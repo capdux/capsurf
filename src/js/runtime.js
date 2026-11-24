@@ -41456,6 +41456,9 @@
       "border-collapse", "border-spacing", "caption-side", "empty-cells",
       "image-orientation", "image-rendering", "image-resolution", "accent-color",
       "ruby-align", "ruby-position", "ruby-merge", "ruby-overhang",
+      "list-style-image", "list-style-position", "list-style-type",
+      "font-feature-settings", "font-kerning", "font-stretch", "font-variant",
+      "font-language-override", "font-optical-sizing", "font-variant-emoji", "font-variant-position",
     ]);
 
     function getDefaultDisplayForElement(element) {
@@ -43741,7 +43744,18 @@
         ["overflow-block", "visible"],
         ["overflow-inline", "visible"],
         ["text-overflow", "clip"],
-        ["scrollbar-gutter", "auto"]
+        ["scrollbar-gutter", "auto"],
+        ["counter-increment", "none"],
+        ["counter-reset", "none"],
+        ["list-style-image", "none"],
+        ["list-style-position", "outside"],
+        ["list-style-type", "disc"],
+        ["font-feature-settings", "normal"],
+        ["font-kerning", "auto"],
+        ["font-stretch", "100%"],
+        ["font-style", "normal"],
+        ["font-variant", "normal"],
+        ["font-weight", "400"]
       ];
       const acRaw = (computedMap.get("accent-color") || "").trim();
       if (acRaw) {

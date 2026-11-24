@@ -1970,3 +1970,10 @@
   - `/css/css-lists/inheritance` (`b491`): `0 PASS / 1 FAIL`（2/10 subtests PASS；缺 `counter-{increment,reset}` 与 `list-style-{image,position,type}` 默认初始值及 `list-style-*` 继承集）
   - `/css/css-writing-modes/inheritance` (`b491`): `0 PASS / 1 FAIL`（9/10 subtests PASS；仅 `direction inherits`）
   - `/css/css-fonts/inheritance` (`b492`): `0 PASS / 1 FAIL`（8/39 subtests PASS；缺 `font-{feature-settings,kerning,size,stretch,style,variant,weight}` 默认初始值及 `font-{language-override,optical-sizing,variant-emoji,variant-position}` 继承等）
+
+### Phase 592: `/css/css-lists/inheritance` 10/10 全绿 & `/css/css-fonts/inheritance` 8/39 -> 22/39
+- **Filter `/css/css-lists/inheritance`**: **PASS (10/10)**（`INHERITED_CSS_PROPS` 补全 `list-style-{image,position,type}`，`textDecorDefs` 补全 `counter-{increment,reset}` 与 `list-style-{image,position,type}` 默认初始值）。
+- **Filter `/css/css-fonts/inheritance`**: `22/39 PASS`（`8/39 -> 22/39`，补全 `font-{feature-settings,kerning,stretch,variant,language-override,optical-sizing,variant-emoji,variant-position}` 继承与 `font-{feature-settings,kerning,stretch,style,variant,weight}` 默认初始值）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-text/inheritance` (`b493`): `0 PASS / 1 FAIL`（12/42 subtests PASS，缺 13 个继承属性与 17 个默认初始值）

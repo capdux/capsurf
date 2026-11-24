@@ -2863,3 +2863,7 @@
 ### Phase 591: `/css/css-overflow/inheritance` Subtest 跃升 (`7/18 -> 12/18`)
 - **核心修复 (`src/js/shim/window.js`)**：在 `textDecorDefs` 补齐 `overflow-block: "visible"`, `overflow-inline: "visible"`, `text-overflow: "clip"`, `scrollbar-gutter: "auto"`，并将 `scrollbar-gutter` 加入 `STANDARD_COMPUTED_LONGHANDS`。
 - **WPT & Smoke 验收**：`/css/css-overflow/inheritance.html` 12/18 PASS、`--smoke` 3/3 suites PASS。
+
+### Phase 592: `/css/css-lists/inheritance` 10/10 全绿 & `/css/css-fonts/inheritance` 8/39 -> 22/39
+- **核心修复 (`src/js/shim/window.js`)**：补齐 `list-style-*`（3）与 `font-*`（8）继承属性，以及 `counter-{increment,reset}`, `list-style-*`, `font-{feature-settings,kerning,stretch,style,variant,weight}` 默认初始值。
+- **WPT & Smoke 验收**：`/css/css-lists/inheritance.html` 10/10 PASS、`/css/css-fonts/inheritance.html` 22/39 PASS、`--smoke` 3/3 suites PASS。

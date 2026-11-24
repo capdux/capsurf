@@ -3648,3 +3648,5 @@
 - **Phase 590** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 在 `textDecorDefs` 补全 `appearance`, `cursor`, `outline-{offset,style,width}`, `resize`, `user-select` 默认初始值；`/css/css-ui/inheritance.html` 由 10/28 跃升至 17/28 PASS。
 
 - **Phase 591** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `overflow-block`, `overflow-inline`, `text-overflow`, `scrollbar-gutter` 默认初始值并纳入 `STANDARD_COMPUTED_LONGHANDS`；`/css/css-overflow/inheritance.html` 由 7/18 跃升至 12/18 PASS。
+
+- **Phase 592** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `list-style-*` 与 `font-*` 继承集及 `counter-*`/`list-style-*`/`font-*` 默认初始值；`/css/css-lists/inheritance.html` 达成 10/10 全绿，`/css/css-fonts/inheritance.html` 跃升至 22/39 PASS。

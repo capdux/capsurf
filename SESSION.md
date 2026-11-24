@@ -7775,3 +7775,9 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`window.js`**：在 `textDecorDefs` 中补全 `overflow-block`, `overflow-inline`, `text-overflow`, `scrollbar-gutter` 默认初始值，并将 `scrollbar-gutter` 加入 `STANDARD_COMPUTED_LONGHANDS`。
   2. **验证**：`/css/css-overflow/inheritance.html` **7/18 -> 12/18 PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
   3. **并行摸底汇总**：`/css/css-lists/inheritance` 2/10 PASS、`/css/css-writing-modes/inheritance` 9/10 PASS、`/css/css-fonts/inheritance` 8/39 PASS。
+
+### 2026-11-24 Phase 592 (`/css/css-lists/inheritance` 10/10 全绿 & `/css/css-fonts/inheritance` 22/39)
+- **[Agent]**: 完成 Phase 592（`src/js/shim/window.js`）：
+  1. **`window.js`**：补全 `list-style-{image,position,type}`、`font-*` 8 项至 `INHERITED_CSS_PROPS`，补全 `counter-{increment,reset}`、`list-style-*`、`font-{feature-settings,kerning,stretch,style,variant,weight}` 默认初始值。
+  2. **验证**：`/css/css-lists/inheritance.html` **10/10 PASS**、`/css/css-fonts/inheritance.html` **8/39 -> 22/39 PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+  3. **并行摸底汇总**：`/css/css-text/inheritance` 12/42 PASS。
