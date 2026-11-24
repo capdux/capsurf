@@ -3332,3 +3332,5 @@
 - 补齐 `Node`/`DocumentType` `parentNode = null` 初始化与 `replaceWith` 原生同步，打通 `DocumentType-remove.html` (4/4) 与 `CharacterData-remove.html` (12/12)；同时复测收紧 `/dom/nodes/` 8 项 `FAIL/TIMEOUT→PASS`，WPT `PASS` 基线达到 `7,197/9,725 (74.01%)`。
 ### Phase 746 — `/dom/events/` `Event-constructors` (14/14) & `remove-all-listeners` (2/2) 全绿
 - 修复 `Event` 构造字典单次读取、事件分发中 `item.removed` 规范语义（修复回调内清全表再加监听及嵌套 `once` 触发偏差），并补齐 `HTMLFrameSetElement` 类定义。
+### Phase 747 — `Body-FrameSet-Event-Handlers.html` 全绿 (`48/48 PASS`)
+- 补全 `frameset` 原型映射及 `HTMLBodyElement`/`HTMLFrameSetElement` 事件处理器属性反射与窗口转发逻辑，打通 `Body-FrameSet-Event-Handlers.html` 48/48 全绿。

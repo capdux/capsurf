@@ -3915,26 +3915,40 @@ function installHtmlClasses(global) {
         });
       }
     }
-    const bodyProto = global.HTMLBodyElement && global.HTMLBodyElement.prototype;
-    if (bodyProto) {
-      const origBodySetAttr = bodyProto.setAttribute || nativeSetAttribute;
-      bodyProto.setAttribute = function (name, val) {
-      const res = origBodySetAttr.apply(this, arguments);
-      const lower = typeof name === "string" ? name.toLowerCase() : "";
-      if (windowReflectingSet.has(lower) && typeof global.__capsurf_invalidateWindowEventHandler === "function") {
-        global.__capsurf_invalidateWindowEventHandler(lower);
-      }
-      return res;
-    };
-    const origBodyRemoveAttr = bodyProto.removeAttribute || nativeRemoveAttribute;
-    bodyProto.removeAttribute = function (name) {
-      const res = origBodyRemoveAttr.apply(this, arguments);
-      const lower = typeof name === "string" ? name.toLowerCase() : "";
-      if (windowReflectingSet.has(lower) && typeof global.__capsurf_invalidateWindowEventHandler === "function") {
-        global.__capsurf_invalidateWindowEventHandler(lower);
-      }
-      return res;
-    };
+    for (let ti = 0; ti < _winHandlerTargets.length; ti++) {
+      const targetProto = _winHandlerTargets[ti];
+      const origSetAttr = targetProto.setAttribute || nativeSetAttribute;
+      targetProto.setAttribute = function (name, val) {
+        const res = origSetAttr.apply(this, arguments);
+        const lower = typeof name === "string" ? name.toLowerCase() : "";
+        if (windowReflectingSet.has(lower)) {
+          const win = typeof window !== "undefined" ? window : global;
+          if (win) {
+            try {
+              win[lower] = new Function("event", String(val == null ? "" : val));
+            } catch (e) {
+              win[lower] = null;
+            }
+          }
+          if (typeof document !== "undefined" && this === document.body && typeof global.__capsurf_invalidateWindowEventHandler === "function") {
+            global.__capsurf_invalidateWindowEventHandler(lower);
+          }
+        }
+        return res;
+      };
+      const origRemoveAttr = targetProto.removeAttribute || nativeRemoveAttribute;
+      targetProto.removeAttribute = function (name) {
+        const res = origRemoveAttr.apply(this, arguments);
+        const lower = typeof name === "string" ? name.toLowerCase() : "";
+        if (windowReflectingSet.has(lower)) {
+          const win = typeof window !== "undefined" ? window : global;
+          if (win) win[lower] = null;
+          if (typeof document !== "undefined" && this === document.body && typeof global.__capsurf_invalidateWindowEventHandler === "function") {
+            global.__capsurf_invalidateWindowEventHandler(lower);
+          }
+        }
+        return res;
+      };
     }
   }
 

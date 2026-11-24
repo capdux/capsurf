@@ -4108,3 +4108,7 @@
   - `src/js/shim/events/dispatch.js`: `removeEventListener` 与 `once` 摘除时标记 `item.removed = true`，`invoke` 分发循环跳过已移除监听器。
   - `src/js/shim/element/html-classes.js`: 新增 `HTMLFrameSetElement` 并挂载窗口反射事件处理器。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 747**:
+  - `src/js/shim/index.js`: `createElement("frameset")` 绑定 `HTMLFrameSetElement.prototype`。
+  - `src/js/shim/element/html-classes.js`: 为 `HTMLBodyElement`/`HTMLFrameSetElement` 的 `setAttribute`/`removeAttribute` 统一编译并转发窗口事件处理器至 `window[on*]`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

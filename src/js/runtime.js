@@ -24717,26 +24717,40 @@
           });
         }
       }
-      const bodyProto = global.HTMLBodyElement && global.HTMLBodyElement.prototype;
-      if (bodyProto) {
-        const origBodySetAttr = bodyProto.setAttribute || nativeSetAttribute;
-        bodyProto.setAttribute = function (name, val) {
-        const res = origBodySetAttr.apply(this, arguments);
-        const lower = typeof name === "string" ? name.toLowerCase() : "";
-        if (windowReflectingSet.has(lower) && typeof global.__capsurf_invalidateWindowEventHandler === "function") {
-          global.__capsurf_invalidateWindowEventHandler(lower);
-        }
-        return res;
-      };
-      const origBodyRemoveAttr = bodyProto.removeAttribute || nativeRemoveAttribute;
-      bodyProto.removeAttribute = function (name) {
-        const res = origBodyRemoveAttr.apply(this, arguments);
-        const lower = typeof name === "string" ? name.toLowerCase() : "";
-        if (windowReflectingSet.has(lower) && typeof global.__capsurf_invalidateWindowEventHandler === "function") {
-          global.__capsurf_invalidateWindowEventHandler(lower);
-        }
-        return res;
-      };
+      for (let ti = 0; ti < _winHandlerTargets.length; ti++) {
+        const targetProto = _winHandlerTargets[ti];
+        const origSetAttr = targetProto.setAttribute || nativeSetAttribute;
+        targetProto.setAttribute = function (name, val) {
+          const res = origSetAttr.apply(this, arguments);
+          const lower = typeof name === "string" ? name.toLowerCase() : "";
+          if (windowReflectingSet.has(lower)) {
+            const win = typeof window !== "undefined" ? window : global;
+            if (win) {
+              try {
+                win[lower] = new Function("event", String(val == null ? "" : val));
+              } catch (e) {
+                win[lower] = null;
+              }
+            }
+            if (typeof document !== "undefined" && this === document.body && typeof global.__capsurf_invalidateWindowEventHandler === "function") {
+              global.__capsurf_invalidateWindowEventHandler(lower);
+            }
+          }
+          return res;
+        };
+        const origRemoveAttr = targetProto.removeAttribute || nativeRemoveAttribute;
+        targetProto.removeAttribute = function (name) {
+          const res = origRemoveAttr.apply(this, arguments);
+          const lower = typeof name === "string" ? name.toLowerCase() : "";
+          if (windowReflectingSet.has(lower)) {
+            const win = typeof window !== "undefined" ? window : global;
+            if (win) win[lower] = null;
+            if (typeof document !== "undefined" && this === document.body && typeof global.__capsurf_invalidateWindowEventHandler === "function") {
+              global.__capsurf_invalidateWindowEventHandler(lower);
+            }
+          }
+          return res;
+        };
       }
     }
 
@@ -58109,6 +58123,7 @@
         case "br": Object.setPrototypeOf(el, (global.HTMLBRElement || global.HTMLElement).prototype); break;
         case "hr": Object.setPrototypeOf(el, (global.HTMLHRElement || global.HTMLElement).prototype); break;
         case "body": Object.setPrototypeOf(el, (global.HTMLBodyElement || global.HTMLElement).prototype); break;
+        case "frameset": Object.setPrototypeOf(el, (global.HTMLFrameSetElement || global.HTMLElement).prototype); break;
         case "head": Object.setPrototypeOf(el, (global.HTMLHeadElement || global.HTMLElement).prototype); break;
         case "html": Object.setPrototypeOf(el, (global.HTMLHtmlElement || global.HTMLElement).prototype); break;
         case "title": Object.setPrototypeOf(el, (global.HTMLTitleElement || global.HTMLElement).prototype); break;
