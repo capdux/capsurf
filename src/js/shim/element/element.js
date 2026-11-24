@@ -12,6 +12,7 @@ const STYLE_LEGACY_ALIASES = {
   "grid-row-gap": "row-gap",
   "grid-column-gap": "column-gap",
   "grid-gap": "gap",
+  "-webkit-border-radius": "border-radius",
 };
 
 const BG_LONGHANDS = [

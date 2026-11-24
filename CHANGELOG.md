@@ -3778,3 +3778,5 @@
 - **Phase 654** (`src/js/shim/window.js`, `src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 补全 `transform`/`rotate` 数学函数求值、`skew`/`rotate` 矩阵化与 `transform` 指定值规范化；`/css/css-transforms/` 目录 31/31 全绿，收紧 `transform-valid.html` 基线为 `PASS`。
 
 - **Phase 655** (`src/js/shim/window.js`, `src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `line-height` 像素求值与 `border-image` 简写展开重置；`important-vs-inline-002` (4/4) 与 `border-image-slice-shorthand-reset` (1/1) 全绿。
+
+- **Phase 656** (`src/js/shim/cssom.js`, `src/js/shim/element/element.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `-webkit-border-radius` 别名映射与折叠、渐变角度精度 `toPrecision(6)`/`circle` 保留及 `border-image-source` `url()` 绝对化；`webkit-border-radius-valid` (25/25) 与 `border-image-source-computed` (10/10) 全绿。

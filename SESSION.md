@@ -8066,3 +8066,7 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`window.js` & `cssom.js`**：`line-height` 长度/数学表达式对 `fontSize` 求值；`expandCssShorthand` 新增 `border-image` 5 长手展开与初始值重置。
   2. **全绿验证**：`important-vs-inline-002.html`（4/4）、`border-image-slice-shorthand-reset.html`（1/1）与 `--smoke`（3/3 suites, 6/6 tests）全绿。
   3. **子智能体并发汇报**：`af40828f` 完成 `/css/css-backgrounds/`（34/52 PASS）、`259ea22d` 完成 `/css/css-animations/`（50/58 PASS）；已接力派发 `fec82af8`（`19710`, `/css/css-break/`）与 `f9da26cb`（`19720`, `/css/css-values/`）。
+- **[Agent]**: 完成 Phase 656（`src/js/shim/cssom.js`, `src/js/shim/element/element.js`, `src/js/shim/window.js`）：
+  1. **`cssom.js` & `element.js` & `window.js`**：`-webkit-border-radius` 全链路别名映射与 `col4` 折叠；`evalAng` `toPrecision(6)`、`radial-gradient` 保留 `circle`、`border-image-source` `url()` 绝对化。
+  2. **全绿验证**：`webkit-border-radius-valid.html`（25/25）、`border-image-source-computed.sub.html`（10/10）与 `--smoke`（3/3 suites, 6/6 tests）全绿。
+  3. **子智能体并发汇报**：`fec82af8` 完成 `/css/css-break/`（164/209 PASS），已接力派发 `d77ac939`（`19710`, `/css/css-position/`）。

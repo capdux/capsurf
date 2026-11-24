@@ -3123,3 +3123,7 @@
 ### Phase 655: `important-vs-inline-002` & `border-image-slice-shorthand-reset` 全绿
 - **核心修复 (`src/js/shim/window.js`, `src/js/shim/cssom.js`)**：`line-height` 非纯数字值对 `fontSize` 求值；`expandCssShorthand("border-image")` 展开为 5 个长手属性并正确重置 `border-image-slice: 100%`。
 - **WPT & Smoke 验收**：`important-vs-inline-002` (4/4) 与 `border-image-slice-shorthand-reset` (1/1) 全绿，`--smoke` 3/3 suites PASS。
+
+### Phase 656: `webkit-border-radius-valid` & `border-image-source-computed` 全绿
+- **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/element/element.js`, `src/js/shim/window.js`)**：`-webkit-border-radius` 接入 `STYLE_LEGACY_ALIASES`、`col4` 折叠及 `parseDeclarationsBlockInto`/`getPropertyValue`；`evalGradientComputed` 保留 `circle` 并采用 `toPrecision(6)`；`border-image-source` `url()` 绝对化。
+- **WPT & Smoke 验收**：`webkit-border-radius-valid` (25/25) 与 `border-image-source-computed` (10/10) 全绿，`--smoke` 3/3 suites PASS。

@@ -2301,3 +2301,7 @@
 ### Phase 655: `important-vs-inline-002` (4/4) & `border-image-slice-shorthand-reset` (1/1) 全绿
 - **Filter `/css/css-cascade/important-vs-inline-002` & `/css/css-backgrounds/border-image-slice-shorthand-reset`**: **FAIL->PASS (2/2: 4/4 + 1/1)**（`window.js` 将非纯数字 `line-height` 表达式接入 `evalCssLengthExpr(..., fontSize, fontSize)` 计算像素值；`cssom.js` `expandCssShorthand` 新增 `border-image` 5 长手属性展开与初始值 `100%`/`1`/`0`/`stretch` 重置）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 656: `webkit-border-radius-valid` (25/25) & `border-image-source-computed` (10/10) 全绿
+- **Filter `/css/css-backgrounds/parsing/{webkit-border-radius-valid,border-image-source-computed}`**: **FAIL->PASS (2/2: 25/25 + 10/10)**（`cssom.js` `col4` 折叠新增 `-webkit-border-radius`；`element.js` `STYLE_LEGACY_ALIASES` 映射 `"-webkit-border-radius": "border-radius"`；`window.js` `parseDeclarationsBlockInto` 与 `getPropertyValue` 补全 `-webkit-border-radius` 别名、`evalAng` 改用 `toPrecision(6)`、`radial-gradient` 无显式半径保留 `circle`、`border-image-source` `url()` 基于 `document.baseURI` 绝对化）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

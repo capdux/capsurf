@@ -5862,7 +5862,8 @@ function installWindow(global) {
         val = val.slice(0, -10).trim();
       }
       val = resolveAttrExpressions(element, val);
-      const key = prop.startsWith("--") ? prop : prop.toLowerCase();
+      const pLowDecl = prop.toLowerCase();
+      const key = prop.startsWith("--") ? prop : (pLowDecl === "-webkit-border-radius" ? "border-radius" : pLowDecl);
       setDecl(key, val, isImp);
 
       if (typeof globalThis.__capsurf_expandShorthand === "function") {
@@ -7249,7 +7250,7 @@ function installWindow(global) {
         if (tm) {
           const u = tm[2].toLowerCase(), n = Number(tm[1]);
           const deg = u === "turn" ? n * 360 : (u === "grad" ? n * 0.9 : n * 180 / Math.PI);
-          return String(Number(deg.toFixed(4))) + "deg";
+          return String(Number(deg.toPrecision(6))) + "deg";
         }
         return tl;
       };
@@ -7379,7 +7380,7 @@ function installWindow(global) {
           for (let ti = 0; ti < toks.length; ti++) {
             const tl = toks[ti].toLowerCase();
             if (tl === "at") { inAt = true; continue; }
-            if ((tl === "circle" || tl === "ellipse") && !inAt) continue;
+            if (tl === "ellipse" && !inAt) continue;
             if (inAt) atPos.push(evalStopPos(toks[ti], false));
             else rOut.push(evalStopPos(toks[ti], !/^(?:closest|farthest)-/.test(tl)));
           }
@@ -8857,6 +8858,14 @@ function installWindow(global) {
     const bisRaw = (computedMap.get("border-image-source") || "").trim();
     if (bisRaw && /^(?:repeating-)?(?:linear|radial|conic)-gradient\(/i.test(bisRaw)) {
       computedMap.set("border-image-source", evalGradientComputed(bisRaw).replace(/\bcurrentcolor\b/gi, elColor));
+    } else if (/^url\(\s*(['"]?)(.*?)\1\s*\)$/i.test(bisRaw)) {
+      const um = /^url\(\s*(['"]?)(.*?)\1\s*\)$/i.exec(bisRaw);
+      if (um && um[2]) {
+        try {
+          const base = (element && element.ownerDocument && element.ownerDocument.baseURI) || (typeof location !== "undefined" && location.href) || "";
+          if (base) computedMap.set("border-image-source", 'url("' + new URL(um[2], base).href + '")');
+        } catch (_) {}
+      }
     }
     const biwRaw = (computedMap.get("border-image-width") || "").trim();
     if (biwRaw && biwRaw !== "1") {
@@ -9913,6 +9922,9 @@ function installWindow(global) {
       }
       if (pLow === "font-stretch") {
         return computedMap.get("font-width") || computedMap.get("font-stretch") || "100%";
+      }
+      if (pLow === "-webkit-border-radius") {
+        return getShorthandComputed("border-radius") || "0px";
       }
       const sh = getShorthandComputed(p);
       if (sh !== null) return sh;

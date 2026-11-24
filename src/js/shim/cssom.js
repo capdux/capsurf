@@ -3226,7 +3226,7 @@
       }
       return parts.join(" ");
     }
-    if (key === "border-radius") {
+    if (key === "border-radius" || key === "-webkit-border-radius") {
       const si = s.indexOf("/");
       const col4 = (str) => {
         const p = splitCssTokens(str);
