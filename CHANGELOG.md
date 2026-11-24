@@ -4068,3 +4068,9 @@
   - `src/js/shim/cssom.js`: `parseMaskLayers` 自动闭合 EOF 缺失的右括号 `)`。
   - `test/wpt/wpt-expectations.json`: 将 `/css/css-masking/parsing/mask-computed.html` 收紧为 `PASS`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 738**:
+  - `src/js/shim/element/element.js`: `setEntryInStyleMap` 对 `background` 优先委托 `__capsurf_expandShorthand("background", val)` 展开全部 8 个 longhand。
+  - `src/js/shim/cssom.js`: 支持 `background-image` `light-dark()` 校验、`cross-fade()` `<image> <pct>` 规范序列化、`parseBackgroundLayers` `border-area`/`text` 组合与 `background-origin` 联动、`background-size` 单值补 `" auto"`、`serializeExpandedShorthand("background")` 省略 `border-area` 默认 `border-box`。
+  - `src/js/shim/window.js`: `background-image` 计算值解析 `light-dark()`（`none` -> `image(rgba(0, 0, 0, 0))`）。
+  - `test/wpt/wpt-expectations.json`: 将 `/css/css-backgrounds/parsing/` 剩余 5 项全部收紧为 `PASS`（74/74 全绿）。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

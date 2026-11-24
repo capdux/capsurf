@@ -1232,19 +1232,19 @@
     "reason": null
   },
   "/css/css-backgrounds/parsing/background-computed.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-backgrounds/parsing/background-image-computed.sub.html": {
-    "expected": "FAIL",
-    "reason": "Records the outcome this produces. The baseline agrees, so this is a long-standing gap rather than a rebaselined regression; reproduced on CI and locally."
+    "expected": "PASS",
+    "reason": null
   },
   "/css/css-backgrounds/parsing/background-image-invalid.html": {
     "expected": "PASS",
     "reason": null
   },
   "/css/css-backgrounds/parsing/background-image-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-backgrounds/parsing/background-invalid.html": {
@@ -1312,7 +1312,7 @@
     "reason": null
   },
   "/css/css-backgrounds/parsing/background-shorthand-serialization.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-backgrounds/parsing/background-size-computed.html": {
@@ -1328,7 +1328,7 @@
     "reason": null
   },
   "/css/css-backgrounds/parsing/background-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-backgrounds/parsing/border-color-computed.html": {

@@ -157,6 +157,18 @@ function setEntryInStyleMap(map, key, rawName, val, pri) {
     }
   }
   if (key === "background") {
+    const expFn = typeof globalThis !== "undefined" && typeof globalThis.__capsurf_expandShorthand === "function" ? globalThis.__capsurf_expandShorthand : null;
+    const expanded = expFn ? expFn("background", val) : null;
+    if (expanded) {
+      map.delete("background");
+      map.delete("background-position-x");
+      map.delete("background-position-y");
+      for (let i = 0; i < expanded.length; i++) {
+        const [lh, lv] = expanded[i];
+        map.set(lh, { name: lh, value: lv, priority: pri });
+      }
+      return;
+    }
     map.delete("background");
     map.delete("background-position-x");
     map.delete("background-position-y");

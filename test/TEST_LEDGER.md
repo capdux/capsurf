@@ -6,6 +6,7 @@
 
 | 测试时间 | 目录 / Filter | 分片 | 用例数 | 结果摘要 | 备注 |
 | :--- | :--- | :--- | :---: | :--- | :--- |
+| 2026-11-25 06:34 | `Phase 738`: `/css/css-backgrounds/parsing/` (5 项) | 定向 | 5 | **5/5 FAIL→PASS** (`/css/css-backgrounds/parsing/` 74/74 全绿) | `--smoke` 3/3 PASS |
 | 2026-11-25 06:28 | `Phase 737`: `/css/css-masking/parsing/mask-computed.html` | 定向 | 1 | **FAIL→PASS** (32/32, `/css/css-masking/parsing/` 28/28 全绿) | `--smoke` 3/3 PASS |
 | 2026-11-25 06:25 | `Phase 736`: `container-name-computed` & `selectors` | 定向 | 5 | `container-name-computed` PASS (10/10); 4x `:dir()`/`:has()` reftest FAIL→PASS | `--smoke` 3/3 PASS |
 | 2026-11-22 14:14 | `/css/css-break/` | `4/5`, `5/5` | 42, 41 | PASS 26/42, 29/41 | Phase 258 |

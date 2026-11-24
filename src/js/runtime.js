@@ -7062,6 +7062,14 @@
             }
             continue;
           }
+          if (/^light-dark\(/i.test(bl)) {
+            const ldm = /^light-dark\(\s*(.*)\s*\)$/i.exec(bl);
+            if (!ldm) return false;
+            const ldArgs = splitTopLevelComma(ldm[1]);
+            if (ldArgs.length !== 2) return false;
+            if (!isValidCssValue("background-image", ldArgs[0].trim()) || !isValidCssValue("background-image", ldArgs[1].trim())) return false;
+            continue;
+          }
           if (/^(?:url|image|image-set|-webkit-image-set|(?:repeating-)?(?:linear|radial|conic)-gradient|-webkit-(?:linear|radial)-gradient)\(/i.test(bl)) continue;
           return false;
         }
@@ -9058,7 +9066,31 @@
           if (s[i] === "(") open++;
           else if (s[i] === ")") close++;
         }
-        return open > close ? s + ")".repeat(open - close) : s;
+        let res = open > close ? s + ")".repeat(open - close) : s;
+        if (key === "background-image") {
+          res = splitTopLevelComma(res).map((layer) => {
+            const lt = layer.trim();
+            if (/^url\(/i.test(lt)) {
+              const um = /^url\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*?))\s*\)$/i.exec(lt);
+              if (um) return 'url("' + (um[1] ?? um[2] ?? um[3] ?? "").trim() + '")';
+            }
+            if (/^cross-fade\(/i.test(lt)) {
+              const cfm = /^cross-fade\(\s*(.*)\s*\)$/i.exec(lt);
+              if (cfm) {
+                const items = splitTopLevelComma(cfm[1]).map((it) => {
+                  const ct = splitCssTokens(it.trim());
+                  if (ct.length === 2 && /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)%$/.test(ct[0])) {
+                    return ct[1] + " " + ct[0];
+                  }
+                  return ct.join(" ");
+                });
+                return "cross-fade(" + items.join(", ") + ")";
+              }
+            }
+            return lt;
+          }).join(", ");
+        }
+        return res;
       }
       if (key === "list-style-type") {
         if (/^symbols\(\s*symbolic\s+/i.test(s)) {
@@ -9222,7 +9254,7 @@
               const s1 = sz1 === "auto" ? "auto" : ((rightToks[1] === "0" || rightToks[1] === "+0") ? "0px" : rightToks[1]);
               size = (s0 === "auto" && s1 === "auto") ? "auto" : (s1 === "auto" ? s0 : (s0 + " " + s1));
             } else {
-              size = s0;
+              size = s0 === "auto" ? "auto" : (s0 + " auto");
             }
           } else {
             return null;
@@ -9271,18 +9303,34 @@
         slashes.push(cur.trim());
         if (slashes.length > 2) return null;
         let img = "none", pos = "0% 0%", size = "auto", rep = "repeat", att = "scroll";
-        let origin = "padding-box", clip = "border-box", color = "rgba(0, 0, 0, 0)";
+        let origin = "padding-box", clip = "border-box", color = "transparent";
         let seenImg = false, seenPos = false, seenRep = false, seenAtt = false, seenCol = false, boxCount = 0;
         const parseTokens = (toks, startIdx) => {
           for (let i = startIdx; i < toks.length; i++) {
             const t = toks[i], tl = t.toLowerCase();
             if (BOX_KW.has(tl)) {
               if (boxCount === 0) { origin = tl; clip = tl; boxCount = 1; }
-              else if (boxCount === 1) { clip = tl; boxCount = 2; }
+              else if (boxCount === 1) {
+                if (clip === "border-area" || clip === "text" || clip === "border-area text") origin = tl;
+                else clip = tl;
+                boxCount = 2;
+              }
               else return false;
-            } else if (tl === "border-area") {
-              if (boxCount >= 2) return false;
-              clip = "border-area"; boxCount = 2;
+            } else if (tl === "border-area" || tl === "text") {
+              if (boxCount === 0) { origin = "border-box"; clip = tl; boxCount = 1; }
+              else if (boxCount === 1) {
+                if ((clip === "border-area" && tl === "text") || (clip === "text" && tl === "border-area")) {
+                  clip = "border-area text"; boxCount = 2;
+                } else if (clip !== "border-area" && clip !== "text" && clip !== "border-area text") {
+                  clip = tl; boxCount = 2;
+                } else {
+                  return false;
+                }
+              } else if (boxCount === 2 && clip === "border-area" && tl === "text") {
+                clip = "border-area text";
+              } else {
+                return false;
+              }
             } else if (ATT_KW.has(tl)) {
               if (seenAtt) return false;
               seenAtt = true; att = tl;
@@ -9300,7 +9348,7 @@
               }
             } else if (isImgTok(t)) {
               if (seenImg) return false;
-              seenImg = true; img = t;
+              seenImg = true; img = normalizeCssSpecifiedValue("background-image", t);
             } else if (isPosTok(t)) {
               if (seenPos) return false;
               seenPos = true;
@@ -9348,7 +9396,7 @@
               const s1 = sz1 === "auto" ? "auto" : ((rightToks[1] === "0" || rightToks[1] === "+0") ? "0px" : rightToks[1]);
               size = (s0 === "auto" && s1 === "auto") ? "auto" : (s1 === "auto" ? s0 : (s0 + " " + s1));
             } else {
-              size = s0;
+              size = s0 === "auto" ? "auto" : (s0 + " auto");
             }
           } else {
             return null;
@@ -10134,6 +10182,7 @@
         }
         const layers = parseBackgroundLayers(normV);
         if (!layers) return null;
+        const defaultBgColor = vl === "none" ? "rgba(0, 0, 0, 0)" : layers[layers.length - 1].color;
         return [
           ["background-image", layers.map((l) => l.img).join(", ")],
           ["background-position", layers.map((l) => l.pos).join(", ")],
@@ -10142,7 +10191,7 @@
           ["background-attachment", layers.map((l) => l.att).join(", ")],
           ["background-origin", layers.map((l) => l.origin).join(", ")],
           ["background-clip", layers.map((l) => l.clip).join(", ")],
-          ["background-color", layers[layers.length - 1].color]
+          ["background-color", defaultBgColor]
         ];
       }
       return null;
@@ -10298,7 +10347,9 @@
           }
           if (rep !== "repeat") parts.push(rep);
           if (att !== "scroll") parts.push(att);
-          if (orig !== "padding-box" || clip !== "border-box") {
+          if (orig === "border-box" && (clip === "border-area" || clip === "border-area text")) {
+            parts.push(clip);
+          } else if (orig !== "padding-box" || clip !== "border-box") {
             if (orig === clip) parts.push(orig);
             else parts.push(orig, clip);
           }
@@ -16806,6 +16857,18 @@
       }
     }
     if (key === "background") {
+      const expFn = typeof globalThis !== "undefined" && typeof globalThis.__capsurf_expandShorthand === "function" ? globalThis.__capsurf_expandShorthand : null;
+      const expanded = expFn ? expFn("background", val) : null;
+      if (expanded) {
+        map.delete("background");
+        map.delete("background-position-x");
+        map.delete("background-position-y");
+        for (let i = 0; i < expanded.length; i++) {
+          const [lh, lv] = expanded[i];
+          map.set(lh, { name: lh, value: lv, priority: pri });
+        }
+        return;
+      }
       map.delete("background");
       map.delete("background-position-x");
       map.delete("background-position-y");
@@ -47853,6 +47916,21 @@
         }
         if (ic.trim()) imgLayers.push(ic.trim());
         const normLayers = imgLayers.map((layer) => {
+          if (/^light-dark\(/i.test(layer)) {
+            const inn = layer.slice(layer.indexOf("(") + 1, -1);
+            let ld = 0, split = -1;
+            for (let j = 0; j < inn.length; j++) {
+              const c = inn[j];
+              if (c === "(") ld++; else if (c === ")" && ld > 0) ld--;
+              else if (c === "," && ld === 0) { split = j; break; }
+            }
+            if (split !== -1) {
+              const csRaw = (computedMap.get("color-scheme") || "normal").toLowerCase();
+              const isDark = /\bdark\b/.test(csRaw) && !/\blight\b/.test(csRaw);
+              layer = (isDark ? inn.slice(split + 1) : inn.slice(0, split)).trim();
+              if (layer.toLowerCase() === "none") return "image(rgba(0, 0, 0, 0))";
+            }
+          }
           if (/^image\(/i.test(layer)) {
             const im = /^image\(\s*(.*)\s*\)$/i.exec(layer);
             return (im && im[1]) ? ("image(" + normCol(im[1].trim()) + ")") : layer;

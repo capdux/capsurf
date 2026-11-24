@@ -9578,6 +9578,21 @@ function installWindow(global) {
       }
       if (ic.trim()) imgLayers.push(ic.trim());
       const normLayers = imgLayers.map((layer) => {
+        if (/^light-dark\(/i.test(layer)) {
+          const inn = layer.slice(layer.indexOf("(") + 1, -1);
+          let ld = 0, split = -1;
+          for (let j = 0; j < inn.length; j++) {
+            const c = inn[j];
+            if (c === "(") ld++; else if (c === ")" && ld > 0) ld--;
+            else if (c === "," && ld === 0) { split = j; break; }
+          }
+          if (split !== -1) {
+            const csRaw = (computedMap.get("color-scheme") || "normal").toLowerCase();
+            const isDark = /\bdark\b/.test(csRaw) && !/\blight\b/.test(csRaw);
+            layer = (isDark ? inn.slice(split + 1) : inn.slice(0, split)).trim();
+            if (layer.toLowerCase() === "none") return "image(rgba(0, 0, 0, 0))";
+          }
+        }
         if (/^image\(/i.test(layer)) {
           const im = /^image\(\s*(.*)\s*\)$/i.exec(layer);
           return (im && im[1]) ? ("image(" + normCol(im[1].trim()) + ")") : layer;
