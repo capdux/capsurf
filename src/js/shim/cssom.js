@@ -2155,6 +2155,17 @@
     if (prop === "image-orientation") {
       return vLower === "from-image" || vLower === "none";
     }
+    if (prop === "shape-outside") {
+      const bm = /^(?:circle|ellipse)\(\s*(.*)\s*\)$/i.exec(trimmed);
+      if (bm) {
+        const toks = splitCssTokens(bm[1].toLowerCase());
+        const atIdx = toks.indexOf("at");
+        if (atIdx !== -1) {
+          const posToks = toks.slice(atIdx + 1);
+          if (posToks.length === 0 || !isValidCssPositionTokens(posToks)) return false;
+        }
+      }
+    }
     if (prop === "view-transition-name" || prop === "view-transition-class" || prop === "view-transition-group") {
       const toks = splitCssTokens(trimmed);
       if (toks.length === 0) return false;

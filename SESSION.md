@@ -7640,3 +7640,9 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`cssom.js`**：在 `normalizeCssSpecifiedValue` 顶部透传 CSS 全局关键字（`inherit`/`initial`/`unset`/`revert`/`revert-layer`，根除 `text-decoration-line: inherit` 被归一化为空串）；`text-decoration-thickness` 放行负 `<length-percentage>`；新增 `text-shadow` 多层 `[<color>? && <length>{2,3}]` 校验与颜色前置规范序。
   2. **`window.js`**：提取 `evalLinLenPctTok` 复用求解 `text-decoration-inset`、`text-decoration-thickness`、`text-underline-offset` 与 `text-shadow`（补齐默认颜色 `elColor` 与默认模糊半径 `0px`）；补全 `text-emphasis-*`/`text-shadow`/`text-underline-position`/`text-decoration-skip-ink` 继承集合及默认初始值。
   3. **全绿验证**：`/css/css-text-decor/` **41/41 PASS (100% ALL GREEN)**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+
+### 2026-11-24 Phase 570 (`css-tables/inheritance` & `shape-outside-invalid-position` 全绿)
+- **[Agent]**: 自主推导并完成 Phase 570（`src/js/shim/cssom.js`, `src/js/shim/window.js`）：
+  1. **`cssom.js`**：为 `shape-outside` 的 `circle(at ...)` / `ellipse(at ...)` 接入 `isValidCssPositionTokens` 位置校验。
+  2. **`window.js`**：将 `border-collapse`、`border-spacing`、`caption-side`、`empty-cells` 纳入 `INHERITED_CSS_PROPS`，并在 `applyUsedValuesToComputedMap` 补全表格 5 项属性（含 `table-layout: auto`）默认初始值。
+  3. **全绿验证**：`css-tables/inheritance.html` **PASS**、`shape-outside-invalid-position.html` **PASS**、`--smoke` **3/3 suites PASS**。

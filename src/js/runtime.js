@@ -5945,6 +5945,17 @@
       if (prop === "image-orientation") {
         return vLower === "from-image" || vLower === "none";
       }
+      if (prop === "shape-outside") {
+        const bm = /^(?:circle|ellipse)\(\s*(.*)\s*\)$/i.exec(trimmed);
+        if (bm) {
+          const toks = splitCssTokens(bm[1].toLowerCase());
+          const atIdx = toks.indexOf("at");
+          if (atIdx !== -1) {
+            const posToks = toks.slice(atIdx + 1);
+            if (posToks.length === 0 || !isValidCssPositionTokens(posToks)) return false;
+          }
+        }
+      }
       if (prop === "view-transition-name" || prop === "view-transition-class" || prop === "view-transition-group") {
         const toks = splitCssTokens(trimmed);
         if (toks.length === 0) return false;
@@ -41109,6 +41120,7 @@
       "letter-spacing", "word-spacing", "cursor", "hyphenate-character", "hyphenate-limit-chars", "interactivity", "caret-color",
       "text-combine-upright", "text-orientation", "writing-mode",
       "text-emphasis-color", "text-emphasis-position", "text-emphasis-style", "text-shadow", "text-underline-position", "text-decoration-skip-ink",
+      "border-collapse", "border-spacing", "caption-side", "empty-cells",
     ]);
 
     function getDefaultDisplayForElement(element) {
@@ -43248,7 +43260,12 @@
         ["text-emphasis-position", "auto"],
         ["text-emphasis-style", "none"],
         ["text-underline-position", "auto"],
-        ["text-decoration-skip-ink", "auto"]
+        ["text-decoration-skip-ink", "auto"],
+        ["border-collapse", "separate"],
+        ["border-spacing", "0px"],
+        ["caption-side", "top"],
+        ["empty-cells", "show"],
+        ["table-layout", "auto"]
       ];
       for (let i = 0; i < textDecorDefs.length; i++) {
         const [dk, dv] = textDecorDefs[i];

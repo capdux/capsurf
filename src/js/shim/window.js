@@ -6285,6 +6285,7 @@ function installWindow(global) {
     "letter-spacing", "word-spacing", "cursor", "hyphenate-character", "hyphenate-limit-chars", "interactivity", "caret-color",
     "text-combine-upright", "text-orientation", "writing-mode",
     "text-emphasis-color", "text-emphasis-position", "text-emphasis-style", "text-shadow", "text-underline-position", "text-decoration-skip-ink",
+    "border-collapse", "border-spacing", "caption-side", "empty-cells",
   ]);
 
   function getDefaultDisplayForElement(element) {
@@ -8424,7 +8425,12 @@ function installWindow(global) {
       ["text-emphasis-position", "auto"],
       ["text-emphasis-style", "none"],
       ["text-underline-position", "auto"],
-      ["text-decoration-skip-ink", "auto"]
+      ["text-decoration-skip-ink", "auto"],
+      ["border-collapse", "separate"],
+      ["border-spacing", "0px"],
+      ["caption-side", "top"],
+      ["empty-cells", "show"],
+      ["table-layout", "auto"]
     ];
     for (let i = 0; i < textDecorDefs.length; i++) {
       const [dk, dv] = textDecorDefs[i];

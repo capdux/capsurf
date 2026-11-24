@@ -2776,3 +2776,7 @@
 ### Phase 569: `/css/css-text-decor/` 41/41 全绿闭环
 - **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：`normalizeCssSpecifiedValue` 顶部透传 CSS 全局关键字；`text-decoration-thickness` 支持负值；新增 `text-shadow` 完整解析与计算值；提取 `evalLinLenPctTok` 统一求值并补全 `text-decor` 继承与默认初始值。
 - **WPT & Smoke 验收**：`/css/css-text-decor/` **41/41 PASS (100% ALL GREEN)**、`--smoke` **3/3 suites PASS**。
+
+### Phase 570: `css-tables/inheritance` 与 `shape-outside-invalid-position` 全绿
+- **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：`shape-outside` 复用 `isValidCssPositionTokens` 校验 `circle/ellipse(at ...)`；补齐 `border-collapse`/`border-spacing`/`caption-side`/`empty-cells` 继承及 `table-layout` 默认值。
+- **WPT & Smoke 验收**：`css-tables/inheritance.html` PASS、`shape-outside-invalid-position.html` PASS、`--smoke` 3/3 suites PASS。

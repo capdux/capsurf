@@ -1762,3 +1762,11 @@
   - `cssom.js`：修复 `normalizeCssSpecifiedValue` 透传 CSS 全局关键字（`inherit`/`initial`/`unset`/`revert`/`revert-layer`）；`text-decoration-thickness` 放行负值；新增 `text-shadow` 完整文法校验与指定值颜色前置。
   - `window.js`：提取 `evalLinLenPctTok` 统一求解 `text-decoration-inset` / `text-decoration-thickness` / `text-underline-offset` / `text-shadow`；将 `text-emphasis-*` / `text-shadow` / `text-underline-position` / `text-decoration-skip-ink` 纳入 `INHERITED_CSS_PROPS` 并补全默认初始值。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 570 `css-tables/inheritance` & `shape-outside-invalid-position` 全绿 & WPT-B409/B405 摸底 (bin_dev Phase 570, 2026-11-24)
+- **Filter `/css/css-tables/inheritance`**: **PASS (10/10)**（`border-collapse`, `border-spacing`, `caption-side`, `empty-cells` 纳入 `INHERITED_CSS_PROPS`，补全表格 5 项默认初始值）。
+- **Filter `/css/css-shapes/parsing/shape-outside-invalid-position`**: **PASS**（`shape-outside` 复用 `isValidCssPositionTokens` 校验 `circle(at ...)` / `ellipse(at ...)`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-tables/` (`b409`): `18` files (`15 PASS / 2 FAIL / 1 TIMEOUT`) -> Phase 570 修复 `inheritance.html` 后 `16/18 PASS`
+  - `/css/css-values/calc` (`b405`): `71` files (`27 PASS / 38 FAIL / 6 TIMEOUT`)

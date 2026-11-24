@@ -3604,3 +3604,5 @@
 - **Phase 568** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 注册并校验 `view-transition-{name,class,group}`，纳入 `STANDARD_COMPUTED_LONGHANDS` 并支持 `revert`/`revert-layer` 回退与 `match-element` 小写规范化；`view-transition-*` 7/7 全绿，收紧 `/css/css-text-decor/parsing/` 5 项基线实现 31/31 全绿。
 
 - **Phase 569** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 修复 `normalizeCssSpecifiedValue` 透传 CSS 全局关键字，放行 `text-decoration-thickness` 负值，补全 `text-shadow` 校验/规范化/计算值及 `text-decoration-thickness`/`text-underline-offset` 线性 `calc` 求值；WPT `/css/css-text-decor/` 41/41 全目录 100% 全绿通过。
+
+- **Phase 570** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 复用 `isValidCssPositionTokens` 校验 `shape-outside` 圆形/椭圆 `at <position>`，补全表格 5 项属性继承与默认初始值；`/css/css-tables/inheritance.html` 与 `shape-outside-invalid-position.html` 转绿。
