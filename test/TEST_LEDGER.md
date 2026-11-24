@@ -2305,3 +2305,7 @@
 ### Phase 656: `webkit-border-radius-valid` (25/25) & `border-image-source-computed` (10/10) 全绿
 - **Filter `/css/css-backgrounds/parsing/{webkit-border-radius-valid,border-image-source-computed}`**: **FAIL->PASS (2/2: 25/25 + 10/10)**（`cssom.js` `col4` 折叠新增 `-webkit-border-radius`；`element.js` `STYLE_LEGACY_ALIASES` 映射 `"-webkit-border-radius": "border-radius"`；`window.js` `parseDeclarationsBlockInto` 与 `getPropertyValue` 补全 `-webkit-border-radius` 别名、`evalAng` 改用 `toPrecision(6)`、`radial-gradient` 无显式半径保留 `circle`、`border-image-source` `url()` 基于 `document.baseURI` 绝对化）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 657: `border-radius-css-text` (1/1) 全绿
+- **Filter `/css/css-backgrounds/border-radius-css-text` & `webkit-border-radius-valid`**: **FAIL->PASS (2/2: 1/1 + 25/25)**（`cssom.js` 在 `expandCssShorthand`、`SHORTHAND_EXPAND_LONGHANDS` 与 `serializeExpandedShorthand` 补全 `border-radius` 4 角长手双向展开与折叠；`element.js` 在 `parseStyleMap()` 与 `serializeStyleMap()` 接入 `border-radius` 展开及 4 角自动折叠回简写）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

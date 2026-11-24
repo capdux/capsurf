@@ -8072,6 +8072,24 @@
           ["border-image-repeat", repVal],
         ];
       }
+      if (key === "border-radius") {
+        const si = normV.indexOf("/");
+        const exp4 = (str) => {
+          const p = splitCssTokens(str);
+          if (p.length < 1 || p.length > 4) return null;
+          const tl = p[0];
+          const tr = p.length >= 2 ? p[1] : tl;
+          const br = p.length >= 3 ? p[2] : tl;
+          const bl = p.length >= 4 ? p[3] : tr;
+          return [tl, tr, br, bl];
+        };
+        const h = exp4(si === -1 ? normV : normV.slice(0, si));
+        if (!h) return null;
+        const v = si === -1 ? h : exp4(normV.slice(si + 1));
+        if (!v) return null;
+        const corners = ["border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius", "border-bottom-left-radius"];
+        return corners.map((cn, idx) => [cn, h[idx] === v[idx] ? h[idx] : (h[idx] + " " + v[idx])]);
+      }
       if (key === "border-color" || key === "border-style" || key === "border-width") {
         const p = splitCssTokens(normV);
         if (p.length < 1 || p.length > 4) return null;
@@ -8441,6 +8459,7 @@
     if (typeof globalThis !== "undefined") globalThis.__capsurf_expandShorthand = expandCssShorthand;
 
     const SHORTHAND_EXPAND_LONGHANDS = {
+      "border-radius": ["border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius", "border-bottom-left-radius"],
       "border-color": ["border-top-color", "border-right-color", "border-bottom-color", "border-left-color"],
       "border-style": ["border-top-style", "border-right-style", "border-bottom-style", "border-left-style"],
       "border-width": ["border-top-width", "border-right-width", "border-bottom-width", "border-left-width"],
@@ -8512,6 +8531,23 @@
       }
       if (key === "text-decoration") {
         return normalizeCssSpecifiedValue("text-decoration", vals.join(" "));
+      }
+      if (key === "border-radius") {
+        const col4 = (arr) => {
+          if (arr[1] === arr[3]) {
+            if (arr[0] === arr[2]) return arr[0] === arr[1] ? arr[0] : (arr[0] + " " + arr[1]);
+            return arr[0] + " " + arr[1] + " " + arr[2];
+          }
+          return arr.join(" ");
+        };
+        const h = [], v = [];
+        for (let i = 0; i < 4; i++) {
+          const p = splitCssTokens(vals[i]);
+          h.push(p[0] || "0px");
+          v.push(p[1] || p[0] || "0px");
+        }
+        const hs = col4(h), vs = col4(v);
+        return hs === vs ? hs : (hs + " / " + vs);
       }
       if (key === "border-color" || key === "border-style" || key === "border-width") {
         if (vals[1] === vals[3]) {
@@ -14659,7 +14695,7 @@
           if (v !== "") {
             if (k === "place-self" || k === "place-items" || k === "place-content") {
               if (isValidInlinePropValue(k, v)) setEntryWithShorthand(map, k, rawKey, v, pri);
-            } else if (k === "column-rule" || k === "columns" || k === "border-color" || k === "border-style" || k === "border-width") {
+            } else if (k === "border-radius" || k === "column-rule" || k === "columns" || k === "border-color" || k === "border-style" || k === "border-width") {
               setEntryWithShorthand(map, k, rawKey, v, pri);
             } else setEntryInStyleMap(map, k, rawKey, v, pri);
           }
@@ -14682,6 +14718,16 @@
         if (entries.every((e) => e && entries[0] && e.priority === entries[0].priority && /^(?:inherit|initial|unset|revert|revert-layer)$/i.test(e.value) && e.value.toLowerCase() === entries[0].value.toLowerCase())) {
           lhs.forEach((lh) => skip.add(lh));
           folded.set(lhs[0], { name: sh, value: entries[0].value.toLowerCase(), priority: entries[0].priority });
+        }
+      }
+      const brLhs = ["border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius", "border-bottom-left-radius"];
+      const brEntries = brLhs.map((lh) => map.get(lh));
+      if (brEntries.every((e) => e && brEntries[0] && e.priority === brEntries[0].priority) &&
+          typeof globalThis !== "undefined" && typeof globalThis.__capsurf_serializeShorthand === "function") {
+        const brVal = globalThis.__capsurf_serializeShorthand("border-radius", (lh) => map.get(lh).value);
+        if (brVal) {
+          brLhs.forEach((lh) => skip.add(lh));
+          folded.set(brLhs[0], { name: "border-radius", value: brVal, priority: brEntries[0].priority });
         }
       }
       for (const [k, entry] of map.entries()) {

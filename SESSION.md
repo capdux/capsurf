@@ -8070,3 +8070,7 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`cssom.js` & `element.js` & `window.js`**：`-webkit-border-radius` 全链路别名映射与 `col4` 折叠；`evalAng` `toPrecision(6)`、`radial-gradient` 保留 `circle`、`border-image-source` `url()` 绝对化。
   2. **全绿验证**：`webkit-border-radius-valid.html`（25/25）、`border-image-source-computed.sub.html`（10/10）与 `--smoke`（3/3 suites, 6/6 tests）全绿。
   3. **子智能体并发汇报**：`fec82af8` 完成 `/css/css-break/`（164/209 PASS），已接力派发 `d77ac939`（`19710`, `/css/css-position/`）。
+- **[Agent]**: 完成 Phase 657（`src/js/shim/cssom.js`, `src/js/shim/element/element.js`）及 3 小时自进化复盘：
+  1. **`cssom.js` & `element.js`**：`border-radius` 接入 `SHORTHAND_EXPAND_LONGHANDS`、`expandCssShorthand`、`serializeExpandedShorthand` 与 `parseStyleMap()`/`serializeStyleMap()`，实现 `cssText` 自动折叠回 `border-radius`。
+  2. **全绿验证**：`border-radius-css-text.html`（1/1）、`webkit-border-radius-valid.html`（25/25）与 `--smoke`（3/3 suites, 6/6 tests）全绿。
+  3. **3 小时自进化复盘**：`node -c` 0.1s 预检 + 双路只读子智能体全量目录摸底支撑了约 60 分钟内连续推进 Phase 643–657（15 个阶段全绿提交）；后续编辑 `cssom.js` 时 `Target` 必须携带唯一上下文行以消除多匹配返工。

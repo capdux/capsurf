@@ -3127,3 +3127,7 @@
 ### Phase 656: `webkit-border-radius-valid` & `border-image-source-computed` 全绿
 - **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/element/element.js`, `src/js/shim/window.js`)**：`-webkit-border-radius` 接入 `STYLE_LEGACY_ALIASES`、`col4` 折叠及 `parseDeclarationsBlockInto`/`getPropertyValue`；`evalGradientComputed` 保留 `circle` 并采用 `toPrecision(6)`；`border-image-source` `url()` 绝对化。
 - **WPT & Smoke 验收**：`webkit-border-radius-valid` (25/25) 与 `border-image-source-computed` (10/10) 全绿，`--smoke` 3/3 suites PASS。
+
+### Phase 657: `border-radius-css-text` (1/1) 全绿
+- **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/element/element.js`)**：`border-radius` 接入 `SHORTHAND_EXPAND_LONGHANDS`、`expandCssShorthand`、`serializeExpandedShorthand` 及 `parseStyleMap()`/`serializeStyleMap()` 折叠管线。
+- **WPT & Smoke 验收**：`border-radius-css-text.html` (1/1) 与 `webkit-border-radius-valid.html` (25/25) 全绿，`--smoke` 3/3 suites PASS。

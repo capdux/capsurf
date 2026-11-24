@@ -256,7 +256,7 @@ function createStyleProxy(element) {
         if (v !== "") {
           if (k === "place-self" || k === "place-items" || k === "place-content") {
             if (isValidInlinePropValue(k, v)) setEntryWithShorthand(map, k, rawKey, v, pri);
-          } else if (k === "column-rule" || k === "columns" || k === "border-color" || k === "border-style" || k === "border-width") {
+          } else if (k === "border-radius" || k === "column-rule" || k === "columns" || k === "border-color" || k === "border-style" || k === "border-width") {
             setEntryWithShorthand(map, k, rawKey, v, pri);
           } else setEntryInStyleMap(map, k, rawKey, v, pri);
         }
@@ -279,6 +279,16 @@ function createStyleProxy(element) {
       if (entries.every((e) => e && entries[0] && e.priority === entries[0].priority && /^(?:inherit|initial|unset|revert|revert-layer)$/i.test(e.value) && e.value.toLowerCase() === entries[0].value.toLowerCase())) {
         lhs.forEach((lh) => skip.add(lh));
         folded.set(lhs[0], { name: sh, value: entries[0].value.toLowerCase(), priority: entries[0].priority });
+      }
+    }
+    const brLhs = ["border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius", "border-bottom-left-radius"];
+    const brEntries = brLhs.map((lh) => map.get(lh));
+    if (brEntries.every((e) => e && brEntries[0] && e.priority === brEntries[0].priority) &&
+        typeof globalThis !== "undefined" && typeof globalThis.__capsurf_serializeShorthand === "function") {
+      const brVal = globalThis.__capsurf_serializeShorthand("border-radius", (lh) => map.get(lh).value);
+      if (brVal) {
+        brLhs.forEach((lh) => skip.add(lh));
+        folded.set(brLhs[0], { name: "border-radius", value: brVal, priority: brEntries[0].priority });
       }
     }
     for (const [k, entry] of map.entries()) {
