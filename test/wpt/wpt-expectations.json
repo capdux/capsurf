@@ -8536,7 +8536,7 @@
     "reason": "T18 enrollment (css-variables): measured PASS"
   },
   "/css/css-writing-modes/inheritance.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-writing-modes/parsing/direction-computed.html": {

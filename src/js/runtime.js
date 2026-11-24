@@ -43775,7 +43775,8 @@
         ["white-space-collapse", "collapse"],
         ["word-break", "normal"],
         ["word-spacing", "0px"],
-        ["word-wrap", "normal"]
+        ["word-wrap", "normal"],
+        ["direction", "ltr"]
       ];
       const acRaw = (computedMap.get("accent-color") || "").trim();
       if (acRaw) {

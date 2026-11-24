@@ -3652,3 +3652,5 @@
 - **Phase 592** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `list-style-*` 与 `font-*` 继承集及 `counter-*`/`list-style-*`/`font-*` 默认初始值；`/css/css-lists/inheritance.html` 达成 10/10 全绿，`/css/css-fonts/inheritance.html` 跃升至 22/39 PASS。
 
 - **Phase 593** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 补全 `css-text` 13 项继承属性与 17 项默认初始值；`/css/css-text/inheritance.html` 在 `--timeout 15000` 下实现 42/42 全绿（debug 版超 10s 暂标 `TIMEOUT`）。
+
+- **Phase 594** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 在 `textDecorDefs` 补全 `direction: "ltr"`；`/css/css-writing-modes/inheritance.html` 实现 10/10 全绿并收紧基线为 `PASS`。

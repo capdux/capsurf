@@ -1981,3 +1981,10 @@
 ### Phase 593: `/css/css-text/inheritance` 42/42 功能全绿（`--timeout 15000` PASS）
 - **Filter `/css/css-text/inheritance`**: **42/42 PASS**（`--timeout 15000` 下 11933ms PASS；`INHERITED_CSS_PROPS` 补全 `hanging-punctuation`, `hyphens`, `line-break`, `overflow-wrap`, `tab-size`, `text-align-all`, `text-align-last`, `text-fit`, `text-indent`, `text-justify`, `text-transform`, `word-break`, `word-wrap` 13 项，`textDecorDefs` 补全 17 项初始默认值；因 debug `bin_dev` 耗时超出 10s 硬超时，基线暂标 `TIMEOUT`）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 594: `/css/css-writing-modes/inheritance` 10/10 全绿收紧 & Display/Cascade 摸底
+- **Filter `/css/css-writing-modes/inheritance`**: **PASS (10/10)**（`window.js` `textDecorDefs` 补全 `direction: "ltr"`，使 `direction: initial` 正确还原；已收紧 `wpt-expectations.json` 基线为 `PASS`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-display/` (`b494`, 52 files): `16 PASS / 32 FAIL / 4 TIMEOUT`（`reading-flow-valid.html`, `reading-order-valid.html` unexpected PASS）
+  - `/css/css-cascade/` (`b495`, 54 recorded of 90): `31 PASS / 18 FAIL / 4 TIMEOUT / 1 ERROR`（`layer-counter-style-override.html` unexpected PASS；`supports-import-parsing.html` 仅多尾随空格）

@@ -2871,3 +2871,7 @@
 ### Phase 593: `/css/css-text/inheritance` 42/42 功能全绿
 - **核心修复 (`src/js/shim/window.js`)**：补齐 `hanging-punctuation`, `hyphens`, `line-break`, `overflow-wrap`, `tab-size`, `text-align-all`, `text-align-last`, `text-fit`, `text-indent`, `text-justify`, `text-transform`, `word-break`, `word-wrap` 继承集及 17 项默认初始值。
 - **WPT & Smoke 验收**：`--timeout 15000` 下 `/css/css-text/inheritance.html` 42/42 PASS（11.9s，暂标 `TIMEOUT` 基线）；`--smoke` 3/3 suites PASS。
+
+### Phase 594: `/css/css-writing-modes/inheritance` 10/10 全绿收紧
+- **核心修复 (`src/js/shim/window.js`)**：在 `textDecorDefs` 补齐 `direction: "ltr"`，使 `direction: initial` 不再沿用继承值。
+- **WPT & Smoke 验收**：`/css/css-writing-modes/inheritance.html` 10/10 PASS（收紧基线）、`--smoke` 3/3 suites PASS。
