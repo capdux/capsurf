@@ -7994,3 +7994,6 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`cssom.js` & `window.js`**：`background-position*` 改用 `splitTopLevelComma` 逐层规范化 `calc()`；`window.js` 补全 `background-size` 计算值求值与负值归零。
   2. **全绿验证**：`background-position-x-valid`、`background-position-y-valid`、`background-size-computed` **3/3 FAIL->PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
   3. **子智能体并发汇报**：`3681428a` 完成 `/css/css-backgrounds/parsing/` 摸底（**49/74 PASS**）；`960d3492` 完成 `/css/css-text-decor/` 全量摸底（**40/41 PASS**）；已接力派发 `65eba7f3`（`19710`, `/css/css-masking/`）。
+- **[Agent]**: 完成 Phase 636（`src/js/shim/window.js`）：
+  1. **`window.js`**：补齐 `text-shadow` 负模糊半径归零为 `0px`，并扩展 `evalGradientComputed`/`border-image-source` 支持 `repeating-*-gradient` 与 `currentcolor` 替换。
+  2. **全绿验证**：`/css/css-text-decor/text-shadow/parsing/text-shadow-computed.html` **FAIL->PASS (7/7)**、`--smoke` **3/3 suites, 6/6 tests PASS**。

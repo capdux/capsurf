@@ -42689,7 +42689,7 @@
         ? global.__capsurf_normalizeSingleColor
         : (v) => v;
       const evalGradientComputed = (gradRaw) => {
-        const gm = /^(linear-gradient|radial-gradient|conic-gradient)\((.*)\)$/i.exec(gradRaw);
+        const gm = /^((?:repeating-)?(?:linear|radial|conic)-gradient)\((.*)\)$/i.exec(gradRaw);
         if (!gm) return gradRaw;
         const fn = gm[1].toLowerCase();
         const args = [];
@@ -44227,8 +44227,8 @@
         computedMap.set("text-underline-offset", evalLinLenPctTok(tuoRaw));
       }
       const bisRaw = (computedMap.get("border-image-source") || "").trim();
-      if (bisRaw && /^(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(bisRaw)) {
-        computedMap.set("border-image-source", evalGradientComputed(bisRaw));
+      if (bisRaw && /^(?:repeating-)?(?:linear|radial|conic)-gradient\(/i.test(bisRaw)) {
+        computedMap.set("border-image-source", evalGradientComputed(bisRaw).replace(/\bcurrentcolor\b/gi, elColor));
       }
       const biwRaw = (computedMap.get("border-image-width") || "").trim();
       if (biwRaw && biwRaw !== "1") {
@@ -44498,6 +44498,7 @@
             else col = (t.toLowerCase() === "currentcolor") ? elColor : normCol(t);
           }
           if (lens.length === 2) lens.push("0px");
+          if (lens.length >= 3 && /^-[\d.]+px$/.test(lens[2])) lens[2] = "0px";
           return [col].concat(lens).join(" ");
         }).join(", "));
       }

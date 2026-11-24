@@ -3043,3 +3043,7 @@
 ### Phase 635: `background-position-{x,y}-valid` & `background-size-computed` 全绿
 - **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：`cssom.js` `background-position*` 改用 `splitTopLevelComma` 逐层调用 `canonicalizeCalcToken`；`window.js` 新增 `background-size` 计算值求值（`evalLinLenPctTok` + 负长度 clamp 为 `0px`）与 `x-start`/`y-start`/`x-end`/`y-end` 归一化。
 - **WPT & Smoke 验收**：`background-position-x-valid`、`background-position-y-valid`、`background-size-computed` PASS，`--smoke` 3/3 suites PASS。
+
+### Phase 636: `/css/css-text-decor/text-shadow/parsing/text-shadow-computed` 7/7 全绿
+- **核心修复 (`src/js/shim/window.js`)**：`text-shadow` 计算值规范化对第 3 个长度（blur radius）负值 clamp 为 `0px`；`evalGradientComputed` 与 `border-image-source` 补齐 `repeating-*-gradient` 与 `currentcolor` 替换。
+- **WPT & Smoke 验收**：`/css/css-text-decor/text-shadow/parsing/text-shadow-computed.html` (7/7) PASS，`--smoke` 3/3 suites PASS。

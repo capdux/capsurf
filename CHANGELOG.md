@@ -3738,3 +3738,5 @@
 - **Phase 634** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `scale` 校验剥离 `sign()`/`progress()` 并在 `evalCssLengthExpr` 支持 `sign()`/`abs()`；`scale-parsing-valid` (32/32) 与 `scale-parsing-computed` (38/38) 全绿。
 
 - **Phase 635** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `background-position*` 逐层规范化并补全 `background-size` 计算值求值；`background-position-{x,y}-valid` 与 `background-size-computed` 全绿。
+
+- **Phase 636** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `text-shadow` 负模糊半径归零为 `0px` 并扩展 `evalGradientComputed` 支持 `repeating-*-gradient`；`text-shadow-computed` 实现 7/7 全绿。

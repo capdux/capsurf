@@ -2221,3 +2221,7 @@
 ### Phase 635: `background-position-{x,y}-valid` & `background-size-computed` 全绿
 - **Filter `background-position-x-valid` / `background-position-y-valid` / `background-size-computed`**: **FAIL->PASS (3/3)**（`cssom.js` `background-position*` 改用 `splitTopLevelComma` 按图层调用 `canonicalizeCalcToken`；`window.js` 新增 `background-size` 计算值求值并夹紧负长度为 `0px`）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 636: `/css/css-text-decor/text-shadow/parsing/text-shadow-computed` 7/7 全绿
+- **Filter `/css/css-text-decor/text-shadow/parsing/text-shadow-computed`**: **FAIL->PASS (7/7)**（`window.js` `text-shadow` 第 3 个长度负模糊半径规范化归零为 `0px`，并扩展 `evalGradientComputed` / `border-image-source` 支持 `repeating-*-gradient` 与 `currentcolor` 替换）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
