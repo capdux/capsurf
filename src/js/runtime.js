@@ -11277,8 +11277,27 @@
         if (context === "font-face") {
           keys = Array.from(data.keys()).sort();
         }
+        let collapseMargin = false;
+        if (context === "page" && data.has("margin-top") && data.has("margin-right") && data.has("margin-bottom") && data.has("margin-left")) {
+          const p0 = data.get("margin-top").priority || "";
+          if ((data.get("margin-right").priority || "") === p0 &&
+              (data.get("margin-bottom").priority || "") === p0 &&
+              (data.get("margin-left").priority || "") === p0) {
+            collapseMargin = true;
+          }
+        }
+        let marginEmitted = false;
         for (let i = 0; i < keys.length; i++) {
           const k = keys[i];
+          if (collapseMargin && (k === "margin-top" || k === "margin-right" || k === "margin-bottom" || k === "margin-left")) {
+            if (!marginEmitted) {
+              marginEmitted = true;
+              const mv = serializeExpandedShorthand("margin", (lh) => serializeCssValue(data.get(lh).value));
+              const mp = data.get("margin-top").priority;
+              parts.push("margin: " + mv + (mp ? " !" + mp : ""));
+            }
+            continue;
+          }
           const entry = data.get(k);
           if (!entry) continue;
           let v = serializeCssValue(entry.value);
@@ -44240,7 +44259,7 @@
       return null;
     }
 
-    function parseDeclarationsBlockInto(element, declBlock, computedMap) {
+    function parseDeclarationsBlockInto(element, declBlock, computedMap, impFilter) {
       const impSet = computedMap._importantKeys || (computedMap._importantKeys = new Set());
       function setDecl(k, v, isImp) {
         if (!isImp && impSet.has(k)) return;
@@ -44261,6 +44280,8 @@
           isImp = true;
           val = val.slice(0, -10).trim();
         }
+        if (impFilter === "normal" && isImp) continue;
+        if (impFilter === "important" && !isImp) continue;
         val = resolveAttrExpressions(element, val);
         const pLowDecl = prop.toLowerCase();
         const key = prop.startsWith("--") ? prop : (pLowDecl === "-webkit-border-radius" ? "border-radius" : pLowDecl);
@@ -44779,25 +44800,73 @@
       const parseFn = global.splitStylesheetRules || (typeof globalThis !== "undefined" && globalThis.splitStylesheetRules);
       const matched = [];
       let seq = 0;
-      const collectFromText = (text) => {
+      const layerOrder = new Map();
+      let layerSeq = 0;
+      let anonLayerSeq = 0;
+      const registerLayerPath = (fullPath) => {
+        if (!fullPath) return "";
+        const segs = fullPath.split(".").map((s) => s.trim()).filter(Boolean);
+        let acc = "";
+        for (let si = 0; si < segs.length; si++) {
+          acc = acc ? (acc + "." + segs[si]) : segs[si];
+          if (!layerOrder.has(acc)) layerOrder.set(acc, layerSeq++);
+        }
+        return acc;
+      };
+      const cmpLayer = (a, b) => {
+        if (a === b) return 0;
+        if (!a) return 1;
+        if (!b) return -1;
+        const sa = a.split("."), sb = b.split(".");
+        const len = Math.min(sa.length, sb.length);
+        let acc = "";
+        for (let i = 0; i < len; i++) {
+          if (sa[i] !== sb[i]) {
+            const pa = acc ? (acc + "." + sa[i]) : sa[i];
+            const pb = acc ? (acc + "." + sb[i]) : sb[i];
+            return (layerOrder.get(pa) ?? 0) - (layerOrder.get(pb) ?? 0);
+          }
+          acc = acc ? (acc + "." + sa[i]) : sa[i];
+        }
+        return sa.length > sb.length ? -1 : 1;
+      };
+      const collectFromText = (text, layerPrefix) => {
         if (typeof parseFn === "function") {
           const rules = parseFn(text);
           for (let i = 0; i < rules.length; i++) {
             const r = rules[i];
             if (!r) continue;
             const sel = String(r.selectorText || "").trim();
-            if (sel.startsWith("@media")) {
+            const rawCss = String(r.cssText || "").trim();
+            if (!sel && /^@layer\b/i.test(rawCss)) {
+              const stmt = rawCss.replace(/^@layer\b/i, "").replace(/;$/, "").trim();
+              if (stmt) {
+                const names = stmt.split(",");
+                for (let ni = 0; ni < names.length; ni++) {
+                  const nm = names[ni].trim();
+                  if (nm) registerLayerPath(layerPrefix ? (layerPrefix + "." + nm) : nm);
+                }
+              }
+              continue;
+            }
+            if (/^@layer\b/i.test(sel)) {
+              const nm = sel.replace(/^@layer\b/i, "").trim();
+              const full = nm
+                ? registerLayerPath(layerPrefix ? (layerPrefix + "." + nm) : nm)
+                : registerLayerPath((layerPrefix ? (layerPrefix + ".") : "") + "__anon_" + (anonLayerSeq++));
+              collectFromText(r.declText || "", full);
+            } else if (sel.startsWith("@media")) {
               const query = sel.replace(/^@media\s*/i, "");
               if (evaluateMediaQuery(query)) {
-                collectFromText(r.declText || "");
+                collectFromText(r.declText || "", layerPrefix);
               }
             } else if (sel.startsWith("@supports")) {
-              collectFromText(r.declText || "");
+              collectFromText(r.declText || "", layerPrefix);
             } else if (sel.startsWith("@")) {
               continue;
             } else if (sel) {
               if (matchesSelector(element, sel, normalizedPseudo)) {
-                matched.push({ decl: r.declText || "", spec: calcMatchedSelectorSpecificity(element, sel, normalizedPseudo), order: seq++ });
+                matched.push({ decl: r.declText || "", layer: layerPrefix || "", spec: calcMatchedSelectorSpecificity(element, sel, normalizedPseudo), order: seq++ });
               }
             }
           }
@@ -44809,16 +44878,31 @@
           const selectorStr = match[1].trim();
           const declBlock = match[2];
           if (matchesSelector(element, selectorStr, normalizedPseudo)) {
-            matched.push({ decl: declBlock, spec: calcMatchedSelectorSpecificity(element, selectorStr, normalizedPseudo), order: seq++ });
+            matched.push({ decl: declBlock, layer: layerPrefix || "", spec: calcMatchedSelectorSpecificity(element, selectorStr, normalizedPseudo), order: seq++ });
           }
         }
       };
-      collectFromText(cleanCss);
-      if (matched.length > 1) {
-        matched.sort((x, y) => (x.spec !== y.spec ? x.spec - y.spec : x.order - y.order));
-      }
-      for (let i = 0; i < matched.length; i++) {
-        parseDeclarationsBlockInto(element, matched[i].decl, computedMap);
+      collectFromText(cleanCss, "");
+      if (matched.length > 0) {
+        const normalSorted = matched.slice().sort((x, y) => {
+          const lc = cmpLayer(x.layer, y.layer);
+          if (lc !== 0) return lc;
+          return x.spec !== y.spec ? x.spec - y.spec : x.order - y.order;
+        });
+        for (let i = 0; i < normalSorted.length; i++) {
+          parseDeclarationsBlockInto(element, normalSorted[i].decl, computedMap, "normal");
+        }
+        const hasAnyImp = matched.some((m) => m.decl.toLowerCase().indexOf("!important") !== -1);
+        if (hasAnyImp) {
+          const impSorted = matched.slice().sort((x, y) => {
+            const lc = cmpLayer(y.layer, x.layer);
+            if (lc !== 0) return lc;
+            return x.spec !== y.spec ? x.spec - y.spec : x.order - y.order;
+          });
+          for (let i = 0; i < impSorted.length; i++) {
+            parseDeclarationsBlockInto(element, impSorted[i].decl, computedMap, "important");
+          }
+        }
       }
     }
 

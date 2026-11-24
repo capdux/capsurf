@@ -3322,3 +3322,5 @@
 - 补全 `::marker` 禁用属性屏蔽、`list-style` 计算值全量序列化及 `font`/`font-variant`/`animation-range`/`animation-timeline` 支持，`marker-supported-properties.html` 67/67 全通过并收紧为 `PASS`。
 ### Phase 741 — `/css/css-grid/` 31 项 `FAIL→PASS` 批量复测与基线收紧
 - 对 `/css/css-grid/` 审计报告中的 31 项意外通过用例执行独立复测，31/31 全部通过（含 29 个 `reftest [match] byte-equal` 与 2 个 `grid-lanes` 解析用例），统一收紧为 `PASS`，使 WPT `PASS` 基线提升至 `7,189/9,725 (73.92%)`。
+### Phase 742 — `@layer` 级联排序与 `!important` 层反转全通 + `@page` `margin` 简写折叠
+- 在 `window.js` `parseCssRulesInto` 实现 `@layer` 声明/块/嵌套路径排序与 `!important` 层间反转，打通 `layer-basic.html` (34/34) 与 `layer-important.html` (9/9)；在 `cssom.js` `serializeDecls` 折叠 `@page` `margin` 简写打通 `page-rule-declarations-001.html` (5/5)。

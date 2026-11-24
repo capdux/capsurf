@@ -7487,8 +7487,27 @@
       if (context === "font-face") {
         keys = Array.from(data.keys()).sort();
       }
+      let collapseMargin = false;
+      if (context === "page" && data.has("margin-top") && data.has("margin-right") && data.has("margin-bottom") && data.has("margin-left")) {
+        const p0 = data.get("margin-top").priority || "";
+        if ((data.get("margin-right").priority || "") === p0 &&
+            (data.get("margin-bottom").priority || "") === p0 &&
+            (data.get("margin-left").priority || "") === p0) {
+          collapseMargin = true;
+        }
+      }
+      let marginEmitted = false;
       for (let i = 0; i < keys.length; i++) {
         const k = keys[i];
+        if (collapseMargin && (k === "margin-top" || k === "margin-right" || k === "margin-bottom" || k === "margin-left")) {
+          if (!marginEmitted) {
+            marginEmitted = true;
+            const mv = serializeExpandedShorthand("margin", (lh) => serializeCssValue(data.get(lh).value));
+            const mp = data.get("margin-top").priority;
+            parts.push("margin: " + mv + (mp ? " !" + mp : ""));
+          }
+          continue;
+        }
         const entry = data.get(k);
         if (!entry) continue;
         let v = serializeCssValue(entry.value);

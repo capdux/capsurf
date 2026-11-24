@@ -4084,3 +4084,8 @@
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
 - **Phase 741**:
   - `test/wpt/wpt-expectations.json`: 经独立复测 31/31 全过（reftest 全像素一致 + testharness 全过），将 `/css/css-grid/` 31 项 `FAIL` 收紧为 `PASS`（`PASS` 基线达到 7,189 项）。
+- **Phase 742**:
+  - `GEMINI.md`: 新增 11.12 节，固化高扇出共性攻坚、三路并发与批次汇总编译铁律。
+  - `src/js/shim/window.js`: `parseCssRulesInto` & `parseDeclarationsBlockInto` 完整实现 `@layer` 级联排序与 `!important` 层反转。
+  - `src/js/shim/cssom.js`: `serializeDecls` 在 `@page` 上下文将四边一致 `margin-*` 折叠为 `margin` 简写。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
