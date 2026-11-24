@@ -3260,3 +3260,5 @@
 - 在 `cssom.js` 补全 `@layer` 语句与块规则校验/序列化（含 `@import` 无效 `layer(...)` 回退为 `<general-enclosed>` 媒体查询），打通 `/css/css-cascade/parsing/` 全目录 5/5 PASS；在 `selector.js` 放行 `::before::marker`/`::after::marker`，打通 `tree-abiding-pseudo-elements.html` 全部 41/41 子测试。
 ### Phase 710 — CSS Shapes `rect()`/`xywh()` 等价 `inset()` 求值与 `shape-margin` 规范化
 - 在 `window.js` 将 `rect()`/`xywh()` 计算值按规范折算为等价 `inset()`（含 `100% - (x + w)` 线性组合及 `calc(0% - Npx)` round-trip），并在 `cssom.js` 为 `shape-margin` 规范化前导 `+` 与 `.5px`，一次性打通 `rect-function-computed.html`、`xywh-function-computed.html` 与 `shape-margin-002.html`。
+### Phase 711 — `circle(at ...)`/`ellipse(at ...)` 1-4 值 `<position>` 计算值全覆盖
+- 在 `window.js` 复用 `sub100Sum` 实现完整 `resolvePos`，正确区分 2 值独立 X/Y 轴与 3/4 值边关键词偏移，一举打通 `shape-outside-circle-002.html` (136/136) 与 `shape-outside-ellipse-002.html` (136/136)。

@@ -3959,3 +3959,6 @@
   - `src/js/shim/cssom.js`: `normalizeCssSpecifiedValue("shape-margin")` 剥离前导 `+` 并补全省略前导 `0`（`.5px` -> `0.5px`）。
   - `src/js/shim/window.js`: `getComputedStyle` 中将 `rect()` 与 `xywh()` 转换为等价 `inset()`（支持 `auto`、`round` 与 4->1 边折叠，并保留 `calc(0% - Npx)` round-trip）。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 711**:
+  - `src/js/shim/window.js`: 提取共用 `parsePctPx`/`sub100Sum`，新增 `resolvePos` 规范化 `circle(at ...)`/`ellipse(at ...)` 的 1-4 值 `<position>`（含 2 值独立 X/Y 与 3/4 值边关键词偏移计算）。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

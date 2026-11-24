@@ -47251,6 +47251,68 @@
         };
         const evalTok = (t) => (/^[+-]?(?:\d|\.)/.test(t) || /^calc\(/i.test(t)) ? evalLinLenPctTok(t) : t;
         const clamp0 = (t) => (/^-\d/.test(t)) ? "0px" : t;
+        const parsePctPx = (evStr) => {
+          const ev = String(evStr || "").trim();
+          const mP = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))%$/.exec(ev);
+          if (mP) return { pct: Number(mP[1]), px: 0 };
+          const mX = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))px$/i.exec(ev);
+          if (mX) return { pct: 0, px: Number(mX[1]) };
+          const mC = /^calc\(\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+))%\s*([+-])\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+))px\s*\)$/i.exec(ev);
+          if (mC) return { pct: Number(mC[1]), px: (mC[2] === "-" ? -1 : 1) * Number(mC[3]) };
+          return null;
+        };
+        const sub100Sum = (ev1, ev2) => {
+          const a = parsePctPx(ev1), b = ev2 ? parsePctPx(ev2) : { pct: 0, px: 0 };
+          if (a && b) {
+            const pRem = Math.round((100 - a.pct - b.pct) * 1e6) / 1e6;
+            const xRem = Math.round((-a.px - b.px) * 1e6) / 1e6;
+            if (xRem === 0) return pRem + "%";
+            return "calc(" + pRem + "% " + (xRem < 0 ? "- " + (-xRem) : "+ " + xRem) + "px)";
+          }
+          return ev2 ? ("calc(100% - (" + ev1 + " + " + ev2 + "))") : ("calc(100% - (" + ev1 + "))");
+        };
+        const resolvePos = (pt) => {
+          const isX = (w) => w === "left" || w === "right";
+          const isY = (w) => w === "top" || w === "bottom";
+          const isKw = (w) => isX(w) || isY(w) || w === "center";
+          const axisVal = (kw, off) => {
+            if (!off) {
+              if (kw === "left" || kw === "top") return "0%";
+              if (kw === "center") return "50%";
+              if (kw === "right" || kw === "bottom") return "100%";
+              return evalTok(kw);
+            }
+            const ev = evalTok(off);
+            if (kw === "right" || kw === "bottom") return sub100Sum(ev, null);
+            return ev;
+          };
+          if (pt.length === 1) {
+            const t0 = pt[0].toLowerCase();
+            return isY(t0) ? ("50% " + axisVal(t0, null)) : (axisVal(t0, null) + " 50%");
+          }
+          if (pt.length === 2) {
+            const a = pt[0].toLowerCase(), b = pt[1].toLowerCase();
+            if (isY(a) && (isX(b) || b === "center")) return axisVal(b, null) + " " + axisVal(a, null);
+            return axisVal(a, null) + " " + axisVal(b, null);
+          }
+          let xKw = "center", xOff = null, yKw = "center", yOff = null;
+          for (let idx = 0; idx < pt.length; idx++) {
+            const w = pt[idx].toLowerCase();
+            const nxt = idx + 1 < pt.length ? pt[idx + 1] : null;
+            const nxtIsOff = nxt !== null && !isKw(nxt.toLowerCase());
+            if (isX(w)) {
+              xKw = w;
+              if (nxtIsOff) { xOff = nxt; idx++; }
+            } else if (isY(w)) {
+              yKw = w;
+              if (nxtIsOff) { yOff = nxt; idx++; }
+            } else if (w === "center") {
+              if (idx === 0) xKw = "center";
+              else yKw = "center";
+            }
+          }
+          return axisVal(xKw, xOff) + " " + axisVal(yKw, yOff);
+        };
         let res = sv;
         if (fn === "circle" || fn === "ellipse") {
           const toks = splitWs(inner);
@@ -47258,22 +47320,7 @@
           const pre = (atI === -1 ? toks : toks.slice(0, atI)).map((t) => clamp0(evalTok(t)));
           let posStr = "";
           if (atI !== -1 && atI + 1 < toks.length) {
-            const pt = toks.slice(atI + 1);
-            const p1 = (t) => {
-              const tl = t.toLowerCase();
-              if (tl === "left" || tl === "top") return "0%";
-              if (tl === "center") return "50%";
-              if (tl === "right" || tl === "bottom") return "100%";
-              return evalTok(t);
-            };
-            if (pt.length === 1) {
-              const tl = pt[0].toLowerCase();
-              posStr = (tl === "top" || tl === "bottom") ? ("50% " + p1(pt[0])) : (p1(pt[0]) + " 50%");
-            } else if (pt.length === 2) {
-              posStr = p1(pt[0]) + " " + p1(pt[1]);
-            } else {
-              posStr = pt.map(evalTok).join(" ");
-            }
+            posStr = resolvePos(toks.slice(atI + 1));
           }
           const preStr = pre.join(" ");
           res = fn + "(" + (posStr ? (preStr ? preStr + " at " + posStr : "at " + posStr) : preStr) + ")";
@@ -47293,26 +47340,6 @@
           const toks = splitWs(inner);
           const rI = toks.findIndex((t) => t.toLowerCase() === "round");
           const raw4 = rI === -1 ? toks : toks.slice(0, rI);
-          const parsePctPx = (evStr) => {
-            const ev = String(evStr || "").trim();
-            const mP = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))%$/.exec(ev);
-            if (mP) return { pct: Number(mP[1]), px: 0 };
-            const mX = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))px$/i.exec(ev);
-            if (mX) return { pct: 0, px: Number(mX[1]) };
-            const mC = /^calc\(\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+))%\s*([+-])\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+))px\s*\)$/i.exec(ev);
-            if (mC) return { pct: Number(mC[1]), px: (mC[2] === "-" ? -1 : 1) * Number(mC[3]) };
-            return null;
-          };
-          const sub100Sum = (ev1, ev2) => {
-            const a = parsePctPx(ev1), b = ev2 ? parsePctPx(ev2) : { pct: 0, px: 0 };
-            if (a && b) {
-              const pRem = Math.round((100 - a.pct - b.pct) * 1e6) / 1e6;
-              const xRem = Math.round((-a.px - b.px) * 1e6) / 1e6;
-              if (xRem === 0) return pRem + "%";
-              return "calc(" + pRem + "% " + (xRem < 0 ? "- " + (-xRem) : "+ " + xRem) + "px)";
-            }
-            return ev2 ? ("calc(100% - (" + ev1 + " + " + ev2 + "))") : ("calc(100% - (" + ev1 + "))");
-          };
           let tVal, rVal, bVal, lVal;
           if (fn === "rect" && raw4.length >= 4) {
             tVal = raw4[0].toLowerCase() === "auto" ? "0%" : evalTok(raw4[0]);
