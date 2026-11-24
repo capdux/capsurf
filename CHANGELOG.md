@@ -3950,3 +3950,8 @@
   - `src/js/shim/cssom.js`: 新增 `parseGridLine` 与 `splitGridSlashParts`，实现 `grid-row-start`/`grid-row-end`/`grid-column-start`/`grid-column-end` 校验与规范化（含 `\31 st` 十六进制转义保护、`min/max` 折叠、`span` 位置与正整数校验），以及 `grid-row`/`grid-column`/`grid-area` 简写展开与最短序列化。
   - `src/js/shim/window.js`: `getShorthandComputed` 与 `applyUsedValuesToComputedMap` 补齐 `grid-row`/`grid-column`/`grid-area` 序列化与 `calc`/`sign(cqw)`/`sibling-index()` 计算求值。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 709**:
+  - `src/js/shim/cssom.js`: 新增 `isValidLayerName` 与 `parseLayerRule`，严格校验 `@layer` 语句/块名称、实现空块 `{\n}` 序列化，并在 `@import` 中将无效 `layer(...)` 回退为 `<general-enclosed>` 媒体查询。
+  - `src/js/shim/selector.js`: 允许 `::before::marker`、`::after::marker` 及 `::search-text` 链式 `:current`/`:not`。
+  - `test/wpt/wpt-expectations.json`: 将 `layer-import-parsing.html`、`layer.html`、`tree-abiding-pseudo-elements.html` 收紧为 `PASS`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

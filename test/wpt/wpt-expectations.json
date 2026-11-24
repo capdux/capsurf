@@ -2184,11 +2184,11 @@
     "reason": null
   },
   "/css/css-cascade/parsing/layer-import-parsing.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-cascade/parsing/layer.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-cascade/parsing/supports-import-parsing.html": {
@@ -5113,7 +5113,7 @@
     "reason": null
   },
   "/css/css-pseudo/parsing/tree-abiding-pseudo-elements.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-ruby/br-clear-all-000.html": {

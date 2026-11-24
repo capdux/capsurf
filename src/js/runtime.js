@@ -11496,6 +11496,41 @@
       return s;
     }
 
+    function isValidLayerName(name) {
+      if (!name || typeof name !== "string") return false;
+      const parts = name.split(".");
+      for (let i = 0; i < parts.length; i++) {
+        const p = parts[i];
+        if (!p || /\s/.test(p)) return false;
+        const pl = p.toLowerCase();
+        if (pl === "inherit" || pl === "initial" || pl === "unset" || pl === "revert" || pl === "revert-layer" || pl === "default") return false;
+        if (!/^(?:--|-?[a-z_]|-?[^\x00-\x7f])(?:[a-z0-9_-]|[^\x00-\x7f])*$/i.test(p)) return false;
+      }
+      return true;
+    }
+
+    function parseLayerRule(parsed, kind) {
+      const sel = String(parsed.selectorText || "").trim();
+      const raw = String(parsed.cssText || "").trim();
+      if (kind === "layer-statement") {
+        const m = /^@layer\b([\s\S]*?);?\s*$/i.exec(raw);
+        if (!m) return null;
+        const body = m[1].trim();
+        if (!body) return null;
+        const items = body.split(",").map((x) => x.trim());
+        if (items.length === 0) return null;
+        for (let i = 0; i < items.length; i++) {
+          if (!isValidLayerName(items[i])) return null;
+        }
+        return { kind: "layer-statement", nameList: items };
+      }
+      const m = /^@layer\b([\s\S]*)$/i.exec(sel);
+      if (!m) return null;
+      const name = m[1].trim();
+      if (name && !isValidLayerName(name)) return null;
+      return { kind: "layer-block", name: name };
+    }
+
     function parseSingleRuleOrThrow(text) {
       const t = String(text == null ? "" : text);
       const split = splitStylesheetRules(t);
@@ -11522,6 +11557,11 @@
       }
       if (kind === "style") {
         validateSelectorOrThrow(parsed.selectorText);
+      }
+      if (kind === "layer-block" || kind === "layer-statement") {
+        if (!parseLayerRule(parsed, kind)) {
+          throw new DOMException("Failed to parse CSS rule: invalid @layer rule", "SyntaxError");
+        }
       }
       return parsed;
     }
@@ -11583,8 +11623,22 @@
         const m = raw.match(/^@import\s+(?:url\(\s*(?:"([^"]*)"|'([^']*)'|([^)"']*))\s*\)|"([^"]*)"|'([^']*)')\s*(layer(?:\(([^)]*)\))?)?\s*([\s\S]*?);?\s*$/i);
         if (m) {
           rule.href = m[1] ?? m[2] ?? (m[3] !== undefined ? m[3].trim() : undefined) ?? m[4] ?? m[5] ?? "";
-          rule.layerName = m[6] ? (m[7] !== undefined ? m[7].trim() : "") : null;
           let rest = (m[8] || "").trim();
+          if (m[6]) {
+            if (m[7] !== undefined) {
+              const ln = m[7].trim();
+              if (isValidLayerName(ln)) {
+                rule.layerName = ln;
+              } else {
+                rule.layerName = null;
+                rest = (m[6] + (rest ? " " + rest : "")).trim();
+              }
+            } else {
+              rule.layerName = "";
+            }
+          } else {
+            rule.layerName = null;
+          }
           let supText = null;
           if (/^supports\(/i.test(rest)) {
             let depth = 1, i = 9, q = "";
@@ -11768,6 +11822,37 @@
         rule._serialize = function () {
           const inner = rule.cssRules.map((r) => r.cssText).join("\n  ");
           return "@keyframes " + rule.name + (inner ? " {\n  " + inner + "\n}" : " {\n}");
+        };
+        return rule;
+      }
+
+      if (kind === "layer-block" || kind === "layer-statement") {
+        const lr = parseLayerRule(parsed, kind);
+        if (!lr) return null;
+        if (kind === "layer-statement") {
+          const rule = new CSSRule();
+          rule.parentRule = parentRule || null;
+          rule.parentStyleSheet = parentSheet || null;
+          rule._type = 0;
+          rule.nameList = lr.nameList;
+          rule._serialize = function () {
+            return "@layer " + lr.nameList.join(", ") + ";";
+          };
+          return rule;
+        }
+        const rule = new CSSGroupingRule();
+        rule.parentRule = parentRule || null;
+        rule.parentStyleSheet = parentSheet || null;
+        rule._onMutate = onMutate || null;
+        rule.name = lr.name;
+        const children = splitStylesheetRules(parsed.declText || "");
+        for (let i = 0; i < children.length; i++) {
+          const c = constructRule(children[i], parentSheet, rule, onMutate);
+          if (c) rule.cssRules.push(c);
+        }
+        rule._serialize = function () {
+          const inner = rule.cssRules.map((r) => r.cssText).join("\n  ");
+          return "@layer" + (lr.name ? " " + lr.name : "") + (inner ? " {\n  " + inner + "\n}" : " {\n}");
         };
         return rule;
       }
@@ -15247,10 +15332,13 @@
         if (seenTerminalPseudoEl) {
           const allowChain = (isDouble && (
             (pName === "::column" && (lastPseudoEl === "::before" || lastPseudoEl === "::after")) ||
+            (pName === "::marker" && (lastPseudoEl === "::before" || lastPseudoEl === "::after")) ||
             (pName === "::scroll-marker" && lastPseudoEl === "::column")
           )) || (!isDouble && lastPseudoEl === "::file-selector-button" && (
             pName === ":hover" || pName === ":focus" || pName === ":active" || pName === ":focus-visible" || pName === ":focus-within" ||
             pName === ":is" || pName === ":where"
+          )) || (!isDouble && lastPseudoEl === "::search-text" && (
+            pName === ":current" || pName === ":not"
           ));
           if (!allowChain) return null;
         }

@@ -157,10 +157,13 @@ function canonicalizeComplexSelector(raw, inHas, inFunc) {
       if (seenTerminalPseudoEl) {
         const allowChain = (isDouble && (
           (pName === "::column" && (lastPseudoEl === "::before" || lastPseudoEl === "::after")) ||
+          (pName === "::marker" && (lastPseudoEl === "::before" || lastPseudoEl === "::after")) ||
           (pName === "::scroll-marker" && lastPseudoEl === "::column")
         )) || (!isDouble && lastPseudoEl === "::file-selector-button" && (
           pName === ":hover" || pName === ":focus" || pName === ":active" || pName === ":focus-visible" || pName === ":focus-within" ||
           pName === ":is" || pName === ":where"
+        )) || (!isDouble && lastPseudoEl === "::search-text" && (
+          pName === ":current" || pName === ":not"
         ));
         if (!allowChain) return null;
       }
