@@ -3882,3 +3882,7 @@
   - `src/js/shim/window.js`: `STANDARD_COMPUTED_LONGHANDS` 与默认值表补齐 `overflow-clip-margin` 与 `scroll-marker-group`。
   - `test/wpt/wpt-expectations.json`: 将 `overflow-clip-margin-computed.html`、`scroll-markers-computed.tentative.html`、`scroll-markers-invalid.html`、`scroll-markers-invalid.tentative.html` 从 `FAIL` 收紧为 `PASS`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 689**:
+  - `src/js/shim/window.js`: `scroll-marker-group` 计算值 `"before"`/`"after"` 补全 `" links"`；`caret-color` 默认/`initial` 计算为 `elColor`。
+  - `test/wpt/wpt-expectations.json`: 将 `/css/css-overflow/parsing/scroll-markers-computed.html` 从 `FAIL` 收紧为 `PASS`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

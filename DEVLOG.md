@@ -3216,3 +3216,5 @@
 - 在 `cssom.js` 中补全 `row-rule*`/`rule*` 与全套 `*-rule-inset*`（含 `cap`/`junction`/`start`/`end` 与 `overlap-join`）语法校验，使 `/css/css-gaps/` 全目录 32/32 用例全数 PASS。
 ### Phase 688 — `scroll-marker-group` 与 `overflow-clip-margin` 闭环及 4 项基线收紧
 - 在 `cssom.js` 与 `window.js` 中补全 `scroll-marker-group` 校验/默认值及 `overflow-clip-margin` 计算属性暴露，一次性打通 `overflow-clip-margin-computed`、`scroll-markers-computed.tentative`、`scroll-markers-invalid`、`scroll-markers-invalid.tentative` 4 项测试并全部收紧为 `PASS`。
+### Phase 689 — `scroll-markers-computed` 与 `caret-color-013` 闭环
+- 在 `window.js` 中补全 `scroll-marker-group` 单关键字计算值补全 ` links` 与 `caret-color` 默认/initial 值回落 `elColor`，`scroll-markers-computed.html`（收紧为 `PASS`）与 `caret-color-013.html` 均全数 PASS。

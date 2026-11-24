@@ -8139,6 +8139,10 @@ function installWindow(global) {
       if (px !== null) computedMap.set("outline-offset", formatCssPx(px));
     }
     const ocmRaw = (computedMap.get("overflow-clip-margin") || "").trim();
+    const smgRaw = (computedMap.get("scroll-marker-group") || "").trim().toLowerCase();
+    if (smgRaw === "before" || smgRaw === "after") {
+      computedMap.set("scroll-marker-group", smgRaw + " links");
+    }
     if (ocmRaw) {
       const splitFn = (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_splitCssTokens === "function")
         ? globalThis.__capsurf_splitCssTokens
@@ -8784,7 +8788,7 @@ function installWindow(global) {
     }
     const ccRaw = (computedMap.get("caret-color") || "").trim();
     if (!ccRaw || ccRaw.toLowerCase() === "initial") {
-      computedMap.set("caret-color", "auto");
+      computedMap.set("caret-color", elColor);
     } else {
       const ccToks = [];
       let cCur = "", cD = 0;

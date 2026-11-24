@@ -4841,7 +4841,7 @@
     "reason": null
   },
   "/css/css-overflow/parsing/scroll-markers-computed.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-overflow/parsing/scroll-markers-computed.tentative.html": {
