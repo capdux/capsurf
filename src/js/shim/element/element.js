@@ -253,8 +253,11 @@ function createStyleProxy(element) {
           v = v.replace(/\s*!important\s*$/i, "").trim();
         }
         if (v !== "") {
-          if (k === "column-rule" || k === "columns" || k === "border-color" || k === "border-style" || k === "border-width" || k === "place-self" || k === "place-items" || k === "place-content") setEntryWithShorthand(map, k, rawKey, v, pri);
-          else setEntryInStyleMap(map, k, rawKey, v, pri);
+          if (k === "place-self" || k === "place-items" || k === "place-content") {
+            if (isValidInlinePropValue(k, v)) setEntryWithShorthand(map, k, rawKey, v, pri);
+          } else if (k === "column-rule" || k === "columns" || k === "border-color" || k === "border-style" || k === "border-width") {
+            setEntryWithShorthand(map, k, rawKey, v, pri);
+          } else setEntryInStyleMap(map, k, rawKey, v, pri);
         }
       }
     }

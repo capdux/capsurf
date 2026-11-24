@@ -3083,3 +3083,7 @@
 ### Phase 645: `font-feature-settings-valid` / `font-variation-settings-valid` / `font-family-computed` 全绿
 - **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：`font-feature-settings` 支持 `1`/`on` 省略、`off`->`0` 与 CSS 转义还原；`font-variation-settings` 统一双引号与数字格式；`font-family` 计算值对非关键字合法 `<custom-ident>` 去除外层引号。
 - **WPT & Smoke 验收**：`font-feature-settings-valid`、`font-variation-settings-valid`、`font-family-computed`（基线收紧为 `PASS`）全绿，`--smoke` 3/3 suites PASS。
+
+### Phase 646: `scrollbar-color-parsing` & `place-{content,self}-shorthand-004` 全绿
+- **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/element/element.js`)**：`scrollbar-color` 独立校验 `auto | <color>{2}` 并规范化颜色；`parseStyleMap()` 对 `place-self`/`place-items`/`place-content` 先过 `isValidInlinePropValue` 再展开。
+- **WPT & Smoke 验收**：`/css/css-scrollbars/` (2/2)、`place-content-shorthand-004`、`place-self-shorthand-004` 全绿，`--smoke` 3/3 suites PASS。

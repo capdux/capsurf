@@ -418,8 +418,13 @@
       return true;
     }
 
-    if (prop === "color" || prop === "background-color" || (prop.endsWith("-color") && prop !== "outline-color" && prop !== "caret-color" && prop !== "accent-color")) {
+    if (prop === "color" || prop === "background-color" || (prop.endsWith("-color") && prop !== "outline-color" && prop !== "caret-color" && prop !== "accent-color" && prop !== "scrollbar-color")) {
       return isValidColor(trimmed);
+    }
+    if (prop === "scrollbar-color") {
+      if (vLower === "auto") return true;
+      const toks = splitCssTokens(trimmed);
+      return toks.length === 2 && isValidColor(toks[0]) && isValidColor(toks[1]);
     }
 
     if (prop === "font-display") {
@@ -3515,7 +3520,7 @@
       }
       return s;
     }
-    if (key === "background-color" || key === "accent-color" || key === "border-color" || key === "border-top-color" || key === "border-right-color" || key === "border-bottom-color" || key === "border-left-color") {
+    if (key === "background-color" || key === "accent-color" || key === "scrollbar-color" || key === "border-color" || key === "border-top-color" || key === "border-right-color" || key === "border-bottom-color" || key === "border-left-color") {
       const toks = splitCssTokens(s);
       return toks.map((t) => {
         const tl = t.toLowerCase();
