@@ -2364,3 +2364,4 @@
 | Phase 695 | WPT `grid-auto-columns` / `grid-auto-rows` `<track-size>+` 校验与注释剥离闭环 | `src/js/shim/cssom.js` | `grid-auto-{columns,rows}-{valid,invalid}` 4/4 全数 PASS (91/91 子测试); `--smoke` 3/3 PASS |
 | Phase 696 | WPT `font-variant-{caps,east-asian,ligatures,numeric}` + `font-synthesis` 计算样式暴露 | `src/js/shim/window.js` | `font-variant-caps-computed` (7/7), `font-variant-east-asian-computed` (12/12), `font-variant-ligatures-computed` (10/10), `font-variant-numeric-computed` (11/11), `font-synthesis-computed` (21/21) 全通 PASS; `--smoke` 3/3 PASS |
 | Phase 697 | WPT `font-variation-settings` 校验、去重、排序与 `calc()` 求值闭环 | `src/js/shim/cssom.js`, `src/js/shim/window.js` | `font-variation-settings-{valid,invalid,computed}` 3/3 全数 PASS; `--smoke` 3/3 PASS |
+| Phase 698 | WPT `font-variant-alternates` 与 `font-variant` 互斥组/函数校验闭环 | `src/js/shim/cssom.js` | `font-variant-alternates-{valid,invalid}` (15/15) 与 `font-variant-invalid` (21/21) 全数 PASS; `--smoke` 3/3 PASS |

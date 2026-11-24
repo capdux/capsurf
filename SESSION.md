@@ -8127,3 +8127,4 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - [Phase 695] `cssom.js` (`grid-auto-columns`/`grid-auto-rows` `<track-size>+` 校验 + 注释剥离规范化): `grid-auto-{columns,rows}-{valid,invalid}` 4/4 PASS，`--smoke` 3/3 PASS。
 - [Phase 696] `window.js` (`STANDARD_COMPUTED_LONGHANDS` 与默认值表补齐 `font-variant-{caps,east-asian,ligatures,numeric}`、`font-synthesis*`、`font-variation-settings`、`font-size-adjust`): `font-variant-*-computed` 4/4 与 `font-synthesis-computed` (21/21) PASS，`--smoke` 3/3 PASS。
 - [Phase 697] `cssom.js` (`font-variation-settings` 4 字符 ASCII tag + `<number>` 校验) & `window.js` (计算值去重保留最右、字母序排序与 `calc()` 求值): `font-variation-settings-{valid,invalid,computed}` 3/3 PASS，`--smoke` 3/3 PASS。
+- [Phase 698] `cssom.js` (`isValidCssValue` 新增 `font-variant-alternates` 函数参数检验与 `font-variant` 互斥组去重校验): `font-variant-alternates-{valid,invalid}` 与 `font-variant-invalid` (21/21) PASS，`--smoke` 3/3 PASS。

@@ -6903,6 +6903,67 @@
         }
         return true;
       }
+      if (prop === "font-variant-alternates" || prop === "font-variant") {
+        if (vLower === "normal") return true;
+        if (prop === "font-variant" && vLower === "none") return true;
+        const toks = splitCssTokens(trimmed);
+        if (toks.length === 0) return false;
+        const seen = new Set();
+        const FVA_SINGLE = new Set(["stylistic", "swash", "ornaments", "annotation"]);
+        const FVA_MULTI = new Set(["styleset", "character-variant"]);
+        const isFvaTok = (t) => {
+          const tl = t.toLowerCase();
+          if (tl === "historical-forms") { if (seen.has("fva-hf")) return false; seen.add("fva-hf"); return true; }
+          const fm = /^([a-z-]+)\((.*)\)$/i.exec(t);
+          if (!fm) return false;
+          const fn = fm[1].toLowerCase(), body = fm[2].trim();
+          if (!body) return false;
+          if (FVA_SINGLE.has(fn)) {
+            if (seen.has("fva-" + fn)) return false;
+            const args = splitCssTokens(body);
+            if (args.length !== 1 || args[0].includes(",")) return false;
+            seen.add("fva-" + fn);
+            return true;
+          }
+          if (FVA_MULTI.has(fn)) {
+            if (seen.has("fva-" + fn)) return false;
+            const items = splitTopLevelComma(body);
+            if (items.length === 0 || items.some((it) => splitCssTokens(it).length !== 1)) return false;
+            seen.add("fva-" + fn);
+            return true;
+          }
+          return false;
+        };
+        if (prop === "font-variant-alternates") {
+          return toks.every((t) => isFvaTok(t));
+        }
+        const FV_GROUPS = {
+          "common-ligatures": "cl", "no-common-ligatures": "cl",
+          "discretionary-ligatures": "dl", "no-discretionary-ligatures": "dl",
+          "historical-ligatures": "hl", "no-historical-ligatures": "hl",
+          "contextual": "cx", "no-contextual": "cx",
+          "small-caps": "cp", "all-small-caps": "cp", "petite-caps": "cp", "all-petite-caps": "cp", "unicase": "cp", "titling-caps": "cp",
+          "lining-nums": "nf", "oldstyle-nums": "nf",
+          "proportional-nums": "ns", "tabular-nums": "ns",
+          "diagonal-fractions": "nr", "stacked-fractions": "nr",
+          "ordinal": "or", "slashed-zero": "sz", "ruby": "rb",
+          "jis78": "ev", "jis83": "ev", "jis90": "ev", "jis04": "ev", "simplified": "ev", "traditional": "ev",
+          "full-width": "ew", "proportional-width": "ew",
+          "sub": "ps", "super": "ps",
+          "text": "em", "emoji": "em", "unicode": "em"
+        };
+        for (let i = 0; i < toks.length; i++) {
+          const t = toks[i], tl = t.toLowerCase();
+          if (Object.prototype.hasOwnProperty.call(FV_GROUPS, tl)) {
+            const g = FV_GROUPS[tl];
+            if (seen.has(g)) return false;
+            seen.add(g);
+          } else if (!isFvaTok(t)) {
+            return false;
+          }
+        }
+        return true;
+      }
       if (prop === "grid-auto-columns" || prop === "grid-auto-rows") {
         const toks = splitCssTokens(trimmed.replace(/\/\*[\s\S]*?\*\//g, " ").trim());
         if (toks.length === 0) return false;

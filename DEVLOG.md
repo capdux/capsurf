@@ -3234,3 +3234,5 @@
 - 在 `window.js` 中补全 `font-variant-{caps,east-asian,ligatures,numeric}`、`font-synthesis*`、`font-variation-settings` 与 `font-size-adjust` 的默认值与 `STANDARD_COMPUTED_LONGHANDS` 注册，`font-variant-*-computed` (4/4) 与 `font-synthesis-computed` (21/21) 全数 PASS。
 ### Phase 697 — `font-variation-settings` 校验与计算值规范化闭环
 - 在 `cssom.js` 与 `window.js` 中补全 `font-variation-settings` 的 4 字符 tag + `<number>` 语法校验、去重保留最右项、字母序排序及 `calc()` 数值求值，`font-variation-settings-{valid,invalid,computed}` 全部 PASS。
+### Phase 698 — `font-variant-alternates` 与 `font-variant` 互斥校验闭环
+- 在 `cssom.js` 中补全 `font-variant-alternates` 函数参数及 `font-variant` 全组互斥关键字校验，`font-variant-alternates-{valid,invalid}` 与 `font-variant-invalid` 全数 PASS。

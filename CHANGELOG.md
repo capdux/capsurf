@@ -3912,3 +3912,6 @@
   - `src/js/shim/cssom.js`: `isValidCssValue("font-variation-settings")` 校验 4 字符 ASCII OpenType tag 与 `<number>`/`calc()`。
   - `src/js/shim/window.js`: `font-variation-settings` 计算值按 tag 去重保留最右、按字典序排序并求值 `calc()`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 698**:
+  - `src/js/shim/cssom.js`: `isValidCssValue` 补齐 `font-variant-alternates` 与 `font-variant` 互斥组与函数参数校验。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
