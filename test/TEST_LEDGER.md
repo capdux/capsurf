@@ -1782,3 +1782,15 @@
   - `/css/css-backgrounds/parsing/` (`b414`): `74` files (`29 PASS / 45 FAIL`)
   - `/css/css-display/parsing/` (`b416`): `5` files (`1 PASS / 4 FAIL`)
   - `/css/css-flexbox/parsing/` (`b417`): **27/27 PASS (100% ALL GREEN)**
+
+### Phase 572 `border-image-{outset,repeat,slice}` & `css-break/parsing` 18/18 收紧 & WPT-B418~B423 摸底 (bin_dev Phase 572, 2026-11-24)
+- **Filter `/css/css-backgrounds/parsing/border-image-repeat`**: **3/3 PASS (100% ALL GREEN)**（校验 `1~2` 关键字 `stretch|repeat|round|space`，对称折叠与默认值 `"stretch"`）。
+- **Filter `/css/css-backgrounds/parsing/border-image-{outset,slice}`**: `outset-{valid,invalid}` **2/2 PASS**、`slice-{valid,invalid}` **2/2 PASS**（`fill` 后置规范化与 `STANDARD_COMPUTED_LONGHANDS` 默认值 `"0"` / `"100%"`）。
+- **Expectations Tightened**: `/css/css-break/parsing/` `orphans-{computed,valid}.html`、`widows-{computed,valid}.html` 共 4 项收紧为 `PASS`（全目录 **18/18 PASS**）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-align/parsing/` (`b418`): **50/50 PASS (100% ALL GREEN)**
+  - `/css/css-break/parsing/` (`b419`): **18/18 PASS (100% ALL GREEN)**
+  - `/css/css-overflow/parsing/` (`b420`): `32` files (`22 PASS / 10 FAIL`)
+  - `/css/css-box/parsing/` (`b421`): **29/29 PASS (100% ALL GREEN)**
+  - `/css/css-ruby/parsing/` (`b423`): **8/8 PASS (100% ALL GREEN)**

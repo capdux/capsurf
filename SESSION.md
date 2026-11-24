@@ -7653,3 +7653,11 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
      - `cssom.js`：实现 `border-image-source` 单层 `none | <image>` 校验与 `border-image-width`（`1~4` 个 `auto | <number [0,∞]> | <length-percentage [0,∞]>`）校验。
      - `window.js`：将 `border-image-source`（默认 `"none"`）与 `border-image-width`（默认 `"1"`）纳入 `STANDARD_COMPUTED_LONGHANDS`，计算期对 `border-image-width` 复用 `evalLinLenPctTok`、负值钳位 `0px` 并对称折叠；同步补齐 `unicode-bidi: normal` 与 `writing-mode: horizontal-tb` 默认初始值。
   2. **全绿验证与并行摸底**：`border-image-width-*` **3/3 PASS**、`border-image-source-{valid,invalid}` **2/2 PASS**、`--smoke` **3/3 suites PASS**；子智能体完成 `/css/css-flexbox/parsing/` **27/27 PASS**、`/css/css-backgrounds/parsing/`（29/74）、`/css/css-grid/parsing/`（6/61）。
+
+### 2026-11-24 Phase 572 (`border-image-{outset,repeat,slice}` 闭环 & `css-break/parsing` 18/18 收紧)
+- **[Agent]**: 自主推导并完成 Phase 572（`src/js/shim/cssom.js`, `src/js/shim/window.js`, `test/wpt/wpt-expectations.json`）：
+  1. **`border-image-{outset,repeat,slice}` (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：
+     - `cssom.js`：补全 3 项属性的严格文法校验、`border-image-repeat` 双等值折叠、`border-image-slice` `fill` 后置与 4/3/2 对称折叠、`border-image-outset` 对称折叠。
+     - `window.js`：全部纳入 `STANDARD_COMPUTED_LONGHANDS`（默认 `0` / `stretch` / `100%`），`border-image-outset` 计算期解析 `<length>`/`calc` 并钳位负值 `0px`。
+  2. **验证与基线收紧**：`border-image-repeat-*` **3/3 PASS**、`border-image-outset-{valid,invalid}` **2/2 PASS**、`border-image-slice-{valid,invalid}` **2/2 PASS**、`--smoke` **3/3 suites PASS**；收紧 `css-break/parsing` 4 项基线实现 **18/18 PASS**。
+  3. **并行摸底汇总**：`/css/css-align/parsing/` **50/50 PASS**、`/css/css-box/parsing/` **29/29 PASS**、`/css/css-ruby/parsing/` **8/8 PASS**、`/css/css-overflow/parsing/` **22/32 PASS**。

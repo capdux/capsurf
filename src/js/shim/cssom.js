@@ -2172,6 +2172,44 @@
       }
       return true;
     }
+    if (prop === "border-image-outset") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length < 1 || toks.length > 4) return false;
+      for (let i = 0; i < toks.length; i++) {
+        const t = toks[i];
+        if (/^[+]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(t)) continue;
+        if (!t.includes("%") && isValidLenPct(t, false)) continue;
+        return false;
+      }
+      return true;
+    }
+    if (prop === "border-image-repeat") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length < 1 || toks.length > 2) return false;
+      for (let i = 0; i < toks.length; i++) {
+        const t = toks[i];
+        if (t !== "stretch" && t !== "repeat" && t !== "round" && t !== "space") return false;
+      }
+      return true;
+    }
+    if (prop === "border-image-slice") {
+      const toks = splitCssTokens(vLower);
+      let hasFill = false;
+      const nums = [];
+      for (let i = 0; i < toks.length; i++) {
+        const t = toks[i];
+        if (t === "fill") {
+          if (hasFill || (i !== 0 && i !== toks.length - 1)) return false;
+          hasFill = true;
+        } else if (/^[+]?(?:\d+(?:\.\d+)?|\.\d+)%?$/.test(t) || /^calc\(/i.test(t)) {
+          if (/^calc\(/i.test(t) && !isValidLenPct(t, false)) return false;
+          nums.push(t);
+        } else {
+          return false;
+        }
+      }
+      return nums.length >= 1 && nums.length <= 4;
+    }
     if (prop === "shape-outside") {
       const bm = /^(?:circle|ellipse)\(\s*(.*)\s*\)$/i.exec(trimmed);
       if (bm) {
@@ -2461,6 +2499,31 @@
       if (parts.length === 3 && parts[0] === parts[2]) parts.pop();
       if (parts.length === 2 && parts[0] === parts[1]) parts.pop();
       return parts.join(" ");
+    }
+    if (key === "border-image-repeat") {
+      const p = splitCssTokens(s.toLowerCase());
+      if (p.length === 2 && p[0] === p[1]) p.pop();
+      return p.join(" ");
+    }
+    if (key === "border-image-slice") {
+      const p = splitCssTokens(s.toLowerCase());
+      const hasFill = p.includes("fill");
+      const nums = p.filter((t) => t !== "fill");
+      if (nums.length === 4 && nums[1] === nums[3]) nums.pop();
+      if (nums.length === 3 && nums[0] === nums[2]) nums.pop();
+      if (nums.length === 2 && nums[0] === nums[1]) nums.pop();
+      if (hasFill) nums.push("fill");
+      return nums.join(" ");
+    }
+    if (key === "border-image-outset" || key === "border-image-width") {
+      const p = splitCssTokens(s.toLowerCase());
+      for (let i = 0; i < p.length; i++) {
+        if (/^calc\(/i.test(p[i])) p[i] = canonicalizeCalcToken(p[i]);
+      }
+      if (p.length === 4 && p[1] === p[3]) p.pop();
+      if (p.length === 3 && p[0] === p[2]) p.pop();
+      if (p.length === 2 && p[0] === p[1]) p.pop();
+      return p.join(" ");
     }
     if (key === "border-style") {
       const parts = splitCssTokens(s.toLowerCase());

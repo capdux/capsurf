@@ -8446,6 +8446,29 @@ function installWindow(global) {
       if (biwOut.length === 2 && biwOut[0] === biwOut[1]) biwOut.pop();
       computedMap.set("border-image-width", biwOut.join(" "));
     }
+    const bioRaw = (computedMap.get("border-image-outset") || "").trim();
+    if (bioRaw && bioRaw !== "0") {
+      const bioToks = [];
+      let bc = "", bd = 0;
+      for (let i = 0; i < bioRaw.length; i++) {
+        const ch = bioRaw[i];
+        if (ch === "(") bd++; else if (ch === ")" && bd > 0) bd--;
+        if (bd === 0 && /\s/.test(ch)) { if (bc) { bioToks.push(bc); bc = ""; } }
+        else bc += ch;
+      }
+      if (bc) bioToks.push(bc);
+      const bioOut = bioToks.map((t) => {
+        const tl = t.toLowerCase();
+        if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(tl)) return tl;
+        const ev = evalLinLenPctTok(t);
+        if (/^-[\d.]+px$/.test(ev)) return "0px";
+        return ev;
+      });
+      if (bioOut.length === 4 && bioOut[1] === bioOut[3]) bioOut.pop();
+      if (bioOut.length === 3 && bioOut[0] === bioOut[2]) bioOut.pop();
+      if (bioOut.length === 2 && bioOut[0] === bioOut[1]) bioOut.pop();
+      computedMap.set("border-image-outset", bioOut.join(" "));
+    }
     const textDecorDefs = [
       ["text-decoration-line", "none"],
       ["text-decoration-style", "solid"],
@@ -8460,6 +8483,9 @@ function installWindow(global) {
       ["table-layout", "auto"],
       ["unicode-bidi", "normal"],
       ["writing-mode", "horizontal-tb"],
+      ["border-image-outset", "0"],
+      ["border-image-repeat", "stretch"],
+      ["border-image-slice", "100%"],
       ["border-image-source", "none"],
       ["border-image-width", "1"]
     ];
@@ -8607,7 +8633,7 @@ function installWindow(global) {
     "border-bottom-color", "border-bottom-left-radius", "border-bottom-right-radius",
     "border-bottom-style", "border-bottom-width", "border-collapse",
     "border-end-end-radius", "border-end-start-radius",
-    "border-image-source", "border-image-width",
+    "border-image-outset", "border-image-repeat", "border-image-slice", "border-image-source", "border-image-width",
     "border-inline-end-color", "border-inline-end-style", "border-inline-end-width",
     "border-inline-start-color", "border-inline-start-style", "border-inline-start-width",
     "border-left-color", "border-left-style", "border-left-width",

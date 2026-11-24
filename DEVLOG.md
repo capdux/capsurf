@@ -2784,3 +2784,7 @@
 ### Phase 571: `border-image-width` 3/3 全绿与 `border-image-source` 解析闭环
 - **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：补全 `border-image-source` 与 `border-image-width` 文法校验、计算期默认值、负长度 `0px` 钳位及 4/3/2 对称折叠，并补全 `unicode-bidi`/`writing-mode` 默认初始值。
 - **WPT & Smoke 验收**：`border-image-width-*` **3/3 PASS**、`border-image-source-{valid,invalid}` **2/2 PASS**、`--smoke` **3/3 suites PASS**。
+
+### Phase 572: `border-image-{outset,repeat,slice}` 闭环与 `css-break/parsing` 18/18 收紧
+- **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：补全 `border-image-outset`/`repeat`/`slice` 文法校验、对称折叠、`fill` 后置及 `STANDARD_COMPUTED_LONGHANDS` 默认值/计算期求值。
+- **WPT & Smoke 验收**：`border-image-repeat` 3/3 PASS、`outset/slice-{valid,invalid}` 4/4 PASS、收紧 `css-break/parsing` 4 项实现 18/18 PASS、`--smoke` 3/3 suites PASS。

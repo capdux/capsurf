@@ -2036,7 +2036,7 @@
     "reason": null
   },
   "/css/css-break/parsing/orphans-computed.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-break/parsing/orphans-invalid.html": {
@@ -2044,11 +2044,11 @@
     "reason": null
   },
   "/css/css-break/parsing/orphans-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-break/parsing/widows-computed.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-break/parsing/widows-invalid.html": {
@@ -2056,7 +2056,7 @@
     "reason": null
   },
   "/css/css-break/parsing/widows-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-break/root-margin-001-print.html": {
