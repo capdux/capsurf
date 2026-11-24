@@ -3139,3 +3139,7 @@
 ### Phase 659: `mask-image-computed` (47/47) 全绿
 - **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：`url()` 内允许 `{}`；`mask-image` 复用 `background-image` 多层求值管线，补全 `lhPx`、`from 0deg` 与 `farthest-corner`/单半径 `circle` 省略。
 - **WPT & Smoke 验收**：`mask-image-computed` (47/47)、`border-image-source-computed` (10/10)、`image-set-computed` (36/36) 与 `--smoke` 3/3 suites PASS。
+
+### Phase 660: `clip-path-invalid` 全绿
+- **核心修复 (`src/js/shim/cssom.js`)**：`isValidCssValue("clip-path")` 校验 `inset`/`circle`/`ellipse`/`polygon`/`path`/`xywh`/`rect` 与 `<geometry-box>`/`url()`。
+- **WPT & Smoke 验收**：`clip-path-invalid.html` 与 `--smoke` 3/3 suites PASS。

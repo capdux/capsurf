@@ -956,6 +956,98 @@
       }
       return true;
     }
+    if (prop === "clip-path") {
+      if (vLower === "none") return true;
+      const toks = splitCssTokens(trimmed);
+      if (toks.length === 0 || toks.length > 2) return false;
+      const GBOX = new Set(["content-box", "padding-box", "border-box", "margin-box", "fill-box", "stroke-box", "view-box"]);
+      let hasShape = false, hasBox = false;
+      const isValidShape = (sh) => {
+        const sm = /^([a-z-]+)\((.*)\)$/i.exec(sh);
+        if (!sm) return false;
+        const fn = sm[1].toLowerCase(), body = sm[2].trim();
+        if (fn === "url") return body.length > 0;
+        if (fn === "shape") return body.length > 0;
+        if (fn === "inset") {
+          const st = splitCssTokens(body.toLowerCase());
+          const rIdx = st.indexOf("round");
+          const pre = rIdx === -1 ? st : st.slice(0, rIdx);
+          if (pre.length < 1 || pre.length > 4 || !pre.every((t) => isValidLenPct(t, true))) return false;
+          if (rIdx === -1) return true;
+          const post = st.slice(rIdx + 1).join(" ");
+          if (!post) return false;
+          const sp = post.split("/");
+          if (sp.length > 2) return false;
+          for (let k = 0; k < sp.length; k++) {
+            const rt = splitCssTokens(sp[k]);
+            if (rt.length < 1 || rt.length > 4 || !rt.every((t) => isValidLenPct(t, false))) return false;
+          }
+          return true;
+        }
+        if (fn === "circle" || fn === "ellipse") {
+          const st = splitCssTokens(body.toLowerCase());
+          const atIdx = st.indexOf("at");
+          const pre = atIdx === -1 ? st : st.slice(0, atIdx);
+          if (atIdx !== -1 && st.slice(atIdx + 1).length === 0) return false;
+          if (fn === "circle") {
+            if (pre.length > 1) return false;
+            if (pre.length === 1 && pre[0] !== "closest-side" && pre[0] !== "farthest-side" && !isValidLenPct(pre[0], false)) return false;
+          } else {
+            if (pre.length !== 0 && pre.length !== 2) return false;
+            for (let k = 0; k < pre.length; k++) {
+              if (pre[k] !== "closest-side" && pre[k] !== "farthest-side" && !isValidLenPct(pre[k], false)) return false;
+            }
+          }
+          return true;
+        }
+        if (fn === "polygon") {
+          const parts = splitTopLevelComma(body);
+          if (parts.length === 0) return false;
+          let idx = 0;
+          const p0 = splitCssTokens(parts[0].toLowerCase());
+          if (p0.length === 0) return false;
+          if (p0[0] === "nonzero" || p0[0] === "evenodd" || p0[0] === "round") {
+            if (p0[0] === "round") {
+              if (p0.length !== 2 || p0[1].endsWith("%") || !isValidLenPct(p0[1], false)) return false;
+            } else if (p0.length !== 1) return false;
+            idx = 1;
+          }
+          if (idx >= parts.length) return false;
+          for (let k = idx; k < parts.length; k++) {
+            const pt = splitCssTokens(parts[k].toLowerCase());
+            if (pt.length !== 2 || !isValidLenPct(pt[0], true) || !isValidLenPct(pt[1], true)) return false;
+          }
+          return true;
+        }
+        if (fn === "path") {
+          const parts = splitTopLevelComma(body);
+          if (parts.length < 1 || parts.length > 2) return false;
+          let strTok = parts[0].trim();
+          if (parts.length === 2) {
+            const fr = parts[0].trim().toLowerCase();
+            if (fr !== "nonzero" && fr !== "evenodd") return false;
+            strTok = parts[1].trim();
+          }
+          if (!((strTok.startsWith('"') && strTok.endsWith('"')) || (strTok.startsWith("'") && strTok.endsWith("'")))) return false;
+          return strTok.slice(1, -1).trim().length > 0;
+        }
+        if (fn === "xywh" || fn === "rect") {
+          const st = splitCssTokens(body.toLowerCase());
+          const rIdx = st.indexOf("round");
+          const pre = rIdx === -1 ? st : st.slice(0, rIdx);
+          if (pre.length !== 4) return false;
+          return pre.every((t) => (fn === "rect" && t === "auto") || isValidLenPct(t, fn === "rect" || pre.indexOf(t) < 2));
+        }
+        return false;
+      };
+      for (let i = 0; i < toks.length; i++) {
+        const tl = toks[i].toLowerCase();
+        if (GBOX.has(tl)) { if (hasBox) return false; hasBox = true; }
+        else if (isValidShape(toks[i])) { if (hasShape || (toks.length > 1 && /^url\(/i.test(tl))) return false; hasShape = true; }
+        else return false;
+      }
+      return hasShape || hasBox;
+    }
     if (prop === "font-weight") {
       const toks = splitCssTokens(vLower);
       if (toks.length !== 1) return false;

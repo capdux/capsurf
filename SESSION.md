@@ -8081,3 +8081,7 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Agent]**: 完成 Phase 659（`src/js/shim/cssom.js`, `src/js/shim/window.js`）：
   1. **`cssom.js` & `window.js`**：放行 `url(...)` 内 `{}`；统一 `background-image`/`mask-image` 多层渐变/`url()`/`image-set()` 求值，新增 `lhPx` 行高单位支持、`conic-gradient` 省略 `from 0deg` 及 `radial-gradient` 省略 `farthest-corner`/单半径 `circle`。
   2. **全绿验证**：`mask-image-computed.html`（47/47）、`border-image-source-computed.sub.html`（10/10）、`image-set-computed.sub.html`（36/36）与 `--smoke`（3/3 suites, 6/6 tests）全绿。
+- **[Agent]**: 完成 Phase 660（`src/js/shim/cssom.js`）：
+  1. **`cssom.js`**：新增 `clip-path` 完整基本图形与几何盒语法校验。
+  2. **全绿验证**：`clip-path-invalid.html`（PASS）与 `--smoke`（3/3 suites, 6/6 tests）全绿。
+  3. **子智能体并发汇报**：`510455bf` 完成 `/css/css-display/`（24/52 PASS），已接力派发 `b01f627f`（`19710`, `/css/css-lists/`）。

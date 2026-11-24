@@ -3786,3 +3786,5 @@
 - **Phase 658** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `animation` 简写单次消费与同名关键字 round-trip 序列化；`style-animation-parsing` (5/5) 与 `computed-style-animation-parsing` (7/7) 全绿。
 
 - **Phase 659** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 统一 `background-image`/`mask-image` 多层渐变与 `url()`/`lh` 求值管线；`mask-image-computed` (47/47) 全绿且回归零破坏。
+
+- **Phase 660** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 新增 `clip-path` 基本图形与几何盒语法校验；`clip-path-invalid` 全绿。

@@ -2317,3 +2317,7 @@
 ### Phase 659: `mask-image-computed` (47/47) 全绿
 - **Filter `/css/css-masking/parsing/mask-image-computed` & 回归 (`border-image-source-computed`, `image-set-computed`)**: **FAIL->PASS (47/47) + 2/2 回归全绿**（`cssom.js` 放行 `url(...)` 内部的 `{}` 模板占位；`window.js` 将 `background-image`/`mask-image` 统一至多层求值管线，新增 `evalCssLengthExpr` `lhPx` 精确行高计算、`conic-gradient`/`repeating-conic-gradient` 省略默认 `from 0deg`，以及 `radial-gradient` 省略 `farthest-corner` 与显式半径时的 `circle`）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 660: `clip-path-invalid` 全绿
+- **Filter `/css/css-masking/parsing/clip-path-invalid`**: **FAIL->PASS**（`cssom.js` `isValidCssValue` 新增 `clip-path` 完整语法校验，涵盖 `none`、`url()`、`<geometry-box>`、`inset()`/`circle()`/`ellipse()`/`polygon()`/`path()`/`xywh()`/`rect()` 参数数量与非法负半径/无单位数值拦截）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
