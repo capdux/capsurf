@@ -2780,3 +2780,7 @@
 ### Phase 570: `css-tables/inheritance` 与 `shape-outside-invalid-position` 全绿
 - **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：`shape-outside` 复用 `isValidCssPositionTokens` 校验 `circle/ellipse(at ...)`；补齐 `border-collapse`/`border-spacing`/`caption-side`/`empty-cells` 继承及 `table-layout` 默认值。
 - **WPT & Smoke 验收**：`css-tables/inheritance.html` PASS、`shape-outside-invalid-position.html` PASS、`--smoke` 3/3 suites PASS。
+
+### Phase 571: `border-image-width` 3/3 全绿与 `border-image-source` 解析闭环
+- **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：补全 `border-image-source` 与 `border-image-width` 文法校验、计算期默认值、负长度 `0px` 钳位及 4/3/2 对称折叠，并补全 `unicode-bidi`/`writing-mode` 默认初始值。
+- **WPT & Smoke 验收**：`border-image-width-*` **3/3 PASS**、`border-image-source-{valid,invalid}` **2/2 PASS**、`--smoke` **3/3 suites PASS**。

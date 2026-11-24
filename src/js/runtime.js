@@ -5945,6 +5945,23 @@
       if (prop === "image-orientation") {
         return vLower === "from-image" || vLower === "none";
       }
+      if (prop === "border-image-source") {
+        if (vLower === "none") return true;
+        if (splitTopLevelComma(trimmed).length !== 1) return false;
+        return /^(?:url|linear-gradient|radial-gradient|conic-gradient|repeating-linear-gradient|repeating-radial-gradient|repeating-conic-gradient|image|image-set|cross-fade|-webkit-linear-gradient|-webkit-radial-gradient)\(/i.test(trimmed);
+      }
+      if (prop === "border-image-width") {
+        const toks = splitCssTokens(vLower);
+        if (toks.length < 1 || toks.length > 4) return false;
+        for (let i = 0; i < toks.length; i++) {
+          const t = toks[i];
+          if (t === "auto") continue;
+          if (/^[+]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(t)) continue;
+          if (isValidLenPct(t, false)) continue;
+          return false;
+        }
+        return true;
+      }
       if (prop === "shape-outside") {
         const bm = /^(?:circle|ellipse)\(\s*(.*)\s*\)$/i.exec(trimmed);
         if (bm) {
@@ -43254,6 +43271,33 @@
       if (tuoRaw && tuoRaw.toLowerCase() !== "auto") {
         computedMap.set("text-underline-offset", evalLinLenPctTok(tuoRaw));
       }
+      const bisRaw = (computedMap.get("border-image-source") || "").trim();
+      if (bisRaw && /^(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(bisRaw)) {
+        computedMap.set("border-image-source", evalGradientComputed(bisRaw));
+      }
+      const biwRaw = (computedMap.get("border-image-width") || "").trim();
+      if (biwRaw && biwRaw !== "1") {
+        const biwToks = [];
+        let bc = "", bd = 0;
+        for (let i = 0; i < biwRaw.length; i++) {
+          const ch = biwRaw[i];
+          if (ch === "(") bd++; else if (ch === ")" && bd > 0) bd--;
+          if (bd === 0 && /\s/.test(ch)) { if (bc) { biwToks.push(bc); bc = ""; } }
+          else bc += ch;
+        }
+        if (bc) biwToks.push(bc);
+        const biwOut = biwToks.map((t) => {
+          const tl = t.toLowerCase();
+          if (tl === "auto" || /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(tl)) return tl;
+          const ev = evalLinLenPctTok(t);
+          if (/^-[\d.]+px$/.test(ev)) return "0px";
+          return ev;
+        });
+        if (biwOut.length === 4 && biwOut[1] === biwOut[3]) biwOut.pop();
+        if (biwOut.length === 3 && biwOut[0] === biwOut[2]) biwOut.pop();
+        if (biwOut.length === 2 && biwOut[0] === biwOut[1]) biwOut.pop();
+        computedMap.set("border-image-width", biwOut.join(" "));
+      }
       const textDecorDefs = [
         ["text-decoration-line", "none"],
         ["text-decoration-style", "solid"],
@@ -43265,7 +43309,11 @@
         ["border-spacing", "0px"],
         ["caption-side", "top"],
         ["empty-cells", "show"],
-        ["table-layout", "auto"]
+        ["table-layout", "auto"],
+        ["unicode-bidi", "normal"],
+        ["writing-mode", "horizontal-tb"],
+        ["border-image-source", "none"],
+        ["border-image-width", "1"]
       ];
       for (let i = 0; i < textDecorDefs.length; i++) {
         const [dk, dv] = textDecorDefs[i];
@@ -43411,6 +43459,7 @@
       "border-bottom-color", "border-bottom-left-radius", "border-bottom-right-radius",
       "border-bottom-style", "border-bottom-width", "border-collapse",
       "border-end-end-radius", "border-end-start-radius",
+      "border-image-source", "border-image-width",
       "border-inline-end-color", "border-inline-end-style", "border-inline-end-width",
       "border-inline-start-color", "border-inline-start-style", "border-inline-start-width",
       "border-left-color", "border-left-style", "border-left-width",

@@ -8419,6 +8419,33 @@ function installWindow(global) {
     if (tuoRaw && tuoRaw.toLowerCase() !== "auto") {
       computedMap.set("text-underline-offset", evalLinLenPctTok(tuoRaw));
     }
+    const bisRaw = (computedMap.get("border-image-source") || "").trim();
+    if (bisRaw && /^(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(bisRaw)) {
+      computedMap.set("border-image-source", evalGradientComputed(bisRaw));
+    }
+    const biwRaw = (computedMap.get("border-image-width") || "").trim();
+    if (biwRaw && biwRaw !== "1") {
+      const biwToks = [];
+      let bc = "", bd = 0;
+      for (let i = 0; i < biwRaw.length; i++) {
+        const ch = biwRaw[i];
+        if (ch === "(") bd++; else if (ch === ")" && bd > 0) bd--;
+        if (bd === 0 && /\s/.test(ch)) { if (bc) { biwToks.push(bc); bc = ""; } }
+        else bc += ch;
+      }
+      if (bc) biwToks.push(bc);
+      const biwOut = biwToks.map((t) => {
+        const tl = t.toLowerCase();
+        if (tl === "auto" || /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(tl)) return tl;
+        const ev = evalLinLenPctTok(t);
+        if (/^-[\d.]+px$/.test(ev)) return "0px";
+        return ev;
+      });
+      if (biwOut.length === 4 && biwOut[1] === biwOut[3]) biwOut.pop();
+      if (biwOut.length === 3 && biwOut[0] === biwOut[2]) biwOut.pop();
+      if (biwOut.length === 2 && biwOut[0] === biwOut[1]) biwOut.pop();
+      computedMap.set("border-image-width", biwOut.join(" "));
+    }
     const textDecorDefs = [
       ["text-decoration-line", "none"],
       ["text-decoration-style", "solid"],
@@ -8430,7 +8457,11 @@ function installWindow(global) {
       ["border-spacing", "0px"],
       ["caption-side", "top"],
       ["empty-cells", "show"],
-      ["table-layout", "auto"]
+      ["table-layout", "auto"],
+      ["unicode-bidi", "normal"],
+      ["writing-mode", "horizontal-tb"],
+      ["border-image-source", "none"],
+      ["border-image-width", "1"]
     ];
     for (let i = 0; i < textDecorDefs.length; i++) {
       const [dk, dv] = textDecorDefs[i];
@@ -8576,6 +8607,7 @@ function installWindow(global) {
     "border-bottom-color", "border-bottom-left-radius", "border-bottom-right-radius",
     "border-bottom-style", "border-bottom-width", "border-collapse",
     "border-end-end-radius", "border-end-start-radius",
+    "border-image-source", "border-image-width",
     "border-inline-end-color", "border-inline-end-style", "border-inline-end-width",
     "border-inline-start-color", "border-inline-start-style", "border-inline-start-width",
     "border-left-color", "border-left-style", "border-left-width",

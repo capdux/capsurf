@@ -7646,3 +7646,10 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`cssom.js`**：为 `shape-outside` 的 `circle(at ...)` / `ellipse(at ...)` 接入 `isValidCssPositionTokens` 位置校验。
   2. **`window.js`**：将 `border-collapse`、`border-spacing`、`caption-side`、`empty-cells` 纳入 `INHERITED_CSS_PROPS`，并在 `applyUsedValuesToComputedMap` 补全表格 5 项属性（含 `table-layout: auto`）默认初始值。
   3. **全绿验证**：`css-tables/inheritance.html` **PASS**、`shape-outside-invalid-position.html` **PASS**、`--smoke` **3/3 suites PASS**。
+
+### 2026-11-24 Phase 571 (`border-image-width` 3/3 全绿 & `border-image-source` 解析闭环)
+- **[Agent]**: 自主推导并完成 Phase 571（`src/js/shim/cssom.js`, `src/js/shim/window.js`）：
+  1. **`border-image-width` & `border-image-source` (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：
+     - `cssom.js`：实现 `border-image-source` 单层 `none | <image>` 校验与 `border-image-width`（`1~4` 个 `auto | <number [0,∞]> | <length-percentage [0,∞]>`）校验。
+     - `window.js`：将 `border-image-source`（默认 `"none"`）与 `border-image-width`（默认 `"1"`）纳入 `STANDARD_COMPUTED_LONGHANDS`，计算期对 `border-image-width` 复用 `evalLinLenPctTok`、负值钳位 `0px` 并对称折叠；同步补齐 `unicode-bidi: normal` 与 `writing-mode: horizontal-tb` 默认初始值。
+  2. **全绿验证与并行摸底**：`border-image-width-*` **3/3 PASS**、`border-image-source-{valid,invalid}` **2/2 PASS**、`--smoke` **3/3 suites PASS**；子智能体完成 `/css/css-flexbox/parsing/` **27/27 PASS**、`/css/css-backgrounds/parsing/`（29/74）、`/css/css-grid/parsing/`（6/61）。

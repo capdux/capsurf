@@ -1770,3 +1770,15 @@
 - **子智能体只读摸底记录**：
   - `/css/css-tables/` (`b409`): `18` files (`15 PASS / 2 FAIL / 1 TIMEOUT`) -> Phase 570 修复 `inheritance.html` 后 `16/18 PASS`
   - `/css/css-values/calc` (`b405`): `71` files (`27 PASS / 38 FAIL / 6 TIMEOUT`)
+
+### Phase 571 `border-image-width` 3/3 全绿 & `border-image-source-{valid,invalid}` & WPT-B411~B417 摸底 (bin_dev Phase 571, 2026-11-24)
+- **Filter `/css/css-backgrounds/parsing/border-image-width`**: **3/3 PASS (100% ALL GREEN)**（`cssom.js` 校验 `1~4` 个 `auto | <number [0,∞]> | <length-percentage [0,∞]>`；`window.js` 纳入 `STANDARD_COMPUTED_LONGHANDS` 默认 `"1"`，复用 `evalLinLenPctTok`、负值钳位 `0px` 并对称折叠 4/3/2 令牌）。
+- **Filter `/css/css-backgrounds/parsing/border-image-source-{valid,invalid}`**: **2/2 PASS**（单层 `none | <image>` 严格校验，拒绝 `auto` 与多图层）。
+- **Writing Modes**: 补全 `unicode-bidi: normal` 与 `writing-mode: horizontal-tb` 默认初始值。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-grid/parsing/` (`b411`): `61` files (`6 PASS / 53 FAIL / 2 TIMEOUT`)
+  - `/css/css-writing-modes/` (`b413`): `20` files (`17 PASS / 3 FAIL`)
+  - `/css/css-backgrounds/parsing/` (`b414`): `74` files (`29 PASS / 45 FAIL`)
+  - `/css/css-display/parsing/` (`b416`): `5` files (`1 PASS / 4 FAIL`)
+  - `/css/css-flexbox/parsing/` (`b417`): **27/27 PASS (100% ALL GREEN)**

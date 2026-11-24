@@ -3606,3 +3606,5 @@
 - **Phase 569** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 修复 `normalizeCssSpecifiedValue` 透传 CSS 全局关键字，放行 `text-decoration-thickness` 负值，补全 `text-shadow` 校验/规范化/计算值及 `text-decoration-thickness`/`text-underline-offset` 线性 `calc` 求值；WPT `/css/css-text-decor/` 41/41 全目录 100% 全绿通过。
 
 - **Phase 570** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 复用 `isValidCssPositionTokens` 校验 `shape-outside` 圆形/椭圆 `at <position>`，补全表格 5 项属性继承与默认初始值；`/css/css-tables/inheritance.html` 与 `shape-outside-invalid-position.html` 转绿。
+
+- **Phase 571** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 实现 `border-image-width` 与 `border-image-source` 校验及计算期 `STANDARD_COMPUTED_LONGHANDS` 默认值/负值钳位/对称折叠，并补齐 `unicode-bidi`/`writing-mode` 初始值；`border-image-width-*` 3/3 全绿，`border-image-source-{valid,invalid}` 2/2 全绿。

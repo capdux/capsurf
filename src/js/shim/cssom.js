@@ -2155,6 +2155,23 @@
     if (prop === "image-orientation") {
       return vLower === "from-image" || vLower === "none";
     }
+    if (prop === "border-image-source") {
+      if (vLower === "none") return true;
+      if (splitTopLevelComma(trimmed).length !== 1) return false;
+      return /^(?:url|linear-gradient|radial-gradient|conic-gradient|repeating-linear-gradient|repeating-radial-gradient|repeating-conic-gradient|image|image-set|cross-fade|-webkit-linear-gradient|-webkit-radial-gradient)\(/i.test(trimmed);
+    }
+    if (prop === "border-image-width") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length < 1 || toks.length > 4) return false;
+      for (let i = 0; i < toks.length; i++) {
+        const t = toks[i];
+        if (t === "auto") continue;
+        if (/^[+]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(t)) continue;
+        if (isValidLenPct(t, false)) continue;
+        return false;
+      }
+      return true;
+    }
     if (prop === "shape-outside") {
       const bm = /^(?:circle|ellipse)\(\s*(.*)\s*\)$/i.exec(trimmed);
       if (bm) {
