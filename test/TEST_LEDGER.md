@@ -1813,3 +1813,14 @@
   - `/css/css-ui/parsing/` (`b428`): `39` files (`35 PASS / 3 FAIL / 1 TIMEOUT`)
   - `/css/css-scroll-snap/` (`b429`): **8/8 PASS (100% ALL GREEN)**
   - `/css/css-overscroll-behavior/` (`b431`): `2` files (`1 PASS / 1 FAIL`)
+
+### Phase 575 `/css/css-overscroll-behavior/` 2/2 & `box-shadow` 3/3 全绿闭环 & WPT-B432~B438 摸底 (bin_dev Phase 575, 2026-11-24)
+- **Filter `/css/css-overscroll-behavior/`**: **2/2 PASS (100% ALL GREEN)**（`inheritance.html`, `overscroll-behavior-invalid.html` 全绿；`overscroll-behavior-{block,inline,x,y}` 纳入 `STANDARD_COMPUTED_LONGHANDS` 默认 `"auto"`）。
+- **Filter `/css/css-backgrounds/parsing/box-shadow`**: **3/3 PASS (100% ALL GREEN)**（`box-shadow-{computed,invalid,valid}.html` 全绿；`cssom.js` 严格校验连续 `2~4` 长度、非负模糊半径、无 `%` 与 `inset`/`<color>` 唯一性，并将指定值规范序为 `<color> <lens> [inset]`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-will-change/` (`b432`): **3/3 PASS (100% ALL GREEN)**
+  - `/css/css-variables/` (`b426`): `194` files (`60 PASS / 125 FAIL / 8 TIMEOUT / 1 ERROR`)
+  - `/css/css-syntax/` (`b434`): `24` files (`7 PASS / 17 FAIL`)
+  - `/css/css-shadow/` (`b435`): `2` files (`1 PASS / 1 FAIL`)
+  - `/css/css-rhythm/parsing/` (`b438`): **5/5 PASS (100% ALL GREEN)**

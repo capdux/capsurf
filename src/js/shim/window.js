@@ -8489,7 +8489,11 @@ function installWindow(global) {
       ["border-image-repeat", "stretch"],
       ["border-image-slice", "100%"],
       ["border-image-source", "none"],
-      ["border-image-width", "1"]
+      ["border-image-width", "1"],
+      ["overscroll-behavior-block", "auto"],
+      ["overscroll-behavior-inline", "auto"],
+      ["overscroll-behavior-x", "auto"],
+      ["overscroll-behavior-y", "auto"]
     ];
     for (let i = 0; i < textDecorDefs.length; i++) {
       const [dk, dv] = textDecorDefs[i];
@@ -8698,6 +8702,7 @@ function installWindow(global) {
     "margin-left", "margin-right", "margin-top", "max-block-size", "max-height", "max-inline-size", "max-width",
     "min-block-size", "min-height", "min-inline-size", "min-width", "mix-blend-mode", "object-fit", "object-position", "opacity",
     "order", "orphans", "outline-color", "outline-offset", "outline-style", "outline-width",
+    "overscroll-behavior-block", "overscroll-behavior-inline", "overscroll-behavior-x", "overscroll-behavior-y",
     "overflow-anchor", "overflow-block", "overflow-inline", "overflow-wrap", "overflow-x", "overflow-y",
     "padding-block-end", "padding-block-start", "padding-bottom", "padding-inline-end", "padding-inline-start",
     "padding-left", "padding-right", "padding-top", "perspective", "perspective-origin", "pointer-events",

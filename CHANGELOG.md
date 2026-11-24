@@ -3614,3 +3614,5 @@
 - **Phase 573** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 在 `normalizeSingleColor` 补齐 `rgb(%)` 与 `hsl()/hsla()` 转换，完善 `background-color` 指定值与计算值求值；`background-color-*` 3/3 全绿通过。
 
 - **Phase 574** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 归一化 `border-color` 四边颜色与 `background-position-x/y` 多图层 `calc`，补全 `border-*-color` 与 `box-shadow` 计算期求值；`background-position-{x,y}-valid` 转绿并收紧基线，`border-color-{invalid,computed,valid}` 3/3 全绿，`box-shadow-computed` 转绿。
+
+- **Phase 575** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/shim/element/element.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `overscroll-behavior-{block,inline,x,y}` 计算期默认值与 `box-shadow` 校验及指定值规范化；`/css/css-overscroll-behavior/` 2/2 全绿、`box-shadow-*` 3/3 全绿。

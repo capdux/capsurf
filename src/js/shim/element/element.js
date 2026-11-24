@@ -250,7 +250,7 @@ function createStyleProxy(element) {
           v = v.replace(/\s*!important\s*$/i, "").trim();
         }
         if (v !== "") {
-          if (k === "column-rule" || k === "columns") setEntryWithShorthand(map, k, rawKey, v, pri);
+          if (k === "column-rule" || k === "columns" || k === "border-color") setEntryWithShorthand(map, k, rawKey, v, pri);
           else setEntryInStyleMap(map, k, rawKey, v, pri);
         }
       }

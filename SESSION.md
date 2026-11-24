@@ -7674,3 +7674,11 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`cssom.js`**：为 `border-color` 及四边长手归一化 `currentColor`/`#hex`/`rgb(%)`，为 `background-position-x/y` 多图层接入 `0 -> 0px` 与 `canonicalizeCalcToken`。
   2. **`window.js`**：将 `border-{top,right,bottom,left}-color` 纳入颜色求值循环；补全 `box-shadow` 计算期多层颜色/长度/4 长度补齐求值。
   3. **验证与基线收紧**：`background-position-{x,y}-valid` **2/2 FAIL->PASS**（已收紧）、`border-color-{invalid,computed,valid}` **3/3 PASS**、`box-shadow-computed` **PASS**、`--smoke` **3/3 suites PASS**。
+
+### 2026-11-24 Phase 575 (`/css/css-overscroll-behavior/` 2/2 & `box-shadow` 3/3 全绿)
+- **[Agent]**: 自主推导并完成 Phase 575（`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/shim/element/element.js`）：
+  1. **`overscroll-behavior-*` & `box-shadow` (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：
+     - `window.js`：将 `overscroll-behavior-{block,inline,x,y}` 纳入 `STANDARD_COMPUTED_LONGHANDS` 默认 `"auto"`。
+     - `cssom.js`：实现 `box-shadow` 连续 `2~4` 长度（非负模糊、禁 `%`）+ 可选 `inset`/颜色校验，及 `<color> <lens> [inset]` 指定值规范化；`element.js` 内联 `border-color` 接入简写展开。
+  2. **全绿验证**：`/css/css-overscroll-behavior/` **2/2 PASS**、`box-shadow-*` **3/3 PASS**、`--smoke` **3/3 suites PASS**。
+  3. **并行摸底汇总**：`/css/css-will-change/` **3/3 PASS**、`/css/css-rhythm/parsing/` **5/5 PASS**、`/css/css-variables/`（60/194 PASS）、`/css/css-syntax/`（7/24 PASS）、`/css/css-shadow/`（1/2 PASS）。

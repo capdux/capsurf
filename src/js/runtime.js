@@ -5709,6 +5709,41 @@
         }
         return true;
       }
+      if (prop === "box-shadow") {
+        if (vLower === "none") return true;
+        const layers = splitTopLevelComma(trimmed);
+        if (layers.length === 0) return false;
+        for (let li = 0; li < layers.length; li++) {
+          const toks = splitCssTokens(layers[li]);
+          if (toks.length < 2 || toks.length > 6) return false;
+          let colorCount = 0, insetCount = 0;
+          let lenPhase = 0;
+          const lens = [];
+          for (let ti = 0; ti < toks.length; ti++) {
+            const tok = toks[ti];
+            const tl = tok.toLowerCase();
+            if (!tok.includes("%") && isValidLenPct(tok, true)) {
+              if (lenPhase === 2) return false;
+              lenPhase = 1;
+              lens.push(tok);
+            } else {
+              if (lenPhase === 1) lenPhase = 2;
+              if (tl === "inset") {
+                insetCount++;
+                if (insetCount > 1) return false;
+              } else if (isValidColor(tok)) {
+                colorCount++;
+                if (colorCount > 1) return false;
+              } else {
+                return false;
+              }
+            }
+          }
+          if (lens.length < 2 || lens.length > 4) return false;
+          if (lens.length >= 3 && (lens[2].includes("%") || !isValidLenPct(lens[2], false))) return false;
+        }
+        return true;
+      }
       if (prop === "text-decoration-skip-spaces") {
         const toks = splitCssTokens(vLower);
         if (toks.length === 1) return toks[0] === "none" || toks[0] === "all" || toks[0] === "start" || toks[0] === "end";
@@ -7188,6 +7223,27 @@
             else col = t;
           }
           return (col ? [col].concat(lens) : lens).join(" ");
+        }).join(", ");
+      }
+      if (key === "box-shadow") {
+        if (s.toLowerCase() === "none") return "none";
+        const layers = splitTopLevelComma(s);
+        return layers.map((layer) => {
+          const toks = splitCssTokens(layer);
+          let col = "", isInset = false;
+          const lens = [];
+          for (let ti = 0; ti < toks.length; ti++) {
+            const t = toks[ti];
+            const tl = t.toLowerCase();
+            if (tl === "inset") isInset = true;
+            else if (t === "0" || t === "+0" || t === "-0") lens.push("0px");
+            else if (/^calc\(/i.test(t)) lens.push(canonicalizeCalcToken(t));
+            else if (/^[+-]?(?:\d|\.)/.test(t) && !t.startsWith("#")) lens.push(t);
+            else col = tl.startsWith("#") || /^rgba?\(/i.test(tl) ? normalizeSingleColor(t) : tl;
+          }
+          const out = col ? [col].concat(lens) : lens;
+          if (isInset) out.push("inset");
+          return out.join(" ");
         }).join(", ");
       }
       if (key === "cursor") {
@@ -13659,7 +13715,7 @@
             v = v.replace(/\s*!important\s*$/i, "").trim();
           }
           if (v !== "") {
-            if (k === "column-rule" || k === "columns") setEntryWithShorthand(map, k, rawKey, v, pri);
+            if (k === "column-rule" || k === "columns" || k === "border-color") setEntryWithShorthand(map, k, rawKey, v, pri);
             else setEntryInStyleMap(map, k, rawKey, v, pri);
           }
         }
@@ -43483,7 +43539,11 @@
         ["border-image-repeat", "stretch"],
         ["border-image-slice", "100%"],
         ["border-image-source", "none"],
-        ["border-image-width", "1"]
+        ["border-image-width", "1"],
+        ["overscroll-behavior-block", "auto"],
+        ["overscroll-behavior-inline", "auto"],
+        ["overscroll-behavior-x", "auto"],
+        ["overscroll-behavior-y", "auto"]
       ];
       for (let i = 0; i < textDecorDefs.length; i++) {
         const [dk, dv] = textDecorDefs[i];
@@ -43692,6 +43752,7 @@
       "margin-left", "margin-right", "margin-top", "max-block-size", "max-height", "max-inline-size", "max-width",
       "min-block-size", "min-height", "min-inline-size", "min-width", "mix-blend-mode", "object-fit", "object-position", "opacity",
       "order", "orphans", "outline-color", "outline-offset", "outline-style", "outline-width",
+      "overscroll-behavior-block", "overscroll-behavior-inline", "overscroll-behavior-x", "overscroll-behavior-y",
       "overflow-anchor", "overflow-block", "overflow-inline", "overflow-wrap", "overflow-x", "overflow-y",
       "padding-block-end", "padding-block-start", "padding-bottom", "padding-inline-end", "padding-inline-start",
       "padding-left", "padding-right", "padding-top", "perspective", "perspective-origin", "pointer-events",

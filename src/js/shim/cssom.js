@@ -1919,6 +1919,41 @@
       }
       return true;
     }
+    if (prop === "box-shadow") {
+      if (vLower === "none") return true;
+      const layers = splitTopLevelComma(trimmed);
+      if (layers.length === 0) return false;
+      for (let li = 0; li < layers.length; li++) {
+        const toks = splitCssTokens(layers[li]);
+        if (toks.length < 2 || toks.length > 6) return false;
+        let colorCount = 0, insetCount = 0;
+        let lenPhase = 0;
+        const lens = [];
+        for (let ti = 0; ti < toks.length; ti++) {
+          const tok = toks[ti];
+          const tl = tok.toLowerCase();
+          if (!tok.includes("%") && isValidLenPct(tok, true)) {
+            if (lenPhase === 2) return false;
+            lenPhase = 1;
+            lens.push(tok);
+          } else {
+            if (lenPhase === 1) lenPhase = 2;
+            if (tl === "inset") {
+              insetCount++;
+              if (insetCount > 1) return false;
+            } else if (isValidColor(tok)) {
+              colorCount++;
+              if (colorCount > 1) return false;
+            } else {
+              return false;
+            }
+          }
+        }
+        if (lens.length < 2 || lens.length > 4) return false;
+        if (lens.length >= 3 && (lens[2].includes("%") || !isValidLenPct(lens[2], false))) return false;
+      }
+      return true;
+    }
     if (prop === "text-decoration-skip-spaces") {
       const toks = splitCssTokens(vLower);
       if (toks.length === 1) return toks[0] === "none" || toks[0] === "all" || toks[0] === "start" || toks[0] === "end";
@@ -3398,6 +3433,27 @@
           else col = t;
         }
         return (col ? [col].concat(lens) : lens).join(" ");
+      }).join(", ");
+    }
+    if (key === "box-shadow") {
+      if (s.toLowerCase() === "none") return "none";
+      const layers = splitTopLevelComma(s);
+      return layers.map((layer) => {
+        const toks = splitCssTokens(layer);
+        let col = "", isInset = false;
+        const lens = [];
+        for (let ti = 0; ti < toks.length; ti++) {
+          const t = toks[ti];
+          const tl = t.toLowerCase();
+          if (tl === "inset") isInset = true;
+          else if (t === "0" || t === "+0" || t === "-0") lens.push("0px");
+          else if (/^calc\(/i.test(t)) lens.push(canonicalizeCalcToken(t));
+          else if (/^[+-]?(?:\d|\.)/.test(t) && !t.startsWith("#")) lens.push(t);
+          else col = tl.startsWith("#") || /^rgba?\(/i.test(tl) ? normalizeSingleColor(t) : tl;
+        }
+        const out = col ? [col].concat(lens) : lens;
+        if (isInset) out.push("inset");
+        return out.join(" ");
       }).join(", ");
     }
     if (key === "cursor") {
