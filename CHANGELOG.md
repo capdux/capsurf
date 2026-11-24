@@ -3831,3 +3831,7 @@
   - `src/js/shim/cssom.js`: `normalizeCssSpecifiedValue` 中 `drop-shadow` 将颜色参数前置重排；`isValidCssValue("cursor")` 的 `isCursorImg` 增加渐变至少 2 个顶层逗号参数校验（拦截 `linear-gradient(red)` 与 `light-dark(...)` 嵌套非法渐变）。
   - `test/wpt/wpt-expectations.json`: 将 `filter-parsing-valid.html` 与 `backdrop-filter-parsing-valid.html` 从 `FAIL` 收紧为 `PASS`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 674**:
+  - `src/js/shim/cssom.js`: `isValidCssPositionTokens` 新增 `allow3 = false` 参数（仅 `background-position` 传 `true`，其余 `<position>` 拒绝 3 值）；新增 `mask-position` 与 `forced-color-adjust`（`auto | none | preserve-parent-color`）语法校验。
+  - `src/js/shim/window.js`: 将 `forced-color-adjust` 纳入 `INHERITED_CSS_PROPS` 及计算值默认/兜底 `"auto"`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

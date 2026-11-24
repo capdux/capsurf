@@ -956,7 +956,7 @@
       }
       return true;
     }
-    const isValidCssPositionTokens = (toks) => {
+    const isValidCssPositionTokens = (toks, allow3 = false) => {
       const HX = new Set(["left", "center", "right"]);
       const VY = new Set(["top", "center", "bottom"]);
       const is2Pos = (a, b) => {
@@ -970,7 +970,7 @@
       if (toks.length === 2) return is2Pos(toks[0], toks[1]);
       const EX = new Set(["left", "right"]);
       const EY = new Set(["top", "bottom"]);
-      if (toks.length === 3) {
+      if (allow3 && toks.length === 3) {
         if (HX.has(toks[0]) && EY.has(toks[1]) && isValidLenPct(toks[2], true)) return true;
         if (EX.has(toks[0]) && isValidLenPct(toks[1], true) && VY.has(toks[2])) return true;
         if (VY.has(toks[0]) && EX.has(toks[1]) && isValidLenPct(toks[2], true)) return true;
@@ -1740,7 +1740,13 @@
     if (prop === "background-position") {
       return splitTopLevelComma(vLower).every((layer) => {
         const toks = splitCssTokens(layer.trim());
-        return toks.length >= 1 && isValidCssPositionTokens(toks);
+        return toks.length >= 1 && isValidCssPositionTokens(toks, true);
+      });
+    }
+    if (prop === "mask-position") {
+      return splitTopLevelComma(vLower).every((layer) => {
+        const toks = splitCssTokens(layer.trim());
+        return toks.length >= 1 && isValidCssPositionTokens(toks, false);
       });
     }
     if (prop === "background-position-x" || prop === "background-position-y") {
@@ -2995,6 +3001,9 @@
     if (prop === "dominant-baseline") {
       return vLower === "auto" || vLower === "text-bottom" || vLower === "alphabetic" || vLower === "ideographic" ||
              vLower === "middle" || vLower === "central" || vLower === "mathematical" || vLower === "hanging" || vLower === "text-top";
+    }
+    if (prop === "forced-color-adjust") {
+      return vLower === "auto" || vLower === "none" || vLower === "preserve-parent-color";
     }
     if (prop === "filter" || prop === "backdrop-filter") {
       if (vLower === "none") return true;

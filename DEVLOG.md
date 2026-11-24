@@ -3182,3 +3182,6 @@
 ### Phase 673 — `filter-parsing-valid` / `backdrop-filter-parsing-valid` 与 `cursor-invalid` 收口
 - 将 `drop-shadow()` 规范化中的颜色参数移至长度参数之前，使 `filter-parsing-valid.html`（87/87）与 `backdrop-filter-parsing-valid.html`（37/37）全部通过并收紧预期基线。
 - 为 `cursor` 的 `isCursorImg` 补齐渐变函数至少 2 个逗号分隔参数校验，使 `cursor-invalid.html`（10/10）全部通过。
+### Phase 674 — `<position>` 3 值语法精准收窄与 `forced-color-adjust` 全量通过
+- 通过 `allow3` 参数将 CSS Backgrounds 3 的 3 值 `<position>` 语法严格限定于 `background-position`，恢复 `gradient-position-invalid`、`object-position-invalid` 与 `mask-position-invalid` 全部通过且保持 `background-position-valid` 零回退。
+- 补全 `forced-color-adjust` 语法校验、继承性与 `"auto"` 初始计算值，使 `/css/css-forced-color-adjust/` 2/2 全数通过。

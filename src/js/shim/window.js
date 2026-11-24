@@ -6442,7 +6442,7 @@ function installWindow(global) {
     "text-combine-upright", "text-orientation", "writing-mode",
     "text-emphasis-color", "text-emphasis-position", "text-emphasis-style", "text-shadow", "text-underline-position", "text-decoration-skip-ink",
     "border-collapse", "border-spacing", "caption-side", "empty-cells",
-    "image-orientation", "image-rendering", "image-resolution", "accent-color", "color-scheme", "color-interpolation-filters",
+    "image-orientation", "image-rendering", "image-resolution", "accent-color", "color-scheme", "color-interpolation-filters", "forced-color-adjust",
     "ruby-align", "ruby-position", "ruby-merge", "ruby-overhang",
     "list-style-image", "list-style-position", "list-style-type",
     "font-feature-settings", "font-kerning", "font-stretch", "font-width", "font-variant",
@@ -9601,6 +9601,12 @@ function installWindow(global) {
     } else {
       computedMap.set("color-interpolation-filters", cifVal.toLowerCase());
     }
+    const fcaVal = computedMap.get("forced-color-adjust");
+    if (!fcaVal || fcaVal === "initial" || fcaVal === "revert" || fcaVal === "revert-layer") {
+      computedMap.set("forced-color-adjust", "auto");
+    } else {
+      computedMap.set("forced-color-adjust", fcaVal.toLowerCase());
+    }
     if (!computedMap.get("hyphenate-limit-chars") || computedMap.get("hyphenate-limit-chars") === "initial") {
       computedMap.set("hyphenate-limit-chars", "auto");
     } else if (computedMap.get("hyphenate-limit-chars").indexOf("calc(") !== -1) {
@@ -10056,7 +10062,7 @@ function installWindow(global) {
       if (lower === "color-interpolation-filters") return "linearrgb";
       if (lower === "flood-color") return "rgb(0, 0, 0)";
       if (lower === "lighting-color") return "rgb(255, 255, 255)";
-      if (lower === "overflow-anchor") return "auto";
+      if (lower === "overflow-anchor" || lower === "forced-color-adjust") return "auto";
       if (lower === "scroll-snap-stop") return "normal";
       if (lower === "scroll-snap-type") return "none";
       if (lower === "scroll-snap-align") return "none";

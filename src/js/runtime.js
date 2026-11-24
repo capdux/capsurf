@@ -4746,7 +4746,7 @@
         }
         return true;
       }
-      const isValidCssPositionTokens = (toks) => {
+      const isValidCssPositionTokens = (toks, allow3 = false) => {
         const HX = new Set(["left", "center", "right"]);
         const VY = new Set(["top", "center", "bottom"]);
         const is2Pos = (a, b) => {
@@ -4760,7 +4760,7 @@
         if (toks.length === 2) return is2Pos(toks[0], toks[1]);
         const EX = new Set(["left", "right"]);
         const EY = new Set(["top", "bottom"]);
-        if (toks.length === 3) {
+        if (allow3 && toks.length === 3) {
           if (HX.has(toks[0]) && EY.has(toks[1]) && isValidLenPct(toks[2], true)) return true;
           if (EX.has(toks[0]) && isValidLenPct(toks[1], true) && VY.has(toks[2])) return true;
           if (VY.has(toks[0]) && EX.has(toks[1]) && isValidLenPct(toks[2], true)) return true;
@@ -5530,7 +5530,13 @@
       if (prop === "background-position") {
         return splitTopLevelComma(vLower).every((layer) => {
           const toks = splitCssTokens(layer.trim());
-          return toks.length >= 1 && isValidCssPositionTokens(toks);
+          return toks.length >= 1 && isValidCssPositionTokens(toks, true);
+        });
+      }
+      if (prop === "mask-position") {
+        return splitTopLevelComma(vLower).every((layer) => {
+          const toks = splitCssTokens(layer.trim());
+          return toks.length >= 1 && isValidCssPositionTokens(toks, false);
         });
       }
       if (prop === "background-position-x" || prop === "background-position-y") {
@@ -6785,6 +6791,9 @@
       if (prop === "dominant-baseline") {
         return vLower === "auto" || vLower === "text-bottom" || vLower === "alphabetic" || vLower === "ideographic" ||
                vLower === "middle" || vLower === "central" || vLower === "mathematical" || vLower === "hanging" || vLower === "text-top";
+      }
+      if (prop === "forced-color-adjust") {
+        return vLower === "auto" || vLower === "none" || vLower === "preserve-parent-color";
       }
       if (prop === "filter" || prop === "backdrop-filter") {
         if (vLower === "none") return true;
@@ -42930,7 +42939,7 @@
       "text-combine-upright", "text-orientation", "writing-mode",
       "text-emphasis-color", "text-emphasis-position", "text-emphasis-style", "text-shadow", "text-underline-position", "text-decoration-skip-ink",
       "border-collapse", "border-spacing", "caption-side", "empty-cells",
-      "image-orientation", "image-rendering", "image-resolution", "accent-color", "color-scheme", "color-interpolation-filters",
+      "image-orientation", "image-rendering", "image-resolution", "accent-color", "color-scheme", "color-interpolation-filters", "forced-color-adjust",
       "ruby-align", "ruby-position", "ruby-merge", "ruby-overhang",
       "list-style-image", "list-style-position", "list-style-type",
       "font-feature-settings", "font-kerning", "font-stretch", "font-width", "font-variant",
@@ -46089,6 +46098,12 @@
       } else {
         computedMap.set("color-interpolation-filters", cifVal.toLowerCase());
       }
+      const fcaVal = computedMap.get("forced-color-adjust");
+      if (!fcaVal || fcaVal === "initial" || fcaVal === "revert" || fcaVal === "revert-layer") {
+        computedMap.set("forced-color-adjust", "auto");
+      } else {
+        computedMap.set("forced-color-adjust", fcaVal.toLowerCase());
+      }
       if (!computedMap.get("hyphenate-limit-chars") || computedMap.get("hyphenate-limit-chars") === "initial") {
         computedMap.set("hyphenate-limit-chars", "auto");
       } else if (computedMap.get("hyphenate-limit-chars").indexOf("calc(") !== -1) {
@@ -46544,7 +46559,7 @@
         if (lower === "color-interpolation-filters") return "linearrgb";
         if (lower === "flood-color") return "rgb(0, 0, 0)";
         if (lower === "lighting-color") return "rgb(255, 255, 255)";
-        if (lower === "overflow-anchor") return "auto";
+        if (lower === "overflow-anchor" || lower === "forced-color-adjust") return "auto";
         if (lower === "scroll-snap-stop") return "normal";
         if (lower === "scroll-snap-type") return "none";
         if (lower === "scroll-snap-align") return "none";
