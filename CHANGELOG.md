@@ -4182,3 +4182,8 @@
   - `src/js/shim/window.js`: 补全 `row-gap`/`column-gap`/`justify-items`/`block-ellipsis`/`continue`/`max-lines`/`width`/`height` 初始值与继承，`justify-items: legacy` 兼容空值继承，并跳过替换 `content` 祖先子孙的 used `width`/`height` 覆盖。
   - `test/wpt/wpt-expectations.json`: 收紧 `/css/css-align/inheritance.html`、`/css/css-overflow/inheritance.html`、`/css/css-content/element-replacement-dynamic-002.html` 为 `PASS`（`7,210` PASS）。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 765**:
+  - `src/js/dom_binding.cp`: 引入 `cap:css` `MediaQueryList`/`MediaEnv`/`MediaType`/`CssColor`，升级 `linkMediaMatchesScreen` 并暴露 `__capsurf_eval_media_query` 与 `__capsurf_parse_color`。
+  - `src/js/shim/window.js`: `evaluateMediaQuery` 优先调用 `__capsurf_eval_media_query`（不支持特性回退 JS）。
+  - `/data/dev/cp/lib/css/color.cp`: 修复 `CssColor.toRgbString` 将 alpha `u8` 输出为 `rgba(r, g, b, 0..1)` 浮点格式。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

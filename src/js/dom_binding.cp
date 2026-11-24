@@ -55,6 +55,7 @@ import {
 import { Document, NodeId, NULL_NODE, NodeType } from "../dom/dom.cp";
 import { Matcher } from "../css/matcher.cp";
 import { StyleSheet, Cascade, ComputedStyle, CssPosition } from "../css/cascade.cp";
+import { MediaQueryList, MediaEnv, MediaType, CssColor } from "cap:css";
 import { LayoutTree, Rect } from "../layout/layout.cp";
 import { RUNTIME_CHUNKS } from "./runtime_source.cp";
 import { MockFixtures } from "../net/mock_fixtures.cp";
@@ -720,30 +721,74 @@ fn docHasContainerQuery(doc: *const Document): bool {
 fn linkMediaMatchesScreen(media_raw: []const u8): bool {
     const trimmed = std.mem.trim(u8, media_raw, " \t\r\n");
     if (trimmed.len == 0) return true;
-    let it = std.mem.splitScalar(u8, trimmed, ',');
-    while (part := it.next()) {
-        const q = std.mem.trim(u8, part, " \t\r\n");
-        if (q.len == 0) continue;
-        let low_buf: [256]u8 = undefined;
-        const n = @min(q.len, low_buf.len);
-        let i: usize = 0;
-        while (i < n) : (i += 1) {
-            low_buf[i] = std.ascii.toLower(q[i]);
-        }
-        const lq = low_buf[0..n];
-        if (std.mem.startsWith(u8, lq, "not screen") || std.mem.startsWith(u8, lq, "not all")) {
-            continue;
-        }
-        const is_print = std.mem.indexOf(u8, lq, "print") != null;
-        const is_speech = std.mem.indexOf(u8, lq, "speech") != null;
-        const is_screen = std.mem.indexOf(u8, lq, "screen") != null;
-        const is_all = std.mem.indexOf(u8, lq, "all") != null;
-        if ((is_print || is_speech) && !is_screen && !is_all) {
-            continue;
-        }
-        return true;
+    const mql = MediaQueryList.parse(trimmed) catch return false;
+    const env = MediaEnv {
+        media_type: MediaType.screen,
+        width: 1280.0,
+        height: 720.0,
+    };
+    return mql.evaluate(env);
+}
+
+@c fn js_capsurf_eval_media_query(
+    ctx: *JSContext,
+    this_val: JSValue,
+    argc: i32,
+    argv: [*]const JSValue!,
+): JSValue {
+    * = this_val;
+    if (argc < 1) return jsNull();
+    const query_slice = jsToSlice(ctx, unsafe { argv[0] });
+    defer if (query_slice.len > 0) std.heap.page_allocator.free(query_slice);
+    const trimmed = std.mem.trim(u8, query_slice, " \t\r\n");
+    if (trimmed.len == 0) return jsBool(true);
+
+    let vw: f64 = 1280.0;
+    let vh: f64 = 720.0;
+    if (argc >= 2) {
+        let w_val: f64 = 0.0;
+        if (JS_ToFloat64(ctx, &w_val, unsafe { argv[1] }) == 0 && w_val > 0.0) vw = w_val;
     }
-    return false;
+    if (argc >= 3) {
+        let h_val: f64 = 0.0;
+        if (JS_ToFloat64(ctx, &h_val, unsafe { argv[2] }) == 0 && h_val > 0.0) vh = h_val;
+    }
+    let mtype = MediaType.screen;
+    if (argc >= 4) {
+        const mt_slice = jsToSlice(ctx, unsafe { argv[3] });
+        defer if (mt_slice.len > 0) std.heap.page_allocator.free(mt_slice);
+        if (std.ascii.eqlIgnoreCase(std.mem.trim(u8, mt_slice, " \t\r\n"), "print")) {
+            mtype = MediaType.print;
+        }
+    }
+
+    const mql = MediaQueryList.parse(trimmed) catch return jsNull();
+    const env = MediaEnv {
+        media_type: mtype,
+        width: vw,
+        height: vh,
+    };
+    return jsBool(mql.evaluate(env));
+}
+
+@c fn js_capsurf_parse_color(
+    ctx: *JSContext,
+    this_val: JSValue,
+    argc: i32,
+    argv: [*]const JSValue!,
+): JSValue {
+    * = this_val;
+    if (argc < 1) return jsNull();
+    const color_slice = jsToSlice(ctx, unsafe { argv[0] });
+    defer if (color_slice.len > 0) std.heap.page_allocator.free(color_slice);
+    const trimmed = std.mem.trim(u8, color_slice, " \t\r\n");
+    if (trimmed.len == 0) return jsNull();
+    if (col := CssColor.parse(trimmed)) {
+        let out_buf: [64]u8 = undefined;
+        const formatted = col.toRgbString(&out_buf);
+        if (formatted.len > 0) return jsNewString(ctx, formatted);
+    }
+    return jsNull();
 }
 
 fn collectDocCssInto(doc: *const Document, cookie_jar: (*CookieJar)?, css_buf: []u8): usize {
@@ -2708,6 +2753,8 @@ pub fn mountDom(
     defineMethod(raw_ctx, global_obj, "__capsurf_open_popup", js_capsurf_open_popup, 2);
     defineMethod(raw_ctx, global_obj, "__capsurf_report_exception", js_report_exception, 1);
     defineMethod(raw_ctx, global_obj, "__capsurf_set_quirks_mode", js_capsurf_set_quirks_mode, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_eval_media_query", js_capsurf_eval_media_query, 4);
+    defineMethod(raw_ctx, global_obj, "__capsurf_parse_color", js_capsurf_parse_color, 1);
 
     // Assemble and evaluate modular runtime shim
     let total_len: usize = 0;

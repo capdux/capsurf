@@ -44723,6 +44723,12 @@
       const w = (global.innerWidth || (typeof window !== "undefined" ? window.innerWidth : 1280)) || 1280;
       const h = (global.innerHeight || (typeof window !== "undefined" ? window.innerHeight : 720)) || 720;
       const dpr = (global.devicePixelRatio || (typeof window !== "undefined" ? window.devicePixelRatio : 1)) || 1;
+      const curMedia = ((typeof globalThis !== "undefined" && globalThis.__capsurf_emulated_media) || "screen").toLowerCase();
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_eval_media_query === "function" &&
+          raw.indexOf("device-pixel-ratio") === -1 && raw.indexOf("resolution") === -1 && raw.indexOf("aspect-ratio") === -1) {
+        const nativeRes = globalThis.__capsurf_eval_media_query(raw, w, h, curMedia);
+        if (typeof nativeRes === "boolean") return nativeRes;
+      }
 
       const branches = raw.split(",");
       for (let i = 0; i < branches.length; i++) {

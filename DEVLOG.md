@@ -3368,3 +3368,5 @@
 - 在 `canonicalizeDisplayValue` 与 `BLOCKIFY` 中补齐 CSS Grid Level 3 `grid-lanes` / `inline-grid-lanes` / `inline grid-lanes` 解析与绝对定位/浮动块化规则，打通 `/css/css-display/parsing/tentative/display-{computed,valid}.html`（2 项 `FAIL→PASS`，基线增至 `7,207`）。
 ### Phase 764 — 3 大 CSS 目录 100% PASS 收官（`css-align` 51/51, `css-overflow` 32/32, `css-content` 6/6）
 - 补齐 `row-gap`/`column-gap`/`justify-items`/`block-ellipsis`/`continue`/`max-lines` 初始值与继承，以及替换 `content` 祖先下子孙 `getComputedStyle().height` 回退 `auto`，3 项 `FAIL→PASS`（基线达 `7,210`），同步达成 `/css/css-align/`、`/css/css-overflow/`、`/css/css-content/` 三目录全绿。
+### Phase 765 — 二八分层 CSS 原生下沉 Batch 1：`cap:css` MediaQuery + Color 桥接与 `color.cp` 修复
+- 在 `dom_binding.cp` 中将 `<link media>` 与 `matchMedia`/`@media` 统一接入 `cap:css` `MediaQueryList` + `MediaEnv` 原生求值（跳过不支持的 `device-pixel-ratio`/`resolution`/`aspect-ratio` 时平滑回退 JS），并暴露 `__capsurf_parse_color`；同时发现并修复 `/data/dev/cp/lib/css/color.cp` 中 `CssColor.toRgbString` 把 `u8` alpha 直接当整数打印（如 `rgba(0,0,0,128)`）的 Bug。
