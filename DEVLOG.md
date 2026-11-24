@@ -3031,3 +3031,7 @@
 ### Phase 632: `/css/css-images/image-set/image-set-computed.sub` 36/36 全绿
 - **核心修复 (`src/js/shim/window.js`)**：新增 `normalizeImageSetComputed` 规范化 `image-set()`/`-webkit-image-set()` 计算值（`dppx` 换算、负值归零、缺省 `1dppx`、`url("...")` 引号与 `type()` 顺序），接入 `background-image` 与 `content`。
 - **WPT & Smoke 验收**：`/css/css-images/image-set/image-set-computed.sub.html` (36/36) PASS，`--smoke` 3/3 suites PASS。
+
+### Phase 633: `/css/css-writing-modes/text-orientation-parsing-001` 8/8 全绿
+- **核心修复 (`src/js/shim/window.js`)**：`collectRawComputedMap` 在执行 `collectElementOwnDeclarations` 前保存 `preOwn` 继承值，确保无效自身声明（如 `text-orientation: foo`）被剔除时正确回退祖先继承值。
+- **WPT & Smoke 验收**：`/css/css-writing-modes/text-orientation-parsing-001.html` (8/8) PASS，`--smoke` 3/3 suites PASS。

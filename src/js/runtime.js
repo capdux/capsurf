@@ -42169,14 +42169,22 @@
           }
         }
       }
+      const valCheckProps = ["text-combine-upright", "text-orientation", "align-items", "align-self", "flex-direction", "flex-grow", "flex-shrink", "flex-basis", "flex-wrap", "order"];
+      const preOwn = new Map();
+      for (let vi = 0; vi < valCheckProps.length; vi++) {
+        const vp = valCheckProps[vi];
+        if (computedMap.has(vp)) preOwn.set(vp, computedMap.get(vp));
+      }
       collectElementOwnDeclarations(element, styleNodes, normalizedPseudo, computedMap);
-      for (const vp of ["text-combine-upright", "text-orientation", "align-items", "align-self", "flex-direction", "flex-grow", "flex-shrink", "flex-basis", "flex-wrap", "order"]) {
+      for (let vi = 0; vi < valCheckProps.length; vi++) {
+        const vp = valCheckProps[vi];
         if (computedMap.has(vp)) {
           const vv = String(computedMap.get(vp) || "").trim();
           const vl = vv.toLowerCase();
           if (vl !== "inherit" && vl !== "initial" && vl !== "unset" && vl !== "revert" && vl !== "revert-layer" &&
               typeof globalThis.__capsurf_isValidCssValue === "function" && !globalThis.__capsurf_isValidCssValue(vp, vv)) {
-            computedMap.delete(vp);
+            if (preOwn.has(vp)) computedMap.set(vp, preOwn.get(vp));
+            else computedMap.delete(vp);
           }
         }
       }
