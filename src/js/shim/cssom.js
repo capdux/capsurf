@@ -6904,9 +6904,15 @@
           if (!/^[+]?(?:\d+(?:\.\d+)?|\.\d+)%$/.test(val.trim()) || isNaN(num) || num < 0) continue;
         }
         if (context === "page" && rawName.toLowerCase() === "size") {
-          val = val.toLowerCase().replace(/^((?:a[345]|b[45]|jis-b[45]|letter|legal|ledger))\s+portrait$/, "$1");
+          val = canonicalizePageSize(val);
+          if (!val) continue;
         }
-        if (context === "margin" && rawName.toLowerCase() === "size") {
+        if (context === "page" && rawName.toLowerCase() === "page-orientation") {
+          const po = val.trim().toLowerCase();
+          if (po !== "upright" && po !== "rotate-left" && po !== "rotate-right") continue;
+          val = po;
+        }
+        if (context !== "page" && (rawName.toLowerCase() === "size" || rawName.toLowerCase() === "page-orientation")) {
           continue;
         }
         const key = rawName.startsWith("--") ? rawName : rawName.toLowerCase();
@@ -7079,11 +7085,18 @@
       }
       const key = p.startsWith("--") ? p : p.toLowerCase();
       if (!p.startsWith("--")) {
-        if (!isValidCssValue(key, v)) return;
-        v = normalizeCssSpecifiedValue(key, v);
-      }
-      if (context === "page" && key === "size") {
-        v = v.toLowerCase().replace(/^((?:a[345]|b[45]|jis-b[45]|letter|legal|ledger))\s+portrait$/, "$1");
+        if (context === "page" && key === "size") {
+          const cs = canonicalizePageSize(v);
+          if (!cs) return;
+          v = cs;
+        } else if (context === "page" && key === "page-orientation") {
+          const po = v.toLowerCase();
+          if (po !== "upright" && po !== "rotate-left" && po !== "rotate-right") return;
+          v = po;
+        } else {
+          if (!isValidCssValue(key, v)) return;
+          v = normalizeCssSpecifiedValue(key, v);
+        }
       }
       if (context === "margin" && key === "size") {
         return;
@@ -7338,16 +7351,43 @@
   }
   CSSGroupingRule.prototype = Object.create(CSSRule.prototype);
   CSSGroupingRule.prototype.constructor = CSSGroupingRule;
+  function canonicalizePageSize(raw) {
+    const s = String(raw == null ? "" : raw).trim().toLowerCase();
+    if (!s) return "";
+    const toks = splitCssTokens(s);
+    if (toks.length === 0 || toks.length > 2) return "";
+    const PAGE_SIZES = new Set(["a3", "a4", "a5", "b4", "b5", "jis-b4", "jis-b5", "letter", "legal", "ledger"]);
+    const ORIENTS = new Set(["portrait", "landscape"]);
+    if (toks.length === 1) {
+      if (toks[0] === "auto" || ORIENTS.has(toks[0]) || PAGE_SIZES.has(toks[0])) return toks[0];
+      if (!toks[0].startsWith("-") && !toks[0].includes("%") && toks[0] !== "auto" && isValidCssValue("width", toks[0])) {
+        return (toks[0] === "0" || toks[0] === "+0") ? "0px" : toks[0];
+      }
+      return "";
+    }
+    const a = toks[0], b = toks[1];
+    if (PAGE_SIZES.has(a) && ORIENTS.has(b)) return b === "portrait" ? a : (a + " landscape");
+    if (ORIENTS.has(a) && PAGE_SIZES.has(b)) return a === "portrait" ? b : (b + " landscape");
+    const isLen = (t) => !t.startsWith("-") && !t.includes("%") && t !== "auto" && isValidCssValue("width", t);
+    if (isLen(a) && isLen(b)) {
+      const na = (a === "0" || a === "+0") ? "0px" : a;
+      const nb = (b === "0" || b === "+0") ? "0px" : b;
+      return na + " " + nb;
+    }
+    return "";
+  }
+
   CSSGroupingRule.prototype.insertRule = function (ruleText, index) {
     if (arguments.length === 0) {
       throw new TypeError("Failed to execute 'insertRule': 1 argument required, but only 0 present.");
     }
     const idx = index === undefined ? 0 : Number(index) >>> 0;
-    if (idx > this.cssRules.length) {
+    const rulesLen = this.cssRules ? this.cssRules.length : 0;
+    if (idx > rulesLen) {
       throw new DOMException("Index out of bounds", "IndexSizeError");
     }
     const parsed = parseSingleRuleOrThrow(ruleText);
-    if (parsed.kind === "import" || parsed.kind === "namespace") {
+    if (parsed.kind === "import" || parsed.kind === "namespace" || !this.cssRules) {
       throw new DOMException("Rule not allowed inside a grouping rule", "HierarchyRequestError");
     }
     const rule = constructRule(parsed, this.parentStyleSheet, this, () => {

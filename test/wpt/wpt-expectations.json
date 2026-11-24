@@ -4929,11 +4929,11 @@
     "reason": null
   },
   "/css/css-page/page-orientation.tentative.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-page/page-rule-declarations-000.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-page/page-rule-declarations-001.html": {

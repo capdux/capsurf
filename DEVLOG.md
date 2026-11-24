@@ -3288,3 +3288,5 @@
 - 修复 `cssom.js` `hwb(... none)` 误剥离 `%` 与非相对 `rgb(... / alpha)` 放行非法标识符的问题，并在 `window.js` `normCol` 中接入 `evalSignCalls`，打通 `color-computed-hwb.html` (56/56 PASS) 与 `color-invalid-relative-color.html` (161/161 PASS)。
 ### Phase 724 — `@counter-style` 规则语法校验全绿闭环 (`10/10 PASS`)
 - 补齐 `parseCounterStyleRule` 对 `symbols`（拒绝空值与 CSS 全局关键字）、`speak-as`（拒绝多 token 与 `none`/全局关键字/字符串/数字）及 `prefix`/`suffix` 无引号 `url(...)` 序列化，`/css/css-counter-styles/counter-style-at-rule/` 全部 10 项测试达成 100% PASS。
+### Phase 725 — `@page` `size` / `page-orientation` 校验与规范序列化闭环
+- 在 `cssom.js` 新增 `canonicalizePageSize` 统一处理 `@page` 声明块与 `setProperty` 中的 `size` 非法值过滤及 `<page-size>` + `<orientation>` 规范序，并隔离非 `@page` 规则上的 `size`/`page-orientation`，打通 `page-orientation.tentative.html` 与 `page-rule-declarations-000.html` 全绿。

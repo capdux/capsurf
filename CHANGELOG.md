@@ -4016,3 +4016,7 @@
   - `src/js/shim/cssom.js`: `parseCounterStyleRule` 补全 `prefix`/`suffix` 无引号 `url(...)` 序列化、`symbols` 校验与 `speak-as` 校验。
   - `test/wpt/wpt-expectations.json`: 将 `prefix-suffix-syntax.html`, `speak-as-syntax.html`, `symbols-syntax.html` 收紧为 `PASS`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 725**:
+  - `src/js/shim/cssom.js`: 新增 `canonicalizePageSize` 校验与序列化 `@page` `size`，补全 `@page` `page-orientation` 校验与非 `@page` 规则拦截，以及 `CSSGroupingRule.prototype.insertRule` 防护。
+  - `test/wpt/wpt-expectations.json`: 将 `page-orientation.tentative.html` 与 `page-rule-declarations-000.html` 收紧为 `PASS`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
