@@ -2122,6 +2122,9 @@
         const inner = t.slice(1, -1).trim();
         if (!inner) return false;
         const cells = inner.split(/\s+/);
+        for (let c = 0; c < cells.length; c++) {
+          if (!/^(?:\.+|[0-9a-zA-Z_\-\u0080-\uffff]+)$/.test(cells[c])) return false;
+        }
         if (cols === -1) cols = cells.length;
         else if (cells.length !== cols) return false;
       }
@@ -3189,7 +3192,22 @@
         if (p[i] === "dense") den = true;
         else ax = p[i];
       }
-      return ax && den ? (ax + " dense") : (ax || (den ? "dense" : s));
+      return ax && den ? (ax === "row" ? "dense" : (ax + " dense")) : (ax || (den ? "dense" : s));
+    }
+    if (key === "grid-template-areas") {
+      if (s.toLowerCase() === "none") return "none";
+      const toks = splitCssTokens(s);
+      return toks.map((t) => {
+        const inner = t.slice(1, -1).trim();
+        const cells = inner.split(/\s+/).map((c) => (/^\.+$/.test(c) ? "." : c));
+        return '"' + cells.join(" ") + '"';
+      }).join(" ");
+    }
+    if (key === "grid-template-columns" || key === "grid-template-rows") {
+      if (s.includes("[]") || /\[\s+\]/.test(s)) {
+        return s.replace(/\[\s*\]/g, "").replace(/\s+/g, " ").replace(/,\s+/g, ", ").replace(/\(\s+/g, "(").replace(/\s+\)/g, ")").trim();
+      }
+      return s;
     }
     if (key === "font-synthesis") {
       const p = splitCssTokens(s.toLowerCase());

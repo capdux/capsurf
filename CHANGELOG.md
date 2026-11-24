@@ -3680,3 +3680,5 @@
 - **Phase 606** (`src/js/shim/cssom.js`, `src/cdp/fetch.cp`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 为 `shape-outside` 实现括号平衡扫描与 `<position>`/`0px` 规范化，并适配 `fetch.cp` `static fn`；`shape-outside-valid-position.html` (20/20) 与 `shape-outside-shape-valid.html` (12/12) 全绿。
 
 - **Phase 607** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 扩充 `NAMED_COLORS_MAP` 补全 `grey`/`gray`/`orangered` 等标准 CSS 命名颜色 RGB 映射；4 项 `/css/selectors/invalidation/` 全绿。
+
+- **Phase 608** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 规范化 `grid-auto-flow`、`grid-template-areas`（含 cell 校验）与 `grid-template-{columns,rows}` 空线名 `[]`；9 项 `css-grid/parsing/*` 全绿。

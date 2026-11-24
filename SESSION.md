@@ -7871,3 +7871,9 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`cssom.js`**：扩充 `NAMED_COLORS_MAP` 补充 `grey`/`gray`/`orangered`/`silver`/`maroon`/`navy`/`teal`/`olive` 等标准命名颜色 RGB 映射。
   2. **四连全绿验证**：`has-invalidation-first-in-sibling-chain.html`、`has-with-not.html`、`has-with-is-child-combinator.html`、`has-pseudoclass-only.html` 全部 **PASS**，`--smoke` **3/3 suites, 6/6 tests PASS**。
   3. **并行摸底汇总**：`/css/css-grid/parsing/` 6/61 PASS（2 项 unexpected PASS）；`/css/css-fonts/parsing/` 41/82 PASS。
+
+### 2026-11-24 Phase 608 (`/css/css-grid/parsing/` 9 项全绿 & Overflow/UI Parsing 摸底)
+- **[Agent]**: 完成 Phase 608（`src/js/shim/cssom.js`）：
+  1. **`cssom.js`**：`grid-auto-flow` 省略 `row` 输出 `"dense"`、`grid-template-areas` 校验与空白/点号规范化、`grid-template-{columns,rows}` 省略空线名 `[]`。
+  2. **九连全绿验证**：`grid-auto-flow` 3/3、`grid-template-areas` 4/4、`grid-template-{columns,rows}-valid` 2/2 全部 **PASS**，`--smoke` **3/3 suites, 6/6 tests PASS**。
+  3. **并行摸底汇总**：`/css/css-overflow/parsing/` 22/32 PASS；`/css/css-ui/parsing/` 35/39 PASS。

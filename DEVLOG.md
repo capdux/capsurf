@@ -2927,3 +2927,7 @@
 ### Phase 607: `/css/selectors/invalidation/` 4 项全绿
 - **核心修复 (`src/js/shim/cssom.js`)**：扩充 `NAMED_COLORS_MAP`（补全 `grey`, `gray`, `orangered`, `silver`, `maroon`, `olive`, `navy`, `teal`, `pink`, `brown`, `violet`, `indigo`, `coral`, `crimson`, `*gray`/`*grey`, `rebeccapurple`, `skyblue`, `tomato`）。
 - **WPT & Smoke 验收**：4 项 `selectors/invalidation/` 测试全绿，`--smoke` 3/3 suites PASS。
+
+### Phase 608: `/css/css-grid/parsing/` 9 项全绿
+- **核心修复 (`src/js/shim/cssom.js`)**：`grid-auto-flow` 省略默认 `row`；`grid-template-areas` 校验合法 cell 字符并折叠空白与连续点号 `.`；`grid-template-{columns,rows}` 省略 `[]`。
+- **WPT & Smoke 验收**：`grid-auto-flow` 3/3、`grid-template-areas` 4/4、`grid-template-{columns,rows}-valid` 2/2 PASS，`--smoke` 3/3 suites PASS。

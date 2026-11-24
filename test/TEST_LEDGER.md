@@ -2085,3 +2085,12 @@
 - **子智能体只读摸底记录**：
   - `/css/css-grid/parsing/` (`b510`, 61 files): `6 PASS / 53 FAIL / 2 TIMEOUT`（`grid-template-{columns,rows}-repeat-intrinsic-valid.tentative` 2 项 unexpected PASS）
   - `/css/css-fonts/parsing/` (`b511`, 82 files): `41 PASS / 39 FAIL / 2 TIMEOUT`
+
+### Phase 608: `/css/css-grid/parsing/` 9 项全绿 & Overflow/UI Parsing 摸底
+- **Filter `/css/css-grid/parsing/grid-auto-flow`**: **3/3 PASS**（`cssom.js` `grid-auto-flow` 省略默认 `row` 序列化为 `"dense"`）。
+- **Filter `/css/css-grid/parsing/grid-template-areas`**: **4/4 PASS**（`cssom.js` 校验 `grid-template-areas` cell name 拒绝 `$` 并折叠空白与连续点号 `.`）。
+- **Filter `/css/css-grid/parsing/grid-template-{columns,rows}-valid`**: **2/2 PASS**（`cssom.js` 省略空线名列表 `[]`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-overflow/parsing/` (`b512`, 32 files): `22 PASS / 10 FAIL / 0 TIMEOUT` (32/32 matched)
+  - `/css/css-ui/parsing/` (`b513`, 39 files): `35 PASS / 3 FAIL / 1 TIMEOUT` (39/39 matched)
