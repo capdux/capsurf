@@ -1284,7 +1284,7 @@
     "reason": null
   },
   "/css/css-backgrounds/parsing/background-position-x-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-backgrounds/parsing/background-position-y-computed.html": {
@@ -1296,7 +1296,7 @@
     "reason": null
   },
   "/css/css-backgrounds/parsing/background-position-y-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-backgrounds/parsing/background-repeat-computed.html": {

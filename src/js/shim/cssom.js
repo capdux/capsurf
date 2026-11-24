@@ -2847,11 +2847,23 @@
     if (key === "ruby-overhang") {
       return s.toLowerCase() === "none" ? "spaces" : s.toLowerCase();
     }
-    if (key === "background-color") {
-      const sl = s.toLowerCase();
-      if (sl === "currentcolor" || sl === "transparent") return sl;
-      if (sl.startsWith("#") || /^rgba?\(/i.test(sl)) return normalizeSingleColor(s);
-      return sl;
+    if (key === "background-color" || key === "border-color" || key === "border-top-color" || key === "border-right-color" || key === "border-bottom-color" || key === "border-left-color") {
+      const toks = splitCssTokens(s);
+      return toks.map((t) => {
+        const tl = t.toLowerCase();
+        if (tl === "currentcolor" || tl === "transparent") return tl;
+        if (tl.startsWith("#") || /^rgba?\(/i.test(tl)) return normalizeSingleColor(t);
+        return tl;
+      }).join(" ");
+    }
+    if (key === "background-position-x" || key === "background-position-y") {
+      return splitTopLevelComma(s).map((layer) => {
+        return splitCssTokens(layer).map((t) => {
+          if (t === "0" || t === "+0" || t === "-0") return "0px";
+          if (/^calc\(/i.test(t)) return canonicalizeCalcToken(t);
+          return t;
+        }).join(" ");
+      }).join(", ");
     }
     if (key === "content") {
       const normCounterTok = (tok) => {

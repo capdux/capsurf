@@ -2792,3 +2792,7 @@
 ### Phase 573: `background-color` 3/3 全绿与 `rgb(%)`/`hsl()` 颜色规范化
 - **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：`normalizeSingleColor` 支持 `rgb(%)` 与 `hsl()/hsla()` 转 `rgb()/rgba()`，`background-color` 接入指定值规范化与计算期求值（含 `transparent -> rgba(0, 0, 0, 0)`）。
 - **WPT & Smoke 验收**：`background-color-*` **3/3 PASS**、`--smoke` **3/3 suites PASS**。
+
+### Phase 574: `bg-pos-{x,y}-valid`、`border-color` 与 `box-shadow-computed` 转绿
+- **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：`background-position-x/y` 接入 `canonicalizeCalcToken`；`border-color` 四边颜色接入指定值归一化与计算期求值；`box-shadow` 实现计算期多层颜色/长度/4 长度补齐。
+- **WPT & Smoke 验收**：`bg-pos-{x,y}-valid` 2/2 PASS（已收紧）、`border-color-{invalid,computed,valid}` 3/3 PASS、`box-shadow-computed` PASS、`--smoke` 3/3 suites PASS。

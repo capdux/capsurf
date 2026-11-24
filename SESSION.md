@@ -7668,3 +7668,9 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
      - `cssom.js`：`normalizeSingleColor` 补齐 `rgb()`/`rgba()`（含 `%` 通道）与 `hsl()`/`hsla()` 到 `rgb()`/`rgba()` 的规范转换；`normalizeCssSpecifiedValue` 对 `background-color` 归一化 `#hex`、`rgb(%)` 与 `currentColor`。
      - `window.js`：将 `background-color` 纳入 `applyUsedValuesToComputedMap` 颜色求值循环（`transparent -> rgba(0, 0, 0, 0)`、`currentcolor` 与 `hsl(...)` 解析）。
   2. **全绿验证**：`background-color-{invalid,computed,valid}.html` **3/3 PASS (100% ALL GREEN)**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+
+### 2026-11-24 Phase 574 (`bg-pos-{x,y}-valid` / `border-color` / `box-shadow-computed` 全绿)
+- **[Agent]**: 自主推导并完成 Phase 574（`src/js/shim/cssom.js`, `src/js/shim/window.js`, `test/wpt/wpt-expectations.json`）：
+  1. **`cssom.js`**：为 `border-color` 及四边长手归一化 `currentColor`/`#hex`/`rgb(%)`，为 `background-position-x/y` 多图层接入 `0 -> 0px` 与 `canonicalizeCalcToken`。
+  2. **`window.js`**：将 `border-{top,right,bottom,left}-color` 纳入颜色求值循环；补全 `box-shadow` 计算期多层颜色/长度/4 长度补齐求值。
+  3. **验证与基线收紧**：`background-position-{x,y}-valid` **2/2 FAIL->PASS**（已收紧）、`border-color-{invalid,computed,valid}` **3/3 PASS**、`box-shadow-computed` **PASS**、`--smoke` **3/3 suites PASS**。

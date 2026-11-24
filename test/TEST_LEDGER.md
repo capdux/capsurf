@@ -1803,3 +1803,13 @@
 - **子智能体只读摸底记录**：
   - `/css/css-multicol/parsing/` (`b424`): **31/31 PASS (100% ALL GREEN)**
   - `/css/css-cascade/` (`b425`, partial 54 recorded): `30 PASS / 19 FAIL / 4 TIMEOUT / 1 ERROR`
+
+### Phase 574 `bg-pos-{x,y}-valid` / `border-color-{valid,computed}` / `box-shadow-computed` 全绿 & WPT-B428~B431 摸底 (bin_dev Phase 574, 2026-11-24)
+- **Filter `/css/css-backgrounds/parsing/background-position-{x,y}-valid`**: **2/2 PASS (FAIL -> PASS)**（多图层 `0 -> 0px` 与 `canonicalizeCalcToken`，已收紧基线为 `PASS`）。
+- **Filter `/css/css-backgrounds/parsing/border-color-{invalid,computed,valid}`**: **3/3 PASS**（指定值归一化 `currentColor`/`#hex`/`rgb(%)`，计算期 `border-{top,right,bottom,left}-color` 接入颜色求值）。
+- **Filter `/css/css-backgrounds/parsing/box-shadow-computed`**: **PASS**（计算期多层 `box-shadow` 默认色 `elColor`、长度求值及 4 长度补齐 `0px`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-ui/parsing/` (`b428`): `39` files (`35 PASS / 3 FAIL / 1 TIMEOUT`)
+  - `/css/css-scroll-snap/` (`b429`): **8/8 PASS (100% ALL GREEN)**
+  - `/css/css-overscroll-behavior/` (`b431`): `2` files (`1 PASS / 1 FAIL`)
