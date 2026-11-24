@@ -7865,3 +7865,9 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   2. **`fetch.cp`**：`FetchState.patternMatches` 补充 `static` 适配新版 `cpc` `E0219`。
   3. **全绿验证与基线收紧**：`shape-outside-valid-position.html` **20/20 PASS**、`shape-outside-shape-valid.html` **FAIL->PASS (12/12)**（已收紧为 `PASS`）、`--smoke` **3/3 suites, 6/6 tests PASS**。
   4. **并行摸底汇总**：`/css/selectors/` 41/67 PASS（4 项 unexpected PASS）；`/css/css-flexbox/` 95/120 PASS。
+
+### 2026-11-24 Phase 607 (`/css/selectors/invalidation/` 4 项全绿 & Grid/Fonts Parsing 摸底)
+- **[Agent]**: 完成 Phase 607（`src/js/shim/cssom.js`）：
+  1. **`cssom.js`**：扩充 `NAMED_COLORS_MAP` 补充 `grey`/`gray`/`orangered`/`silver`/`maroon`/`navy`/`teal`/`olive` 等标准命名颜色 RGB 映射。
+  2. **四连全绿验证**：`has-invalidation-first-in-sibling-chain.html`、`has-with-not.html`、`has-with-is-child-combinator.html`、`has-pseudoclass-only.html` 全部 **PASS**，`--smoke` **3/3 suites, 6/6 tests PASS**。
+  3. **并行摸底汇总**：`/css/css-grid/parsing/` 6/61 PASS（2 项 unexpected PASS）；`/css/css-fonts/parsing/` 41/82 PASS。

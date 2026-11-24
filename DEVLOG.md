@@ -2923,3 +2923,7 @@
 ### Phase 606: `shape-outside-{valid-position,shape-valid}` 全绿 & `fetch.cp` 适配
 - **核心修复 (`cssom.js`, `fetch.cp`)**：`shape-outside` `circle`/`ellipse`/`shape` 改用引号感知的括号平衡扫描，`at <position>` 复用 `normalizePositionLayer`，`shape()` 坐标无单位 `0` 转 `0px`；`FetchState.patternMatches` 补充 `static fn` 通过 `cpc` 4 门禁。
 - **WPT & Smoke 验收**：`shape-outside-valid-position.html` 20/20 PASS、`shape-outside-shape-valid.html` FAIL->PASS (收紧基线)、`--smoke` 3/3 suites PASS。
+
+### Phase 607: `/css/selectors/invalidation/` 4 项全绿
+- **核心修复 (`src/js/shim/cssom.js`)**：扩充 `NAMED_COLORS_MAP`（补全 `grey`, `gray`, `orangered`, `silver`, `maroon`, `olive`, `navy`, `teal`, `pink`, `brown`, `violet`, `indigo`, `coral`, `crimson`, `*gray`/`*grey`, `rebeccapurple`, `skyblue`, `tomato`）。
+- **WPT & Smoke 验收**：4 项 `selectors/invalidation/` 测试全绿，`--smoke` 3/3 suites PASS。

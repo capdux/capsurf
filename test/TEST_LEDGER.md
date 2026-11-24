@@ -2075,3 +2075,13 @@
 - **子智能体只读摸底记录**：
   - `/css/selectors/` (`b509`, 67 files): `41 PASS / 17 FAIL / 7 TIMEOUT / 2 ERROR`（`dir-pseudo-in-has`, `dir-selector-auto-direction-change-001`, `dir-selector-change-004`, `dir-pseudo-class-in-has` 4 项 unexpected PASS；6 项 `has-*` invalidation 集中于 `"grey"` vs `"rgb(128, 128, 128)"`）
   - `/css/css-flexbox/` (`b508`, 120 recorded of 261): `95 PASS / 15 FAIL / 10 TIMEOUT`
+
+### Phase 607: `/css/selectors/invalidation/` 4 项全绿 & Grid/Fonts Parsing 摸底
+- **Filter `/css/selectors/invalidation/has-invalidation-first-in-sibling-chain`**: **PASS**（`cssom.js` `NAMED_COLORS_MAP` 补全 `grey`/`gray`/`orangered` 等标准 CSS 命名颜色 RGB 映射）。
+- **Filter `/css/selectors/invalidation/has-with-not`**: **PASS**。
+- **Filter `/css/selectors/invalidation/has-with-is-child-combinator`**: **PASS**。
+- **Filter `/css/selectors/invalidation/has-pseudoclass-only`**: **PASS**。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-grid/parsing/` (`b510`, 61 files): `6 PASS / 53 FAIL / 2 TIMEOUT`（`grid-template-{columns,rows}-repeat-intrinsic-valid.tentative` 2 项 unexpected PASS）
+  - `/css/css-fonts/parsing/` (`b511`, 82 files): `41 PASS / 39 FAIL / 2 TIMEOUT`
