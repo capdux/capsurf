@@ -3782,3 +3782,5 @@
 - **Phase 656** (`src/js/shim/cssom.js`, `src/js/shim/element/element.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `-webkit-border-radius` 别名映射与折叠、渐变角度精度 `toPrecision(6)`/`circle` 保留及 `border-image-source` `url()` 绝对化；`webkit-border-radius-valid` (25/25) 与 `border-image-source-computed` (10/10) 全绿。
 
 - **Phase 657** (`src/js/shim/cssom.js`, `src/js/shim/element/element.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `border-radius` 4 角长手双向展开与 `cssText` 自动折叠；`border-radius-css-text` (1/1) 与 `webkit-border-radius-valid` (25/25) 全绿。
+
+- **Phase 658** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `animation` 简写单次消费与同名关键字 round-trip 序列化；`style-animation-parsing` (5/5) 与 `computed-style-animation-parsing` (7/7) 全绿。

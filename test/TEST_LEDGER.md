@@ -2309,3 +2309,7 @@
 ### Phase 657: `border-radius-css-text` (1/1) 全绿
 - **Filter `/css/css-backgrounds/border-radius-css-text` & `webkit-border-radius-valid`**: **FAIL->PASS (2/2: 1/1 + 25/25)**（`cssom.js` 在 `expandCssShorthand`、`SHORTHAND_EXPAND_LONGHANDS` 与 `serializeExpandedShorthand` 补全 `border-radius` 4 角长手双向展开与折叠；`element.js` 在 `parseStyleMap()` 与 `serializeStyleMap()` 接入 `border-radius` 展开及 4 角自动折叠回简写）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 658: `style-animation-parsing` (5/5) & `computed-style-animation-parsing` (7/7) 全绿
+- **Filter `/css/css-animations/{style,computed-style}-animation-parsing`**: **FAIL->PASS (2/2: 5/5 + 7/7)**（`cssom.js` 在 `isValidCssValue`、`normalizeCssSpecifiedValue` 与 `expandCssShorthand` 中为 `animation` 补全 `seenTf`/`seenIter`/`seenDr`/`seenFl`/`seenPl` 单次消费标记（含 `none` 计入 `seenFl`），使二次出现的同名关键字可作为 `<custom-ident>` 落入 `animation-name`；`serializeExpandedShorthand("animation")` 在 `animation-name` 与其他关键字同名时显式输出对应默认关键字保证 round-trip 一致）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

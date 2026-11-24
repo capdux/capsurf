@@ -3131,3 +3131,7 @@
 ### Phase 657: `border-radius-css-text` (1/1) 全绿
 - **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/element/element.js`)**：`border-radius` 接入 `SHORTHAND_EXPAND_LONGHANDS`、`expandCssShorthand`、`serializeExpandedShorthand` 及 `parseStyleMap()`/`serializeStyleMap()` 折叠管线。
 - **WPT & Smoke 验收**：`border-radius-css-text.html` (1/1) 与 `webkit-border-radius-valid.html` (25/25) 全绿，`--smoke` 3/3 suites PASS。
+
+### Phase 658: `style-animation-parsing` & `computed-style-animation-parsing` 全绿
+- **核心修复 (`src/js/shim/cssom.js`)**：`isValidCssValue`、`normalizeCssSpecifiedValue`、`expandCssShorthand` 统一 `animation` 各子属性单次消费标记，`serializeExpandedShorthand("animation")` 在 `animation-name` 与关键字冲突时显式输出默认关键字。
+- **WPT & Smoke 验收**：`style-animation-parsing` (5/5) 与 `computed-style-animation-parsing` (7/7) 全绿，`--smoke` 3/3 suites PASS。

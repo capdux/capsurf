@@ -5881,14 +5881,13 @@
           let seenTime = 0, seenTf = false, seenIter = false, seenDir = false, seenFill = false, seenPlay = false, seenName = false;
           for (let i = 0; i < p.length; i++) {
             const t = p[i], tl = t.toLowerCase();
-            if (TF_KW.has(tl) || /^(?:cubic-bezier|steps|linear)\(/i.test(tl)) {
-              if (seenTf) return false; seenTf = true;
-            } else if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?(?:ms|s)$/i.test(tl)) {
-              if (seenTime >= 2) return false;
+            if (!seenTf && (TF_KW.has(tl) || /^(?:cubic-bezier|steps|linear)\(/i.test(tl))) {
+              seenTf = true;
+            } else if (seenTime < 2 && /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?(?:ms|s)$/i.test(tl)) {
               if (seenTime === 0 && parseFloat(tl) < 0) return false;
               seenTime++;
-            } else if (tl === "infinite" || (/^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(tl) && tl !== "")) {
-              if (seenIter) return false; seenIter = true;
+            } else if (!seenIter && (tl === "infinite" || (/^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(tl) && tl !== ""))) {
+              seenIter = true;
             } else if (!seenDir && DIR.has(tl)) {
               seenDir = true;
             } else if (!seenFill && FILL.has(tl)) {
@@ -7546,13 +7545,13 @@
           let seenTime = 0;
           for (let i = 0; i < p.length; i++) {
             const t = p[i], tl = t.toLowerCase();
-            if (TF_KW.has(tl)) tf = tl;
-            else if (/^(?:cubic-bezier|steps|linear)\(/i.test(tl)) tf = t.replace(/\(\s+/g, "(").replace(/\s+\)/g, ")");
-            else if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?(?:ms|s)$/i.test(tl)) {
+            if (!tf && TF_KW.has(tl)) tf = tl;
+            else if (!tf && /^(?:cubic-bezier|steps|linear)\(/i.test(tl)) tf = t.replace(/\(\s+/g, "(").replace(/\s+\)/g, ")");
+            else if (seenTime < 2 && /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?(?:ms|s)$/i.test(tl)) {
               if (seenTime === 0) du = tl;
               else dl = tl;
               seenTime++;
-            } else if (tl === "infinite" || /^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(tl)) it = tl;
+            } else if (!it && (tl === "infinite" || /^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(tl))) it = tl;
             else if (!dr && DIR.has(tl)) dr = tl;
             else if (!fl && FILL.has(tl)) fl = tl;
             else if (!pl && PLAY.has(tl)) pl = tl;
@@ -8245,17 +8244,18 @@
         for (let li = 0; li < layers.length; li++) {
           const p = splitCssTokens(layers[li]);
           let du = "auto", tf = "ease", dl = "0s", it = "1", dr = "normal", fl = "none", pl = "running", nm = "none", seenTime = 0;
+          let seenTf = false, seenIt = false, seenDr = false, seenFl = false, seenPl = false;
           for (let i = 0; i < p.length; i++) {
             const t = p[i], tl = t.toLowerCase();
-            if (TF_KW.has(tl) || /^(?:cubic-bezier|steps|linear)\(/i.test(tl)) tf = t;
-            else if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?(?:ms|s)$/i.test(tl)) {
+            if (!seenTf && (TF_KW.has(tl) || /^(?:cubic-bezier|steps|linear)\(/i.test(tl))) { tf = t; seenTf = true; }
+            else if (seenTime < 2 && /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?(?:ms|s)$/i.test(tl)) {
               if (seenTime === 0) du = tl;
               else dl = tl;
               seenTime++;
-            } else if (tl === "infinite" || /^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(tl)) it = tl;
-            else if (dr === "normal" && DIR.has(tl)) dr = tl;
-            else if (fl === "none" && FILL.has(tl) && tl !== "none") fl = tl;
-            else if (pl === "running" && PLAY.has(tl)) pl = tl;
+            } else if (!seenIt && (tl === "infinite" || /^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(tl))) { it = tl; seenIt = true; }
+            else if (!seenDr && DIR.has(tl)) { dr = tl; seenDr = true; }
+            else if (!seenFl && FILL.has(tl)) { fl = tl; seenFl = true; }
+            else if (!seenPl && PLAY.has(tl)) { pl = tl; seenPl = true; }
             else if (nm === "none") nm = tl === "none" ? "none" : t;
           }
           durs.push(du); tfs.push(tf); dels.push(dl); iters.push(it); dirs.push(dr); fills.push(fl); plays.push(pl); names.push(nm);
@@ -8622,17 +8622,22 @@
         const n = splitVals[0].length;
         if (!splitVals.every((a) => a.length === n)) return "";
         const out = [];
+        const TF_KW = new Set(["linear", "ease", "ease-in", "ease-out", "ease-in-out", "step-start", "step-end"]);
+        const DIR = new Set(["normal", "reverse", "alternate", "alternate-reverse"]);
+        const FILL = new Set(["none", "forwards", "backwards", "both"]);
+        const PLAY = new Set(["running", "paused"]);
         for (let i = 0; i < n; i++) {
           const du = splitVals[0][i], tf = splitVals[1][i], dl = splitVals[2][i], it = splitVals[3][i],
                 dr = splitVals[4][i], fl = splitVals[5][i], pl = splitVals[6][i], nm = splitVals[7][i];
+          const nmLow = nm.toLowerCase();
           const parts = [];
           if ((du !== "auto" && du !== "0s") || dl !== "0s") parts.push(du === "auto" ? "0s" : du);
-          if (tf !== "ease") parts.push(tf);
+          if (tf !== "ease" || (nm !== "none" && TF_KW.has(nmLow))) parts.push(tf);
           if (dl !== "0s") parts.push(dl);
-          if (it !== "1") parts.push(it);
-          if (dr !== "normal") parts.push(dr);
-          if (fl !== "none") parts.push(fl);
-          if (pl !== "running") parts.push(pl);
+          if (it !== "1" || (nm !== "none" && nmLow === "infinite")) parts.push(it);
+          if (dr !== "normal" || (nm !== "none" && DIR.has(nmLow))) parts.push(dr);
+          if (fl !== "none" || (nm !== "none" && FILL.has(nmLow))) parts.push(fl);
+          if (pl !== "running" || (nm !== "none" && PLAY.has(nmLow))) parts.push(pl);
           if (nm !== "none") parts.push(nm);
           out.push(parts.length > 0 ? parts.join(" ") : "none");
         }

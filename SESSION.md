@@ -8074,3 +8074,7 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`cssom.js` & `element.js`**：`border-radius` 接入 `SHORTHAND_EXPAND_LONGHANDS`、`expandCssShorthand`、`serializeExpandedShorthand` 与 `parseStyleMap()`/`serializeStyleMap()`，实现 `cssText` 自动折叠回 `border-radius`。
   2. **全绿验证**：`border-radius-css-text.html`（1/1）、`webkit-border-radius-valid.html`（25/25）与 `--smoke`（3/3 suites, 6/6 tests）全绿。
   3. **3 小时自进化复盘**：`node -c` 0.1s 预检 + 双路只读子智能体全量目录摸底支撑了约 60 分钟内连续推进 Phase 643–657（15 个阶段全绿提交）；后续编辑 `cssom.js` 时 `Target` 必须携带唯一上下文行以消除多匹配返工。
+- **[Agent]**: 完成 Phase 658（`src/js/shim/cssom.js`）：
+  1. **`cssom.js`**：补全 `animation` 校验/规范化/展开单次消费标记，及 `serializeExpandedShorthand("animation")` 同名关键字消歧 round-trip 序列化。
+  2. **全绿验证**：`style-animation-parsing.html`（5/5）、`computed-style-animation-parsing.html`（7/7）与 `--smoke`（3/3 suites, 6/6 tests）全绿。
+  3. **子智能体并发汇报**：`8f248964` 完成 `/css/css-masking/`（31/94 PASS），已接力派发 `4297d9ab`（`19710`, `/css/css-nesting/`）。
