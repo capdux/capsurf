@@ -6530,7 +6530,10 @@ function installWindow(global) {
               collectFromText(r.declText || "", layerPrefix);
             }
           } else if (sel.startsWith("@supports")) {
-            collectFromText(r.declText || "", layerPrefix);
+            const cond = sel.replace(/^@supports\s*/i, "").trim();
+            if (typeof CSS !== "undefined" && typeof CSS.supports === "function" && CSS.supports(cond)) {
+              collectFromText(r.declText || "", layerPrefix);
+            }
           } else if (sel.startsWith("@")) {
             continue;
           } else if (sel) {

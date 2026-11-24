@@ -11175,7 +11175,8 @@
             priority = "important";
             val = val.replace(/\s*!\s*important\s*$/i, "").trim();
           }
-          const lowerName = rawName.toLowerCase();
+          let lowerName = rawName.toLowerCase();
+          if (lowerName === "-webkit-appearance") lowerName = "appearance";
           if (context === "keyframe" && (priority === "important" || lowerName === "animation" || (lowerName.startsWith("animation-") && lowerName !== "animation-timing-function"))) continue;
           if (context === "page" && lowerName === "transform") continue;
           if (context === "font-face" && lowerName === "src") {
@@ -11327,7 +11328,8 @@
 
       decl.getPropertyValue = function (prop) {
         const p = String(prop).trim();
-        const key = p.startsWith("--") ? p : p.toLowerCase();
+        let key = p.startsWith("--") ? p : p.toLowerCase();
+        if (key === "-webkit-appearance") key = "appearance";
         if (context === "margin" && key === "size") return "";
         if (data.has(key)) {
           const rawVal = data.get(key).value;
@@ -11444,7 +11446,8 @@
           decl.removeProperty(p);
           return;
         }
-        const key = p.startsWith("--") ? p : p.toLowerCase();
+        let key = p.startsWith("--") ? p : p.toLowerCase();
+        if (key === "-webkit-appearance") key = "appearance";
         if (!p.startsWith("--")) {
           if (context === "page" && key === "size") {
             const cs = canonicalizePageSize(v);
@@ -11496,7 +11499,7 @@
         if (!data.has(key)) {
           authoredOrder.push(key);
         }
-        data.set(key, { name: p, value: v, priority: pPriority });
+        data.set(key, { name: key === "appearance" ? "appearance" : p, value: v, priority: pPriority });
         if (key === "font") {
           const fvLhs = SHORTHAND_EXPAND_LONGHANDS["font-variant"];
           for (let i = 0; i < fvLhs.length; i++) {
@@ -11621,6 +11624,9 @@
             }
             if (prop === "transform") {
               return target.getPropertyValue ? target.getPropertyValue("transform") : (target.transform || "");
+            }
+            if (!prop.startsWith("--") && !isCssPropertySupported(prop)) {
+              return undefined;
             }
             const kebab = cssPropCamelToKebab(prop);
             let val = decl.getPropertyValue(kebab);
@@ -17387,6 +17393,8 @@
     "grid-column-gap": "column-gap",
     "grid-gap": "gap",
     "-webkit-border-radius": "border-radius",
+    "-webkit-appearance": "appearance",
+    "webkitappearance": "appearance",
   };
 
   const BG_LONGHANDS = [
@@ -17645,7 +17653,7 @@
               if (isValidInlinePropValue(k, v)) setEntryWithShorthand(map, k, rawKey, v, pri);
             } else if (k === "border-radius" || k === "column-rule" || k === "columns" || k === "border-color" || k === "border-style" || k === "border-width") {
               setEntryWithShorthand(map, k, rawKey, v, pri);
-            } else setEntryInStyleMap(map, k, rawKey, v, pri);
+            } else setEntryInStyleMap(map, k, k === "appearance" ? "appearance" : rawKey, v, pri);
           }
         }
       }
@@ -17959,6 +17967,11 @@
         }
 
         // CamelCase or kebab-case lookup
+        if (!prop.startsWith("--") && typeof globalThis !== "undefined" &&
+            typeof globalThis.__isCssPropertySupported === "function" &&
+            !globalThis.__isCssPropertySupported(prop)) {
+          return undefined;
+        }
         const map = parseStyleMap();
         if (map.has(prop)) return serializeInlineSpecifiedValue(prop, map.get(prop).value);
         const kebab = normalizeStylePropKey(propToKebab(prop));
@@ -45675,7 +45688,10 @@
                 collectFromText(r.declText || "", layerPrefix);
               }
             } else if (sel.startsWith("@supports")) {
-              collectFromText(r.declText || "", layerPrefix);
+              const cond = sel.replace(/^@supports\s*/i, "").trim();
+              if (typeof CSS !== "undefined" && typeof CSS.supports === "function" && CSS.supports(cond)) {
+                collectFromText(r.declText || "", layerPrefix);
+              }
             } else if (sel.startsWith("@")) {
               continue;
             } else if (sel) {

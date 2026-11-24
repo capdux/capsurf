@@ -4618,6 +4618,11 @@ pub struct StyleSheet {
         if (std.mem.startsWith(u8, p_name, "--") && p_name.len > 2) {
             return ComputedStyle.isValidCustomPropValue(p_val);
         }
+        if (std.ascii.eqlIgnoreCase(p_name, "user-modify") ||
+            std.ascii.eqlIgnoreCase(p_name, "-webkit-user-modify") ||
+            std.ascii.eqlIgnoreCase(p_name, "-moz-user-modify")) {
+            return false;
+        }
         if (p_val.len == 0) return false;
         return ComputedStyle.isValidCustomPropValue(p_val);
     }

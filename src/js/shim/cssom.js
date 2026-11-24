@@ -7280,7 +7280,8 @@
           priority = "important";
           val = val.replace(/\s*!\s*important\s*$/i, "").trim();
         }
-        const lowerName = rawName.toLowerCase();
+        let lowerName = rawName.toLowerCase();
+        if (lowerName === "-webkit-appearance") lowerName = "appearance";
         if (context === "keyframe" && (priority === "important" || lowerName === "animation" || (lowerName.startsWith("animation-") && lowerName !== "animation-timing-function"))) continue;
         if (context === "page" && lowerName === "transform") continue;
         if (context === "font-face" && lowerName === "src") {
@@ -7432,7 +7433,8 @@
 
     decl.getPropertyValue = function (prop) {
       const p = String(prop).trim();
-      const key = p.startsWith("--") ? p : p.toLowerCase();
+      let key = p.startsWith("--") ? p : p.toLowerCase();
+      if (key === "-webkit-appearance") key = "appearance";
       if (context === "margin" && key === "size") return "";
       if (data.has(key)) {
         const rawVal = data.get(key).value;
@@ -7549,7 +7551,8 @@
         decl.removeProperty(p);
         return;
       }
-      const key = p.startsWith("--") ? p : p.toLowerCase();
+      let key = p.startsWith("--") ? p : p.toLowerCase();
+      if (key === "-webkit-appearance") key = "appearance";
       if (!p.startsWith("--")) {
         if (context === "page" && key === "size") {
           const cs = canonicalizePageSize(v);
@@ -7601,7 +7604,7 @@
       if (!data.has(key)) {
         authoredOrder.push(key);
       }
-      data.set(key, { name: p, value: v, priority: pPriority });
+      data.set(key, { name: key === "appearance" ? "appearance" : p, value: v, priority: pPriority });
       if (key === "font") {
         const fvLhs = SHORTHAND_EXPAND_LONGHANDS["font-variant"];
         for (let i = 0; i < fvLhs.length; i++) {
@@ -7726,6 +7729,9 @@
           }
           if (prop === "transform") {
             return target.getPropertyValue ? target.getPropertyValue("transform") : (target.transform || "");
+          }
+          if (!prop.startsWith("--") && !isCssPropertySupported(prop)) {
+            return undefined;
           }
           const kebab = cssPropCamelToKebab(prop);
           let val = decl.getPropertyValue(kebab);

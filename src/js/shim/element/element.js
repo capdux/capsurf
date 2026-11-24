@@ -13,6 +13,8 @@ const STYLE_LEGACY_ALIASES = {
   "grid-column-gap": "column-gap",
   "grid-gap": "gap",
   "-webkit-border-radius": "border-radius",
+  "-webkit-appearance": "appearance",
+  "webkitappearance": "appearance",
 };
 
 const BG_LONGHANDS = [
@@ -271,7 +273,7 @@ function createStyleProxy(element) {
             if (isValidInlinePropValue(k, v)) setEntryWithShorthand(map, k, rawKey, v, pri);
           } else if (k === "border-radius" || k === "column-rule" || k === "columns" || k === "border-color" || k === "border-style" || k === "border-width") {
             setEntryWithShorthand(map, k, rawKey, v, pri);
-          } else setEntryInStyleMap(map, k, rawKey, v, pri);
+          } else setEntryInStyleMap(map, k, k === "appearance" ? "appearance" : rawKey, v, pri);
         }
       }
     }
@@ -585,6 +587,11 @@ function createStyleProxy(element) {
       }
 
       // CamelCase or kebab-case lookup
+      if (!prop.startsWith("--") && typeof globalThis !== "undefined" &&
+          typeof globalThis.__isCssPropertySupported === "function" &&
+          !globalThis.__isCssPropertySupported(prop)) {
+        return undefined;
+      }
       const map = parseStyleMap();
       if (map.has(prop)) return serializeInlineSpecifiedValue(prop, map.get(prop).value);
       const kebab = normalizeStylePropKey(propToKebab(prop));
