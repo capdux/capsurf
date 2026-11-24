@@ -12192,6 +12192,20 @@
         const slash = splitTopSlash(hslM[1]);
         const chParts = splitColorCh(slash[0]);
         if (chParts.length === 3 || (chParts.length === 4 && slash.length === 1)) {
+          if (/\bnone\b/i.test(hslM[1]) && chParts.length === 3) {
+            const stripPct = (t) => t.toLowerCase() === "none" ? "none" : (t.endsWith("%") ? String(Number(parseFloat(t).toFixed(6))) : t);
+            const hOut = chParts[0].toLowerCase() === "none" ? "none" : chParts[0];
+            let aOut = "";
+            if (slash.length === 2) {
+              const at = evalColorExpr(slash[1]);
+              if (at === "none") aOut = " / none";
+              else {
+                const av = Math.max(0, Math.min(1, at.endsWith("%") ? (parseFloat(at) / 100) : parseFloat(at)));
+                if (isFinite(av) && av < 1) aOut = " / " + String(Number(av.toFixed(6)));
+              }
+            }
+            return "hsl(" + hOut + " " + stripPct(chParts[1]) + " " + stripPct(chParts[2]) + aOut + ")";
+          }
           const hTok = evalColorExpr(chParts[0]);
           let h = parseFloat(hTok);
           if (hTok.endsWith("rad")) h = h * 180 / Math.PI;

@@ -3930,3 +3930,6 @@
 - **Phase 703**:
   - `src/js/shim/window.js`: `color: currentcolor` 向上沿父链继承最近的非 `currentcolor` 颜色并规范化。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 704**:
+  - `src/js/shim/cssom.js`: `normalizeSingleColor` 对含 `none` 通道的 `hsl`/`hsla` 统一输出 `hsl(...)`、剥离 S/L `%` 并省略 `/ 1`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

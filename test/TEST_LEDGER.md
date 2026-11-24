@@ -2370,3 +2370,4 @@
 | Phase 701 | WPT `@counter-style` 禁用名与 8 项描述符严格校验闭环 | `src/js/shim/cssom.js` | `counter-style-at-rule` 7 项回归全数 PASS (`fallback`, `additive-symbols`, `negative`, `name`, `pad`, `range`, `system`), 10/10 匹配基线; `--smoke` 3/3 PASS |
 | Phase 702 | WPT `css-color` 19 项 System Colors + `lab`/`lch`/`oklab`/`oklch`/`color()` 严格校验 | `src/js/shim/cssom.js` | `color-valid-system-color` (19/19 PASS), `color-invalid-lab` (18/18 PASS), `color-invalid-color-function` (124/124 PASS); `--smoke` 3/3 PASS |
 | Phase 703 | WPT `color-computed.html` `currentcolor` 父元素继承求值修复 | `src/js/shim/window.js` | `/css/css-color/parsing/color-computed.html` (16/16 PASS); `--smoke` 3/3 PASS |
+| Phase 704 | WPT `color-valid-hsl` `none` 通道 `hsla->hsl` 与 `%` 剥离规范化 | `src/js/shim/cssom.js` | `color-valid-hsl.html` 30/59 fails -> 24/59 fails (全部 `none` 通道通过); `--smoke` 3/3 PASS |
