@@ -2360,3 +2360,4 @@
 | Phase 691 | WPT `CSSStyleRule.selectorText` 校验 + `:nth-*` `An+B` 解析/序列化闭环 | `src/js/shim/cssom.js`, `src/js/shim/selector.js` | `anb-parsing.html` (67/67 PASS), `anb-serialization.html` (20/20 PASS), `/css/selectors/parsing/` (16/16 PASS); `--smoke` 3/3 PASS |
 | Phase 692 | WPT `src/css/matcher.cp` 组合子 `U+000C` (`0x0c`) 换页符空白支持 | `src/css/matcher.cp` | `cpc brief` PASS; `/css/css-syntax/whitespace.html` (31/31 PASS); `--smoke` 3/3 PASS |
 | Phase 693 | WPT `css-syntax` 非 ASCII ident 码点与不可打印控制字符拦截 | `src/js/shim/cssom.js`, `src/js/shim/selector.js` | `non-ascii-codepoints.html` (PASS), `inclusive-ranges.html` (38/38 PASS); `--smoke` 3/3 PASS |
+| Phase 694 | WPT `css-syntax` 选择器顶层 EOF 未闭合 `[attr` 与 `:nth-*(` 自动收口 | `src/js/shim/selector.js` | `unclosed-constructs.html` (4/4 PASS), `/css/selectors/parsing/` (16/16 PASS); `--smoke` 3/3 PASS |

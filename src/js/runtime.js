@@ -14545,7 +14545,7 @@
         cur += ch;
       }
     }
-    if (quote || depthP !== 0 || depthB !== 0) return null;
+    if (quote) return null;
     out.push(cur);
     return out;
   }
@@ -14607,7 +14607,7 @@
           }
           j++;
         }
-        if (j >= s.length || s[j] !== "]") return null;
+        if (j >= s.length && (inFunc || inHas || q)) return null;
         const inner = s.slice(i + 1, j).trim();
         if (!inner) return null;
         const am = /^([a-zA-Z_*|-][a-zA-Z0-9_*|-]*)\s*(?:([~|^$*]?=)\s*([\s\S]*?))?$/.exec(inner);
@@ -14673,8 +14673,8 @@
             }
             k++;
           }
-          if (dp !== 0) return null;
-          const inner = s.slice(j + 1, k - 1).trim();
+          if (dp !== 0 && (inFunc || inHas || q || dp !== 1)) return null;
+          const inner = (dp === 0 ? s.slice(j + 1, k - 1) : s.slice(j + 1)).trim();
           if (NON_EMPTY_FUNC_PSEUDOS.has(pName) && !inner) return null;
           if (pName === ":has" && inHas) return null;
           if (pName === "::slotted") {

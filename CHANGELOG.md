@@ -3899,3 +3899,6 @@
   - `src/js/shim/cssom.js`: `animation-name` 等 `<custom-ident>` 属性校验支持完整 CSS Syntax 3 非 ASCII ident 码点区间。
   - `src/js/shim/selector.js`: `canonicalizeSelectorList` 与 `canonicalizeComplexSelector` 在 `.trim()` 前拒绝 `[\x00-\x08\x0b\x0e-\x1f\x7f]` 控制字符。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 694**:
+  - `src/js/shim/selector.js`: 顶层选择器列表允许在 EOF 自动闭合未闭合的 `[` 与 `(`（如 `[foo`、`:nth-child(1`）。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

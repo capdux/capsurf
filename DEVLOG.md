@@ -3226,3 +3226,5 @@
 - 在 `src/css/matcher.cp` 组合子分词循环中补全 `0x0c` 换页符，通过 `cpc fix`/`cpc brief` 4 门禁，使 `/css/css-syntax/whitespace.html` 全部 31/31 PASS。
 ### Phase 693 — `css-syntax` 非 ASCII ident 码点与控制字符边界闭环
 - 为 `<custom-ident>` 校验补齐 CSS Syntax 3 非 ASCII ident 码点集合，并在选择器规范化 `.trim()` 前拦截不可打印控制字符（含 `U+000B`），`non-ascii-codepoints.html` 与 `inclusive-ranges.html` 全数 PASS。
+### Phase 694 — `css-syntax` 顶层 EOF 未闭合构造自动收口
+- 在 `selector.js` 中允许顶层选择器列表在 EOF 自动闭合未闭合的属性选择器和函数伪类，打通 `/css/css-syntax/unclosed-constructs.html` 全部 4/4 用例并保持 `/css/selectors/parsing/` 16/16 全绿。
