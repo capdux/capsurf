@@ -5899,39 +5899,81 @@ function installWindow(global) {
           setDecl("padding-left", sides[3], isImp);
         }
       } else if (key === "padding-inline-start") {
+        setDecl("padding-inline-start", val, isImp);
         setDecl("padding-left", val, isImp);
       } else if (key === "padding-inline-end") {
+        setDecl("padding-inline-end", val, isImp);
         setDecl("padding-right", val, isImp);
       } else if (key === "padding-block-start") {
+        setDecl("padding-block-start", val, isImp);
         setDecl("padding-top", val, isImp);
       } else if (key === "padding-block-end") {
+        setDecl("padding-block-end", val, isImp);
         setDecl("padding-bottom", val, isImp);
       } else if (key === "padding-inline") {
         const parts = splitCssTopLevelWhitespace(val);
         if (parts.length === 1) {
+          setDecl("padding-inline-start", parts[0], isImp);
+          setDecl("padding-inline-end", parts[0], isImp);
           setDecl("padding-left", parts[0], isImp);
           setDecl("padding-right", parts[0], isImp);
         } else if (parts.length >= 2) {
+          setDecl("padding-inline-start", parts[0], isImp);
+          setDecl("padding-inline-end", parts[1], isImp);
           setDecl("padding-left", parts[0], isImp);
           setDecl("padding-right", parts[1], isImp);
         }
       } else if (key === "padding-block") {
         const parts = splitCssTopLevelWhitespace(val);
         if (parts.length === 1) {
+          setDecl("padding-block-start", parts[0], isImp);
+          setDecl("padding-block-end", parts[0], isImp);
           setDecl("padding-top", parts[0], isImp);
           setDecl("padding-bottom", parts[0], isImp);
         } else if (parts.length >= 2) {
+          setDecl("padding-block-start", parts[0], isImp);
+          setDecl("padding-block-end", parts[1], isImp);
           setDecl("padding-top", parts[0], isImp);
           setDecl("padding-bottom", parts[1], isImp);
         }
       } else if (key === "margin-inline-start") {
+        setDecl("margin-inline-start", val, isImp);
         setDecl("margin-left", val, isImp);
       } else if (key === "margin-inline-end") {
+        setDecl("margin-inline-end", val, isImp);
         setDecl("margin-right", val, isImp);
       } else if (key === "margin-block-start") {
+        setDecl("margin-block-start", val, isImp);
         setDecl("margin-top", val, isImp);
       } else if (key === "margin-block-end") {
+        setDecl("margin-block-end", val, isImp);
         setDecl("margin-bottom", val, isImp);
+      } else if (key === "margin-inline") {
+        const parts = splitCssTopLevelWhitespace(val);
+        if (parts.length === 1) {
+          setDecl("margin-inline-start", parts[0], isImp);
+          setDecl("margin-inline-end", parts[0], isImp);
+          setDecl("margin-left", parts[0], isImp);
+          setDecl("margin-right", parts[0], isImp);
+        } else if (parts.length >= 2) {
+          setDecl("margin-inline-start", parts[0], isImp);
+          setDecl("margin-inline-end", parts[1], isImp);
+          setDecl("margin-left", parts[0], isImp);
+          setDecl("margin-right", parts[1], isImp);
+        }
+      } else if (key === "margin-block") {
+        const parts = splitCssTopLevelWhitespace(val);
+        if (parts.length === 1) {
+          setDecl("margin-block-start", parts[0], isImp);
+          setDecl("margin-block-end", parts[0], isImp);
+          setDecl("margin-top", parts[0], isImp);
+          setDecl("margin-bottom", parts[0], isImp);
+        } else if (parts.length >= 2) {
+          setDecl("margin-block-start", parts[0], isImp);
+          setDecl("margin-block-end", parts[1], isImp);
+          setDecl("margin-top", parts[0], isImp);
+          setDecl("margin-bottom", parts[1], isImp);
+        }
       } else if (key === "border-width") {
         const sides = expandFourSides(splitCssTopLevelWhitespace(val));
         if (sides) {
@@ -6702,14 +6744,20 @@ function installWindow(global) {
     if (!element || element.nodeType !== 1 || depth > 24) return 600;
     const rawMap = collectRawComputedMap(element, "");
     const fontSize = evalCssLengthExpr(rawMap.get("font-size") || "16px", 16, 16) || 16;
-    const hRaw = (rawMap.get("height") || "auto").trim().toLowerCase();
-    if (hRaw && hRaw !== "auto") {
+    const bs = (rawMap.get("block-size") || "").trim().toLowerCase();
+    const hRaw = (bs || rawMap.get("height") || "auto").trim().toLowerCase();
+    if (hRaw && hRaw !== "auto" && hRaw !== "min-content" && hRaw !== "max-content") {
       const parentEl = element.parentElement || element.parentNode;
       const cbH = (parentEl && parentEl.nodeType === 1) ? computeElementUsedHeightPx(parentEl, depth + 1) : 600;
       const h = evalCssLengthExpr(hRaw, cbH, fontSize);
-      if (h !== null) return h;
+      if (h !== null) return Math.max(0, h);
     }
-    return 0;
+    const ch = element.children || [];
+    let sum = 0;
+    for (let i = 0; i < ch.length; i++) {
+      sum += computeElementUsedHeightPx(ch[i], depth + 1);
+    }
+    return sum;
   }
 
   function findStickyScrollportSize(element, axis) {
@@ -7014,18 +7062,64 @@ function installWindow(global) {
       if ((computedMap.get("min-height") || "").trim().toLowerCase() === "auto") {
         computedMap.set("min-height", "0px");
       }
+      if ((computedMap.get("min-block-size") || "").trim().toLowerCase() === "auto") {
+        computedMap.set("min-block-size", "0px");
+      }
+      if ((computedMap.get("min-inline-size") || "").trim().toLowerCase() === "auto") {
+        computedMap.set("min-inline-size", "0px");
+      }
+    }
+
+    const LOGICAL_BORDER_SIDES = ["border-block-start", "border-block-end", "border-inline-start", "border-inline-end"];
+    const elColorNorm = (typeof globalThis.__capsurf_normalizeSingleColor === "function")
+      ? globalThis.__capsurf_normalizeSingleColor(computedMap.get("color") || "rgb(0, 0, 0)")
+      : (computedMap.get("color") || "rgb(0, 0, 0)");
+    for (let bi = 0; bi < LOGICAL_BORDER_SIDES.length; bi++) {
+      const side = LOGICAL_BORDER_SIDES[bi];
+      const st = (computedMap.get(side + "-style") || "none").trim().toLowerCase();
+      if (st === "none" || st === "hidden") {
+        computedMap.set(side + "-width", "0px");
+      } else {
+        const wr = (computedMap.get(side + "-width") || "medium").trim().toLowerCase();
+        if (wr === "thin") computedMap.set(side + "-width", "1px");
+        else if (wr === "medium") computedMap.set(side + "-width", "3px");
+        else if (wr === "thick") computedMap.set(side + "-width", "5px");
+        else {
+          const px = evalCssLengthExpr(wr, null, fontSize);
+          if (px !== null && isFinite(px)) computedMap.set(side + "-width", formatCssPx(Math.max(0, px)));
+        }
+      }
+      const cr = (computedMap.get(side + "-color") || "currentcolor").trim();
+      if (cr.toLowerCase() === "currentcolor") {
+        computedMap.set(side + "-color", elColorNorm);
+      } else if (typeof globalThis.__capsurf_normalizeSingleColor === "function") {
+        computedMap.set(side + "-color", globalThis.__capsurf_normalizeSingleColor(cr));
+      }
+    }
+    if (computedMap.has("border-spacing")) {
+      const bsp = splitCssTopLevelWhitespace(String(computedMap.get("border-spacing") || "").trim());
+      const outBsp = [];
+      for (let bi = 0; bi < bsp.length; bi++) {
+        const px = evalCssLengthExpr(bsp[bi], null, fontSize);
+        outBsp.push(px !== null && isFinite(px) ? formatCssPx(Math.max(0, px)) : bsp[bi]);
+      }
+      if (outBsp.length === 2 && outBsp[0] === outBsp[1]) outBsp.pop();
+      computedMap.set("border-spacing", outBsp.join(" "));
     }
 
     if (!hasLayoutBox(element, computedMap)) {
       // For elements without a layout box (e.g. display: none), resolve definite non-percentage length expressions
-      const boxSizingProps = ["width", "height", "min-width", "max-width", "min-height", "max-height"];
+      const boxSizingProps = [
+        "width", "height", "min-width", "max-width", "min-height", "max-height",
+        "block-size", "inline-size", "min-block-size", "max-block-size", "min-inline-size", "max-inline-size"
+      ];
       for (let bi = 0; bi < boxSizingProps.length; bi++) {
         const bp = boxSizingProps[bi];
         const bv = computedMap.get(bp);
         if (bv && bv !== "auto" && bv !== "none" && !bv.includes("%")) {
           const px = evalCssLengthExpr(bv, null, fontSize);
           if (px !== null && isFinite(px)) {
-            computedMap.set(bp, formatCssPx(px));
+            computedMap.set(bp, formatCssPx(Math.max(0, px)));
           }
         }
       }
@@ -7042,7 +7136,26 @@ function installWindow(global) {
       pos !== "absolute" &&
       pos !== "fixed";
 
-    const cbW = (parentEl && parentEl.nodeType === 1) ? computeElementUsedWidthPx(parentEl, 0) : 800;
+    let cbEl = parentEl;
+    if (pos === "absolute") {
+      let anc = parentEl;
+      cbEl = null;
+      while (anc && anc.nodeType === 1) {
+        const aMap = collectRawComputedMap(anc, "");
+        const aPos = (aMap.get("position") || "static").trim().toLowerCase();
+        const aTf = (aMap.get("transform") || "none").trim().toLowerCase();
+        const aWc = (aMap.get("will-change") || "auto").trim().toLowerCase();
+        const aCont = (aMap.get("contain") || "none").trim().toLowerCase();
+        if (aPos !== "static" || aTf !== "none" || aWc.includes("transform") || aWc.includes("filter") || aWc.includes("perspective") || aCont.includes("layout") || aCont.includes("paint")) {
+          cbEl = anc;
+          break;
+        }
+        anc = anc.parentElement || anc.parentNode;
+      }
+    } else if (pos === "fixed") {
+      cbEl = null;
+    }
+    const cbW = (cbEl && cbEl.nodeType === 1) ? computeElementUsedWidthPx(cbEl, 0) : 800;
 
     // Resolve width for elements with a box (except non-replaced inline)
     if (!isNonReplacedInline) {
@@ -7055,7 +7168,10 @@ function installWindow(global) {
       }
 
       // Resolve padding-* percentages / calc / relative units against cbW
-      const padProps = ["padding-top", "padding-right", "padding-bottom", "padding-left"];
+      const padProps = [
+        "padding-top", "padding-right", "padding-bottom", "padding-left",
+        "padding-block-start", "padding-block-end", "padding-inline-start", "padding-inline-end"
+      ];
       for (let i = 0; i < padProps.length; i++) {
         const pk = padProps[i];
         const pv = computedMap.get(pk);
@@ -7065,17 +7181,54 @@ function installWindow(global) {
         }
       }
 
+      // Resolve block-size, inline-size, min/max logical sizes
+      const cbH = (parentEl && parentEl.nodeType === 1) ? computeElementUsedHeightPx(parentEl, 0) : 600;
+      const bsRaw = (computedMap.get("block-size") || "").trim().toLowerCase();
+      if (bsRaw === "auto" || bsRaw === "min-content" || bsRaw === "max-content") {
+        computedMap.set("block-size", formatCssPx(computeElementUsedHeightPx(element, 0)));
+      } else if (bsRaw) {
+        const px = evalCssLengthExpr(bsRaw, cbH, fontSize);
+        if (px !== null && isFinite(px)) computedMap.set("block-size", formatCssPx(Math.max(0, px)));
+      }
+      const isRaw = (computedMap.get("inline-size") || "").trim().toLowerCase();
+      if (isRaw === "auto") {
+        computedMap.set("inline-size", formatCssPx(cbW));
+      } else if (isRaw === "min-content" || isRaw === "max-content") {
+        const ch = element.children || [];
+        let maxW = 0;
+        for (let ci = 0; ci < ch.length; ci++) {
+          const cw = computeElementUsedWidthPx(ch[ci], 0);
+          if (cw > maxW) maxW = cw;
+        }
+        computedMap.set("inline-size", formatCssPx(maxW));
+      } else if (isRaw) {
+        const px = evalCssLengthExpr(isRaw, cbW, fontSize);
+        if (px !== null && isFinite(px)) computedMap.set("inline-size", formatCssPx(Math.max(0, px)));
+      }
+      const logMinMax = ["min-block-size", "max-block-size", "min-inline-size", "max-inline-size"];
+      for (let i = 0; i < logMinMax.length; i++) {
+        const lk = logMinMax[i];
+        const lv = computedMap.get(lk);
+        if (lv && lv !== "auto" && lv !== "none" && !lv.includes("%")) {
+          const px = evalCssLengthExpr(lv, null, fontSize);
+          if (px !== null && isFinite(px)) computedMap.set(lk, formatCssPx(Math.max(0, px)));
+        }
+      }
+
       // Resolve margin-* percentages / calc against cbW (skip internal table boxes like table-row)
       const isTableInternal =
         disp === "table-row" || disp === "table-row-group" ||
         disp === "table-header-group" || disp === "table-footer-group" ||
         disp === "table-column" || disp === "table-column-group" || disp === "table-cell";
       if (!isTableInternal) {
-        const marProps = ["margin-top", "margin-right", "margin-bottom", "margin-left"];
+        const marProps = [
+          "margin-top", "margin-right", "margin-bottom", "margin-left",
+          "margin-block-start", "margin-block-end", "margin-inline-start", "margin-inline-end"
+        ];
         for (let i = 0; i < marProps.length; i++) {
           const mk = marProps[i];
           const mv = computedMap.get(mk);
-          if (mv && (mv.indexOf("%") !== -1 || mv.indexOf("(") !== -1)) {
+          if (mv && !/^[+-]?(?:\d+\.?\d*|\.\d+)px$/i.test(mv.trim())) {
             const px = evalCssLengthExpr(mv, cbW, fontSize);
             if (px !== null) computedMap.set(mk, formatCssPx(px));
           }
@@ -8306,6 +8459,50 @@ function installWindow(global) {
         const e = computedMap.get("scroll-padding-inline-end") || "auto";
         return s === e ? s : (s + " " + e);
       }
+      if (name === "inset") {
+        const t = computedMap.get("top") || "auto";
+        const r = computedMap.get("right") || "auto";
+        const b = computedMap.get("bottom") || "auto";
+        const l = computedMap.get("left") || "auto";
+        return shorten4(t, r, b, l);
+      }
+      if (name === "inset-block" || name === "inset-inline") {
+        const s = computedMap.get(name + "-start") || "auto";
+        const e = computedMap.get(name + "-end") || "auto";
+        return s === e ? s : (s + " " + e);
+      }
+      if (name === "margin-block" || name === "margin-inline" ||
+          name === "padding-block" || name === "padding-inline") {
+        const s = computedMap.get(name + "-start") || "0px";
+        const e = computedMap.get(name + "-end") || "0px";
+        return s === e ? s : (s + " " + e);
+      }
+      const bPairM = /^(border-(?:block|inline))-(width|style|color)$/.exec(name);
+      if (bPairM) {
+        const base = bPairM[1], kind = bPairM[2];
+        const def = kind === "style" ? "none" : (kind === "color" ? (computedMap.get("color") || "rgb(0, 0, 0)") : "0px");
+        const s = computedMap.get(base + "-start-" + kind) || def;
+        const e = computedMap.get(base + "-end-" + kind) || def;
+        return s === e ? s : (s + " " + e);
+      }
+      if (name === "border-block-start" || name === "border-block-end" ||
+          name === "border-inline-start" || name === "border-inline-end") {
+        const w = computedMap.get(name + "-width") || "0px";
+        const st = computedMap.get(name + "-style") || "none";
+        const c = computedMap.get(name + "-color") || (computedMap.get("color") || "rgb(0, 0, 0)");
+        return w + " " + st + " " + c;
+      }
+      if (name === "border-block" || name === "border-inline") {
+        const defC = computedMap.get("color") || "rgb(0, 0, 0)";
+        const sw = computedMap.get(name + "-start-width") || "0px";
+        const ss = computedMap.get(name + "-start-style") || "none";
+        const sc = computedMap.get(name + "-start-color") || defC;
+        const ew = computedMap.get(name + "-end-width") || "0px";
+        const es = computedMap.get(name + "-end-style") || "none";
+        const ec = computedMap.get(name + "-end-color") || defC;
+        if (sw === ew && ss === es && sc === ec) return sw + " " + ss + " " + sc;
+        return "";
+      }
       if (name === "place-content" || name === "place-items" || name === "place-self") {
         const kind = name.slice(6);
         const def = kind === "self" ? "auto" : "normal";
@@ -8428,6 +8625,14 @@ function installWindow(global) {
       if (lower === "shape-margin") return "0px";
       if (lower.startsWith("scroll-margin")) return "0px";
       if (lower.startsWith("scroll-padding")) return "auto";
+      if (lower.startsWith("inset-")) return "auto";
+      if (lower.startsWith("margin-block-") || lower.startsWith("margin-inline-") ||
+          lower.startsWith("padding-block-") || lower.startsWith("padding-inline-")) return "0px";
+      if (lower.startsWith("border-block-") || lower.startsWith("border-inline-")) {
+        if (lower.endsWith("-style")) return "none";
+        if (lower.endsWith("-width")) return "0px";
+        if (lower.endsWith("-color")) return computedMap.get("color") || "rgb(0, 0, 0)";
+      }
       return "";
     }, "getPropertyValue");
 

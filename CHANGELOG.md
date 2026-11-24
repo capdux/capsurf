@@ -3560,6 +3560,9 @@
 
 - **Phase 551** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 实现 `scroll-margin` 与 `scroll-padding` 全系物理与逻辑长手/简写属性解析、展开、折叠序列化与计算期求值，严格拦截非法单位与 `calc(auto)`；WPT `css-scroll-snap/parsing/` 16/16 用例 100% 全绿通过。
 
+- **Phase 552** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `GEMINI.md`, `test/TEST_LEDGER.md`): 新增 `canonicalizeCalcToken`、`isValidColor` 严格校验、`inset`/`margin-block/inline`/`padding-block/inline`/`border-block/inline` 全系逻辑属性展开与计算值解析、以及 `border-spacing` `calc()` 求值；WPT `/css/css-logical/parsing/` 54/54 与 `/css/css-tables/parsing/` 15/15 均 100% 全绿通过；并在 `GEMINI.md` 固化 11.8 节省 Token 与提效规范。
+
+
 
 
 

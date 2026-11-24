@@ -2660,6 +2660,18 @@
 - **WPT 测试结果**：
   - `/css/css-scroll-snap/parsing/` 16/16 用例 100% 全绿通过。
 
+### Phase 552: `css-logical` 与 `css-tables` 100% 全绿闭环及 3 小时自进化工作流固化
+- **CSS Values 4 `calc()` 加减项规范化 (`canonicalizeCalcToken`)**：
+  - 对平面 `+`/`-` `calc()` 表达式按单位类别（无单位数字 < `%` < 字母序单位）重排并规范化正负号位置（`calc(10px - 0.5em)` -> `calc(-0.5em + 10px)`），并解除 `TWO_SIDE_PROPS` 与 `border-spacing` 在 `normalizeCssSpecifiedValue` 中的早期截断。
+- **颜色合法性与指定值/计算值分离**：
+  - 严化 `isValidColor`，拒绝非法 Hex 长度、5 参数 `rgb()`/`hsla()` 以及 `rgb()` 中混用数值与百分比。
+  - 指定值序列化阶段仅将 `#hex` 转为 `rgb()`，保留关键字色名（如 `red`、`transparent`），计算期再统一求值并解析 `currentcolor`。
+- **逻辑盒模型与边框计算值**：
+  - 打通 `inset`、`inset-block/inline`、`margin-block/inline`、`padding-block/inline`、`border-block/inline` 及 `border-{block,inline}-{width,style,color}` 全系简写展开、折叠序列化及 `getComputedStyle` 支持。
+  - 补全 `computeElementUsedHeightPx` 子元素高度汇总、`inline-size` `min-content/max-content` 子元素宽度计算、绝对定位包含块查找以及 `border-block/inline-*-width` 随 `style: none|hidden` 归零规则。
+- **WPT 验收**：`/css/css-logical/parsing/` **54/54 PASS**、`/css/css-tables/parsing/` **15/15 PASS**，均 100% 全绿。
+
+
 
 
 

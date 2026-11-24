@@ -317,3 +317,10 @@
 - **双端口镜像同步（Binary Sync on Commit）**：每次 Slot B 完成 `bin_19233/main` 构建并提交后，主智能体立即执行 `cp -f bin_19233/main bin_19232/main`，防止 `e2e/harness.ts` 与旧版 `bin_19232` 协议错配产生假失败。
 - **大栈白盒运行规范**：凡传递导入 `src/cdp/` 或 `mock_fixtures.cp`（~98 模块）的白盒测试，执行 `cap test -m` 前必须加 `ulimit -s 65536` 防止编译期栈溢出。
 - **分级构建加速铁律（Debug `-m -d` vs ReleaseFast `-m -r`）**：日常修复与 E2E 调试**严禁**使用 ReleaseFast `-m -r`（~81s），必须统一使用 `cap build -m -d -o bin_<port> src/main.cp`（实测全量 99 模块仅 **12.70s**，增量单文件仅 **~8.5s**，提速 7–10 倍）；
+
+### 11.8 WPT 双并发执行、JSON 摘要提取与持久化服务规范 (2026-11-24 自进化固化)
+
+- **WPT 并发度提速 (`-j 2`)**：在拥有充足内存的宿主机上运行 `wpt-batched.mjs` 时，优先使用 `-j 2`（双引擎并发，如 `--port 19700` 会自动占用 `19700..19701`），实测 54 个用例耗时从 46s 压缩至 **27s**（提速 41%），且无端口冲突。
+- **极简 `--full-out` + Python 失败提取（节省 90% Token）**：运行未知套件摸底时使用 `--full-out /tmp/xxx.json`，严禁直接 `cat` 原始 JSON；统一用 1 行 Python 脚本仅打印 `FAIL` 用例名与前 3 条 `subtest` 断言差值，将单轮上下文消耗从数万 Token 降至 `< 500` Tokens。
+- **跨模块同源合批修复**：将共享底层逻辑的 CSS 模块打包在同一 Phase 中修改（如 `canonicalizeCalcToken` 同时覆盖 `css-logical` 与 `css-tables/border-spacing`），单次 `bundle_runtime.py` + `cap build` 同步打通多套件全绿，减少 50% 构建往返。
+- **后台持久化 `wpt-serve`**：使用 `IsDaemon: true` 在后台启动 `node test/wpt/scripts/wpt-serve.mjs` 监听 `8000` 端口；主智能体与各只读子智能体均**严禁**再传递 `--start-server`，各自使用隔离 CDP 端口（`19700` / `19710` / `19720`）并发运行，彻底消除重复启停开销。

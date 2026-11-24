@@ -7454,6 +7454,23 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   3. WPT 验收：`/css/css-scroll-snap/parsing/` 16 个测试用例 100% 全部通过（16/16 ALL GREEN）。
   4. CDP 探针与 `--smoke`（3/3 suites, 6/6 tests）全绿。
 
+### 2026-11-24 Phase 552 (`css-logical` 54 项与 `css-tables` 15 项 100% 全绿闭环 & 3 小时自进化机制上线)
+- **[User]**: 配额恢复了，继续开两个子智能体和主智能体并行工作；最大限度节省 token 情况下加快进度，每隔 3 小时分析一次如何节省 token、提高效率，测试如有效合并到 `GEMINI.md` 固化，实现自我进化。
+- **[Agent]**: 完成 Phase 552 并固化自进化工作流：
+  1. **双子智能体并发摸底 + 3 小时周期自进化定时任务**：
+     - 注册 `0 */3 * * *` 周期调度（`task-17699`）每 3 小时自动复盘 Token 节省与效率优化并合并固化到 `GEMINI.md`；本次验证 `-j 2` 并发提速 41%（54 项从 46s 降至 27s）、`--full-out` + Python 失败提取节省 90% Token 与同源模块合批构建，已写入 `GEMINI.md` 第 `11.8` 节。
+     - 双子智能体分别完成 `/css/css-logical/parsing/`、`/css/css-masking/parsing/`、`/css/selectors/parsing/`、`/css/css-images/parsing/`、`/css/css-gaps/parsing/`、`/css/css-tables/parsing/` 与 `/intersection-observer/` 基线摸底。
+  2. **核心源码修复（`src/js/shim/cssom.js`, `src/js/shim/window.js`）**：
+     - 在 `cssom.js` 新增通用 `canonicalizeCalcToken`（按 CSS Values 4 对 `calc()` 加减项按单位排序，如 `calc(10px - 0.5em) -> calc(-0.5em + 10px)`），并修复 `TWO_SIDE_PROPS` 与 `border-spacing` 早退拦截；
+     - 严格化 `isValidColor`（拦截 `rgb(1,2,3,4,5)`、`rgb(10%, 20, 30%)`、非法位数 `#hex`），放行 `border-color`/`border-block-color`/`border-inline-color` 多色解析；
+     - 新增 `inset`、`inset-block/inline`、`margin-block/inline`、`padding-block/inline`、`border-block/inline` 及 `border-{block,inline}-{width,style,color}` 全套校验、规范化、展开与折叠序列化（指定值保留关键字色名，仅 `#hex` 转 `rgb()`）；
+     - 在 `window.js` 补全 `collectRawComputedMap` 保留逻辑长手属性、`computeElementUsedHeightPx` 块容器自动高度汇总、绝对定位包含块查找、`inline-size: min-content/max-content` 子元素宽度计算、`border-block/inline-*-width` 遇 `none/hidden` 归零与 `currentcolor` 解析、以及 `border-spacing` `splitCssTopLevelWhitespace` 切分与等值折叠。
+  3. **全绿回归验证（后置最终编辑全量实测）**：
+     - `/css/css-logical/parsing/`: **54/54 PASS (100% ALL GREEN)**
+     - `/css/css-tables/parsing/`: **15/15 PASS (100% ALL GREEN)**
+     - `scripts/e2e_suite.py --smoke`: **3/3 suites, 6/6 tests PASS**
+
+
 
 
 

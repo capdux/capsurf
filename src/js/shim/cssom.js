@@ -155,8 +155,39 @@
     if (!v) return false;
     if (v === "bogus") return false;
     if (v === "currentcolor" || v === "transparent") return true;
-    if (/^#[0-9a-f]{3,8}$/i.test(v)) return true;
-    if (/^(?:rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color)\(/i.test(v)) return true;
+    if (/^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(v)) return true;
+    if (v.startsWith("#")) return false;
+    const fnMatch = /^(rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color)\((.*)\)$/i.exec(v);
+    if (fnMatch) {
+      const fn = fnMatch[1];
+      const inner = fnMatch[2].trim();
+      if (!inner) return false;
+      if (fn === "rgb" || fn === "rgba" || fn === "hsl" || fn === "hsla") {
+        if (inner.includes(",")) {
+          const parts = splitTopLevelComma(inner);
+          if (parts.length !== 3 && parts.length !== 4) return false;
+          const isNum = (s) => /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(s);
+          const isPct = (s) => /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)%$/.test(s);
+          if (fn === "rgb" || fn === "rgba") {
+            const allNum = isNum(parts[0]) && isNum(parts[1]) && isNum(parts[2]);
+            const allPct = isPct(parts[0]) && isPct(parts[1]) && isPct(parts[2]);
+            if (!allNum && !allPct) return false;
+          } else {
+            if (!/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:deg|rad|grad|turn)?$/.test(parts[0])) return false;
+            if (!isPct(parts[1]) || !isPct(parts[2])) return false;
+          }
+          if (parts.length === 4 && !isNum(parts[3]) && !isPct(parts[3])) return false;
+          return true;
+        }
+        const slashParts = inner.split("/");
+        if (slashParts.length > 2) return false;
+        const mainToks = splitCssTokens(slashParts[0].trim());
+        if (mainToks.length !== 3) return false;
+        if (slashParts.length === 2 && splitCssTokens(slashParts[1].trim()).length !== 1) return false;
+        return true;
+      }
+      return true;
+    }
     const NAMED_COLORS = new Set([
       "black", "silver", "gray", "white", "maroon", "red", "purple", "fuchsia",
       "green", "lime", "olive", "yellow", "navy", "blue", "teal", "aqua",
@@ -333,6 +364,29 @@
         "table-cell", "table-caption", "list-item"
       ]);
       return validDisplays.has(vLower);
+    }
+
+    if (prop === "border-color" || prop === "border-block-color" || prop === "border-inline-color") {
+      const maxN = prop === "border-color" ? 4 : 2;
+      const toks = splitCssTokens(trimmed);
+      return toks.length >= 1 && toks.length <= maxN && toks.every(isValidColor);
+    }
+    if (prop === "border-block" || prop === "border-block-start" || prop === "border-block-end" ||
+        prop === "border-inline" || prop === "border-inline-start" || prop === "border-inline-end") {
+      const toks = splitCssTokens(trimmed);
+      if (toks.length < 1 || toks.length > 3) return false;
+      const LINE_STYLES = new Set(["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset"]);
+      let hasW = false, hasS = false, hasC = false;
+      for (let i = 0; i < toks.length; i++) {
+        const t = toks[i], tl = t.toLowerCase();
+        if (!hasS && LINE_STYLES.has(tl)) { hasS = true; continue; }
+        if (!hasW && (tl === "thin" || tl === "medium" || tl === "thick" || (isValidLenPct(tl, false) && !tl.endsWith("%") && !tl.includes("%")))) {
+          hasW = true; continue;
+        }
+        if (!hasC && isValidColor(t)) { hasC = true; continue; }
+        return false;
+      }
+      return true;
     }
 
     if (prop === "color" || prop === "background-color" || (prop.endsWith("-color") && prop !== "outline-color" && prop !== "caret-color")) {
@@ -2022,6 +2076,40 @@
     "inset-block", "inset-inline", "margin-block", "margin-inline", "padding-block", "padding-inline",
     "overflow", "gap", "grid-gap"
   ]);
+  function canonicalizeCalcToken(t) {
+    const m = /^calc\(\s*(.+)\s*\)$/i.exec(t);
+    if (!m) return t;
+    const inner = m[1].trim();
+    if (!inner || inner.includes("(") || inner.includes("*") || inner.includes("/")) return t;
+    const parts = inner.split(/\s+([+-])\s+/);
+    if (parts.length < 3 || parts.length % 2 === 0) return t;
+    const terms = [];
+    for (let i = 0; i < parts.length; i += 2) {
+      const sign = i === 0 ? 1 : (parts[i - 1] === "-" ? -1 : 1);
+      let rawTerm = parts[i].trim();
+      let termSign = sign;
+      if (rawTerm.startsWith("-")) { termSign *= -1; rawTerm = rawTerm.slice(1).trim(); }
+      else if (rawTerm.startsWith("+")) { rawTerm = rawTerm.slice(1).trim(); }
+      const tm = /^(\d+(?:\.\d+)?|\.\d+)([a-z%]*)$/i.exec(rawTerm);
+      if (!tm) return t;
+      terms.push({ val: tm[1], unit: tm[2].toLowerCase(), sign: termSign });
+    }
+    terms.sort((a, b) => {
+      const ra = a.unit === "" ? 0 : (a.unit === "%" ? 1 : 2);
+      const rb = b.unit === "" ? 0 : (b.unit === "%" ? 1 : 2);
+      if (ra !== rb) return ra - rb;
+      return a.unit < b.unit ? -1 : (a.unit > b.unit ? 1 : 0);
+    });
+    let out = "";
+    for (let i = 0; i < terms.length; i++) {
+      const tm = terms[i];
+      const mag = tm.val + tm.unit;
+      if (i === 0) out += (tm.sign < 0 ? "-" : "") + mag;
+      else out += (tm.sign < 0 ? " - " : " + ") + mag;
+    }
+    return "calc(" + out + ")";
+  }
+
   function normalizeCssSpecifiedValue(key, raw) {
     if (!raw || key.startsWith("--")) return raw;
     const s = String(raw).trim();
@@ -2036,6 +2124,7 @@
       if (isLenProp) {
         for (let i = 0; i < parts.length; i++) {
           if (parts[i] === "0" || parts[i] === "+0" || parts[i] === "-0") parts[i] = "0px";
+          else if (/^calc\(/i.test(parts[i])) parts[i] = canonicalizeCalcToken(parts[i]);
         }
       }
       if (parts.length === 2 && parts[0] === parts[1]) return parts[0];
@@ -2045,6 +2134,7 @@
       const parts = splitCssTokens(s);
       for (let i = 0; i < parts.length; i++) {
         if (parts[i] === "0" || parts[i] === "+0" || parts[i] === "-0") parts[i] = "0px";
+        else if (/^calc\(/i.test(parts[i])) parts[i] = canonicalizeCalcToken(parts[i]);
       }
       if (parts.length === 4 && parts[1] === parts[3]) parts.pop();
       if (parts.length === 3 && parts[0] === parts[2]) parts.pop();
@@ -2249,7 +2339,10 @@
     }
     if (key === "border-spacing") {
       const parts = splitCssTokens(s);
-      for (let i = 0; i < parts.length; i++) if (parts[i] === "0" || parts[i] === "+0" || parts[i] === "-0") parts[i] = "0px";
+      for (let i = 0; i < parts.length; i++) {
+        if (parts[i] === "0" || parts[i] === "+0" || parts[i] === "-0") parts[i] = "0px";
+        else if (/^calc\(/i.test(parts[i])) parts[i] = canonicalizeCalcToken(parts[i]);
+      }
       if (parts.length === 2 && parts[0] === parts[1]) parts.pop();
       return parts.join(" ");
     }
@@ -2726,27 +2819,50 @@
       return s;
     }
     const normLenZero = (t) => (t === "0" || t === "+0" || t === "-0") ? "0px" : t;
-    if (key.startsWith("scroll-margin") || key.startsWith("scroll-padding")) {
+    const normCalcOrLen = (t) => canonicalizeCalcToken(normLenZero(t));
+    const collapse2 = (a, b) => (a === b ? a : (a + " " + b));
+    const collapse4 = (a, b, c, d) => (b === d ? (a === c ? collapse2(a, b) : (a + " " + b + " " + c)) : (a + " " + b + " " + c + " " + d));
+    const collapseToks = (toks) => {
+      if (toks.length === 1) return toks[0];
+      if (toks.length === 2) return collapse2(toks[0], toks[1]);
+      if (toks.length === 3) return (toks[0] === toks[2]) ? collapse2(toks[0], toks[1]) : toks.join(" ");
+      if (toks.length === 4) return collapse4(toks[0], toks[1], toks[2], toks[3]);
+      return toks.join(" ");
+    };
+    if (key.startsWith("scroll-margin") || key.startsWith("scroll-padding") ||
+        key === "inset" || key === "inset-block" || key === "inset-inline" ||
+        key === "inset-block-start" || key === "inset-block-end" || key === "inset-inline-start" || key === "inset-inline-end" ||
+        key === "margin-block" || key === "margin-inline" || key === "margin-block-start" || key === "margin-block-end" || key === "margin-inline-start" || key === "margin-inline-end" ||
+        key === "padding-block" || key === "padding-inline" || key === "padding-block-start" || key === "padding-block-end" || key === "padding-inline-start" || key === "padding-inline-end" ||
+        key === "border-block-width" || key === "border-inline-width" || key === "border-block-start-width" || key === "border-block-end-width" || key === "border-inline-start-width" || key === "border-inline-end-width" ||
+        key === "border-spacing") {
+      const toks = splitCssTokens(s.trim()).map(normCalcOrLen);
+      if (key === "border-spacing") return toks.length === 2 && toks[0] === toks[1] ? toks[0] : toks.join(" ");
+      return collapseToks(toks);
+    }
+    if (key === "border-block-style" || key === "border-inline-style") {
+      const toks = splitCssTokens(s.trim().toLowerCase());
+      return collapseToks(toks);
+    }
+    const normBorderSpecColor = (t) => t.startsWith("#") ? normalizeSingleColor(t) : t.toLowerCase();
+    if (key === "border-block-color" || key === "border-inline-color" ||
+        key === "border-block-start-color" || key === "border-block-end-color" ||
+        key === "border-inline-start-color" || key === "border-inline-end-color") {
+      const toks = splitCssTokens(s.trim()).map(normBorderSpecColor);
+      return collapseToks(toks);
+    }
+    if (key === "border-block" || key === "border-block-start" || key === "border-block-end" ||
+        key === "border-inline" || key === "border-inline-start" || key === "border-inline-end") {
       const toks = splitCssTokens(s.trim());
-      if (toks.length === 1) return normLenZero(toks[0]);
-      if (toks.length === 2) {
-        const a = normLenZero(toks[0]), b = normLenZero(toks[1]);
-        return a === b ? a : (a + " " + b);
+      const LINE_STYLES = new Set(["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset"]);
+      let w = "", st = "", c = "";
+      for (let i = 0; i < toks.length; i++) {
+        const t = toks[i], tl = t.toLowerCase();
+        if (!st && LINE_STYLES.has(tl)) st = tl;
+        else if (!w && (tl === "thin" || tl === "medium" || tl === "thick" || /^[+-]?(?:\d|\.)/.test(tl) || /^(?:calc|min|max|clamp)\(/i.test(tl))) w = normCalcOrLen(t);
+        else c = normBorderSpecColor(t);
       }
-      if (toks.length === 3) {
-        const a = normLenZero(toks[0]), b = normLenZero(toks[1]), c = normLenZero(toks[2]);
-        return (a === c) ? (a === b ? a : (a + " " + b)) : (a + " " + b + " " + c);
-      }
-      if (toks.length === 4) {
-        const a = normLenZero(toks[0]), b = normLenZero(toks[1]), c = normLenZero(toks[2]), d = normLenZero(toks[3]);
-        if (b === d) {
-          if (a === c) {
-            return a === b ? a : (a + " " + b);
-          }
-          return a + " " + b + " " + c;
-        }
-        return a + " " + b + " " + c + " " + d;
-      }
+      return [w, st, c].filter(Boolean).join(" ");
     }
     if (key === "text-decoration-line") {
       const p = splitCssTokens(s.toLowerCase());
@@ -3073,22 +3189,26 @@
       if (!p) return null;
       return [["contain-intrinsic-width", p[0]], ["contain-intrinsic-height", p[1]]];
     }
-    if (key === "scroll-margin" || key === "scroll-padding") {
+    if (key === "scroll-margin" || key === "scroll-padding" || key === "inset") {
       const toks = splitCssTokens(normV).map((t) => (t === "0" || t === "+0" || t === "-0") ? "0px" : t);
       if (toks.length === 0) return null;
       let t = toks[0], r = toks[0], b = toks[0], l = toks[0];
       if (toks.length === 2) { r = toks[1]; l = toks[1]; }
       else if (toks.length === 3) { r = toks[1]; b = toks[2]; l = toks[1]; }
       else if (toks.length === 4) { r = toks[1]; b = toks[2]; l = toks[3]; }
+      const pfx = key === "inset" ? "" : (key + "-");
       return [
-        [key + "-top", t],
-        [key + "-right", r],
-        [key + "-bottom", b],
-        [key + "-left", l]
+        [pfx + "top", t],
+        [pfx + "right", r],
+        [pfx + "bottom", b],
+        [pfx + "left", l]
       ];
     }
     if (key === "scroll-margin-block" || key === "scroll-margin-inline" ||
-        key === "scroll-padding-block" || key === "scroll-padding-inline") {
+        key === "scroll-padding-block" || key === "scroll-padding-inline" ||
+        key === "inset-block" || key === "inset-inline" ||
+        key === "margin-block" || key === "margin-inline" ||
+        key === "padding-block" || key === "padding-inline") {
       const toks = splitCssTokens(normV).map((t) => (t === "0" || t === "+0" || t === "-0") ? "0px" : t);
       if (toks.length === 0) return null;
       const start = toks[0];
@@ -3097,6 +3217,40 @@
         [key + "-start", start],
         [key + "-end", end]
       ];
+    }
+    const borderPairMatch = /^(border-(?:block|inline))-(width|style|color)$/.exec(key);
+    if (borderPairMatch) {
+      const base = borderPairMatch[1];
+      const kind = borderPairMatch[2];
+      const toks = splitCssTokens(normV).map((t) => (kind === "width" && (t === "0" || t === "+0" || t === "-0")) ? "0px" : t);
+      if (toks.length === 0) return null;
+      const start = toks[0];
+      const end = toks.length > 1 ? toks[1] : toks[0];
+      return [
+        [base + "-start-" + kind, start],
+        [base + "-end-" + kind, end]
+      ];
+    }
+    if (key === "border-block" || key === "border-inline" ||
+        key === "border-block-start" || key === "border-block-end" ||
+        key === "border-inline-start" || key === "border-inline-end") {
+      const p = splitCssTokens(normV);
+      const STY = new Set(["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset"]);
+      let w = "medium", st = "none", c = "currentcolor";
+      for (let i = 0; i < p.length; i++) {
+        const t = p[i], tl = t.toLowerCase();
+        if (STY.has(tl)) st = tl;
+        else if (tl === "thin" || tl === "medium" || tl === "thick" || /^[+-]?(?:\d|\.)/.test(tl) || /^(?:calc|min|max|clamp)\(/i.test(tl)) {
+          w = (tl === "0" || tl === "+0" || tl === "-0") ? "0px" : t;
+        } else c = t;
+      }
+      if (key === "border-block" || key === "border-inline") {
+        return [
+          [key + "-start-width", w], [key + "-start-style", st], [key + "-start-color", c],
+          [key + "-end-width", w], [key + "-end-style", st], [key + "-end-color", c]
+        ];
+      }
+      return [[key + "-width", w], [key + "-style", st], [key + "-color", c]];
     }
     return null;
   }
@@ -3128,7 +3282,26 @@
     "scroll-margin-inline": ["scroll-margin-inline-start", "scroll-margin-inline-end"],
     "scroll-padding": ["scroll-padding-top", "scroll-padding-right", "scroll-padding-bottom", "scroll-padding-left"],
     "scroll-padding-block": ["scroll-padding-block-start", "scroll-padding-block-end"],
-    "scroll-padding-inline": ["scroll-padding-inline-start", "scroll-padding-inline-end"]
+    "scroll-padding-inline": ["scroll-padding-inline-start", "scroll-padding-inline-end"],
+    inset: ["top", "right", "bottom", "left"],
+    "inset-block": ["inset-block-start", "inset-block-end"],
+    "inset-inline": ["inset-inline-start", "inset-inline-end"],
+    "margin-block": ["margin-block-start", "margin-block-end"],
+    "margin-inline": ["margin-inline-start", "margin-inline-end"],
+    "padding-block": ["padding-block-start", "padding-block-end"],
+    "padding-inline": ["padding-inline-start", "padding-inline-end"],
+    "border-block-width": ["border-block-start-width", "border-block-end-width"],
+    "border-block-style": ["border-block-start-style", "border-block-end-style"],
+    "border-block-color": ["border-block-start-color", "border-block-end-color"],
+    "border-inline-width": ["border-inline-start-width", "border-inline-end-width"],
+    "border-inline-style": ["border-inline-start-style", "border-inline-end-style"],
+    "border-inline-color": ["border-inline-start-color", "border-inline-end-color"],
+    "border-block-start": ["border-block-start-width", "border-block-start-style", "border-block-start-color"],
+    "border-block-end": ["border-block-end-width", "border-block-end-style", "border-block-end-color"],
+    "border-inline-start": ["border-inline-start-width", "border-inline-start-style", "border-inline-start-color"],
+    "border-inline-end": ["border-inline-end-width", "border-inline-end-style", "border-inline-end-color"],
+    "border-block": ["border-block-start-width", "border-block-start-style", "border-block-start-color", "border-block-end-width", "border-block-end-style", "border-block-end-color"],
+    "border-inline": ["border-inline-start-width", "border-inline-start-style", "border-inline-start-color", "border-inline-end-width", "border-inline-end-style", "border-inline-end-color"]
   };
   global.__capsurf_shorthandLonghands = SHORTHAND_EXPAND_LONGHANDS;
   if (typeof globalThis !== "undefined") globalThis.__capsurf_shorthandLonghands = SHORTHAND_EXPAND_LONGHANDS;
@@ -3159,7 +3332,7 @@
     if (key === "place-content" || key === "place-items" || key === "place-self" || key === "overflow" || key === "gap" || key === "grid-gap" || key === "contain-intrinsic-size") {
       return vals[0] === vals[1] ? vals[0] : (vals[0] + " " + vals[1]);
     }
-    if (key === "scroll-margin" || key === "scroll-padding") {
+    if (key === "scroll-margin" || key === "scroll-padding" || key === "inset") {
       const [t, r, b, l] = vals;
       if (r === l) {
         if (b === t) {
@@ -3171,8 +3344,27 @@
       return t + " " + r + " " + b + " " + l;
     }
     if (key === "scroll-margin-block" || key === "scroll-margin-inline" ||
-        key === "scroll-padding-block" || key === "scroll-padding-inline") {
+        key === "scroll-padding-block" || key === "scroll-padding-inline" ||
+        key === "inset-block" || key === "inset-inline" ||
+        key === "margin-block" || key === "margin-inline" ||
+        key === "padding-block" || key === "padding-inline" ||
+        key === "border-block-width" || key === "border-block-style" || key === "border-block-color" ||
+        key === "border-inline-width" || key === "border-inline-style" || key === "border-inline-color") {
       return vals[0] === vals[1] ? vals[0] : (vals[0] + " " + vals[1]);
+    }
+    if (key === "border-block-start" || key === "border-block-end" ||
+        key === "border-inline-start" || key === "border-inline-end") {
+      const cw = vals[0] === "medium" && (vals[1] !== "none" || vals[2] !== "currentcolor") ? "" : vals[0];
+      const cst = vals[1] === "none" && (cw || vals[2] !== "currentcolor") ? "" : vals[1];
+      const cc = vals[2].toLowerCase() === "currentcolor" ? "" : vals[2];
+      return [cw, cst, cc].filter(Boolean).join(" ") || "none";
+    }
+    if (key === "border-block" || key === "border-inline") {
+      if (vals[0] !== vals[3] || vals[1] !== vals[4] || vals[2] !== vals[5]) return "";
+      const cw = vals[0] === "medium" && (vals[1] !== "none" || vals[2] !== "currentcolor") ? "" : vals[0];
+      const cst = vals[1] === "none" && (cw || vals[2] !== "currentcolor") ? "" : vals[1];
+      const cc = vals[2].toLowerCase() === "currentcolor" ? "" : vals[2];
+      return [cw, cst, cc].filter(Boolean).join(" ") || "none";
     }
     if (key === "flex-flow") {
       if (vals[0] === "row" && vals[1] === "nowrap") return "row";

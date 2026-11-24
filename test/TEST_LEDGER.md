@@ -1556,6 +1556,17 @@
   - `scroll-padding-computed.html` (PASS), `scroll-padding-invalid.html` (PASS), `scroll-padding-shorthand.html` (PASS), `scroll-padding-valid.html` (PASS)
 - **累计**: 16/16 用例 100% 全部通过。
 
+### WPT-B311 / B312 / B313 / B314 摸底与 Phase 552 全绿闭环 (bin_dev Phase 552, 2026-11-24)
+- **Filter `/css/css-logical/parsing/`**: `54` files (**54 PASS / 0 FAIL / 0 TIMEOUT / 0 ERROR**, **100% ALL GREEN**!); 从摸底 `23/54` 跃升至 `54/54` 全绿（覆盖 `block-size`/`inline-size`/`min-*/max-*`/`inset*`/`margin-block*`/`padding-block*`/`border-block*`/`border-inline*` 全系长手、简写与计算值）。
+- **Filter `/css/css-tables/parsing/`**: `15` files (**15 PASS / 0 FAIL / 0 TIMEOUT / 0 ERROR**, **100% ALL GREEN**!); `border-spacing-{valid,computed}` 转绿。
+- **子智能体只读摸底记录（待后续 Phase 攻坚）**：
+  - `/css/css-masking/parsing/`: `28` files (`4 PASS / 24 FAIL / 0 TIMEOUT`)
+  - `/css/selectors/parsing/`: `16` files (`6 PASS / 10 FAIL / 0 TIMEOUT`)
+  - `/css/css-images/parsing/`: `24` files (`7 PASS / 15 FAIL / 2 TIMEOUT`, `image-resolution-valid` unexpected PASS)
+  - `/css/css-gaps/parsing/`: `15` files (`3 PASS / 12 FAIL / 0 TIMEOUT`)
+  - `/intersection-observer/`: `117/149` ran (`45 PASS / 61 FAIL / 11 TIMEOUT`, batch 2 因 `3d-transform-occlusion` 重启上限截断)
+
+
 
 
 
