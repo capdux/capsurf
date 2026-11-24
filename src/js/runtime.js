@@ -483,11 +483,14 @@
     }
     const typeStr = String(type);
     const opts = (options !== null && typeof options === "object") ? options : {};
+    const rawBubbles = Boolean(opts.bubbles);
+    const rawCancelable = Boolean(opts.cancelable);
+    const rawComposed = Boolean(opts.composed);
     const s = {
       type: typeStr,
-      bubbles: Boolean(opts.bubbles),
-      cancelable: opts.cancelable !== undefined ? Boolean(opts.cancelable) : (typeStr === "click" || typeStr === "submit"),
-      composed: Boolean(opts.composed),
+      bubbles: rawBubbles,
+      cancelable: rawCancelable,
+      composed: rawComposed,
       timeStamp: typeof performance !== "undefined" && performance.now ? performance.now() : Date.now(),
       target: null,
       currentTarget: null,
@@ -1952,6 +1955,7 @@
     if (!list) return;
     for (let i = 0; i < list.length; i++) {
       if (list[i].callback === callback && list[i].capture === capture) {
+        list[i].removed = true;
         list.splice(i, 1);
         return;
       }
@@ -2221,11 +2225,13 @@
               for (let i = 0; i < copy.length; i++) {
                 if (isImmediateStopped()) return;
                 const item = copy[i];
+                if (item.removed) continue;
                 if (phase === PHASE_CAPTURING && !item.capture) continue;
                 if (phase === PHASE_BUBBLING && item.capture) continue;
                 if (wantCapture !== null && Boolean(item.capture) !== wantCapture) continue;
 
                 if (item.once) {
+                  item.removed = true;
                   entry.removeEventListener(eventType, item.callback, item.capture);
                 }
                 const prevPassive = eventState ? eventState.inPassiveListener : false;
@@ -24235,6 +24241,7 @@
       "HTMLBRElement",
       "HTMLHRElement",
       "HTMLBodyElement",
+      "HTMLFrameSetElement",
       "HTMLHeadElement",
       "HTMLHtmlElement",
       "HTMLTitleElement",
@@ -24668,9 +24675,12 @@
       });
     })();
 
-    // Window-reflecting event handlers on HTMLBodyElement.prototype
-    if (global.HTMLBodyElement && global.HTMLBodyElement.prototype) {
-      const bodyProto = global.HTMLBodyElement.prototype;
+    // Window-reflecting event handlers on HTMLBodyElement.prototype & HTMLFrameSetElement.prototype
+    const _winHandlerTargets = [
+      global.HTMLBodyElement && global.HTMLBodyElement.prototype,
+      global.HTMLFrameSetElement && global.HTMLFrameSetElement.prototype,
+    ].filter(Boolean);
+    if (_winHandlerTargets.length > 0) {
       const WINDOW_REFLECTING_HANDLERS = [
         "onafterprint", "onbeforeprint", "onbeforeunload", "onblur",
         "onerror", "onfocus", "onhashchange", "onlanguagechange",
@@ -24698,15 +24708,19 @@
         };
         Object.defineProperty(getter, "name", { value: "get " + prop, configurable: true });
         Object.defineProperty(setter, "name", { value: "set " + prop, configurable: true });
-        Object.defineProperty(bodyProto, prop, {
-          configurable: true,
-          enumerable: true,
-          get: getter,
-          set: setter,
-        });
+        for (let ti = 0; ti < _winHandlerTargets.length; ti++) {
+          Object.defineProperty(_winHandlerTargets[ti], prop, {
+            get: getter,
+            set: setter,
+            enumerable: true,
+            configurable: true,
+          });
+        }
       }
-      const origBodySetAttr = bodyProto.setAttribute || nativeSetAttribute;
-      bodyProto.setAttribute = function (name, val) {
+      const bodyProto = global.HTMLBodyElement && global.HTMLBodyElement.prototype;
+      if (bodyProto) {
+        const origBodySetAttr = bodyProto.setAttribute || nativeSetAttribute;
+        bodyProto.setAttribute = function (name, val) {
         const res = origBodySetAttr.apply(this, arguments);
         const lower = typeof name === "string" ? name.toLowerCase() : "";
         if (windowReflectingSet.has(lower) && typeof global.__capsurf_invalidateWindowEventHandler === "function") {
@@ -24723,6 +24737,7 @@
         }
         return res;
       };
+      }
     }
 
     // 7. HTMLTemplateElement

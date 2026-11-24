@@ -117,6 +117,7 @@ EventTarget.prototype.removeEventListener = function removeEventListener(type, c
   if (!list) return;
   for (let i = 0; i < list.length; i++) {
     if (list[i].callback === callback && list[i].capture === capture) {
+      list[i].removed = true;
       list.splice(i, 1);
       return;
     }
@@ -386,11 +387,13 @@ function internalDispatch(target, event, trusted) {
             for (let i = 0; i < copy.length; i++) {
               if (isImmediateStopped()) return;
               const item = copy[i];
+              if (item.removed) continue;
               if (phase === PHASE_CAPTURING && !item.capture) continue;
               if (phase === PHASE_BUBBLING && item.capture) continue;
               if (wantCapture !== null && Boolean(item.capture) !== wantCapture) continue;
 
               if (item.once) {
+                item.removed = true;
                 entry.removeEventListener(eventType, item.callback, item.capture);
               }
               const prevPassive = eventState ? eventState.inPassiveListener : false;

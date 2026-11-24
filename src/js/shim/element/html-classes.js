@@ -3439,6 +3439,7 @@ function installHtmlClasses(global) {
     "HTMLBRElement",
     "HTMLHRElement",
     "HTMLBodyElement",
+    "HTMLFrameSetElement",
     "HTMLHeadElement",
     "HTMLHtmlElement",
     "HTMLTitleElement",
@@ -3872,9 +3873,12 @@ function installHtmlClasses(global) {
     });
   })();
 
-  // Window-reflecting event handlers on HTMLBodyElement.prototype
-  if (global.HTMLBodyElement && global.HTMLBodyElement.prototype) {
-    const bodyProto = global.HTMLBodyElement.prototype;
+  // Window-reflecting event handlers on HTMLBodyElement.prototype & HTMLFrameSetElement.prototype
+  const _winHandlerTargets = [
+    global.HTMLBodyElement && global.HTMLBodyElement.prototype,
+    global.HTMLFrameSetElement && global.HTMLFrameSetElement.prototype,
+  ].filter(Boolean);
+  if (_winHandlerTargets.length > 0) {
     const WINDOW_REFLECTING_HANDLERS = [
       "onafterprint", "onbeforeprint", "onbeforeunload", "onblur",
       "onerror", "onfocus", "onhashchange", "onlanguagechange",
@@ -3902,15 +3906,19 @@ function installHtmlClasses(global) {
       };
       Object.defineProperty(getter, "name", { value: "get " + prop, configurable: true });
       Object.defineProperty(setter, "name", { value: "set " + prop, configurable: true });
-      Object.defineProperty(bodyProto, prop, {
-        configurable: true,
-        enumerable: true,
-        get: getter,
-        set: setter,
-      });
+      for (let ti = 0; ti < _winHandlerTargets.length; ti++) {
+        Object.defineProperty(_winHandlerTargets[ti], prop, {
+          get: getter,
+          set: setter,
+          enumerable: true,
+          configurable: true,
+        });
+      }
     }
-    const origBodySetAttr = bodyProto.setAttribute || nativeSetAttribute;
-    bodyProto.setAttribute = function (name, val) {
+    const bodyProto = global.HTMLBodyElement && global.HTMLBodyElement.prototype;
+    if (bodyProto) {
+      const origBodySetAttr = bodyProto.setAttribute || nativeSetAttribute;
+      bodyProto.setAttribute = function (name, val) {
       const res = origBodySetAttr.apply(this, arguments);
       const lower = typeof name === "string" ? name.toLowerCase() : "";
       if (windowReflectingSet.has(lower) && typeof global.__capsurf_invalidateWindowEventHandler === "function") {
@@ -3927,6 +3935,7 @@ function installHtmlClasses(global) {
       }
       return res;
     };
+    }
   }
 
   // 7. HTMLTemplateElement

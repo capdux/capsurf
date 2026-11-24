@@ -58,11 +58,14 @@ function Event(type, options) {
   }
   const typeStr = String(type);
   const opts = (options !== null && typeof options === "object") ? options : {};
+  const rawBubbles = Boolean(opts.bubbles);
+  const rawCancelable = Boolean(opts.cancelable);
+  const rawComposed = Boolean(opts.composed);
   const s = {
     type: typeStr,
-    bubbles: Boolean(opts.bubbles),
-    cancelable: opts.cancelable !== undefined ? Boolean(opts.cancelable) : (typeStr === "click" || typeStr === "submit"),
-    composed: Boolean(opts.composed),
+    bubbles: rawBubbles,
+    cancelable: rawCancelable,
+    composed: rawComposed,
     timeStamp: typeof performance !== "undefined" && performance.now ? performance.now() : Date.now(),
     target: null,
     currentTarget: null,

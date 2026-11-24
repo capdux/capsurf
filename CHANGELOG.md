@@ -4103,3 +4103,8 @@
   - `src/js/shim/index.js`, `src/js/shim/window.js`: `DocumentType` 与 `createDocumentType` 初始 `parentNode = null`。
   - `test/wpt/wpt-expectations.json`: 将 `/dom/nodes/` 8 项已实测通过的 `FAIL/TIMEOUT` 用例收紧为 `PASS`（`PASS` 总数 7,197）。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 746**:
+  - `src/js/shim/events/event.js`: `Event` 构造函数单次读取 `opts.cancelable` 并按规范默认 `false`。
+  - `src/js/shim/events/dispatch.js`: `removeEventListener` 与 `once` 摘除时标记 `item.removed = true`，`invoke` 分发循环跳过已移除监听器。
+  - `src/js/shim/element/html-classes.js`: 新增 `HTMLFrameSetElement` 并挂载窗口反射事件处理器。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
