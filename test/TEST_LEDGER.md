@@ -1945,3 +1945,11 @@
   - `/css/css-flexbox/inheritance` (`b484`): **PASS (20/20)**
   - `/css/css-animations/inheritance` (`b485`): `0 PASS / 1 FAIL`（8/16 subtests PASS，仅缺 8 个 `animation-*` 默认初始值）
   - `/css/css-transitions/inheritance` (`b485`): `0 PASS / 1 FAIL`（4/8 subtests PASS，仅缺 4 个 `transition-*` 默认初始值）
+
+### Phase 589: `/css/css-animations/inheritance` & `/css/css-transitions/inheritance` 全绿
+- **Filter `/css/css-animations/inheritance`**: **PASS (16/16)**（`window.js` `textDecorDefs` 补全 8 个 `animation-*` 默认初始值）。
+- **Filter `/css/css-transitions/inheritance`**: **PASS (8/8)**（`window.js` `textDecorDefs` 补全 4 个 `transition-*` 默认初始值）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-color/inheritance` (`b487`): **PASS (4/4)**
+  - `/css/css-ui/inheritance` (`b487`): `0 PASS / 1 FAIL`（10/28 subtests PASS；缺 `appearance`, `cursor`, `outline-{offset,style,width}`, `resize`, `user-select`, `caret-shape`, `nav-{up,down,left,right}` 初始值/支持与 `caret-color: currentColor`）

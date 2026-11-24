@@ -7757,3 +7757,9 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`window.js`**：在 `textDecorDefs` 中补全 10 个 `grid-*` 计算期默认初始值。
   2. **全绿验证**：`/css/css-grid/inheritance.html` **PASS (20/20)**、`--smoke` **3/3 suites, 6/6 tests PASS**。
   3. **并行摸底汇总**：`/css/css-flexbox/inheritance` **20/20 PASS**；`/css/css-animations/inheritance` 8/16 PASS（缺 8 个 `animation-*` 初始值）；`/css/css-transitions/inheritance` 4/8 PASS（缺 4 个 `transition-*` 初始值）。
+
+### 2026-11-24 Phase 589 (`/css/css-animations/inheritance` & `/css/css-transitions/inheritance` 全绿)
+- **[Agent]**: 完成 Phase 589（`src/js/shim/window.js`）：
+  1. **`window.js`**：在 `textDecorDefs` 中补全 8 个 `animation-*` 与 4 个 `transition-*` 计算期默认初始值。
+  2. **全绿验证**：`/css/css-animations/inheritance.html` **PASS (16/16)**、`/css/css-transitions/inheritance.html` **PASS (8/8)**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+  3. **并行摸底汇总**：`/css/css-color/inheritance` **4/4 PASS**；`/css/css-ui/inheritance` 10/28 PASS。

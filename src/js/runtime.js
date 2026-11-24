@@ -43718,7 +43718,19 @@
         ["grid-row-start", "auto"],
         ["grid-template-areas", "none"],
         ["grid-template-columns", "none"],
-        ["grid-template-rows", "none"]
+        ["grid-template-rows", "none"],
+        ["animation-delay", "0s"],
+        ["animation-direction", "normal"],
+        ["animation-duration", "0s"],
+        ["animation-fill-mode", "none"],
+        ["animation-iteration-count", "1"],
+        ["animation-name", "none"],
+        ["animation-play-state", "running"],
+        ["animation-timing-function", "ease"],
+        ["transition-delay", "0s"],
+        ["transition-duration", "0s"],
+        ["transition-property", "all"],
+        ["transition-timing-function", "ease"]
       ];
       const acRaw = (computedMap.get("accent-color") || "").trim();
       if (acRaw) {

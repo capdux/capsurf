@@ -3642,3 +3642,5 @@
 - **Phase 587** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 为 `getComputedStyle` Proxy 补全 `getOwnPropertyDescriptor` trap；`css-logical/getComputedStyle-listing` 30/30 全绿，收紧 `/css/css-text/parsing/` 21 项基线实现 86/86 全绿。
 
 - **Phase 588** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 在 `textDecorDefs` 补全 10 个 `grid-*` 计算期默认初始值；`/css/css-grid/inheritance.html` 达成 20/20 全绿。
+
+- **Phase 589** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 在 `textDecorDefs` 补全 8 个 `animation-*` 与 4 个 `transition-*` 计算期默认初始值；`/css/css-animations/inheritance.html` 与 `/css/css-transitions/inheritance.html` 全绿。

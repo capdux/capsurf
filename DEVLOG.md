@@ -2851,3 +2851,7 @@
 ### Phase 588: `/css/css-grid/inheritance` 20/20 全绿
 - **核心修复 (`src/js/shim/window.js`)**：在 `textDecorDefs` 中补齐 `grid-auto-{columns,flow,rows}`、`grid-{column,row}-{start,end}`、`grid-template-{areas,columns,rows}` 默认初始值。
 - **WPT & Smoke 验收**：`/css/css-grid/inheritance.html` PASS（20/20）、`--smoke` 3/3 suites PASS；并行确认 `/css/css-flexbox/inheritance.html` 20/20 PASS。
+
+### Phase 589: `/css/css-animations/inheritance` & `/css/css-transitions/inheritance` 全绿
+- **核心修复 (`src/js/shim/window.js`)**：在 `textDecorDefs` 中补齐 8 个 `animation-*`（`delay/direction/duration/fill-mode/iteration-count/name/play-state/timing-function`）与 4 个 `transition-*`（`delay/duration/property/timing-function`）默认初始值。
+- **WPT & Smoke 验收**：`/css/css-animations/inheritance.html` 16/16 PASS、`/css/css-transitions/inheritance.html` 8/8 PASS、`--smoke` 3/3 suites PASS。
