@@ -3167,3 +3167,6 @@
 ### Phase 668 — `background-position` 1~4 值解析、规范化与计算值收口
 - 为 `isValidCssPositionTokens` 补充 3 值位置语法（`<edge> <len> <center|edge>` 与 `<center|edge> <edge> <len>`），并在 `normalizePositionLayer` 中为 3 值非 Z 轴场景执行规范顺序重排。
 - 在 `window.js` 中补全 `background-position` 的 1/2/3/4 值计算值解析与 `getShorthandComputed("background-position")` 默认兜底，使 `background-position-{invalid,valid,computed}.html` 全数通过。
+### Phase 669 — `content: counter(\})` 与 `background-image` 非法值校验收口
+- 在 `isValidCssValue` 的顶层花括号拒绝逻辑前先剥离 `\\.` 转义序列，放行合法的 CSS 转义标识符（如 `counter(\})`）。
+- 补全 `background-image` 逗号分层的 `<image> | none` 校验、`radial-gradient` 半径非负与形状参数数量校验，以及 `cross-fade()` 参数百分比范围 `[0,100]` 校验。

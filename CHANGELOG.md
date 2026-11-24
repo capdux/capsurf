@@ -3813,3 +3813,6 @@
   - `src/js/shim/cssom.js`: `isValidCssPositionTokens` 补齐 3 值位置语法校验；`isValidCssValue("background-position")` 与 `normalizeCssSpecifiedValue("background-position")` 接入多图层校验及 `normalizePositionLayer`（含 3 值规范重排）。
   - `src/js/shim/window.js`: `background-position` 计算样式支持 1/2/3/4 值边缘偏移解析（`right`/`bottom` 换算 `calc(100% - ...)` / `100% - %`）及 `getShorthandComputed("background-position")` 兜底。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 669**:
+  - `src/js/shim/cssom.js`: `isValidCssValue` 在花括号检测前剔除反斜杠转义序列（修复 `content: counter(\})` 与 `counters(\}, ".")`）；为 `background-image` 补齐图层类型校验、`radial-gradient` 非负半径校验及 `cross-fade()` 百分比 `[0,100]` 与 `<image>|<color>` 校验。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

@@ -2335,3 +2335,4 @@
 | Phase 666 | WPT `{inset,rect,xywh}-function-valid` + `clip-path-valid` 收口 | `src/js/shim/cssom.js` | `{inset,rect,xywh}-function-valid` 3/3 PASS; `clip-path-valid` 35/54 -> 49/54; `--smoke` 3/3 PASS |
 | Phase 667 | WPT `clip-path-valid` 全量收口 (54/54) | `src/js/shim/cssom.js`, `test/wpt/wpt-expectations.json` | `clip-path-valid` 49/54 -> 54/54 PASS (基线由 FAIL 收紧为 PASS); `--smoke` 3/3 PASS |
 | Phase 668 | WPT `background-position-{invalid,valid,computed}` 全量收口 | `src/js/shim/cssom.js`, `src/js/shim/window.js` | `background-position-invalid` (11/11), `background-position-valid` (31/31), `background-position-computed` (32/32) 全数 PASS; `--smoke` 3/3 PASS |
+| Phase 669 | WPT `content/parsing/` + `background-image-invalid` 全量收口 | `src/js/shim/cssom.js` | `/css/css-content/parsing/` 4/4 PASS (`content-valid` PASS); `background-image-invalid` 12/12 PASS; `--smoke` 3/3 PASS |

@@ -388,7 +388,7 @@
     }
     if (prop === "all") return false;
     if (vLower === "bogus") return false;
-    if (/[{}]/.test(trimmed) && !/(?:^|[^a-z0-9_-])var\(/i.test(vLower) && !/\burl\(/i.test(vLower)) return false;
+    if (/[{}]/.test(trimmed.replace(/\\./g, "")) && !/(?:^|[^a-z0-9_-])var\(/i.test(vLower) && !/\burl\(/i.test(vLower)) return false;
     if (!_isValidCalcSyntax) _isValidCalcSyntax = isValidCalcSyntax;
 
     if (prop === "display") {
@@ -2901,6 +2901,38 @@
       }
       return false;
     }
+    if (prop === "background-image") {
+      const bgLayers = splitTopLevelComma(trimmed);
+      for (let bi = 0; bi < bgLayers.length; bi++) {
+        const bl = bgLayers[bi].trim();
+        if (!bl) return false;
+        if (bl.toLowerCase() === "none") continue;
+        if (/^cross-fade\(/i.test(bl)) {
+          const cfm = /^cross-fade\(\s*(.*)\s*\)$/i.exec(bl);
+          if (!cfm || !cfm[1]) return false;
+          const cfItems = splitTopLevelComma(cfm[1]);
+          for (let ci = 0; ci < cfItems.length; ci++) {
+            const ct = splitCssTokens(cfItems[ci].trim());
+            if (ct.length < 1 || ct.length > 2) return false;
+            let imgTok = null, pctTok = null;
+            if (ct.length === 1) {
+              imgTok = ct[0];
+            } else {
+              const p0 = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))%$/.exec(ct[0]);
+              const p1 = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))%$/.exec(ct[1]);
+              if (p0) { pctTok = parseFloat(p0[1]); imgTok = ct[1]; }
+              else if (p1) { pctTok = parseFloat(p1[1]); imgTok = ct[0]; }
+              else return false;
+              if (!(pctTok >= 0 && pctTok <= 100)) return false;
+            }
+            if (!(/^(?:url|image|image-set|-webkit-image-set|cross-fade|(?:repeating-)?(?:linear|radial|conic)-gradient)\(/i.test(imgTok) || isValidColor(imgTok))) return false;
+          }
+          continue;
+        }
+        if (/^(?:url|image|image-set|-webkit-image-set|(?:repeating-)?(?:linear|radial|conic)-gradient|-webkit-(?:linear|radial)-gradient)\(/i.test(bl)) continue;
+        return false;
+      }
+    }
     if (prop === "background-image" && /^image\(/i.test(trimmed)) {
       const im = /^image\(\s*(.*)\s*\)$/i.exec(trimmed);
       return !!(im && im[1] && isValidColor(im[1]));
@@ -2917,6 +2949,20 @@
             if (atIdx !== -1) {
               const posToks = toks0.slice(atIdx + 1);
               if (posToks.length === 0 || !isValidCssPositionTokens(posToks)) return false;
+            }
+            if (gKind === "radial") {
+              const preAt = atIdx === -1 ? toks0 : toks0.slice(0, atIdx);
+              const RADIAL_KW = new Set(["circle", "ellipse", "closest-side", "closest-corner", "farthest-side", "farthest-corner"]);
+              let lenCount = 0, shapeKw = "";
+              for (let ri = 0; ri < preAt.length; ri++) {
+                const rt = preAt[ri];
+                if (rt === "circle" || rt === "ellipse") shapeKw = rt;
+                else if (!RADIAL_KW.has(rt)) {
+                  if (!isValidLenPct(rt, false)) return false;
+                  lenCount++;
+                }
+              }
+              if ((shapeKw === "circle" && lenCount > 1) || (shapeKw === "ellipse" && lenCount === 1) || lenCount > 2) return false;
             }
           }
           if (gKind === "conic" && toks0[0] === "from" && toks0.length >= 2 && /^calc\(/i.test(toks0[1]) && toks0[1].includes("%")) {
