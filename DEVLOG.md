@@ -3284,3 +3284,5 @@
 - 在 `cssom.js` 实现 `canonicalizeDisplayValue` 统一处理 `<display-outside>`/`<display-inside>`/`list-item` 任意顺序组合并输出最短规范形式，`display-valid.html` 108/108 全数通过并收紧为 `PASS`，`display-computed.html` 由 19/112 提升至 108/112。
 ### Phase 722 — `outline` 计算值简写序列化与 `outline-color: auto` 保留
 - 在 `window.js` `getShorthandComputed` 补全 `outline` 计算值（`outline-width outline-style outline-color`），并在 `cssom.js` `normalizePropColors` 保留 `outline-color: auto`，保持 `/css/css-ui/parsing/outline-*` 15/15 匹配基线。
+### Phase 723 — `css-color/parsing` (`color-computed-hwb` & `color-invalid-relative-color`) 全绿闭环
+- 修复 `cssom.js` `hwb(... none)` 误剥离 `%` 与非相对 `rgb(... / alpha)` 放行非法标识符的问题，并在 `window.js` `normCol` 中接入 `evalSignCalls`，打通 `color-computed-hwb.html` (56/56 PASS) 与 `color-invalid-relative-color.html` (161/161 PASS)。

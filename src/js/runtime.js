@@ -3994,7 +3994,12 @@
           if (slashParts.length > 2) return false;
           const mainToks = splitCssTokens(slashParts[0]);
           if (mainToks.length !== 3) return false;
-          if (slashParts.length === 2 && splitCssTokens(slashParts[1]).length !== 1) return false;
+          if (slashParts.length === 2) {
+            const aToks = splitCssTokens(slashParts[1]);
+            if (aToks.length !== 1) return false;
+            const at = aToks[0];
+            if (at !== "none" && !/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?%?$/i.test(at) && !isCalc(at)) return false;
+          }
           return true;
         }
         if (fn === "hwb") {
@@ -13100,7 +13105,7 @@
         const chParts = splitColorCh(slash[0]);
         if (chParts.length === 3 && slash.length <= 2) {
           if (/\bnone\b/i.test(hwbM[1])) {
-            const stripPct = (t) => t.toLowerCase() === "none" ? "none" : (t.endsWith("%") ? String(Number(parseFloat(t).toFixed(6))) : t);
+            const keepPct = (t) => t.toLowerCase() === "none" ? "none" : (t.endsWith("%") ? (String(Number(parseFloat(t).toFixed(6))) + "%") : t);
             const hOut = chParts[0].toLowerCase() === "none" ? "none" : chParts[0];
             let aOut = "";
             if (slash.length === 2) {
@@ -13111,7 +13116,7 @@
                 if (isFinite(av) && av < 1) aOut = " / " + String(Number(av.toFixed(6)));
               }
             }
-            return "hwb(" + hOut + " " + stripPct(chParts[1]) + " " + stripPct(chParts[2]) + aOut + ")";
+            return "hwb(" + hOut + " " + keepPct(chParts[1]) + " " + keepPct(chParts[2]) + aOut + ")";
           }
           const hTok = evalColorExpr(chParts[0]);
           let h = parseFloat(hTok);
@@ -45240,7 +45245,7 @@
       }
       const fontSize = evalCssLengthExpr(computedMap.get("font-size") || "16px", 16, 16) || 16;
       const normCol = typeof global.__capsurf_normalizeSingleColor === "function"
-        ? global.__capsurf_normalizeSingleColor
+        ? (v) => global.__capsurf_normalizeSingleColor(/sign\(/i.test(String(v || "")) ? evalSignCalls(String(v), element) : v)
         : (v) => v;
       const evalGradientComputed = (gradRaw) => {
         const gm = /^((?:repeating-)?(?:linear|radial|conic)-gradient)\((.*)\)$/i.exec(gradRaw);

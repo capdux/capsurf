@@ -2389,3 +2389,4 @@
 | Phase 720 | WPT `grid-auto-columns` / `grid-auto-rows` 计算值 `calc()` 求值闭环 | `src/js/shim/window.js` | `/css/css-grid/parsing/grid-auto-*` **9/9 PASS**, `--smoke` 3/3 PASS |
 | Phase 721 | WPT CSS Display 3 多关键字 `display` 校验与规范序列化闭环 | `src/js/shim/cssom.js`, `src/js/shim/window.js`, `test/wpt/wpt-expectations.json` | `display-valid.html` (108/108 FAIL->PASS), `display-computed.html` (108/112), `display-invalid.html` PASS; `--smoke` 3/3 PASS |
 | Phase 722 | WPT `outline` 计算值简写序列化与 `outline-color: auto` 保留 | `src/js/shim/cssom.js`, `src/js/shim/window.js` | `/css/css-ui/parsing/outline-*` **15/15 匹配基线** (14/15 PASS), `--smoke` 3/3 PASS |
+| Phase 723 | WPT `css-color` (`hwb` `none`/`sign()` 计算值与 `rgb(... / alpha)` 非法校验) 闭环 | `src/js/shim/cssom.js`, `src/js/shim/window.js` | `color-computed-hwb.html` (**56/56 PASS**), `color-invalid-relative-color.html` (**161/161 PASS**); `--smoke` 3/3 PASS |

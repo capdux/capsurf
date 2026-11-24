@@ -7226,7 +7226,7 @@ function installWindow(global) {
     }
     const fontSize = evalCssLengthExpr(computedMap.get("font-size") || "16px", 16, 16) || 16;
     const normCol = typeof global.__capsurf_normalizeSingleColor === "function"
-      ? global.__capsurf_normalizeSingleColor
+      ? (v) => global.__capsurf_normalizeSingleColor(/sign\(/i.test(String(v || "")) ? evalSignCalls(String(v), element) : v)
       : (v) => v;
     const evalGradientComputed = (gradRaw) => {
       const gm = /^((?:repeating-)?(?:linear|radial|conic)-gradient)\((.*)\)$/i.exec(gradRaw);
