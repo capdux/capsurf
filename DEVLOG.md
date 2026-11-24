@@ -3310,3 +3310,5 @@
 - 在 `cssom.js` 新增 `parseAndNormalizeShape` 并通过 `_parseAndNormalizeShape` 共享于校验与指定值规范化，配合 `window.js` 逻辑关键字与角度计算值转换，打通 `shape-function-valid.html` (51/51)、`shape-function-computed.html` (35/35) 与 `shape-function-invalid.html`，实现 `/css/css-shapes/shape-functions/` 16/16 全绿。
 ### Phase 735 — `container` / `container-name` / `container-type` 解析与序列化全绿 (`3/3 parsing PASS`)
 - 在 `cssom.js` 补全 `container-name`（拒绝 `none none`/`default`/`not`/`and`/`or`/引号，支持 `\!escaped`）、`container-type` 与 `container` 简写校验与规范序列化，打通 `container-name-parsing` (29/29)、`container-type-parsing` (30/30)、`container-parsing` (48/48) 全绿。
+### Phase 736 — `container-name-computed` 修复闭环与 4 项 `:dir()`/`:has()` 基线收紧
+- 定位 `dom_binding.cp` `_wrappedGcs` 对 `container-name`/`container-type` 直接透传 `__capsurf_get_computed_prop` 导致 `"initial"`/`"unset"` 短路跳过 `window.js` 规范化的问题，过滤 CSS-wide 关键字后 `container-name-computed.html` 恢复 **10/10 PASS**；同步收紧 4 项实测 byte-equal PASS 的 `:dir()`/`:has()` reftest。

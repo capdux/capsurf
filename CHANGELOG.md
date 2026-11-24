@@ -4060,3 +4060,6 @@
   - `src/js/shim/cssom.js`: 补全 `container-name`（含 `\!escaped` 转义）、`container-type` 与 `container` 简写校验及 `serializeExpandedShorthand("container")` 规范序列化。
   - `src/js/shim/window.js`: 补充 `container-name` 与 `container-type` 计算值全局关键字回退。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 736**:
+  - `src/js/dom_binding.cp`: `_wrappedGcs` 对 `container-name`/`container-type` 过滤原生返回的 CSS-wide 关键字，回落到 `window.js` `applyUsedValuesToComputedMap` 规范化。
+  - `test/wpt/wpt-expectations.json`: 将 `dir-pseudo-in-has.html`, `dir-selector-auto-direction-change-001.html`, `dir-selector-change-004.html`, `invalidation/dir-pseudo-class-in-has.html` 收紧为 `PASS`。

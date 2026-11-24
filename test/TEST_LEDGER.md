@@ -6,6 +6,7 @@
 
 | 测试时间 | 目录 / Filter | 分片 | 用例数 | 结果摘要 | 备注 |
 | :--- | :--- | :--- | :---: | :--- | :--- |
+| 2026-11-25 06:25 | `Phase 736`: `container-name-computed` & `selectors` | 定向 | 5 | `container-name-computed` PASS (10/10); 4x `:dir()`/`:has()` reftest FAIL→PASS | `--smoke` 3/3 PASS |
 | 2026-11-22 14:14 | `/css/css-break/` | `4/5`, `5/5` | 42, 41 | PASS 26/42, 29/41 | Phase 258 |
 | 2026-11-22 14:14 | `/css/css-contain/` | `4/5`, `5/5` | 14, 13 | PASS 11/14, 11/13 | Phase 258 |
 | 2026-11-22 14:14 | `/dom/nodes/` | `5/10` | 25 | PASS 24/25 | Phase 258 |

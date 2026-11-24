@@ -9712,8 +9712,8 @@
     "reason": null
   },
   "/css/selectors/dir-pseudo-in-has.html": {
-    "expected": "FAIL",
-    "reason": ":has() matches correctly; this is a reftest that fails on pixel-diff (:dir() rendering + fuzzy threshold), not a :has() matching gap."
+    "expected": "PASS",
+    "reason": null
   },
   "/css/selectors/dir-pseudo-on-input-element.html": {
     "expected": "FAIL",
@@ -9724,8 +9724,8 @@
     "reason": null
   },
   "/css/selectors/invalidation/dir-pseudo-class-in-has.html": {
-    "expected": "FAIL",
-    "reason": "Reftest, pixel-diff 10000/480000: a dir change inside :has() doesn't invalidate the subject, so the styled block never repaints. Matching itself works (dir-pseudo-in-has.html)."
+    "expected": "PASS",
+    "reason": null
   },
   "/css/selectors/invalidation/part-dir.html": {
     "expected": "ERROR",
@@ -29091,12 +29091,12 @@
     "reason": "Times out at any budget, not just the 5000ms default: measured still TIMEOUT at 10000ms running alone. The baseline times out too, so this pins the outcome it actually produces - --skip-expected-timeouts then short-circuits it instead of spending 5s a run to rediscover it."
   },
   "/css/selectors/dir-selector-change-004.html": {
-    "expected": "FAIL",
-    "reason": "MR-178: incremental layout does not recompute dir(rtl) after innerHTML change on dir=auto ancestor"
+    "expected": "PASS",
+    "reason": null
   },
   "/css/selectors/dir-selector-auto-direction-change-001.html": {
-    "expected": "FAIL",
-    "reason": "MR-178: incremental layout does not recompute dir(rtl) after dynamic content change"
+    "expected": "PASS",
+    "reason": null
   },
   "/uievents/order-of-events/focus-events/focus-contained.html": {
     "expected": "PASS",
