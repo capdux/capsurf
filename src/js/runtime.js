@@ -6144,7 +6144,27 @@
             if (t.length <= 2) return false;
             continue;
           }
-          if (BAD.has(tl) || !/^(?:-*(?:[a-z_]|\\.)(?:[a-z0-9_-]|\\.)*)$/i.test(t)) return false;
+          if (BAD.has(tl)) return false;
+          let okId = true, idx = 0, hasStart = false;
+          while (idx < t.length && t[idx] === "-") idx++;
+          for (let ci = idx; ci < t.length; ci++) {
+            const cp = t.codePointAt(ci);
+            if (cp > 0xffff) ci++;
+            if (cp === 0x5c) { if (ci + 1 >= t.length) { okId = false; break; } ci++; hasStart = true; continue; }
+            const isAscStart = (cp >= 0x41 && cp <= 0x5a) || (cp >= 0x61 && cp <= 0x7a) || cp === 0x5f;
+            const isAscDigit = cp >= 0x30 && cp <= 0x39;
+            const isNonAsc = cp === 0xb7 || (cp >= 0xc0 && cp <= 0xd6) || (cp >= 0xd8 && cp <= 0xf6) ||
+              (cp >= 0xf8 && cp <= 0x37d) || (cp >= 0x37f && cp <= 0x1fff) || cp === 0x200c || cp === 0x200d ||
+              cp === 0x203f || cp === 0x2040 || (cp >= 0x2070 && cp <= 0x218f) || (cp >= 0x2c00 && cp <= 0x2fef) ||
+              (cp >= 0x3001 && cp <= 0xd7ff) || (cp >= 0xf900 && cp <= 0xfdcf) || (cp >= 0xfdf0 && cp <= 0xfffd) || cp >= 0x10000;
+            if (ci === idx && !hasStart) {
+              if (!isAscStart && !isNonAsc) { okId = false; break; }
+              hasStart = true;
+            } else {
+              if (!isAscStart && !isAscDigit && cp !== 0x2d && !isNonAsc) { okId = false; break; }
+            }
+          }
+          if (!okId || !hasStart) return false;
         }
         return true;
       }
@@ -6229,7 +6249,27 @@
           const toks = splitCssTokens(items[i].trim());
           if (toks.length !== 1) return false;
           const t = toks[0], tl = t.toLowerCase();
-          if (BAD.has(tl) || !/^(?:-*(?:[a-z_]|\\.)(?:[a-z0-9_-]|\\.)*)$/i.test(t)) return false;
+          if (BAD.has(tl)) return false;
+          let okId = true, idx = 0, hasStart = false;
+          while (idx < t.length && t[idx] === "-") idx++;
+          for (let ci = idx; ci < t.length; ci++) {
+            const cp = t.codePointAt(ci);
+            if (cp > 0xffff) ci++;
+            if (cp === 0x5c) { if (ci + 1 >= t.length) { okId = false; break; } ci++; hasStart = true; continue; }
+            const isAscStart = (cp >= 0x41 && cp <= 0x5a) || (cp >= 0x61 && cp <= 0x7a) || cp === 0x5f;
+            const isAscDigit = cp >= 0x30 && cp <= 0x39;
+            const isNonAsc = cp === 0xb7 || (cp >= 0xc0 && cp <= 0xd6) || (cp >= 0xd8 && cp <= 0xf6) ||
+              (cp >= 0xf8 && cp <= 0x37d) || (cp >= 0x37f && cp <= 0x1fff) || cp === 0x200c || cp === 0x200d ||
+              cp === 0x203f || cp === 0x2040 || (cp >= 0x2070 && cp <= 0x218f) || (cp >= 0x2c00 && cp <= 0x2fef) ||
+              (cp >= 0x3001 && cp <= 0xd7ff) || (cp >= 0xf900 && cp <= 0xfdcf) || (cp >= 0xfdf0 && cp <= 0xfffd) || cp >= 0x10000;
+            if (ci === idx && !hasStart) {
+              if (!isAscStart && !isNonAsc) { okId = false; break; }
+              hasStart = true;
+            } else {
+              if (!isAscStart && !isAscDigit && cp !== 0x2d && !isNonAsc) { okId = false; break; }
+            }
+          }
+          if (!okId || !hasStart) return false;
         }
         return true;
       }
@@ -10227,14 +10267,14 @@
     Object.defineProperty(CSSStyleRule.prototype, "selectorText", {
       get: function () { return this._selectorText || ""; },
       set: function (val) {
-        const s = String(val || "").trim();
-        if (!s) return;
+        const s = String(val || "");
+        if (!s.trim()) return;
         if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_canonicalizeSelector === "function") {
           const canon = globalThis.__capsurf_canonicalizeSelector(s, false);
           if (canon === null) return;
           this._selectorText = canon;
         } else {
-          this._selectorText = s;
+          this._selectorText = s.trim();
         }
         if (this._onMutate) this._onMutate();
       },
@@ -14511,6 +14551,7 @@
   }
 
   function canonicalizeComplexSelector(raw, inHas, inFunc) {
+    if (/[\x00-\x08\x0b\x0e-\x1f\x7f]/.test(raw)) return null;
     const s = raw.trim();
     if (!s) return null;
     let i = 0;
@@ -14741,6 +14782,7 @@
 
   function canonicalizeSelectorList(selector, inHas, inFunc) {
     if (typeof selector !== "string") selector = String(selector);
+    if (/[\x00-\x08\x0b\x0e-\x1f\x7f]/.test(selector)) return null;
     const parts = splitTopLevelSelectorList(selector.trim());
     if (!parts || parts.length === 0) return null;
     const out = [];

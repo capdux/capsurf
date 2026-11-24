@@ -3895,3 +3895,7 @@
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
 - **Phase 692**:
   - `src/css/matcher.cp`: 组合子分隔循环补充 `0x0c` (`U+000C` 换页符) 判定为合法 CSS 空白符。
+- **Phase 693**:
+  - `src/js/shim/cssom.js`: `animation-name` 等 `<custom-ident>` 属性校验支持完整 CSS Syntax 3 非 ASCII ident 码点区间。
+  - `src/js/shim/selector.js`: `canonicalizeSelectorList` 与 `canonicalizeComplexSelector` 在 `.trim()` 前拒绝 `[\x00-\x08\x0b\x0e-\x1f\x7f]` 控制字符。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

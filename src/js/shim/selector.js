@@ -60,6 +60,7 @@ function splitTopLevelSelectorList(str) {
 }
 
 function canonicalizeComplexSelector(raw, inHas, inFunc) {
+  if (/[\x00-\x08\x0b\x0e-\x1f\x7f]/.test(raw)) return null;
   const s = raw.trim();
   if (!s) return null;
   let i = 0;
@@ -290,6 +291,7 @@ function canonicalizeComplexSelector(raw, inHas, inFunc) {
 
 function canonicalizeSelectorList(selector, inHas, inFunc) {
   if (typeof selector !== "string") selector = String(selector);
+  if (/[\x00-\x08\x0b\x0e-\x1f\x7f]/.test(selector)) return null;
   const parts = splitTopLevelSelectorList(selector.trim());
   if (!parts || parts.length === 0) return null;
   const out = [];

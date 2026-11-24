@@ -3224,3 +3224,5 @@
 - 在 `cssom.js` 为 `CSSStyleRule.prototype.selectorText` 接入合法性校验与规范化 setter，并在 `selector.js` 实现 `:nth-*` 的 `An+B [of S]` 解析及最小化序列化，`anb-parsing.html` (67/67) 与 `anb-serialization.html` (20/20) 全数 PASS。
 ### Phase 692 — `matcher.cp` 组合子 `U+000C` CSS 空白符补齐
 - 在 `src/css/matcher.cp` 组合子分词循环中补全 `0x0c` 换页符，通过 `cpc fix`/`cpc brief` 4 门禁，使 `/css/css-syntax/whitespace.html` 全部 31/31 PASS。
+### Phase 693 — `css-syntax` 非 ASCII ident 码点与控制字符边界闭环
+- 为 `<custom-ident>` 校验补齐 CSS Syntax 3 非 ASCII ident 码点集合，并在选择器规范化 `.trim()` 前拦截不可打印控制字符（含 `U+000B`），`non-ascii-codepoints.html` 与 `inclusive-ranges.html` 全数 PASS。
