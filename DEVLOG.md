@@ -2999,3 +2999,7 @@
 ### Phase 624: `/css/css-display/inheritance` & `textarea-display` 全绿收紧
 - **核心修复 (`src/js/shim/window.js`)**：`collectRawComputedMap` 中对 `display: initial|unset` 直接设为 `"inline"`（防止删除后回退到标签默认 `"block"`）；`getDefaultDisplayForElement` 补齐 `<textarea>` 默认 `"inline-block"`。
 - **WPT & Smoke 验收**：`/css/css-display/inheritance.html` & `textarea-display.html` PASS（收紧 `textarea-display` 基线为 `PASS`），`--smoke` 3/3 suites PASS。
+
+### Phase 625: 非 MathML 元素 `display: math` 降级计算全绿收紧
+- **核心修复 (`src/js/shim/window.js`)**：在 `applyUsedValuesToComputedMap` 中对非 MathML 元素与伪元素的 `display: math|inline math|math inline` 归化为 `"inline"`、`block math|math block` 归化为 `"block"`。
+- **WPT & Smoke 验收**：`display-math-on-non-mathml-elements.html` FAIL->PASS (10/10，收紧基线)、`--smoke` 3/3 suites PASS。

@@ -2610,8 +2610,8 @@
     "reason": "T18 enrollment (css-display): measured PASS"
   },
   "/css/css-display/display-math-on-non-mathml-elements.html": {
-    "expected": "FAIL",
-    "reason": "T18 enrollment (css-display): 5/10 subtests pass"
+    "expected": "PASS",
+    "reason": "Phase 625: display:math computes to inline/block on non-MathML elements"
   },
   "/css/css-display/display-math-on-pseudo-elements-001.html": {
     "expected": "FAIL",

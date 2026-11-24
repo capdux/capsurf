@@ -7955,3 +7955,7 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Agent]**: 完成 Phase 624（`src/js/shim/window.js`, `test/wpt/wpt-expectations.json`）：
   1. **`window.js`**：`collectRawComputedMap` 中 `display: initial|unset` 归位 `"inline"`，且 `<textarea>` 默认 `display` 设为 `"inline-block"`。
   2. **全绿验证与基线收紧**：`/css/css-display/inheritance.html` **FAIL->PASS**、`/css/css-display/textarea-display.html` **FAIL->PASS**（已收紧为 `PASS`）、`--smoke` **3/3 suites, 6/6 tests PASS**。
+- **[Agent]**: 完成 Phase 625（`src/js/shim/window.js`, `test/wpt/wpt-expectations.json`）：
+  1. **`window.js`**：非 MathML 元素与伪元素的 `display: math` 系列值降级计算为 `"inline"`/`"block"`。
+  2. **全绿验证与基线收紧**：`display-math-on-non-mathml-elements.html` **FAIL->PASS (10/10)**（已收紧为 `PASS`）、`--smoke` **3/3 suites, 6/6 tests PASS**。
+  3. **子智能体并发汇报**：`0302000f` 完成 `/css/css-flexbox/` 摸底（**95/120 PASS**），已接力派发 `bf393f0e`（`19720`, `/css/css-position/`）。

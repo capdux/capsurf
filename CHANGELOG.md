@@ -3716,3 +3716,5 @@
 - **Phase 623** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 新增 `reading-flow`/`reading-order` 完整支持与根元素 `display: contents` 块化；5 项 `css-display` 用例全绿并收紧基线。
 
 - **Phase 624** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): `display: initial|unset` 归位 `"inline"` 与 `<textarea>` 默认 `"inline-block"`；`/css/css-display/inheritance` 与 `textarea-display` 全绿并收紧基线。
+
+- **Phase 625** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 非 MathML 元素 `display: math` 系列降级为 `inline`/`block`；`display-math-on-non-mathml-elements` 实现 10/10 全绿并收紧基线。

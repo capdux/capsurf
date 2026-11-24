@@ -42483,6 +42483,10 @@
       } else if (disp === "contents" && element === (element.ownerDocument && element.ownerDocument.documentElement)) {
         disp = "block";
         computedMap.set("display", "block");
+      } else if ((normalizedPseudo || !element.namespaceURI || element.namespaceURI.indexOf("MathML") === -1) &&
+                 (disp === "math" || disp === "inline math" || disp === "math inline" || disp === "block math" || disp === "math block")) {
+        disp = (disp === "block math" || disp === "math block") ? "block" : "inline";
+        computedMap.set("display", disp);
       }
       if (disp === "-webkit-box" || disp === "-webkit-inline-box") {
         const boxOrient = (computedMap.get("-webkit-box-orient") || "").trim().toLowerCase();
