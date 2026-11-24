@@ -3466,7 +3466,7 @@
     "reason": null
   },
   "/css/css-images/parsing/conic-gradient-calc-angle-percentage-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-images/parsing/gradient-interpolation-method-computed.html": {
@@ -3522,7 +3522,7 @@
     "reason": null
   },
   "/css/css-images/parsing/image-resolution-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-images/parsing/object-fit-computed.html": {
@@ -3534,7 +3534,7 @@
     "reason": null
   },
   "/css/css-images/parsing/object-fit-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-images/parsing/object-position-computed.html": {

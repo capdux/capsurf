@@ -7609,3 +7609,12 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
      - `cssom.js`：提取 `isValidCssPositionTokens(toks)` 复用校验 `object-position` 与 `(radial|conic)-gradient` 的 `at <position>`，并在 `normalizeCssSpecifiedValue` 中将 `at <pos>` 规范为水平边前置（`bottom 10% right 20% -> right 20% bottom 10%`、`center left -> left center`、`0 -> 0px`）。
      - `window.js`：`evalGradientComputed` 提取 `resolveGradientAtPos(atPos)` 公共函数，统一对 `radial-gradient` 与 `conic-gradient` 的 `at <pos>` 做 1/2/4 令牌解析并省略默认的 `at 50% 50%`。
   2. **全绿验证**：`gradient-position-{valid,invalid,computed}.html` **3/3 PASS (100% ALL GREEN)**、`object-position-*` **3/3 PASS**、`scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### 2026-11-24 Phase 566 (`css-images/parsing` `object-fit`/`image-resolution`/`conic-gradient-calc` 全绿收官)
+- **[Agent]**: 自主推导并完成 Phase 566（`src/js/shim/cssom.js`, `test/wpt/wpt-expectations.json`）：
+  1. **3 项精准修复 (`src/js/shim/cssom.js`)**：
+     - `object-fit`：将 `contain scale-down` / `scale-down contain` 规范折叠为 `"scale-down"`。
+     - `image-resolution`：放行负 `<resolution>`（如 `-8dpcm`），`image-resolution-{valid,invalid}` 2/2 PASS。
+     - 渐变 `calc(...)`：为 `background-image`/`list-style-image` 的 `(radial|conic)-gradient` 参数接入 `canonicalizeCalcToken`（`calc(0deg + 100%) -> calc(100% + 0deg)`），并拦截 `linear/radial-gradient` 混用 `%` 与 `<angle>`、`conic-gradient(from calc(...%))` 及无单位混算。
+  2. **验证与基线收紧**：`conic-gradient-calc-angle-percentage` 2/2 PASS、`image-resolution` 2/2 PASS、`object-fit` 3/3 PASS、`--smoke` 3/3 suites PASS；收紧 3 项基线为 `PASS`。
+  3. **并行摸底汇总**：子智能体完成 `/css/css-fonts/`（49/121 PASS）、`/css/css-text/`（90/125 PASS）、`/css/css-backgrounds/`（18/34 recorded PASS）。

@@ -2760,3 +2760,7 @@
 ### Phase 565: `gradient-position` 全绿闭环
 - **`(radial|conic)-gradient` `at <position>` (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：复用 `isValidCssPositionTokens` 校验并规范 `at <pos>` 指定值序；在 `evalGradientComputed` 中提取 `resolveGradientAtPos` 统一计算 `radial-gradient` 与 `conic-gradient` 的 1/2/4 令牌位置并省略默认 `at 50% 50%`。
 - **WPT & Smoke 验收**：`gradient-position-*` **3/3 PASS**、`object-position-*` **3/3 PASS**、`--smoke` **3/3 suites PASS**。
+
+### Phase 566: `css-images/parsing` 剩余可修项全绿收官
+- **`cssom.js` 修复**：`object-fit` 将 `contain scale-down`/`scale-down contain` 规范为 `"scale-down"`；`image-resolution` 支持 `[+-]?` 分辨率；渐变 `calc(...)` 复用 `canonicalizeCalcToken` 规范排序并增加 `linear/radial` 禁止 `%`+`<angle>`、`conic(from calc(...%))` 与无单位混算校验。
+- **WPT & Smoke 验收**：`conic-gradient-calc-angle-percentage` 2/2、`image-resolution` 2/2、`object-fit` 3/3 全部 PASS，`--smoke` 3/3 suites PASS。

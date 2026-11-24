@@ -2137,7 +2137,7 @@
       for (let i = 0; i < core.length; i++) {
         if (core[i] === "from-image") {
           if (seenFi) return false; seenFi = true;
-        } else if (/^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:dpi|dpcm|dppx|x)$/i.test(core[i]) || /^calc\(/i.test(core[i])) {
+        } else if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:dpi|dpcm|dppx|x)$/i.test(core[i]) || /^calc\(/i.test(core[i])) {
           if (seenRes) return false; seenRes = true;
         } else {
           return false;
@@ -2160,16 +2160,35 @@
       const im = /^image\(\s*(.*)\s*\)$/i.exec(trimmed);
       return !!(im && im[1] && isValidColor(im[1]));
     }
-    if ((prop === "background-image" || prop === "list-style-image") && /(?:radial|conic)-gradient\(/i.test(trimmed)) {
-      const gm = /^(?:repeating-)?(radial|conic)-gradient\(\s*(.*)\s*\)$/i.exec(trimmed);
+    if ((prop === "background-image" || prop === "list-style-image") && /(?:linear|radial|conic)-gradient\(/i.test(trimmed)) {
+      const gm = /^(?:repeating-)?(linear|radial|conic)-gradient\(\s*(.*)\s*\)$/i.exec(trimmed);
       if (gm) {
+        const gKind = gm[1].toLowerCase();
         const args = splitTopLevelComma(gm[2]);
         if (args.length >= 2) {
           const toks0 = splitCssTokens(args[0].toLowerCase());
-          const atIdx = toks0.indexOf("at");
-          if (atIdx !== -1) {
-            const posToks = toks0.slice(atIdx + 1);
-            if (posToks.length === 0 || !isValidCssPositionTokens(posToks)) return false;
+          if (gKind === "radial" || gKind === "conic") {
+            const atIdx = toks0.indexOf("at");
+            if (atIdx !== -1) {
+              const posToks = toks0.slice(atIdx + 1);
+              if (posToks.length === 0 || !isValidCssPositionTokens(posToks)) return false;
+            }
+          }
+          if (gKind === "conic" && toks0[0] === "from" && toks0.length >= 2 && /^calc\(/i.test(toks0[1]) && toks0[1].includes("%")) {
+            return false;
+          }
+          for (let ai = 0; ai < args.length; ai++) {
+            const atoks = splitCssTokens(args[ai].toLowerCase());
+            for (let ti = 0; ti < atoks.length; ti++) {
+              const ct = atoks[ti];
+              if (!/^calc\(/i.test(ct)) continue;
+              if ((gKind === "linear" || gKind === "radial") && ct.includes("%") && /\d(?:deg|rad|grad|turn)\b/i.test(ct)) {
+                return false;
+              }
+              if (/(?:[+-]\s*(?:\d+(?:\.\d+)?|\.\d+)\s*(?:\)|[+-])|\(\s*(?:\d+(?:\.\d+)?|\.\d+)\s*[+-])/.test(ct)) {
+                return false;
+              }
+            }
           }
         }
       }
@@ -2673,6 +2692,7 @@
     }
     if (key === "object-fit") {
       const p = splitCssTokens(s.toLowerCase());
+      if (p.length === 2 && (p[0] === "contain" || p[1] === "contain")) return "scale-down";
       if (p.length === 2 && p[0] === "scale-down") return p[1] + " scale-down";
       return p.join(" ");
     }
@@ -3155,6 +3175,7 @@
       const gm = /^((?:repeating-)?(?:radial|conic)-gradient)\(\s*(.*)\s*\)$/i.exec(s);
       if (gm) {
         const args = splitTopLevelComma(gm[2]);
+        let changed = false;
         if (args.length >= 2) {
           const toks0 = splitCssTokens(args[0]);
           const atIdx = toks0.findIndex((t) => t.toLowerCase() === "at");
@@ -3171,8 +3192,22 @@
               if (a === "top" || a === "bottom") normPos = [pos[2], pos[3], pos[0], pos[1]];
             }
             args[0] = toks0.slice(0, atIdx + 1).concat(normPos).join(" ");
-            return gm[1].toLowerCase() + "(" + args.join(", ") + ")";
+            changed = true;
           }
+          if (/\bcalc\(/i.test(gm[2])) {
+            for (let ai = 0; ai < args.length; ai++) {
+              const atoks = splitCssTokens(args[ai]);
+              let argChanged = false;
+              for (let ti = 0; ti < atoks.length; ti++) {
+                if (/^calc\(/i.test(atoks[ti])) {
+                  const nt = canonicalizeCalcToken(atoks[ti]);
+                  if (nt !== atoks[ti]) { atoks[ti] = nt; argChanged = true; }
+                }
+              }
+              if (argChanged) { args[ai] = atoks.join(" "); changed = true; }
+            }
+          }
+          if (changed) return gm[1].toLowerCase() + "(" + args.join(", ") + ")";
         }
       }
     }

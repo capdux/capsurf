@@ -1718,3 +1718,14 @@
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
 - **子智能体只读摸底记录**：
   - `/css/css-grid/` (`3/3`): `57/278` PASS
+
+### Phase 566 `/css/css-images/parsing/` 剩余用例全绿收官 & WPT-B386/B387/B390 摸底 (bin_dev Phase 566, 2026-11-24)
+- **Filter `/css/css-images/parsing/conic-gradient-calc-angle-percentage`**: **2/2 PASS (100% ALL GREEN)**（`calc(deg + %)` 接入 `canonicalizeCalcToken` 规范排序，同时拦截 `linear/radial-gradient` 混用 `%` 与角度、`conic-gradient(from calc(...%))` 及无单位混算）。
+- **Filter `/css/css-images/parsing/image-resolution`**: **2/2 PASS (100% ALL GREEN)**（放行负 `<resolution>` 如 `-8dpcm`）。
+- **Filter `/css/css-images/parsing/object-fit`**: **3/3 PASS (100% ALL GREEN)**（`contain scale-down` / `scale-down contain` 折叠序列化为 `"scale-down"`）。
+- **Expectations Tightened**: `conic-gradient-calc-angle-percentage-valid.html`, `image-resolution-valid.html`, `object-fit-valid.html` 收紧为 `PASS`。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-fonts/`: `121` files (`49 PASS / 69 FAIL / 3 TIMEOUT`)
+  - `/css/css-text/`: `125` files (`90 PASS / 34 FAIL / 1 TIMEOUT`)
+  - `/css/css-backgrounds/` (`partial`, 34 recorded): `18 PASS / 12 FAIL / 4 TIMEOUT` (`animations/border-*-width-composition.html`)
