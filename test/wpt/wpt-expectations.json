@@ -9452,8 +9452,7 @@
     "reason": "T18 enrollment (filter-effects): measured PASS"
   },
   "/css/filter-effects/parsing/backdrop-filter-parsing-valid.html": {
-    "expected": "FAIL",
-    "reason": "T18 enrollment (filter-effects): 34/37 subtests pass"
+    "expected": "PASS"
   },
   "/css/filter-effects/parsing/color-interpolation-filters-computed.html": {
     "expected": "PASS"
@@ -9474,8 +9473,7 @@
     "reason": "T18 enrollment (filter-effects): measured PASS"
   },
   "/css/filter-effects/parsing/filter-parsing-valid.html": {
-    "expected": "FAIL",
-    "reason": "T18 enrollment (filter-effects): 84/87 subtests pass"
+    "expected": "PASS"
   },
   "/css/filter-effects/parsing/flood-color-computed.html": {
     "expected": "PASS",

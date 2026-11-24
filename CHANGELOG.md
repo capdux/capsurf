@@ -3827,3 +3827,7 @@
 - **Phase 672**:
   - `src/js/shim/cssom.js`: `isValidShape("polygon")` 强制 `<fill-rule>` 先于 `round <length>`；`normalizeCssSpecifiedValue` 为 `filter` 与 `backdrop-filter` 补齐 `blur(0)`->`blur(0px)`、`hue-rotate(0)`->`hue-rotate(0deg)`、`drop-shadow` 零值补 `px` 与颜色规范化，以及 `grayscale`/`invert`/`opacity`/`sepia` `[0,1]`/`[0%,100%]` 截断。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 673**:
+  - `src/js/shim/cssom.js`: `normalizeCssSpecifiedValue` 中 `drop-shadow` 将颜色参数前置重排；`isValidCssValue("cursor")` 的 `isCursorImg` 增加渐变至少 2 个顶层逗号参数校验（拦截 `linear-gradient(red)` 与 `light-dark(...)` 嵌套非法渐变）。
+  - `test/wpt/wpt-expectations.json`: 将 `filter-parsing-valid.html` 与 `backdrop-filter-parsing-valid.html` 从 `FAIL` 收紧为 `PASS`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

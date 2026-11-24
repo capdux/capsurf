@@ -1801,7 +1801,9 @@
       if (last.length !== 1 || !KW.has(last[0])) return false;
       const isCoord = (x) => /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(x) || /^(?:calc|min|max|clamp)\(/i.test(x);
       const isCursorImg = (tok) => {
-        if (/^(?:url|image-set|(?:repeating-)?(?:linear|radial|conic)-gradient|cross-fade)\(/i.test(tok)) return true;
+        const gm = /^(?:repeating-)?(?:linear|radial|conic)-gradient\(\s*(.*)\s*\)$/i.exec(tok);
+        if (gm) return splitTopLevelComma(gm[1]).length >= 2;
+        if (/^(?:url|image-set|cross-fade)\(/i.test(tok)) return true;
         if (/^light-dark\(/i.test(tok)) {
           const inn = tok.slice(11, -1).trim();
           const p = splitTopLevelComma(inn);
@@ -3970,11 +3972,15 @@
           return "hue-rotate(" + args.map((a) => (a === "0" || a === "+0" || a === "-0") ? "0deg" : a).join(" ") + ")";
         }
         if (fn === "drop-shadow") {
-          return "drop-shadow(" + args.map((a) => {
-            if (a === "0" || a === "+0" || a === "-0") return "0px";
-            if (a.startsWith("#") || /^(?:rgba?|hsla?)\(/i.test(a)) return normalizeSingleColor(a);
-            return a.toLowerCase();
-          }).join(" ") + ")";
+          const cols = [], lens = [];
+          for (let j = 0; j < args.length; j++) {
+            const a = args[j];
+            if (a === "0" || a === "+0" || a === "-0") lens.push("0px");
+            else if (/^[+-]?(?:\d|\.)/.test(a) || /^(?:calc|min|max|clamp)\(/i.test(a)) lens.push(a);
+            else if (a.startsWith("#") || /^(?:rgba?|hsla?)\(/i.test(a)) cols.push(normalizeSingleColor(a));
+            else cols.push(a.toLowerCase());
+          }
+          return "drop-shadow(" + cols.concat(lens).join(" ") + ")";
         }
         if (fn === "grayscale" || fn === "invert" || fn === "opacity" || fn === "sepia") {
           return fn + "(" + args.map((a) => {

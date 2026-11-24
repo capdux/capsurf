@@ -3179,3 +3179,6 @@
 ### Phase 672 — `polygon` 顺序约束与 `filter`/`backdrop-filter` 指定值规范化
 - 在 `isValidShape("polygon")` 中拒绝 `round <length>` 出现在 `nonzero`/`evenodd` 之前的非法写法，使 `clip-path-invalid.html`（48/48）与 `polygon-function-round-invalid.html`（9/9）全数通过。
 - 为 `filter` 与 `backdrop-filter` 补齐指定值规范化（仅剩 `drop-shadow` 颜色前置重排待下一阶段收口）。
+### Phase 673 — `filter-parsing-valid` / `backdrop-filter-parsing-valid` 与 `cursor-invalid` 收口
+- 将 `drop-shadow()` 规范化中的颜色参数移至长度参数之前，使 `filter-parsing-valid.html`（87/87）与 `backdrop-filter-parsing-valid.html`（37/37）全部通过并收紧预期基线。
+- 为 `cursor` 的 `isCursorImg` 补齐渐变函数至少 2 个逗号分隔参数校验，使 `cursor-invalid.html`（10/10）全部通过。
