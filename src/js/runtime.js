@@ -47895,7 +47895,7 @@
           computedMap.set(sk, "none");
           continue;
         }
-        const fm = /^(inset|circle|ellipse|polygon|shape|rect|xywh)\(/i.exec(sv);
+        const fm = /^(inset|circle|ellipse|polygon|shape|rect|xywh|path)\(/i.exec(sv);
         if (!fm) continue;
         const fn = fm[1].toLowerCase();
         let d = 1, i = fm[0].length, q = "";
@@ -47919,7 +47919,24 @@
           if (cur) out.push(cur);
           return out;
         };
-        const evalTok = (t) => (/^[+-]?(?:\d|\.)/.test(t) || /^(?:calc|min|max|clamp)\(/i.test(t)) ? evalLinLenPctTok((/(?:sign|sibling-index)\(/i.test(t) ? evalSignCalls(t, element) : t)) : t;
+        const evalTok = (t) => {
+          if (/^[+-]?(?:\d|\.)/.test(t) || /^(?:calc|min|max|clamp)\(/i.test(t)) {
+            let expr = t;
+            if (/sibling-index\(\)/i.test(expr)) {
+              let si = 1;
+              const pe = element && element.parentElement;
+              if (pe && pe.children) {
+                for (let k = 0; k < pe.children.length; k++) {
+                  if (pe.children[k] === element) { si = k + 1; break; }
+                }
+              }
+              expr = expr.replace(/sibling-index\(\)/gi, String(si));
+            }
+            if (/sign\(/i.test(expr)) expr = evalSignCalls(expr, element);
+            return evalLinLenPctTok(expr);
+          }
+          return t;
+        };
         const clamp0 = (t) => (/^-\d/.test(t)) ? "0px" : t;
         const parsePctPx = (evStr) => {
           const ev = String(evStr || "").trim();

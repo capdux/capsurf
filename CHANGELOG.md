@@ -4044,3 +4044,7 @@
   - `src/js/shim/element/element.js`: `lookupPropertyValue("font")` 补充 `font-variant: small-caps` 前缀联动。
   - `test/wpt/wpt-expectations.json`: 将 `font-size-adjust-computed.html` 收紧为 `PASS`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 732**:
+  - `src/js/shim/window.js`: 在 `shape-outside`/`clip-path` 函数正则补全 `path` 匹配，并在 `evalTok` 展开 `sibling-index()`。
+  - `test/wpt/wpt-expectations.json`: 将 `/css/css-shapes/parsing/shape-outside-computed.html` 收紧为 `PASS`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

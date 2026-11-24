@@ -3302,3 +3302,5 @@
 - 集中修复 `font-feature-settings` 单引号计算值、`font-weight` 含单位 `calc`、`font-style: oblique 0deg`、`font-size-adjust` 默认 `ex-height` 省略及 `font-family` 引号规范化，5 项 `css-fonts` 测试一次性全 PASS，其中 2 项收紧为 `PASS`。
 ### Phase 731 — `font-size-adjust-computed.html` 全绿闭环 (`20/20 PASS`)
 - 在 `window.js` 中为 `font-size-adjust` 计算值补齐 `from-font` 字体度量（`ex-height`/`cap-height` -> `0.5`，`ch-width`/`ic-width`/`ic-height` -> `1`）及 `calc`/`sign` 负值钳位，`/css/css-fonts/parsing/font-size-adjust-computed.html` 20/20 全数通过并收紧为 `PASS`。
+### Phase 732 — `/css/css-shapes/parsing/` 13/13 全绿闭环
+- 在 `window.js` `shape-outside`/`clip-path` 计算值正则中补入 `path` 并于 `evalTok` 内展开 `sibling-index()`，打通 `shape-outside-computed.html` (32/32 PASS) 并实现 `/css/css-shapes/parsing/` **13/13 (100% PASS)**。

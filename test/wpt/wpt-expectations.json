@@ -5226,7 +5226,7 @@
     "reason": null
   },
   "/css/css-shapes/parsing/shape-outside-computed.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-shapes/parsing/shape-outside-invalid-position.html": {
