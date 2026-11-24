@@ -7639,6 +7639,8 @@ function installWindow(global) {
     }
     if (!computedMap.has("color") || computedMap.get("color") === "") {
       computedMap.set("color", "rgb(0, 0, 0)");
+    } else if (typeof globalThis.__capsurf_normalizeSingleColor === "function") {
+      computedMap.set("color", globalThis.__capsurf_normalizeSingleColor(computedMap.get("color")));
     }
     const mozTf = (computedMap.get("-moz-transform") || "").trim();
     const wkTf = (computedMap.get("-webkit-transform") || "").trim();

@@ -1045,9 +1045,20 @@ function installShim(global) {
       markNative(docProto.getElementById, "getElementById");
     }
 
+    const checkDirSelector = (selStr) => {
+      const str = String(selStr || "");
+      const re = /:dir\(([^)]*)\)/gi;
+      let m;
+      while ((m = re.exec(str)) !== null) {
+        if (!/^\s*[a-zA-Z_-][a-zA-Z0-9_-]*\s*$/.test(m[1])) {
+          throw new DOMException("The provided selector is invalid.", "SyntaxError");
+        }
+      }
+    };
     if (docProto.querySelector) {
       const origQuerySelector = docProto.querySelector;
       docProto.querySelector = function (sel) {
+        checkDirSelector(sel);
         const el = upgradeElement(origQuerySelector.call(this, sel));
         if (el && typeof global.__capsurf_setLastQueriedNode === "function") {
           global.__capsurf_setLastQueriedNode(el);
@@ -1060,6 +1071,7 @@ function installShim(global) {
     if (docProto.querySelectorAll) {
       const origQuerySelectorAll = docProto.querySelectorAll;
       docProto.querySelectorAll = function (sel) {
+        checkDirSelector(sel);
         const nodes = origQuerySelectorAll.call(this, sel);
         if (nodes && nodes.length) {
           for (let i = 0; i < nodes.length; i++) upgradeElement(nodes[i]);

@@ -2281,3 +2281,7 @@
 ### Phase 650: 消除 `CALC_FUNCS` / `CALC_CONSTS` TDZ 死区
 - **Filter `/css/css-color/parsing/color-valid.html` & `color-invalid.html`**: **PASS (2/2)**（`cssom.js` 将 `CALC_FUNCS` 与 `CALC_CONSTS` 提升至模块顶层作用域，彻底消除 `isValidColor` 首次调用 `isValidCalcSyntax` 时的 `ReferenceError` TDZ 异常，并减少每次 `isValidCssValue` 调用的 Set 重复分配）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 651: `attribute-or-elemental-selectors-in-has` (31/31) & `dir-selector-querySelector` (4/4) 全绿
+- **Filter `/css/selectors/invalidation/attribute-or-elemental-selectors-in-has` & `/css/selectors/dir-selector-querySelector`**: **FAIL->PASS (2/2: 31/31 + 4/4)**（`window.js` 将非空计算值 `color` 接入 `__capsurf_normalizeSingleColor`；`cssom.js` `NAMED_COLORS_MAP` 补全 `yellowgreen: "rgb(154, 205, 50)"`；`element.js` 与 `index.js` 在 `matches`/`querySelector`/`querySelectorAll` 拦截非法 `:dir(...)` 多参数并抛出 `SyntaxError`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

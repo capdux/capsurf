@@ -3768,3 +3768,5 @@
 - **Phase 649** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `isValidColor` 新增 `light-dark()` 校验，并将 `color` 与 `hsl`/`hsla` 接入 `normalizeSingleColor`；`color-valid` (17/17) 与 `color-invalid` (12/12) 全绿。
 
 - **Phase 650** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 将 `CALC_FUNCS` 与 `CALC_CONSTS` 提升至模块顶层，消除 `isValidColor` 调用 `isValidCalcSyntax` 时的 TDZ 死区异常。
+
+- **Phase 651** (`src/js/shim/window.js`, `src/js/shim/cssom.js`, `src/js/shim/element/element.js`, `src/js/shim/index.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 计算值 `color` 接入命名色规范化（补全 `yellowgreen`）并拦截非法 `:dir(...)` 选择器参数；`attribute-or-elemental-selectors-in-has` (31/31) 与 `dir-selector-querySelector` (4/4) 全绿。

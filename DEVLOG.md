@@ -3103,3 +3103,7 @@
 ### Phase 650: 消除 `CALC_FUNCS` / `CALC_CONSTS` TDZ 死区
 - **核心修复 (`src/js/shim/cssom.js`)**：`CALC_FUNCS` 与 `CALC_CONSTS` 移至 IIFE 顶层，避免 `isValidCssValue` 入口处 `isValidColor` 调用 `isValidCalcSyntax` 时触发 `ReferenceError`。
 - **WPT & Smoke 验收**：`color-valid.html`、`color-invalid.html`、`--smoke` 3/3 suites PASS。
+
+### Phase 651: `attribute-or-elemental-selectors-in-has` & `dir-selector-querySelector` 全绿
+- **核心修复 (`src/js/shim/window.js`, `src/js/shim/cssom.js`, `src/js/shim/element/element.js`, `src/js/shim/index.js`)**：`applyUsedValuesToComputedMap` 对非空 `color` 调用 `__capsurf_normalizeSingleColor` 并补全 `yellowgreen`；`matches`/`querySelector`/`querySelectorAll` 校验 `:dir(<ident>)` 单标识符语法。
+- **WPT & Smoke 验收**：`attribute-or-elemental-selectors-in-has` (31/31) 与 `dir-selector-querySelector` (4/4) 全绿，`--smoke` 3/3 suites PASS。

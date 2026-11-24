@@ -7185,6 +7185,7 @@
     rebeccapurple: "rgb(102, 51, 153)",
     skyblue: "rgb(135, 206, 235)",
     tomato: "rgb(255, 99, 71)",
+    yellowgreen: "rgb(154, 205, 50)",
     transparent: "rgba(0, 0, 0, 0)",
   };
 

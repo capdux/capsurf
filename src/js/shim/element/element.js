@@ -1953,6 +1953,13 @@ function installElementExtensions(proto) {
       selector = validateSelector(selector);
     }
     const s = String(selector).trim();
+    const dirCheckRe = /:dir\(([^)]*)\)/gi;
+    let dcm;
+    while ((dcm = dirCheckRe.exec(s)) !== null) {
+      if (!/^\s*[a-zA-Z_-][a-zA-Z0-9_-]*\s*$/.test(dcm[1])) {
+        throw new DOMException("The provided selector is invalid.", "SyntaxError");
+      }
+    }
     const dirMatch = s.match(/^:dir\(\s*([a-zA-Z0-9_-]+)\s*\)$/i);
     if (dirMatch) {
       const targetDir = dirMatch[1].toLowerCase();

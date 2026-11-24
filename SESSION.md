@@ -8048,3 +8048,7 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Agent]**: 完成 Phase 650（`src/js/shim/cssom.js`）：
   1. **`cssom.js`**：将 `CALC_FUNCS` 与 `CALC_CONSTS` 提升至模块顶层，消除 `isValidColor` 触发 `isValidCalcSyntax` 时的 TDZ `ReferenceError`。
   2. **全绿验证**：`color-valid.html`、`color-invalid.html` 与 `--smoke`（3/3 suites, 6/6 tests）全绿。
+- **[Agent]**: 完成 Phase 651（`src/js/shim/window.js`, `src/js/shim/cssom.js`, `src/js/shim/element/element.js`, `src/js/shim/index.js`）：
+  1. **`window.js` & `cssom.js`**：计算值 `color` 接入 `__capsurf_normalizeSingleColor`，`NAMED_COLORS_MAP` 补全 `yellowgreen`。
+  2. **`element.js` & `index.js`**：`matches`/`querySelector`/`querySelectorAll` 拦截非法 `:dir(...)` 参数并抛出 `SyntaxError`。
+  3. **全绿验证**：`attribute-or-elemental-selectors-in-has.html`（31/31）、`dir-selector-querySelector.html`（4/4）、`color-valid.html`（17/17）与 `--smoke`（3/3 suites, 6/6 tests）全绿。

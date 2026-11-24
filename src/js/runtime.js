@@ -10975,6 +10975,7 @@
       rebeccapurple: "rgb(102, 51, 153)",
       skyblue: "rgb(135, 206, 235)",
       tomato: "rgb(255, 99, 71)",
+      yellowgreen: "rgb(154, 205, 50)",
       transparent: "rgba(0, 0, 0, 0)",
     };
 
@@ -16292,6 +16293,13 @@
         selector = validateSelector(selector);
       }
       const s = String(selector).trim();
+      const dirCheckRe = /:dir\(([^)]*)\)/gi;
+      let dcm;
+      while ((dcm = dirCheckRe.exec(s)) !== null) {
+        if (!/^\s*[a-zA-Z_-][a-zA-Z0-9_-]*\s*$/.test(dcm[1])) {
+          throw new DOMException("The provided selector is invalid.", "SyntaxError");
+        }
+      }
       const dirMatch = s.match(/^:dir\(\s*([a-zA-Z0-9_-]+)\s*\)$/i);
       if (dirMatch) {
         const targetDir = dirMatch[1].toLowerCase();
@@ -43576,6 +43584,8 @@
       }
       if (!computedMap.has("color") || computedMap.get("color") === "") {
         computedMap.set("color", "rgb(0, 0, 0)");
+      } else if (typeof globalThis.__capsurf_normalizeSingleColor === "function") {
+        computedMap.set("color", globalThis.__capsurf_normalizeSingleColor(computedMap.get("color")));
       }
       const mozTf = (computedMap.get("-moz-transform") || "").trim();
       const wkTf = (computedMap.get("-webkit-transform") || "").trim();
@@ -54822,9 +54832,20 @@
         markNative(docProto.getElementById, "getElementById");
       }
 
+      const checkDirSelector = (selStr) => {
+        const str = String(selStr || "");
+        const re = /:dir\(([^)]*)\)/gi;
+        let m;
+        while ((m = re.exec(str)) !== null) {
+          if (!/^\s*[a-zA-Z_-][a-zA-Z0-9_-]*\s*$/.test(m[1])) {
+            throw new DOMException("The provided selector is invalid.", "SyntaxError");
+          }
+        }
+      };
       if (docProto.querySelector) {
         const origQuerySelector = docProto.querySelector;
         docProto.querySelector = function (sel) {
+          checkDirSelector(sel);
           const el = upgradeElement(origQuerySelector.call(this, sel));
           if (el && typeof global.__capsurf_setLastQueriedNode === "function") {
             global.__capsurf_setLastQueriedNode(el);
@@ -54837,6 +54858,7 @@
       if (docProto.querySelectorAll) {
         const origQuerySelectorAll = docProto.querySelectorAll;
         docProto.querySelectorAll = function (sel) {
+          checkDirSelector(sel);
           const nodes = origQuerySelectorAll.call(this, sel);
           if (nodes && nodes.length) {
             for (let i = 0; i < nodes.length; i++) upgradeElement(nodes[i]);
