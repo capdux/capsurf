@@ -6689,6 +6689,12 @@
         }
         return false;
       }
+      if (prop === "grid-row-start" || prop === "grid-row-end" || prop === "grid-column-start" || prop === "grid-column-end") {
+        return parseGridLine(trimmed) !== null;
+      }
+      if (prop === "grid-row" || prop === "grid-column" || prop === "grid-area") {
+        return !!expandCssShorthand(prop, trimmed);
+      }
       if (prop === "block-step-align") {
         return vLower === "auto" || vLower === "center" || vLower === "start" || vLower === "end";
       }
@@ -8912,9 +8918,139 @@
         }
         return out.join(" ");
       }
+      if (key === "grid-row-start" || key === "grid-row-end" || key === "grid-column-start" || key === "grid-column-end") {
+        const gl = parseGridLine(s);
+        if (gl) return gl.canon;
+      }
       return s;
     }
     global.__capsurf_normalizeCssValue = normalizeCssSpecifiedValue;
+
+    function parseGridLine(raw) {
+      const s = String(raw || "").trim();
+      if (!s || /["'/]/.test(s)) return null;
+      // Protect CSS hex escape trailing single space (\31 st -> single ident token)
+      const ESC_MARK = "\uE001";
+      const sProt = s.replace(/(\\[0-9a-fA-F]{1,6}) /g, "$1" + ESC_MARK);
+      const toks = splitCssTokens(sProt).map((t) => t.replace(/\uE001/g, " "));
+      if (toks.length === 0 || toks.length > 3) return null;
+      if (toks.length === 1 && toks[0].toLowerCase() === "auto") {
+        return { canon: "auto", isPureIdent: false };
+      }
+      const isGridIdent = (t) => {
+        if (t.includes(",")) return false;
+        const tl = t.toLowerCase();
+        if (tl === "auto" || tl === "span" || tl === "inherit" || tl === "initial" || tl === "unset" || tl === "revert" || tl === "revert-layer" || tl === "default") return false;
+        if (/^[+-]?(?:\d|\.\d)/.test(t)) return false;
+        if (/\(/.test(t)) return false;
+        return /^(?:--|-?[a-z_]|-?[^\x00-\x7f]|\\[0-9a-fA-F]{1,6}\s?|\\[^0-9a-fA-F\r\n])(?:[a-z0-9_-]|[^\x00-\x7f]|\\[0-9a-fA-F]{1,6}\s?|\\[^0-9a-fA-F\r\n])*$/i.test(t);
+      };
+      const normGridIdent = (t) => t.replace(/^(\\[0-9a-fA-F]{1,6})([g-zG-Z_-])/, "$1 $2");
+      const parseGridInt = (t, positiveOnly) => {
+        if (/^[+-]?\d+$/.test(t)) {
+          const n = parseInt(t, 10);
+          if (!isFinite(n) || n === 0) return null;
+          if (positiveOnly && n <= 0) return null;
+          return String(n);
+        }
+        const mFn = /^(calc|min|max|clamp|round|mod|rem|abs|sign)\((.+)\)$/i.exec(t);
+        if (mFn) {
+          const fnName = mFn[1].toLowerCase();
+          const inner = mFn[2].trim();
+          if ((fnName === "min" || fnName === "max") && /^[+-]?\d+(?:\s*,\s*[+-]?\d+)+$/.test(inner)) {
+            const nums = inner.split(",").map((x) => parseInt(x.trim(), 10));
+            const val = fnName === "min" ? Math.min(...nums) : Math.max(...nums);
+            return "calc(" + val + ")";
+          }
+          if (fnName === "calc") {
+            const mSub = /^([a-z-]+\(\))\s*-\s*(\d+)$/i.exec(inner);
+            if (mSub) return "calc(-" + mSub[2] + " + " + mSub[1] + ")";
+          }
+          return t;
+        }
+        return null;
+      };
+      let spanIdx = -1;
+      for (let i = 0; i < toks.length; i++) {
+        if (toks[i].toLowerCase() === "span") {
+          if (spanIdx !== -1) return null;
+          spanIdx = i;
+        }
+      }
+      if (spanIdx !== -1) {
+        if (spanIdx !== 0 && spanIdx !== toks.length - 1) return null;
+        const rest = toks.filter((_, i) => i !== spanIdx);
+        if (rest.length === 0 || rest.length > 2) return null;
+        let intStr = null;
+        let identStr = null;
+        for (const rt of rest) {
+          const pi = parseGridInt(rt, true);
+          if (pi !== null && intStr === null) {
+            intStr = pi;
+          } else if (isGridIdent(rt) && identStr === null) {
+            identStr = normGridIdent(rt);
+          } else {
+            return null;
+          }
+        }
+        if (intStr === "1" && identStr !== null) intStr = null;
+        const out = ["span"];
+        if (intStr !== null) out.push(intStr);
+        if (identStr !== null) out.push(identStr);
+        return { canon: out.join(" "), isPureIdent: false };
+      }
+      if (toks.length === 1) {
+        const pi = parseGridInt(toks[0], false);
+        if (pi !== null) return { canon: pi, isPureIdent: false };
+        if (isGridIdent(toks[0])) return { canon: normGridIdent(toks[0]), isPureIdent: true };
+        return null;
+      }
+      if (toks.length === 2) {
+        let intStr = null;
+        let identStr = null;
+        for (const t of toks) {
+          const pi = parseGridInt(t, false);
+          if (pi !== null && intStr === null) intStr = pi;
+          else if (isGridIdent(t) && identStr === null) identStr = normGridIdent(t);
+          else return null;
+        }
+        if (intStr !== null && identStr !== null) {
+          return { canon: intStr + " " + identStr, isPureIdent: false };
+        }
+      }
+      return null;
+    }
+
+    function splitGridSlashParts(str) {
+      const parts = [];
+      let cur = "";
+      let paren = 0;
+      let quote = "";
+      for (let i = 0; i < str.length; i++) {
+        const ch = str[i];
+        if (quote) {
+          cur += ch;
+          if (ch === "\\" && i + 1 < str.length) cur += str[++i];
+          else if (ch === quote) quote = "";
+          continue;
+        }
+        if (ch === "\"" || ch === "'") { quote = ch; cur += ch; continue; }
+        if (ch === "(") { paren++; cur += ch; continue; }
+        if (ch === ")") { if (paren > 0) paren--; cur += ch; continue; }
+        if (ch === "/" && paren === 0) {
+          const t = cur.trim();
+          if (!t) return null;
+          parts.push(t);
+          cur = "";
+          continue;
+        }
+        cur += ch;
+      }
+      const tail = cur.trim();
+      if (!tail) return null;
+      parts.push(tail);
+      return parts;
+    }
 
     function normalizePositionTryFallbacks(val) {
       const s = String(val || "").trim();
@@ -9393,6 +9529,40 @@
         if (!p) return null;
         return [["contain-intrinsic-width", p[0]], ["contain-intrinsic-height", p[1]]];
       }
+      if (key === "grid-row" || key === "grid-column") {
+        const segs = splitGridSlashParts(normV);
+        if (!segs || segs.length > 2) return null;
+        const p0 = parseGridLine(segs[0]);
+        if (!p0) return null;
+        let p1 = null;
+        if (segs.length === 2) {
+          p1 = parseGridLine(segs[1]);
+          if (!p1) return null;
+        } else {
+          p1 = { canon: p0.isPureIdent ? p0.canon : "auto" };
+        }
+        return [[key + "-start", p0.canon], [key + "-end", p1.canon]];
+      }
+      if (key === "grid-area") {
+        const segs = splitGridSlashParts(normV);
+        if (!segs || segs.length > 4) return null;
+        const parsed = [];
+        for (let i = 0; i < segs.length; i++) {
+          const gl = parseGridLine(segs[i]);
+          if (!gl) return null;
+          parsed.push(gl);
+        }
+        const r1 = parsed[0];
+        const c1 = parsed.length >= 2 ? parsed[1] : { canon: r1.isPureIdent ? r1.canon : "auto", isPureIdent: r1.isPureIdent };
+        const r2 = parsed.length >= 3 ? parsed[2] : { canon: r1.isPureIdent ? r1.canon : "auto", isPureIdent: r1.isPureIdent };
+        const c2 = parsed.length >= 4 ? parsed[3] : { canon: c1.isPureIdent ? c1.canon : "auto", isPureIdent: c1.isPureIdent };
+        return [
+          ["grid-row-start", r1.canon],
+          ["grid-column-start", c1.canon],
+          ["grid-row-end", r2.canon],
+          ["grid-column-end", c2.canon]
+        ];
+      }
       if (key === "scroll-margin" || key === "scroll-padding" || key === "inset") {
         const toks = splitCssTokens(normV).map((t) => (t === "0" || t === "+0" || t === "-0") ? "0px" : t);
         if (toks.length === 0) return null;
@@ -9530,7 +9700,10 @@
       "border-inline-start": ["border-inline-start-width", "border-inline-start-style", "border-inline-start-color"],
       "border-inline-end": ["border-inline-end-width", "border-inline-end-style", "border-inline-end-color"],
       "border-block": ["border-block-start-width", "border-block-start-style", "border-block-start-color", "border-block-end-width", "border-block-end-style", "border-block-end-color"],
-      "border-inline": ["border-inline-start-width", "border-inline-start-style", "border-inline-start-color", "border-inline-end-width", "border-inline-end-style", "border-inline-end-color"]
+      "border-inline": ["border-inline-start-width", "border-inline-start-style", "border-inline-start-color", "border-inline-end-width", "border-inline-end-style", "border-inline-end-color"],
+      "grid-row": ["grid-row-start", "grid-row-end"],
+      "grid-column": ["grid-column-start", "grid-column-end"],
+      "grid-area": ["grid-row-start", "grid-column-start", "grid-row-end", "grid-column-end"]
     };
     global.__capsurf_shorthandLonghands = SHORTHAND_EXPAND_LONGHANDS;
     if (typeof globalThis !== "undefined") globalThis.__capsurf_shorthandLonghands = SHORTHAND_EXPAND_LONGHANDS;
@@ -9637,6 +9810,24 @@
       }
       if (key === "position-try") {
         return vals[0] === "normal" ? vals[1] : (vals[0] + " " + vals[1]);
+      }
+      if (key === "grid-row" || key === "grid-column") {
+        const s = vals[0], e = vals[1];
+        const ps = parseGridLine(s);
+        const defE = (ps && ps.isPureIdent) ? s : "auto";
+        return e === defE ? s : (s + " / " + e);
+      }
+      if (key === "grid-area") {
+        const [rs, cs, re, ce] = vals;
+        const prs = parseGridLine(rs);
+        const pcs = parseGridLine(cs);
+        const defCs = (prs && prs.isPureIdent) ? rs : "auto";
+        const defRe = (prs && prs.isPureIdent) ? rs : "auto";
+        const defCe = (pcs && pcs.isPureIdent) ? cs : "auto";
+        if (ce !== defCe) return rs + " / " + cs + " / " + re + " / " + ce;
+        if (re !== defRe) return rs + " / " + cs + " / " + re;
+        if (cs !== defCs) return rs + " / " + cs;
+        return rs;
       }
       if (key === "border-image") {
         const src = vals[0], slice = vals[1], width = vals[2], outset = vals[3], rep = vals[4];
@@ -45473,6 +45664,39 @@
       if (pageRaw === "auto" || pageRaw === "initial" || pageRaw === "unset" || pageRaw === "revert" || pageRaw === "revert-layer") {
         computedMap.set("page", "auto");
       }
+      for (const gp of ["grid-row-start", "grid-row-end", "grid-column-start", "grid-column-end"]) {
+        const gRaw = (computedMap.get(gp) || "").trim();
+        const gLow = gRaw.toLowerCase();
+        if (gLow === "initial" || gLow === "unset" || gLow === "revert" || gLow === "revert-layer") {
+          computedMap.set(gp, "auto");
+        } else if (gRaw) {
+          let gNorm = typeof globalThis.__capsurf_normalizeCssValue === "function"
+            ? globalThis.__capsurf_normalizeCssValue(gp, gRaw)
+            : gRaw;
+          if (/(?:calc|min|max|clamp|sign)\(/i.test(gNorm)) {
+            const isSpan = /\bspan\b/i.test(gNorm);
+            if (/sign\(/i.test(gNorm)) {
+              gNorm = evalSignCalls(gNorm, element);
+            }
+            gNorm = gNorm.replace(/(?:calc|min|max|clamp)\([^()]*(?:\([^()]*\)[^()]*)*\)/gi, (expr) => {
+              let inner = expr.slice(expr.indexOf("(") + 1, -1).trim();
+              if (/sibling-index\(\)/i.test(inner)) inner = inner.replace(/sibling-index\(\)/gi, "1");
+              if (/^[\d+\-*/().\s]+$/.test(inner)) {
+                try {
+                  const v = Function("return (" + inner + ")")();
+                  if (typeof v === "number" && isFinite(v)) {
+                    let iv = Math.round(v);
+                    if (isSpan && iv < 1) iv = 1;
+                    return String(iv);
+                  }
+                } catch (_) {}
+              }
+              return expr;
+            });
+          }
+          computedMap.set(gp, gNorm);
+        }
+      }
       const ocmRaw = (computedMap.get("overflow-clip-margin") || "").trim();
       const smgRaw = (computedMap.get("scroll-marker-group") || "").trim().toLowerCase();
       if (smgRaw === "before" || smgRaw === "after") {
@@ -47279,6 +47503,11 @@
         }
         if (name === "grid-row-gap") return computedMap.get("row-gap") || "normal";
         if (name === "grid-column-gap") return computedMap.get("column-gap") || "normal";
+        if (name === "grid-row" || name === "grid-column" || name === "grid-area") {
+          if (typeof globalThis.__capsurf_serializeShorthand === "function") {
+            return globalThis.__capsurf_serializeShorthand(name, (lh) => computedMap.get(lh) || "auto");
+          }
+        }
         if (name === "contain-intrinsic-size") {
           const w = computedMap.get("contain-intrinsic-width") || "none";
           const h = computedMap.get("contain-intrinsic-height") || "none";

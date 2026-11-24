@@ -8176,6 +8176,39 @@ function installWindow(global) {
     if (pageRaw === "auto" || pageRaw === "initial" || pageRaw === "unset" || pageRaw === "revert" || pageRaw === "revert-layer") {
       computedMap.set("page", "auto");
     }
+    for (const gp of ["grid-row-start", "grid-row-end", "grid-column-start", "grid-column-end"]) {
+      const gRaw = (computedMap.get(gp) || "").trim();
+      const gLow = gRaw.toLowerCase();
+      if (gLow === "initial" || gLow === "unset" || gLow === "revert" || gLow === "revert-layer") {
+        computedMap.set(gp, "auto");
+      } else if (gRaw) {
+        let gNorm = typeof globalThis.__capsurf_normalizeCssValue === "function"
+          ? globalThis.__capsurf_normalizeCssValue(gp, gRaw)
+          : gRaw;
+        if (/(?:calc|min|max|clamp|sign)\(/i.test(gNorm)) {
+          const isSpan = /\bspan\b/i.test(gNorm);
+          if (/sign\(/i.test(gNorm)) {
+            gNorm = evalSignCalls(gNorm, element);
+          }
+          gNorm = gNorm.replace(/(?:calc|min|max|clamp)\([^()]*(?:\([^()]*\)[^()]*)*\)/gi, (expr) => {
+            let inner = expr.slice(expr.indexOf("(") + 1, -1).trim();
+            if (/sibling-index\(\)/i.test(inner)) inner = inner.replace(/sibling-index\(\)/gi, "1");
+            if (/^[\d+\-*/().\s]+$/.test(inner)) {
+              try {
+                const v = Function("return (" + inner + ")")();
+                if (typeof v === "number" && isFinite(v)) {
+                  let iv = Math.round(v);
+                  if (isSpan && iv < 1) iv = 1;
+                  return String(iv);
+                }
+              } catch (_) {}
+            }
+            return expr;
+          });
+        }
+        computedMap.set(gp, gNorm);
+      }
+    }
     const ocmRaw = (computedMap.get("overflow-clip-margin") || "").trim();
     const smgRaw = (computedMap.get("scroll-marker-group") || "").trim().toLowerCase();
     if (smgRaw === "before" || smgRaw === "after") {
@@ -9982,6 +10015,11 @@ function installWindow(global) {
       }
       if (name === "grid-row-gap") return computedMap.get("row-gap") || "normal";
       if (name === "grid-column-gap") return computedMap.get("column-gap") || "normal";
+      if (name === "grid-row" || name === "grid-column" || name === "grid-area") {
+        if (typeof globalThis.__capsurf_serializeShorthand === "function") {
+          return globalThis.__capsurf_serializeShorthand(name, (lh) => computedMap.get(lh) || "auto");
+        }
+      }
       if (name === "contain-intrinsic-size") {
         const w = computedMap.get("contain-intrinsic-width") || "none";
         const h = computedMap.get("contain-intrinsic-height") || "none";
