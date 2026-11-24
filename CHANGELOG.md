@@ -4157,3 +4157,6 @@
   - `GEMINI.md`: 新增 §11.13（`--tests-file` 过滤 `*-ref.*`、`wpt-batched.mjs` 精确参数、`edit_file` 多行唯一 Target 规范）。
   - `src/js/shim/cssom.js`: `cssPropCamelToKebab` 支持 `Webkit*`；`parseInitial` 补全 `@font-face src` 语法校验；完善 `CSSCounterStyleRule` WebIDL 属性描述符与 `@@toStringTag`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 759**:
+  - `src/js/shim/cssom.js`: 修复 `hwb()` 验证的括号感知斜杠分割；在 `normalizeSingleColor` 中完善 `hwb(... none)`、`lab`/`lch`/`oklab`/`oklch`、`color()` 与 `canvastext` 规范化序列化。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

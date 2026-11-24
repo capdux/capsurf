@@ -4108,7 +4108,18 @@
         }
         if (fn === "hwb") {
           if (inner.includes(",")) return false;
-          const slashParts = inner.split("/");
+          const slashParts = [];
+          let sd = 0, sStart = 0;
+          for (let si = 0; si < inner.length; si++) {
+            const sc = inner[si];
+            if (sc === "(") sd++;
+            else if (sc === ")" && sd > 0) sd--;
+            else if (sc === "/" && sd === 0) {
+              slashParts.push(inner.slice(sStart, si));
+              sStart = si + 1;
+            }
+          }
+          slashParts.push(inner.slice(sStart));
           if (slashParts.length > 2) return false;
           const mainToks = splitCssTokens(slashParts[0].trim());
           if (mainToks.length !== 3) return false;
@@ -13860,7 +13871,10 @@
         const chParts = splitColorCh(slash[0]);
         if (chParts.length === 3 && slash.length <= 2) {
           if (/\bnone\b/i.test(hwbM[1])) {
-            const keepPct = (t) => t.toLowerCase() === "none" ? "none" : (t.endsWith("%") ? (String(Number(parseFloat(t).toFixed(6))) + "%") : t);
+            const stripPct = (t) => {
+              const ev = evalColorExpr(t);
+              return ev.toLowerCase() === "none" ? "none" : (ev.endsWith("%") ? String(Number(parseFloat(ev).toFixed(6))) : ev);
+            };
             const hOut = chParts[0].toLowerCase() === "none" ? "none" : chParts[0];
             let aOut = "";
             if (slash.length === 2) {
@@ -13871,7 +13885,7 @@
                 if (isFinite(av) && av < 1) aOut = " / " + String(Number(av.toFixed(6)));
               }
             }
-            return "hwb(" + hOut + " " + keepPct(chParts[1]) + " " + keepPct(chParts[2]) + aOut + ")";
+            return "hwb(" + hOut + " " + stripPct(chParts[1]) + " " + stripPct(chParts[2]) + aOut + ")";
           }
           const hTok = evalColorExpr(chParts[0]);
           let h = parseFloat(hTok);
@@ -13909,9 +13923,56 @@
       const labM = /^(lab|lch|oklab|oklch)\(\s*(.+)\s*\)$/i.exec(s);
       if (labM && !/\bfrom\b/i.test(labM[2])) {
         const fn = labM[1].toLowerCase();
+        const isOk = fn === "oklab" || fn === "oklch";
+        const isLch = fn === "lch" || fn === "oklch";
         const slash = splitTopSlash(labM[2]);
         const chParts = splitColorCh(slash[0]);
         if (chParts.length === 3 && slash.length <= 2) {
+          const fmtN = (n) => {
+            if (n === 0 || Object.is(n, -0)) return "0";
+            return String(Number(n.toFixed(6)));
+          };
+          const parseL = (raw) => {
+            const t = evalColorExpr(raw);
+            if (t.toLowerCase() === "none") return "none";
+            if (/^calc\(/i.test(t)) return t;
+            let v = parseFloat(t);
+            if (isNaN(v)) return t;
+            if (isOk) {
+              if (t.endsWith("%")) v = v / 100;
+              v = Math.max(0, Math.min(1, v));
+            } else {
+              v = Math.max(0, Math.min(100, v));
+            }
+            return fmtN(v);
+          };
+          const parseABOrC = (raw, isChroma) => {
+            const t = evalColorExpr(raw);
+            if (t.toLowerCase() === "none") return "none";
+            if (/^calc\(/i.test(t)) return t;
+            let v = parseFloat(t);
+            if (isNaN(v)) return t;
+            if (t.endsWith("%")) {
+              v = isOk ? (v * 0.004) : (isChroma ? (v * 1.5) : (v * 1.25));
+            }
+            if (isChroma) v = Math.max(0, v);
+            return fmtN(v);
+          };
+          const parseH = (raw) => {
+            const t = evalColorExpr(raw);
+            if (t.toLowerCase() === "none") return "none";
+            if (/^calc\(/i.test(t)) return t;
+            let h = parseFloat(t);
+            if (isNaN(h)) return t;
+            if (t.endsWith("rad")) h = h * 180 / Math.PI;
+            else if (t.endsWith("grad")) h = h * 0.9;
+            else if (t.endsWith("turn")) h = h * 360;
+            h = ((h % 360) + 360) % 360;
+            return fmtN(h);
+          };
+          const c0 = parseL(chParts[0]);
+          const c1 = parseABOrC(chParts[1], isLch);
+          const c2 = isLch ? parseH(chParts[2]) : parseABOrC(chParts[2], false);
           let aStr = "";
           if (slash.length === 2) {
             const at = evalColorExpr(slash[1]);
@@ -13921,9 +13982,39 @@
               if (isFinite(av) && av < 1) aStr = " / " + String(Number(av.toFixed(6)));
             }
           }
-          return fn + "(" + chParts.join(" ") + aStr + ")";
+          return fn + "(" + c0 + " " + c1 + " " + c2 + aStr + ")";
         }
       }
+      const colorFnM = /^color\(\s*(.+)\s*\)$/i.exec(s);
+      if (colorFnM && !/\bfrom\b/i.test(colorFnM[1])) {
+        const slash = splitTopSlash(colorFnM[1]);
+        const toks = splitColorCh(slash[0]);
+        if (toks.length === 4 && slash.length <= 2) {
+          let sp = toks[0].toLowerCase();
+          if (sp === "xyz") sp = "xyz-d65";
+          const fmtC = (raw) => {
+            const t = evalColorExpr(raw);
+            if (t.toLowerCase() === "none") return "none";
+            if (/^calc\(/i.test(t)) return t;
+            let v = parseFloat(t);
+            if (isNaN(v)) return t;
+            if (t.endsWith("%")) v = v / 100;
+            if (v === 0 || Object.is(v, -0)) return "0";
+            return String(Number(v.toFixed(6)));
+          };
+          let aStr = "";
+          if (slash.length === 2) {
+            const at = evalColorExpr(slash[1]);
+            if (at === "none") aStr = " / none";
+            else {
+              const av = Math.max(0, Math.min(1, at.endsWith("%") ? (parseFloat(at) / 100) : parseFloat(at)));
+              if (isFinite(av) && av < 1) aStr = " / " + String(Number(av.toFixed(6)));
+            }
+          }
+          return "color(" + sp + " " + fmtC(toks[1]) + " " + fmtC(toks[2]) + " " + fmtC(toks[3]) + aStr + ")";
+        }
+      }
+      if (s.toLowerCase() === "canvastext") return "rgb(0, 0, 0)";
       return val;
     }
 
