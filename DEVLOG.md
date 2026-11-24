@@ -3326,3 +3326,5 @@
 - 在 `window.js` `parseCssRulesInto` 实现 `@layer` 声明/块/嵌套路径排序与 `!important` 层间反转，打通 `layer-basic.html` (34/34) 与 `layer-important.html` (9/9)；在 `cssom.js` `serializeDecls` 折叠 `@page` `margin` 简写打通 `page-rule-declarations-001.html` (5/5)。
 ### Phase 743 — `all` / `revert-layer` 跨层回退、`splitStylesheetRules` 缓存与 `hitTest` 绘制序优化
 - 在 `window.js` 补全 `all: revert-layer/initial/unset/inherit` 与单属性 `revert-layer` 跨层快照恢复并缓存样式规则解析；同步在 `input.cp` `hitTest` 补全 `z_index` / `position != static` 层级优先命中。
+### Phase 744 — `ChildNode` (`before`/`after`/`replaceWith`/`remove`) 与 `textContent` 批量修复 (+116 子测试)
+- 在 `node-base.js` 与 `window.js` 补全 `ChildNode` 原型方法及 `Document`/`DocumentType`/`Element` `textContent` 规范行为，`ChildNode-*` 与 `Node-textContent` 合计净增 +116 子测试通过。

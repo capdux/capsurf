@@ -15155,13 +15155,13 @@
             try { oldKids[i].parentNode = null; } catch (e) {}
           }
         }
+        const val = (v === null || v === undefined) ? "" : String(v);
         if (nativeElementSetTextContent) {
           try {
-            nativeElementSetTextContent.call(this, v);
+            nativeElementSetTextContent.call(this, val);
           } catch (e) {}
         }
         this._children = [];
-        const val = (v === null || v === undefined) ? "" : String(v);
         const newKids = [];
         if (val.length > 0) {
           const t = new Text(val);
@@ -15485,6 +15485,7 @@
     this._data = String(data !== undefined ? data : "");
     this.nodeType = TEXT_NODE;
     this.nodeName = "#text";
+    this.parentNode = null;
   }
   Text.prototype = Object.create(CharacterData.prototype);
   Text.prototype.constructor = Text;
@@ -15774,6 +15775,73 @@
   };
   markNative(DocumentFragment.prototype.replaceChildren, "replaceChildren");
 
+  function convertNodesToFragment(nodes, ownerDoc) {
+    const doc = ownerDoc || (typeof document !== "undefined" ? document : null);
+    if (nodes.length === 1) {
+      const n = nodes[0];
+      if (n && typeof n === "object" && typeof n.nodeType === "number") return n;
+      return doc && typeof doc.createTextNode === "function" ? doc.createTextNode(String(n)) : new Text(String(n));
+    }
+    const frag = doc && typeof doc.createDocumentFragment === "function" ? doc.createDocumentFragment() : new DocumentFragment();
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      const node = (n && typeof n === "object" && typeof n.nodeType === "number")
+        ? n
+        : (doc && typeof doc.createTextNode === "function" ? doc.createTextNode(String(n)) : new Text(String(n)));
+      frag.appendChild(node);
+    }
+    return frag;
+  }
+
+  function installChildNodeMethods(proto) {
+    if (!proto) return;
+    if (!proto.before) {
+      proto.before = markNative(function (...nodes) {
+        const parent = this.parentNode;
+        if (!parent) return;
+        let viablePrev = this.previousSibling;
+        while (viablePrev && nodes.indexOf(viablePrev) !== -1) viablePrev = viablePrev.previousSibling;
+        const node = convertNodesToFragment(nodes, this.ownerDocument);
+        const ref = viablePrev ? viablePrev.nextSibling : parent.firstChild;
+        parent.insertBefore(node, ref);
+      }, "before");
+    }
+    if (!proto.after) {
+      proto.after = markNative(function (...nodes) {
+        const parent = this.parentNode;
+        if (!parent) return;
+        let viableNext = this.nextSibling;
+        while (viableNext && nodes.indexOf(viableNext) !== -1) viableNext = viableNext.nextSibling;
+        const node = convertNodesToFragment(nodes, this.ownerDocument);
+        parent.insertBefore(node, viableNext);
+      }, "after");
+    }
+    if (!proto.replaceWith) {
+      proto.replaceWith = markNative(function (...nodes) {
+        const parent = this.parentNode;
+        if (!parent) return;
+        let viableNext = this.nextSibling;
+        while (viableNext && nodes.indexOf(viableNext) !== -1) viableNext = viableNext.nextSibling;
+        const node = convertNodesToFragment(nodes, this.ownerDocument);
+        if (this.parentNode === parent) parent.replaceChild(node, this);
+        else parent.insertBefore(node, viableNext);
+      }, "replaceWith");
+    }
+    if (!proto.remove) {
+      proto.remove = markNative(function () {
+        if (this.parentNode && typeof this.parentNode.removeChild === "function") {
+          this.parentNode.removeChild(this);
+        }
+      }, "remove");
+    }
+  }
+
+  installChildNodeMethods(CharacterData.prototype);
+  if (typeof Element !== "undefined" && Element.prototype) installChildNodeMethods(Element.prototype);
+  if (typeof DocumentType !== "undefined" && DocumentType.prototype) installChildNodeMethods(DocumentType.prototype);
+  global.__capsurf_installChildNodeMethods = installChildNodeMethods;
+  if (typeof globalThis !== "undefined") globalThis.__capsurf_installChildNodeMethods = installChildNodeMethods;
+
   markNative(DocumentFragment, "DocumentFragment");
 
   Object.defineProperty(DocumentFragment.prototype, "innerHTML", {
@@ -15948,6 +16016,13 @@
   }
 
   if (typeof Document !== "undefined" && Document.prototype) {
+    if (!Object.getOwnPropertyDescriptor(Document.prototype, "textContent")) {
+      Object.defineProperty(Document.prototype, "textContent", {
+        get: function () { return null; },
+        set: function () {},
+        configurable: true,
+      });
+    }
     if (!Document.prototype.createTextNode) {
       Document.prototype.createTextNode = function (text) {
         return new Text(text);
@@ -52795,6 +52870,14 @@
     }
     DocumentType.prototype = Object.create(global.Node ? global.Node.prototype : Object.prototype);
     DocumentType.prototype.constructor = DocumentType;
+    Object.defineProperty(DocumentType.prototype, "textContent", {
+      get: function () { return null; },
+      set: function () {},
+      configurable: true,
+    });
+    if (typeof global.__capsurf_installChildNodeMethods === "function") {
+      global.__capsurf_installChildNodeMethods(DocumentType.prototype);
+    }
     global.DocumentType = DocumentType;
     if (typeof globalThis !== "undefined") globalThis.DocumentType = DocumentType;
     if (typeof window !== "undefined") window.DocumentType = DocumentType;

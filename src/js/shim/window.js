@@ -14373,6 +14373,14 @@ const CSS_TYPED_OM_GLOBALS = {
   }
   DocumentType.prototype = Object.create(global.Node ? global.Node.prototype : Object.prototype);
   DocumentType.prototype.constructor = DocumentType;
+  Object.defineProperty(DocumentType.prototype, "textContent", {
+    get: function () { return null; },
+    set: function () {},
+    configurable: true,
+  });
+  if (typeof global.__capsurf_installChildNodeMethods === "function") {
+    global.__capsurf_installChildNodeMethods(DocumentType.prototype);
+  }
   global.DocumentType = DocumentType;
   if (typeof globalThis !== "undefined") globalThis.DocumentType = DocumentType;
   if (typeof window !== "undefined") window.DocumentType = DocumentType;

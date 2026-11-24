@@ -4094,3 +4094,7 @@
   - `src/js/shim/cssom.js`: `notify()` 递增 `__capsurf_cssom_epoch`。
   - `src/cdp/input.cp`: `hitTest` 按 `(z_index, positioned, dom_order)` 判定最上层命中节点。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 744**:
+  - `src/js/shim/node-base.js`: 新增 `convertNodesToFragment` 与 `installChildNodeMethods`（`before`/`after`/`replaceWith`/`remove`）并挂载至 `CharacterData`/`Element`/`DocumentType`；修复 `Element.textContent` 赋值 `null/undefined` 转空串、`Document.prototype.textContent` 与 `Text.parentNode` 初始值。
+  - `src/js/shim/window.js`: 为 `DocumentType.prototype` 挂载 `ChildNode` 方法与 `textContent: null`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
