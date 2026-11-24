@@ -8025,3 +8025,7 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`window.js` & `cssom.js`**：`evalCssLengthExpr` 接入 `cqw`/`cqi`/`cqh`/`cqb`，补全 `border-image-outset` 与 `border-image-slice` 计算值求值；`isValidCalcSyntax` 支持 EOF 未闭合左括号。
   2. **全绿验证**：`border-image-outset-computed.html` **FAIL->PASS (7/7)**、`border-image-slice-computed.html` **FAIL->PASS (7/7)**、`calc-invalid-parsing.html` **PASS (6/6)**、`--smoke` **3/3 suites, 6/6 tests PASS**。
   3. **子智能体并发汇报**：`b07eed50` 完成 `/css/css-variables/` 全量摸底（63/194 PASS），已接力派发全新子智能体（`19710`, `/css/css-pseudo/`）。
+- **[Agent]**: 完成 Phase 644（`src/js/shim/cssom.js`, `src/js/shim/window.js`）：
+  1. **`cssom.js` & `window.js`**：提前绑定 `_isValidCalcSyntax` 使 `isValidColor` 拒绝 `angle * angle`；`opacity` 接入 `isValidCalcSyntax`、指定值 `%`->数字与 `min`/`max`/`clamp` 化简、计算值全数学函数求值。
+  2. **全绿验证**：`opacity-valid.html`、`opacity-computed.html`、`color-invalid.html` 均 **FAIL->PASS**，`--smoke` **3/3 suites, 6/6 tests PASS**。
+  3. **子智能体并发汇报**：`3afd78cf` 完成 `/css/css-contain/`（50/55 PASS）、`32c54d07` 完成 `/css/css-shadow/`（1/2 PASS）、`60c2bba6` 完成 `/css/css-scrollbars/`（1/2 PASS）、`e3e2fda2` 完成 `/css/css-scroll-snap/`（8/8 PASS）；已接力派发 `852ff469`（`19710`, `/css/css-grid/`）与 `9294fa46`（`19720`, `/css/css-flexbox/`）。

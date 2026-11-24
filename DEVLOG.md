@@ -3075,3 +3075,7 @@
 ### Phase 643: `border-image-outset-computed` (7/7) & `border-image-slice-computed` (7/7) 全绿
 - **核心修复 (`src/js/shim/window.js`, `src/js/shim/cssom.js`)**：`evalCssLengthExpr` 新增 `cqw`/`cqi`/`cqh`/`cqb` 单位换算，补全 `border-image-outset` 与 `border-image-slice` `sign()` 及无单位数值化简；`isValidCalcSyntax` 允许 EOF 未闭合 `(`。
 - **WPT & Smoke 验收**：`border-image-outset-computed.html` (7/7) & `border-image-slice-computed.html` (7/7) & `calc-invalid-parsing.html` (6/6) PASS，`--smoke` 3/3 suites PASS。
+
+### Phase 644: `opacity-valid` / `opacity-computed` / `color-invalid` 全绿
+- **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：`_isValidCalcSyntax` 在 `isValidCssValue` 入口绑定，消除 `isValidColor` 首次调用时未初始化导致的 `angle * angle` 漏放；`opacity` 支持 `%` 转小数及 `min`/`max`/`clamp` 指定值与计算值求值。
+- **WPT & Smoke 验收**：`opacity-invalid`、`opacity-valid`、`opacity-computed`、`color-invalid` 全绿，`--smoke` 3/3 suites PASS。

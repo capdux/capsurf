@@ -2253,3 +2253,7 @@
 ### Phase 643: `border-image-outset-computed` (7/7) & `border-image-slice-computed` (7/7) 全绿
 - **Filter `/css/css-backgrounds/parsing/border-image-outset-computed` & `/css/css-backgrounds/parsing/border-image-slice-computed`**: **FAIL->PASS (2/2: 7/7 + 7/7)**（`window.js` 在 `evalCssLengthExpr` 接入 `cqw`/`cqi`/`cqh`/`cqb` 单位，并补全 `border-image-outset` 与 `border-image-slice` 的 `sign()`/无单位数值计算值求值；`cssom.js` 在 `isValidCalcSyntax` 允许 EOF 未闭合左括号）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 644: `opacity-valid` / `opacity-computed` / `color-invalid` 全绿
+- **Filter `/css/css-color/parsing/opacity-` & `/css/css-color/parsing/color-invalid.html`**: **FAIL->PASS (4/4: `opacity-invalid`, `opacity-valid`, `opacity-computed`, `color-invalid`)**（`cssom.js` 在 `isValidCssValue` 入口提前绑定 `_isValidCalcSyntax` 使 `isValidColor` 拒绝 `angle * angle` 等非法 `calc()`，`opacity` 接入 `isValidCalcSyntax` 与百分比/极值函数 `min`/`max`/`clamp` 指定值化简；`window.js` 将 `opacity` 计算值求值扩展至 `min`/`max`/`clamp`/`sign`/`abs`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

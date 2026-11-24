@@ -7603,7 +7603,7 @@ function installWindow(global) {
       else {
         const opm = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)%$/i.exec(opRaw);
         if (opm) opNum = Number(opm[1]) / 100;
-        else if (/^calc\(/i.test(opRaw)) {
+        else if (/^(?:calc|min|max|clamp|sign|abs)\(/i.test(opRaw)) {
           const norm = opRaw.replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))%/g, (_, n) => String(Number(n) / 100));
           opNum = evalCssLengthExpr(norm, 0, fontSize);
         }

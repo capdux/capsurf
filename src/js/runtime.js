@@ -3943,6 +3943,7 @@
     if (typeof globalThis !== "undefined") globalThis.__isCssPropertySupported = isCssPropertySupported;
 
     let _NAMED_COLORS_CACHE = null;
+    let _isValidCalcSyntax = null;
     function isValidColor(val) {
       const rawTrimmed = val.trim();
       const v = rawTrimmed.toLowerCase();
@@ -3957,7 +3958,7 @@
         const inner = fnMatch[2].trim();
         if (!inner) return false;
         if (fn === "rgb" || fn === "rgba" || fn === "hsl" || fn === "hsla") {
-          const isCalc = (s) => /^(?:calc|min|max|clamp)\(/i.test(s);
+          const isCalc = (s) => /^(?:calc|min|max|clamp)\(/i.test(s) && (!_isValidCalcSyntax || _isValidCalcSyntax(s));
           if (inner.includes(",")) {
             const parts = splitTopLevelComma(inner);
             if (parts.length !== 3 && parts.length !== 4) return false;
@@ -4172,6 +4173,7 @@
       if (prop === "all") return false;
       if (vLower === "bogus") return false;
       if (/[{}]/.test(trimmed) && !/(?:^|[^a-z0-9_-])var\(/i.test(vLower)) return false;
+      if (!_isValidCalcSyntax) _isValidCalcSyntax = isValidCalcSyntax;
 
       if (prop === "display") {
         const validDisplays = new Set([
@@ -4408,6 +4410,7 @@
         }
         return true;
       }
+      _isValidCalcSyntax = isValidCalcSyntax;
 
       function isValidLenPct(tok, allowNegative) {
         if (/^(?:var|env|attr|anchor|anchor-size)\(/i.test(tok)) return true;
@@ -4657,7 +4660,8 @@
         const toks = splitCssTokens(vLower);
         if (toks.length !== 1) return false;
         const t = toks[0];
-        if (/^(?:calc|min|max|clamp|var|env)\(/i.test(t)) return true;
+        if (/^(?:var|env)\(/i.test(t)) return true;
+        if (/^(?:calc|min|max|clamp)\(/i.test(t)) return isValidCalcSyntax(t);
         return /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?%?$/i.test(t);
       }
       if (prop === "border-radius") {
@@ -6742,6 +6746,37 @@
       if (NUM_NORM_PROPS.has(key) && /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(s)) {
         const n = Number(s);
         if (Number.isFinite(n)) return String(n === 0 ? 0 : n);
+      }
+      if (key === "opacity") {
+        const pctM = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)%$/i.exec(s);
+        if (pctM) {
+          const n = Number(pctM[1]) / 100;
+          if (Number.isFinite(n)) return String(n === 0 ? 0 : n);
+        }
+        if (/^calc\(/i.test(s)) return canonicalizeCalcToken(s);
+        const fnM = /^(min|max|clamp)\(\s*(.+)\s*\)$/i.exec(s);
+        if (fnM) {
+          const fnName = fnM[1].toLowerCase();
+          const args = splitTopLevelComma(fnM[2]);
+          let unit = null;
+          const vals = [];
+          let ok = true;
+          for (let ai = 0; ai < args.length; ai++) {
+            const am = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)(%)?$/i.exec(args[ai].trim());
+            if (!am) { ok = false; break; }
+            const u = am[2] || "";
+            if (unit === null) unit = u;
+            else if (unit !== u) { ok = false; break; }
+            vals.push(Number(am[1]));
+          }
+          if (ok && vals.length > 0) {
+            let r = null;
+            if (fnName === "min") r = Math.min.apply(null, vals);
+            else if (fnName === "max") r = Math.max.apply(null, vals);
+            else if (fnName === "clamp" && vals.length === 3) r = Math.max(vals[0], Math.min(vals[1], vals[2]));
+            if (r !== null && Number.isFinite(r)) return "calc(" + String(r === 0 ? 0 : r) + unit + ")";
+          }
+        }
       }
       if (ZERO_PX_PROPS.has(key)) {
         if (s === "0" || s === "+0" || s === "-0") return "0px";
@@ -43420,7 +43455,7 @@
         else {
           const opm = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)%$/i.exec(opRaw);
           if (opm) opNum = Number(opm[1]) / 100;
-          else if (/^calc\(/i.test(opRaw)) {
+          else if (/^(?:calc|min|max|clamp|sign|abs)\(/i.test(opRaw)) {
             const norm = opRaw.replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))%/g, (_, n) => String(Number(n) / 100));
             opNum = evalCssLengthExpr(norm, 0, fontSize);
           }
