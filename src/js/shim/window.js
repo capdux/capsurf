@@ -7784,13 +7784,6 @@ function installWindow(global) {
       }
     }
     // Ensure standard initial computed values for opacity and color
-    const lhRaw = (computedMap.get("line-height") || "").trim();
-    if (lhRaw && lhRaw.toLowerCase() !== "normal" && !/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(lhRaw)) {
-      const lhPx = evalCssLengthExpr(lhRaw, fontSize, fontSize);
-      if (lhPx !== null && isFinite(lhPx)) {
-        computedMap.set("line-height", formatCssPx(Math.max(0, lhPx)));
-      }
-    }
     if (!computedMap.has("opacity") || computedMap.get("opacity") === "") {
       computedMap.set("opacity", "1");
     } else {
@@ -8019,6 +8012,24 @@ function installWindow(global) {
         return full;
       });
     };
+    const lhRaw = (computedMap.get("line-height") || "").trim();
+    if (lhRaw && lhRaw.toLowerCase() !== "normal") {
+      const lhExpr = /sign\(/i.test(lhRaw) ? evalSignCalls(lhRaw, element) : lhRaw;
+      if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(lhExpr)) {
+        const lhNum = Number(lhExpr);
+        if (isFinite(lhNum)) computedMap.set("line-height", formatCssPx(Math.max(0, lhNum * fontSize)));
+      } else if (/^(?:calc|min|max|clamp|round|mod|rem|abs|sign)\(/i.test(lhExpr) && !/(?:px|em|rem|ex|ch|vw|vh|vmin|vmax|cm|mm|q|in|pt|pc|%)/i.test(lhExpr)) {
+        const lhNum = evalCssLengthExpr(lhExpr, fontSize, fontSize);
+        if (lhNum !== null && isFinite(lhNum)) {
+          computedMap.set("line-height", formatCssPx(Math.max(0, lhNum * fontSize)));
+        }
+      } else {
+        const lhPx = evalCssLengthExpr(lhExpr, fontSize, fontSize);
+        if (lhPx !== null && isFinite(lhPx)) {
+          computedMap.set("line-height", formatCssPx(Math.max(0, lhPx)));
+        }
+      }
+    }
     const fwRaw = (computedMap.get("font-weight") || "").trim().toLowerCase();
     if (fwRaw) {
       if (fwRaw === "normal") computedMap.set("font-weight", "400");

@@ -3266,3 +3266,5 @@
 - 在 `selector.js` 中拒绝 `::view-transition` 后的括号参数（`::view-transition(*)`/`(valid)`/`(root)`），并将 Phase 710-711 顺带打通的 `clip-path-computed.html` 收紧为 `PASS`。
 ### Phase 713 — `mask` 简写 13 个 longhand 展开与规范序列化闭环
 - 在 `cssom.js` 提取 `parseMaskLayers` 统一校验与解析 `<mask-layer>#`（修正 `no-clip` 先于 `<geometry-box>` 时仍固定归属 `mask-clip` 的语义），并在 `window.js` 接入 `getComputedStyle().mask`，打通 `mask-valid.sub.html` (55/55 FAIL→PASS) 与 `mask-invalid.html` (13/13 PASS)。
+### Phase 714 — `line-height` 无单位数值与 `sign(cqw)` 计算值 `px` 转换闭环
+- 修复 `window.js` `applyUsedValuesToComputedMap` 中 `line-height` 对纯数字及含 `sign(cqw)` 的无单位 `calc()` 未乘以 `fontSize` 的缺陷，并解决 `evalSignCalls` 前置调用 TDZ 问题，打通 `/css/css-inline/parsing/` 9/9 全绿与 `getComputedStyle-line-height.html`。

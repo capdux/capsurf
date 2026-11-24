@@ -3971,3 +3971,6 @@
   - `src/js/shim/window.js`: 默认值表与 `getShorthandComputed` 注册 `mask` 与 `mask-*` longhand 默认值。
   - `test/wpt/wpt-expectations.json`: 将 `/css/css-masking/parsing/mask-valid.sub.html` 收紧为 `PASS`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 714**:
+  - `src/js/shim/window.js`: 将 `line-height` 计算值求值移至 `evalSignCalls` 声明之后，支持无单位 `<number>` 及无单位 `calc()`/`sign(cqw)` 乘以 `fontSize` 转为绝对 `px`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
