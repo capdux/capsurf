@@ -5623,85 +5623,7 @@
         return true;
       }
       if (prop === "mask") {
-        const layers = splitTopLevelComma(trimmed);
-        if (layers.length === 0) return false;
-        const REP1 = new Set(["repeat-x", "repeat-y"]);
-        const REP2 = new Set(["repeat", "space", "round", "no-repeat"]);
-        const GEO = new Set(["content-box", "padding-box", "border-box", "fill-box", "stroke-box", "view-box"]);
-        const COMP = new Set(["add", "subtract", "intersect", "exclude"]);
-        const MODE = new Set(["alpha", "luminance", "match-source"]);
-        const POS_KW = new Set(["left", "center", "right", "top", "bottom"]);
-        const isPosTok = (t) => POS_KW.has(t.toLowerCase()) || isValidLenPct(t, true);
-        for (let li = 0; li < layers.length; li++) {
-          const layer = layers[li].trim();
-          if (!layer) return false;
-          const slashes = [];
-          let cur = "", d = 0, q = "";
-          for (let ci = 0; ci < layer.length; ci++) {
-            const ch = layer[ci];
-            if (q) { cur += ch; if (ch === q && layer[ci - 1] !== "\\") q = ""; continue; }
-            if (ch === "\"" || ch === "'") { q = ch; cur += ch; continue; }
-            if (ch === "(") d++; else if (ch === ")" && d > 0) d--;
-            if (d === 0 && ch === "/") { slashes.push(cur.trim()); cur = ""; }
-            else cur += ch;
-          }
-          slashes.push(cur.trim());
-          if (slashes.length > 2) return false;
-          let seenImg = false, seenPos = false, seenRep = false, boxCnt = 0, seenNoClip = false, seenComp = false, seenMode = false;
-          const checkNonPos = (toks, startIdx) => {
-            for (let ti = startIdx; ti < toks.length; ti++) {
-              const t = toks[ti], tl = t.toLowerCase();
-              if (tl === "none" || /^(?:url|image|image-set|-webkit-image-set|cross-fade|(?:repeating-)?(?:linear|radial|conic)-gradient)\(/i.test(t)) {
-                if (seenImg) return false; seenImg = true;
-              } else if (REP1.has(tl)) {
-                if (seenRep) return false; seenRep = true;
-              } else if (REP2.has(tl)) {
-                if (seenRep) return false; seenRep = true;
-                if (ti + 1 < toks.length && REP2.has(toks[ti + 1].toLowerCase())) ti++;
-              } else if (GEO.has(tl)) {
-                if (boxCnt >= 2) return false; boxCnt++;
-              } else if (tl === "no-clip") {
-                if (seenNoClip || boxCnt >= 2) return false; seenNoClip = true; boxCnt++;
-              } else if (COMP.has(tl)) {
-                if (seenComp) return false; seenComp = true;
-              } else if (MODE.has(tl)) {
-                if (seenMode) return false; seenMode = true;
-              } else if (isPosTok(t)) {
-                if (seenPos) return false;
-                const pToks = [t];
-                while (ti + 1 < toks.length && isPosTok(toks[ti + 1])) pToks.push(toks[++ti]);
-                if (!isValidCssPositionTokens(pToks, true)) return false;
-                seenPos = true;
-              } else {
-                return false;
-              }
-            }
-            return true;
-          };
-          if (slashes.length === 1) {
-            if (!checkNonPos(splitCssTokens(slashes[0]), 0)) return false;
-          } else {
-            const leftToks = splitCssTokens(slashes[0]);
-            const rightToks = splitCssTokens(slashes[1]);
-            if (leftToks.length === 0 || rightToks.length === 0) return false;
-            let posEnd = leftToks.length;
-            let posStart = posEnd;
-            while (posStart > 0 && isPosTok(leftToks[posStart - 1])) posStart--;
-            if (posStart === posEnd) return false;
-            if (!isValidCssPositionTokens(leftToks.slice(posStart, posEnd), true)) return false;
-            seenPos = true;
-            if (!checkNonPos(leftToks.slice(0, posStart), 0)) return false;
-            const sz0 = rightToks[0].toLowerCase();
-            let szUsed = 0;
-            if (sz0 === "cover" || sz0 === "contain") szUsed = 1;
-            else if (sz0 === "auto" || isValidLenPct(rightToks[0], false)) {
-              szUsed = 1;
-              if (rightToks.length >= 2 && (rightToks[1].toLowerCase() === "auto" || isValidLenPct(rightToks[1], false))) szUsed = 2;
-            } else return false;
-            if (!checkNonPos(rightToks, szUsed)) return false;
-          }
-        }
-        return true;
+        return parseMaskLayers(trimmed) !== null;
       }
       if (prop === "border-spacing") {
         const toks = splitCssTokens(vLower);
@@ -8926,6 +8848,136 @@
     }
     global.__capsurf_normalizeCssValue = normalizeCssSpecifiedValue;
 
+    function parseMaskLayers(raw) {
+      const s = String(raw || "").trim();
+      if (!s) return null;
+      const layers = splitTopLevelComma(s);
+      if (layers.length === 0) return null;
+      const REP1 = new Set(["repeat-x", "repeat-y"]);
+      const REP2 = new Set(["repeat", "space", "round", "no-repeat"]);
+      const GEO = new Set(["content-box", "padding-box", "border-box", "fill-box", "stroke-box", "view-box"]);
+      const COMP = new Set(["add", "subtract", "intersect", "exclude"]);
+      const MODE = new Set(["alpha", "luminance", "match-source"]);
+      const POS_KW = new Set(["left", "center", "right", "top", "bottom"]);
+      const isPosTok = (t) => POS_KW.has(t.toLowerCase()) || isValidCssValue("left", t);
+      const out = [];
+      for (let li = 0; li < layers.length; li++) {
+        const layer = layers[li].trim();
+        if (!layer) return null;
+        const slashes = [];
+        let cur = "", d = 0, q = "";
+        for (let ci = 0; ci < layer.length; ci++) {
+          const ch = layer[ci];
+          if (q) { cur += ch; if (ch === q && layer[ci - 1] !== "\\") q = ""; continue; }
+          if (ch === "\"" || ch === "'") { q = ch; cur += ch; continue; }
+          if (ch === "(") d++; else if (ch === ")" && d > 0) d--;
+          if (d === 0 && ch === "/") { slashes.push(cur.trim()); cur = ""; }
+          else cur += ch;
+        }
+        slashes.push(cur.trim());
+        if (slashes.length > 2) return null;
+        let img = "none", pos = "0% 0%", size = "auto", rep = "repeat", origin = "border-box", clip = "border-box", comp = "add", mode = "match-source";
+        let seenImg = false, seenPos = false, seenRep = false, boxCnt = 0, seenGeo = false, seenNoClip = false, seenComp = false, seenMode = false;
+        const parseTokens = (toks, startIdx) => {
+          for (let ti = startIdx; ti < toks.length; ti++) {
+            const t = toks[ti], tl = t.toLowerCase();
+            if (tl === "none" || /^(?:url|image|image-set|-webkit-image-set|cross-fade|(?:repeating-)?(?:linear|radial|conic)-gradient)\(/i.test(t)) {
+              if (seenImg) return false;
+              seenImg = true;
+              img = tl === "none" ? "none" : normalizeCssSpecifiedValue("mask-image", t);
+            } else if (REP1.has(tl)) {
+              if (seenRep) return false;
+              seenRep = true;
+              rep = tl;
+            } else if (REP2.has(tl)) {
+              if (seenRep) return false;
+              seenRep = true;
+              if (ti + 1 < toks.length && REP2.has(toks[ti + 1].toLowerCase())) {
+                const r0 = tl, r1 = toks[++ti].toLowerCase();
+                if (r0 === "repeat" && r1 === "no-repeat") rep = "repeat-x";
+                else if (r0 === "no-repeat" && r1 === "repeat") rep = "repeat-y";
+                else if (r0 === r1) rep = r0;
+                else rep = r0 + " " + r1;
+              } else {
+                rep = tl;
+              }
+            } else if (GEO.has(tl)) {
+              if (boxCnt >= 2) return false;
+              if (!seenGeo) {
+                origin = tl;
+                if (!seenNoClip) clip = tl;
+                seenGeo = true;
+              } else {
+                clip = tl;
+              }
+              boxCnt++;
+            } else if (tl === "no-clip") {
+              if (seenNoClip || boxCnt >= 2) return false;
+              seenNoClip = true;
+              clip = "no-clip";
+              boxCnt++;
+            } else if (COMP.has(tl)) {
+              if (seenComp) return false;
+              seenComp = true;
+              comp = tl;
+            } else if (MODE.has(tl)) {
+              if (seenMode) return false;
+              seenMode = true;
+              mode = tl;
+            } else if (isPosTok(t)) {
+              if (seenPos) return false;
+              const pToks = [t];
+              while (ti + 1 < toks.length && isPosTok(toks[ti + 1])) pToks.push(toks[++ti]);
+              if (!isValidCssValue("mask-position", pToks.join(" "))) return false;
+              seenPos = true;
+              pos = normalizeCssSpecifiedValue("mask-position", pToks.join(" "));
+            } else {
+              return false;
+            }
+          }
+          return true;
+        };
+        if (slashes.length === 1) {
+          if (!parseTokens(splitCssTokens(slashes[0]), 0)) return null;
+        } else {
+          const leftToks = splitCssTokens(slashes[0]);
+          const rightToks = splitCssTokens(slashes[1]);
+          if (leftToks.length === 0 || rightToks.length === 0) return null;
+          let posEnd = leftToks.length;
+          let posStart = posEnd;
+          while (posStart > 0 && isPosTok(leftToks[posStart - 1])) posStart--;
+          if (posStart === posEnd) return null;
+          const pToks = leftToks.slice(posStart, posEnd);
+          if (!isValidCssValue("mask-position", pToks.join(" "))) return null;
+          seenPos = true;
+          pos = normalizeCssSpecifiedValue("mask-position", pToks.join(" "));
+          if (!parseTokens(leftToks.slice(0, posStart), 0)) return null;
+          const sz0 = rightToks[0].toLowerCase();
+          let szUsed = 0;
+          if (sz0 === "cover" || sz0 === "contain") {
+            szUsed = 1;
+            size = sz0;
+          } else if (sz0 === "auto" || isValidCssValue("mask-size", rightToks[0])) {
+            szUsed = 1;
+            const s0 = sz0 === "auto" ? "auto" : ((rightToks[0] === "0" || rightToks[0] === "+0") ? "0px" : rightToks[0]);
+            if (rightToks.length >= 2 && (rightToks[1].toLowerCase() === "auto" || isValidCssValue("mask-size", rightToks[1]))) {
+              szUsed = 2;
+              const sz1 = rightToks[1].toLowerCase();
+              const s1 = sz1 === "auto" ? "auto" : ((rightToks[1] === "0" || rightToks[1] === "+0") ? "0px" : rightToks[1]);
+              size = (s0 === "auto" && s1 === "auto") ? "auto" : (s1 === "auto" ? s0 : (s0 + " " + s1));
+            } else {
+              size = s0;
+            }
+          } else {
+            return null;
+          }
+          if (!parseTokens(rightToks, szUsed)) return null;
+        }
+        out.push({ img, pos, size, rep, origin, clip, comp, mode });
+      }
+      return out;
+    }
+
     function parseGridLine(raw) {
       const s = String(raw || "").trim();
       if (!s || /["'/]/.test(s)) return null;
@@ -9529,6 +9581,25 @@
         if (!p) return null;
         return [["contain-intrinsic-width", p[0]], ["contain-intrinsic-height", p[1]]];
       }
+      if (key === "mask") {
+        const layers = parseMaskLayers(normV);
+        if (!layers) return null;
+        return [
+          ["mask-image", layers.map((l) => l.img).join(", ")],
+          ["mask-position", layers.map((l) => l.pos).join(", ")],
+          ["mask-size", layers.map((l) => l.size).join(", ")],
+          ["mask-repeat", layers.map((l) => l.rep).join(", ")],
+          ["mask-origin", layers.map((l) => l.origin).join(", ")],
+          ["mask-clip", layers.map((l) => l.clip).join(", ")],
+          ["mask-composite", layers.map((l) => l.comp).join(", ")],
+          ["mask-mode", layers.map((l) => l.mode).join(", ")],
+          ["mask-border-source", "none"],
+          ["mask-border-slice", "0"],
+          ["mask-border-width", "auto"],
+          ["mask-border-outset", "0"],
+          ["mask-border-repeat", "stretch"]
+        ];
+      }
       if (key === "grid-row" || key === "grid-column") {
         const segs = splitGridSlashParts(normV);
         if (!segs || segs.length > 2) return null;
@@ -9703,7 +9774,8 @@
       "border-inline": ["border-inline-start-width", "border-inline-start-style", "border-inline-start-color", "border-inline-end-width", "border-inline-end-style", "border-inline-end-color"],
       "grid-row": ["grid-row-start", "grid-row-end"],
       "grid-column": ["grid-column-start", "grid-column-end"],
-      "grid-area": ["grid-row-start", "grid-column-start", "grid-row-end", "grid-column-end"]
+      "grid-area": ["grid-row-start", "grid-column-start", "grid-row-end", "grid-column-end"],
+      mask: ["mask-image", "mask-position", "mask-size", "mask-repeat", "mask-origin", "mask-clip", "mask-composite", "mask-mode", "mask-border-source", "mask-border-slice", "mask-border-width", "mask-border-outset", "mask-border-repeat"]
     };
     global.__capsurf_shorthandLonghands = SHORTHAND_EXPAND_LONGHANDS;
     if (typeof globalThis !== "undefined") globalThis.__capsurf_shorthandLonghands = SHORTHAND_EXPAND_LONGHANDS;
@@ -9807,6 +9879,44 @@
         const cst = vals[1] === "none" && (cw || vals[2] !== "currentcolor") ? "" : vals[1];
         const cc = vals[2].toLowerCase() === "currentcolor" ? "" : vals[2];
         return [cw, cst, cc].filter(Boolean).join(" ") || "none";
+      }
+      if (key === "mask") {
+        if (vals[8] !== "none" || vals[9] !== "0" || vals[10] !== "auto" || vals[11] !== "0" || vals[12] !== "stretch") {
+          return "";
+        }
+        const imgs = splitTopLevelComma(vals[0]);
+        const poss = splitTopLevelComma(vals[1]);
+        const szs = splitTopLevelComma(vals[2]);
+        const reps = splitTopLevelComma(vals[3]);
+        const origs = splitTopLevelComma(vals[4]);
+        const clips = splitTopLevelComma(vals[5]);
+        const comps = splitTopLevelComma(vals[6]);
+        const modes = splitTopLevelComma(vals[7]);
+        const n = imgs.length;
+        if (poss.length !== n || szs.length !== n || reps.length !== n || origs.length !== n || clips.length !== n || comps.length !== n || modes.length !== n) {
+          return "";
+        }
+        const outLayers = [];
+        for (let i = 0; i < n; i++) {
+          const im = imgs[i].trim(), po = poss[i].trim(), sz = szs[i].trim(), rp = reps[i].trim();
+          const og = origs[i].trim(), cl = clips[i].trim(), cp = comps[i].trim(), md = modes[i].trim();
+          const parts = [];
+          if (im !== "none") parts.push(im);
+          if (po !== "0% 0%" || sz !== "auto") {
+            parts.push(sz !== "auto" ? (po + " / " + sz) : po);
+          }
+          if (rp !== "repeat") parts.push(rp);
+          if (og === cl) {
+            if (og !== "border-box") parts.push(og);
+          } else {
+            if (og === "border-box" && cl === "no-clip") parts.push("no-clip");
+            else { parts.push(og); parts.push(cl); }
+          }
+          if (cp !== "add") parts.push(cp);
+          if (md !== "match-source") parts.push(md);
+          outLayers.push(parts.length > 0 ? parts.join(" ") : "none");
+        }
+        return outLayers.join(", ");
       }
       if (key === "position-try") {
         return vals[0] === "normal" ? vals[1] : (vals[0] + " " + vals[1]);
@@ -46754,6 +46864,15 @@
         ["direction", "ltr"],
         ["clip-rule", "nonzero"],
         ["mask-image", "none"],
+        ["mask-position", "0% 0%"],
+        ["mask-origin", "border-box"],
+        ["mask-clip", "border-box"],
+        ["mask-mode", "match-source"],
+        ["mask-border-source", "none"],
+        ["mask-border-slice", "0"],
+        ["mask-border-width", "auto"],
+        ["mask-border-outset", "0"],
+        ["mask-border-repeat", "stretch"],
         ["mask-type", "luminance"],
         ["mask-composite", "add"],
         ["mask-repeat", "repeat"],
@@ -47675,9 +47794,9 @@
         }
         if (name === "grid-row-gap") return computedMap.get("row-gap") || "normal";
         if (name === "grid-column-gap") return computedMap.get("column-gap") || "normal";
-        if (name === "grid-row" || name === "grid-column" || name === "grid-area") {
+        if (name === "grid-row" || name === "grid-column" || name === "grid-area" || name === "mask") {
           if (typeof globalThis.__capsurf_serializeShorthand === "function") {
-            return globalThis.__capsurf_serializeShorthand(name, (lh) => computedMap.get(lh) || "auto");
+            return globalThis.__capsurf_serializeShorthand(name, (lh) => computedMap.get(lh) || "");
           }
         }
         if (name === "contain-intrinsic-size") {

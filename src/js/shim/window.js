@@ -9177,6 +9177,15 @@ function installWindow(global) {
       ["direction", "ltr"],
       ["clip-rule", "nonzero"],
       ["mask-image", "none"],
+      ["mask-position", "0% 0%"],
+      ["mask-origin", "border-box"],
+      ["mask-clip", "border-box"],
+      ["mask-mode", "match-source"],
+      ["mask-border-source", "none"],
+      ["mask-border-slice", "0"],
+      ["mask-border-width", "auto"],
+      ["mask-border-outset", "0"],
+      ["mask-border-repeat", "stretch"],
       ["mask-type", "luminance"],
       ["mask-composite", "add"],
       ["mask-repeat", "repeat"],
@@ -10098,9 +10107,9 @@ function installWindow(global) {
       }
       if (name === "grid-row-gap") return computedMap.get("row-gap") || "normal";
       if (name === "grid-column-gap") return computedMap.get("column-gap") || "normal";
-      if (name === "grid-row" || name === "grid-column" || name === "grid-area") {
+      if (name === "grid-row" || name === "grid-column" || name === "grid-area" || name === "mask") {
         if (typeof globalThis.__capsurf_serializeShorthand === "function") {
-          return globalThis.__capsurf_serializeShorthand(name, (lh) => computedMap.get(lh) || "auto");
+          return globalThis.__capsurf_serializeShorthand(name, (lh) => computedMap.get(lh) || "");
         }
       }
       if (name === "contain-intrinsic-size") {

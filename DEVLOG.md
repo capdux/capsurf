@@ -3264,3 +3264,5 @@
 - 在 `window.js` 复用 `sub100Sum` 实现完整 `resolvePos`，正确区分 2 值独立 X/Y 轴与 3/4 值边关键词偏移，一举打通 `shape-outside-circle-002.html` (136/136) 与 `shape-outside-ellipse-002.html` (136/136)。
 ### Phase 712 — `::view-transition(...)` 参数校验收口与 `clip-path-computed` 预期收紧
 - 在 `selector.js` 中拒绝 `::view-transition` 后的括号参数（`::view-transition(*)`/`(valid)`/`(root)`），并将 Phase 710-711 顺带打通的 `clip-path-computed.html` 收紧为 `PASS`。
+### Phase 713 — `mask` 简写 13 个 longhand 展开与规范序列化闭环
+- 在 `cssom.js` 提取 `parseMaskLayers` 统一校验与解析 `<mask-layer>#`（修正 `no-clip` 先于 `<geometry-box>` 时仍固定归属 `mask-clip` 的语义），并在 `window.js` 接入 `getComputedStyle().mask`，打通 `mask-valid.sub.html` (55/55 FAIL→PASS) 与 `mask-invalid.html` (13/13 PASS)。

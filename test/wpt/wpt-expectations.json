@@ -4610,8 +4610,8 @@
     "reason": "T18 enrollment (css-masking): measured PASS"
   },
   "/css/css-masking/parsing/mask-valid.sub.html": {
-    "expected": "FAIL",
-    "reason": "T18 enrollment (css-masking): 38/55 subtests pass"
+    "expected": "PASS",
+    "reason": null
   },
   "/css/css-mixins/function-relative-units.html": {
     "expected": "FAIL",

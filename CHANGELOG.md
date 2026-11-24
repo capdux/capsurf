@@ -3966,3 +3966,8 @@
   - `src/js/shim/selector.js`: 拒绝 `::view-transition(...)` 带括号参数，修复 `pseudo-elements-invalid.html` 3/675 失败子测试。
   - `test/wpt/wpt-expectations.json`: 将已通过的 `/css/css-masking/parsing/clip-path-computed.html` 收紧为 `PASS`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 713**:
+  - `src/js/shim/cssom.js`: 新增 `parseMaskLayers` 统一校验与解析 `<mask-layer>#`（`no-clip` 固定归属 `mask-clip`），补全 `mask` 13 个 longhand 展开与规范序列化。
+  - `src/js/shim/window.js`: 默认值表与 `getShorthandComputed` 注册 `mask` 与 `mask-*` longhand 默认值。
+  - `test/wpt/wpt-expectations.json`: 将 `/css/css-masking/parsing/mask-valid.sub.html` 收紧为 `PASS`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
