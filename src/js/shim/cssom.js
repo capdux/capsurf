@@ -3024,6 +3024,28 @@
     if (prop === "position-try") {
       return !!expandCssShorthand("position-try", trimmed);
     }
+    if (prop === "container-name") {
+      if (vLower === "none") return true;
+      const toks = splitCssTokens(trimmed);
+      if (toks.length === 0) return false;
+      for (let i = 0; i < toks.length; i++) {
+        const t = toks[i], tl = t.toLowerCase();
+        if (t.includes(",") || t.startsWith('"') || t.startsWith("'") || t.startsWith("#") || /^[+-]?(?:\d|\.\d)/.test(t) || /\(/.test(t)) return false;
+        if (tl === "none" || tl === "not" || tl === "and" || tl === "or" || tl === "default" ||
+            tl === "inherit" || tl === "initial" || tl === "unset" || tl === "revert" || tl === "revert-layer") return false;
+        if (!/^(?:--|-?(?:\\[0-9a-fA-F]{1,6}\s?|\\[^\n\r\f]|[a-z_])|-?[^\x00-\x7f])(?:\\[0-9a-fA-F]{1,6}\s?|\\[^\n\r\f]|[a-z0-9_-]|[^\x00-\x7f])*$/i.test(t)) return false;
+      }
+      return true;
+    }
+    if (prop === "container-type") {
+      return vLower === "normal" || vLower === "size" || vLower === "inline-size";
+    }
+    if (prop === "container") {
+      const slash = trimmed.split("/");
+      if (slash.length === 1) return isValidCssValue("container-name", slash[0]);
+      if (slash.length === 2) return isValidCssValue("container-name", slash[0]) && isValidCssValue("container-type", slash[1]);
+      return false;
+    }
     if (prop === "size" || prop === "page-orientation") {
       return false;
     }
@@ -6259,7 +6281,7 @@
     if (key === "container") {
       const slash = normV.split("/");
       const cn = slash[0].trim() || "none";
-      const ct = slash.length === 2 ? (slash[1].trim() || "normal") : "normal";
+      const ct = slash.length === 2 ? (slash[1].trim().toLowerCase() || "normal") : "normal";
       return [["container-name", cn], ["container-type", ct]];
     }
     if (key === "font-variant") {
@@ -6483,6 +6505,9 @@
         out.push(parts.length > 0 ? parts.join(" ") : "none");
       }
       return out.join(", ");
+    }
+    if (key === "container") {
+      return vals[1] === "normal" ? vals[0] : (vals[0] + " / " + vals[1]);
     }
     if (key === "place-content" || key === "place-items" || key === "place-self" || key === "overflow" || key === "gap" || key === "grid-gap" || key === "contain-intrinsic-size") {
       return vals[0] === vals[1] ? vals[0] : (vals[0] + " " + vals[1]);

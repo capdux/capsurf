@@ -8206,6 +8206,14 @@ function installWindow(global) {
     if (pageRaw === "auto" || pageRaw === "initial" || pageRaw === "unset" || pageRaw === "revert" || pageRaw === "revert-layer") {
       computedMap.set("page", "auto");
     }
+    const cnRaw = (computedMap.get("container-name") || "").trim().toLowerCase();
+    if (cnRaw === "none" || cnRaw === "initial" || cnRaw === "unset" || cnRaw === "revert" || cnRaw === "revert-layer") {
+      computedMap.set("container-name", "none");
+    }
+    const ctRaw = (computedMap.get("container-type") || "").trim().toLowerCase();
+    if (ctRaw === "normal" || ctRaw === "initial" || ctRaw === "unset" || ctRaw === "revert" || ctRaw === "revert-layer") {
+      computedMap.set("container-type", "normal");
+    }
     for (const gp of ["grid-row-start", "grid-row-end", "grid-column-start", "grid-column-end"]) {
       const gRaw = (computedMap.get(gp) || "").trim();
       const gLow = gRaw.toLowerCase();

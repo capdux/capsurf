@@ -4056,3 +4056,7 @@
   - `src/js/shim/cssom.js`: 新增 `parseAndNormalizeShape` 统一处理 `shape()` 校验与规范序列化（`hline`/`vline` 关键字、`from`/`curve`/`smooth`/`arc` 位置规范序、`with` 控制点原点省略、`arc` 修饰符顺序、`0 -> 0px`）。
   - `src/js/shim/window.js`: `shape()` 计算值补充 `x-start`/`y-start`/`x-end`/`y-end` 百分比化与 `rotate <angle>` 换算 `deg`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 735**:
+  - `src/js/shim/cssom.js`: 补全 `container-name`（含 `\!escaped` 转义）、`container-type` 与 `container` 简写校验及 `serializeExpandedShorthand("container")` 规范序列化。
+  - `src/js/shim/window.js`: 补充 `container-name` 与 `container-type` 计算值全局关键字回退。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
