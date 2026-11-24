@@ -3372,3 +3372,5 @@
 - 在 `dom_binding.cp` 中将 `<link media>` 与 `matchMedia`/`@media` 统一接入 `cap:css` `MediaQueryList` + `MediaEnv` 原生求值（跳过不支持的 `device-pixel-ratio`/`resolution`/`aspect-ratio` 时平滑回退 JS），并暴露 `__capsurf_parse_color`；同时发现并修复 `/data/dev/cp/lib/css/color.cp` 中 `CssColor.toRgbString` 把 `u8` alpha 直接当整数打印（如 `rgba(0,0,0,128)`）的 Bug。
 ### Phase 766 — 二八分层 CSS 原生下沉 Batch 2：`SupportsTree` 与 `MediaQueryList` 接管 `cascade.cp`
 - 移除 `cascade.cp` 中手写的 `@supports` 递归条件解析，统一切换为 `cap:css` `SupportsTree.parse` + `.eval`；同时将 `CssRuleKind.Media` 接入 `cap:css` `MediaQueryList.parse` + `MediaEnv.evaluate`，并在 `/data/dev/cp/lib/css/media.cp` 补齐 `MediaType.unknown` 变体，使 `@media not unknown`（`at-media-001.html`）通过。
+### Phase 767 — `@media (unknown)` / `not (unknown)` 三值逻辑与 `media.cp` `and(` 修复
+- 收紧 `cascade.cp` 中 `MediaQueryList.parse` 失败回退条件，避免未知媒体特性误回退到旧逻辑返回 `true`，使 `at-media-001.html` 与 `at-media-002.html` 均通过；同时完善 `/data/dev/cp/lib/css/media.cp` 支持 `and(` 无空格语法。

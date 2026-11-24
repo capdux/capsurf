@@ -4190,3 +4190,6 @@
 - **Phase 766**:
   - `/data/dev/cp/lib/css/media.cp`: `MediaType` 新增 `unknown` 变体，使未知媒体类型按规范解析为不匹配（`not unknown` 为真）。
   - `src/css/cascade.cp`: `@supports` 条件求值切换至 `cap:css` `SupportsTree.parse`+`.eval`，`CssRuleKind.Media` 优先走 `cap:css` `MediaQueryList.parse`+`MediaEnv.evaluate`。
+- **Phase 767**:
+  - `/data/dev/cp/lib/css/media.cp`: `MediaQuery.parse` 支持 `and(` 无空格语法。
+  - `src/css/cascade.cp`: 收紧 `MediaQueryList.parse` 失败回退范围并处理空 `@media {}` 规则，修复 `@media (unknown)` 与 `@media not (unknown)` 三值逻辑。

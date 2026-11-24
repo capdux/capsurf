@@ -4695,7 +4695,9 @@ pub struct StyleSheet {
                 }
             } else if (r.kind == CssRuleKind.Media) {
                 let media_matched = false;
-                if (mql := MediaQueryList.parse(r.prelude) catch null) {
+                if (std.mem.trim(u8, r.prelude, " \t\r\n").len == 0) {
+                    media_matched = true;
+                } else if (mql := MediaQueryList.parse(r.prelude) catch null) {
                     const env = MediaEnv {
                         media_type: MediaType.screen,
                         width: @as(f64, viewport_w),
@@ -4703,7 +4705,9 @@ pub struct StyleSheet {
                         color_scheme: if (is_dark) .dark else .light,
                     };
                     media_matched = mql.evaluate(env);
-                } else {
+                } else if (std.mem.indexOf(u8, r.prelude, "aspect-ratio") != null ||
+                    std.mem.indexOf(u8, r.prelude, "device-pixel-ratio") != null ||
+                    std.mem.indexOf(u8, r.prelude, "resolution") != null) {
                     media_matched = r.media.matches(@as(f64, viewport_w), is_dark);
                 }
                 if (media_matched) {
