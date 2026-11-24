@@ -3616,3 +3616,5 @@
 - **Phase 574** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 归一化 `border-color` 四边颜色与 `background-position-x/y` 多图层 `calc`，补全 `border-*-color` 与 `box-shadow` 计算期求值；`background-position-{x,y}-valid` 转绿并收紧基线，`border-color-{invalid,computed,valid}` 3/3 全绿，`box-shadow-computed` 转绿。
 
 - **Phase 575** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/shim/element/element.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `overscroll-behavior-{block,inline,x,y}` 计算期默认值与 `box-shadow` 校验及指定值规范化；`/css/css-overscroll-behavior/` 2/2 全绿、`box-shadow-*` 3/3 全绿。
+
+- **Phase 576** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 补全 `border-color` 简写展开与 4 边折叠序列化，修复 `border-image` 顶层 `/` 切分与 `fill` 后置；`border-color-*` 4/4 全绿、`border-image-valid` 转绿，收紧 `animation-shorthand.html` 为 `PASS`（`css-animations/parsing` 35/35 全绿）。

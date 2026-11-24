@@ -2792,6 +2792,28 @@
       }
       return layers.join(", ");
     }
+    if (key === "border-image") {
+      const slashes = [];
+      let sc = "", sd = 0, sq = "";
+      for (let i = 0; i < s.length; i++) {
+        const ch = s[i];
+        if (sq) { sc += ch; if (ch === sq && s[i - 1] !== "\\") sq = ""; continue; }
+        if (ch === "\"" || ch === "'") { sq = ch; sc += ch; continue; }
+        if (ch === "(") sd++;
+        else if (ch === ")" && sd > 0) sd--;
+        if (sd === 0 && ch === "/") { slashes.push(sc.trim()); sc = ""; }
+        else sc += ch;
+      }
+      slashes.push(sc.trim());
+      const seg0 = splitCssTokens(slashes[0]);
+      const fillIdx = seg0.findIndex((t) => t.toLowerCase() === "fill");
+      if (fillIdx !== -1) {
+        seg0.splice(fillIdx, 1);
+        seg0.push("fill");
+        slashes[0] = seg0.join(" ");
+        return slashes.join(" / ").replace(/ \/  \/ /g, " / / ");
+      }
+    }
     if (key === "background-repeat") {
       const layers = s.toLowerCase().split(",");
       for (let i = 0; i < layers.length; i++) {
@@ -3529,6 +3551,20 @@
       }
       return null;
     }
+    if (key === "border-color") {
+      const p = splitCssTokens(normV);
+      if (p.length < 1 || p.length > 4) return null;
+      const t = p[0];
+      const r = p.length >= 2 ? p[1] : t;
+      const b = p.length >= 3 ? p[2] : t;
+      const l = p.length >= 4 ? p[3] : r;
+      return [
+        ["border-top-color", t],
+        ["border-right-color", r],
+        ["border-bottom-color", b],
+        ["border-left-color", l],
+      ];
+    }
     if (key === "text-decoration") {
       const parts = splitCssTokens(normV);
       const LINES = new Set(["underline", "overline", "line-through", "blink"]);
@@ -3876,6 +3912,7 @@
   if (typeof globalThis !== "undefined") globalThis.__capsurf_expandShorthand = expandCssShorthand;
 
   const SHORTHAND_EXPAND_LONGHANDS = {
+    "border-color": ["border-top-color", "border-right-color", "border-bottom-color", "border-left-color"],
     "text-decoration": ["text-decoration-line", "text-decoration-style", "text-decoration-thickness", "text-decoration-color"],
     "list-style": ["list-style-position", "list-style-image", "list-style-type"],
     "place-content": ["align-content", "justify-content"],
@@ -3939,6 +3976,15 @@
     }
     if (key === "text-decoration") {
       return normalizeCssSpecifiedValue("text-decoration", vals.join(" "));
+    }
+    if (key === "border-color") {
+      if (vals[1] === vals[3]) {
+        if (vals[0] === vals[2]) {
+          return vals[0] === vals[1] ? vals[0] : (vals[0] + " " + vals[1]);
+        }
+        return vals[0] + " " + vals[1] + " " + vals[2];
+      }
+      return vals.join(" ");
     }
     if (key === "list-style") {
       if (vals[0] === "outside" && vals[1] === "none" && vals[2] === "outside") return "outside outside";

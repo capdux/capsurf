@@ -7682,3 +7682,11 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
      - `cssom.js`：实现 `box-shadow` 连续 `2~4` 长度（非负模糊、禁 `%`）+ 可选 `inset`/颜色校验，及 `<color> <lens> [inset]` 指定值规范化；`element.js` 内联 `border-color` 接入简写展开。
   2. **全绿验证**：`/css/css-overscroll-behavior/` **2/2 PASS**、`box-shadow-*` **3/3 PASS**、`--smoke` **3/3 suites PASS**。
   3. **并行摸底汇总**：`/css/css-will-change/` **3/3 PASS**、`/css/css-rhythm/parsing/` **5/5 PASS**、`/css/css-variables/`（60/194 PASS）、`/css/css-syntax/`（7/24 PASS）、`/css/css-shadow/`（1/2 PASS）。
+
+### 2026-11-24 Phase 576 (`border-color` 4/4 & `border-image-valid` 全绿 & `animation-shorthand` 收紧)
+- **[Agent]**: 自主推导并完成 Phase 576（`src/js/shim/cssom.js`, `test/wpt/wpt-expectations.json`）：
+  1. **`border-color` & `border-image` (`src/js/shim/cssom.js`)**：
+     - 将 `border-color` 纳入 `SHORTHAND_EXPAND_LONGHANDS`，实现 `expandCssShorthand` 1~4 值四边展开与 `serializeExpandedShorthand` 四边对称折叠序列化。
+     - `border-image` 指定值按顶层 `/` 切分（避开 `url(...)` 内斜杠）并将 `fill` 移至切片数字之后，保留 `/ /` 空斜杠段。
+  2. **全绿验证与基线收紧**：`border-color-*` **4/4 PASS**、`border-image-valid.html` **PASS**、`--smoke` **3/3 suites PASS**；收紧 `animation-shorthand.html` 基线为 `PASS`。
+  3. **并行摸底汇总**：`/css/css-animations/parsing/` **35/35 PASS**、`/css/css-transitions/parsing/` **14/14 PASS**、`/css/selectors/parsing/` **16/16 PASS**、`/css/css-shapes/` **23/70 PASS**、`/css/css-masking/` **15/94 PASS**。

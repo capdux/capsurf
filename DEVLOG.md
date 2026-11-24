@@ -2800,3 +2800,7 @@
 ### Phase 575: `/css/css-overscroll-behavior/` 2/2 与 `box-shadow` 3/3 全绿
 - **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：`overscroll-behavior-{block,inline,x,y}` 纳入 `STANDARD_COMPUTED_LONGHANDS` 默认 `"auto"`；`box-shadow` 严格校验连续长度与非负模糊并规范指定值序。
 - **WPT & Smoke 验收**：`/css/css-overscroll-behavior/` 2/2 PASS、`box-shadow-*` 3/3 PASS、`--smoke` 3/3 suites PASS。
+
+### Phase 576: `border-color` 4/4 与 `border-image-valid` 全绿
+- **核心修复 (`src/js/shim/cssom.js`)**：`border-color` 接入 `SHORTHAND_EXPAND_LONGHANDS` 与 4 边展开/折叠序列化；`border-image` 顶层 `/` 切分避开 `url()` 并规范化 `fill` 位置。
+- **WPT & Smoke 验收**：`border-color-*` 4/4 PASS、`border-image-valid` PASS、收紧 `animation-shorthand.html` 实现 `css-animations/parsing` 35/35 PASS、`--smoke` 3/3 suites PASS。

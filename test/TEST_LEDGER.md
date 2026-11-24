@@ -1824,3 +1824,15 @@
   - `/css/css-syntax/` (`b434`): `24` files (`7 PASS / 17 FAIL`)
   - `/css/css-shadow/` (`b435`): `2` files (`1 PASS / 1 FAIL`)
   - `/css/css-rhythm/parsing/` (`b438`): **5/5 PASS (100% ALL GREEN)**
+
+### Phase 576 `border-color` 4/4 & `border-image-valid` 全绿 & `animation-shorthand` 收紧 & WPT-B439~B444 摸底 (bin_dev Phase 576, 2026-11-24)
+- **Filter `/css/css-backgrounds/parsing/border-color`**: **4/4 PASS (100% ALL GREEN)**（`border-color-{invalid,computed,shorthand,valid}.html` 全绿；`cssom.js` 将 `border-color` 纳入 `SHORTHAND_EXPAND_LONGHANDS` 并实现 `expandCssShorthand` 4 边展开与 `serializeExpandedShorthand` 4 边折叠）。
+- **Filter `/css/css-backgrounds/parsing/border-image-valid`**: **PASS**（顶层 `/` 切分避开 `url(http://...)` 并后置 `fill` 关键字）。
+- **Expectations Tightened**: `/css/css-animations/parsing/animation-shorthand.html` 收紧为 `PASS`（`css-animations/parsing` **35/35 PASS**）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-animations/parsing/` (`b439`): **35/35 PASS (100% ALL GREEN)**
+  - `/css/css-transitions/parsing/` (`b440`): **14/14 PASS (100% ALL GREEN)**
+  - `/css/css-masking/` (`b441`, partial 94 recorded): `15 PASS / 75 FAIL / 4 TIMEOUT`
+  - `/css/css-shapes/` (`b442`): `23 PASS / 46 FAIL / 1 TIMEOUT`
+  - `/css/selectors/parsing/` (`b444`): **16/16 PASS (100% ALL GREEN)**

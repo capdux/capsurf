@@ -39002,8 +39002,8 @@
     "reason": "80/81 parser subtests pass; innerHTML in a select context incorrectly retains an input element."
   },
   "/css/css-animations/parsing/animation-shorthand.html": {
-    "expected": "FAIL",
-    "reason": "34/36 shorthand subtests pass; Stylo serializes an omitted list-item animation duration as 0s instead of auto."
+    "expected": "PASS",
+    "reason": null
   },
   "/html/browsers/windows/browsing-context.html": {
     "expected": "PASS",
