@@ -3722,3 +3722,5 @@
 - **Phase 626** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `expandCssShorthand("flex")` 前置有效性校验并补全 `transform-origin-z` 校验；`flexbox_computedstyle_flex-shorthand-invalid` 与 `calc-mix-invalid.tentative` 全绿。
 
 - **Phase 627** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `position: absolute|fixed` `width: auto` shrink-to-fit 与 `block` `height: auto` 解析；`/css/css-sizing/inheritance-002` 全绿。
+
+- **Phase 628** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 升级 `canonicalizeCalcToken` 为递归线性组合化简器并接入 `background-position*`；`calc-background-position-003` 全绿。

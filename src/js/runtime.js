@@ -6475,33 +6475,118 @@
     function canonicalizeCalcToken(t) {
       const m = /^calc\(\s*(.+)\s*\)$/i.exec(t);
       if (!m) return t;
-      const inner = m[1].trim();
-      if (!inner || inner.includes("(") || inner.includes("*") || inner.includes("/")) return t;
-      const parts = inner.split(/\s+([+-])\s+/);
-      if (parts.length < 3 || parts.length % 2 === 0) return t;
-      const terms = [];
-      for (let i = 0; i < parts.length; i += 2) {
-        const sign = i === 0 ? 1 : (parts[i - 1] === "-" ? -1 : 1);
-        let rawTerm = parts[i].trim();
-        let termSign = sign;
-        if (rawTerm.startsWith("-")) { termSign *= -1; rawTerm = rawTerm.slice(1).trim(); }
-        else if (rawTerm.startsWith("+")) { rawTerm = rawTerm.slice(1).trim(); }
-        const tm = /^(\d+(?:\.\d+)?|\.\d+)([a-z%]*)$/i.exec(rawTerm);
-        if (!tm) return t;
-        terms.push({ val: tm[1], unit: tm[2].toLowerCase(), sign: termSign });
+      const ABS_PX = { px: 1, in: 96, cm: 96 / 2.54, mm: 96 / 25.4, q: 96 / 101.6, pt: 96 / 72, pc: 16 };
+      const src = m[1].trim();
+      if (!src) return t;
+      let pos = 0;
+      const skipWs = () => { while (pos < src.length && /\s/.test(src[pos])) pos++; };
+      const addMaps = (a, b, sgn) => {
+        const res = new Map(a);
+        for (const [u, v] of b.entries()) res.set(u, (res.get(u) || 0) + sgn * v);
+        return res;
+      };
+      const mulMaps = (a, b) => {
+        if (a.size === 1 && a.has("")) {
+          const k = a.get("");
+          const res = new Map();
+          for (const [u, v] of b.entries()) res.set(u, k * v);
+          return res;
+        }
+        if (b.size === 1 && b.has("")) {
+          const k = b.get("");
+          const res = new Map();
+          for (const [u, v] of a.entries()) res.set(u, v * k);
+          return res;
+        }
+        return null;
+      };
+      const parseExpr = () => {
+        let left = parseTerm();
+        if (!left) return null;
+        while (true) {
+          skipWs();
+          const op = src[pos];
+          if (op !== "+" && op !== "-") break;
+          pos++;
+          const right = parseTerm();
+          if (!right) return null;
+          left = addMaps(left, right, op === "-" ? -1 : 1);
+        }
+        return left;
+      };
+      const parseTerm = () => {
+        let left = parseFactor();
+        if (!left) return null;
+        while (true) {
+          skipWs();
+          const op = src[pos];
+          if (op !== "*" && op !== "/") break;
+          pos++;
+          const right = parseFactor();
+          if (!right) return null;
+          if (op === "*") {
+            left = mulMaps(left, right);
+            if (!left) return null;
+          } else {
+            if (right.size !== 1 || !right.has("")) return null;
+            const d = right.get("");
+            if (d === 0 || !isFinite(d)) return null;
+            const res = new Map();
+            for (const [u, v] of left.entries()) res.set(u, v / d);
+            left = res;
+          }
+        }
+        return left;
+      };
+      const parseFactor = () => {
+        skipWs();
+        if (src.slice(pos, pos + 5).toLowerCase() === "calc(") {
+          pos += 4;
+        }
+        if (src[pos] === "(") {
+          pos++;
+          const inner = parseExpr();
+          skipWs();
+          if (src[pos] !== ")") return null;
+          pos++;
+          return inner;
+        }
+        const nm = /^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)([a-z%]*)/i.exec(src.slice(pos));
+        if (!nm) return null;
+        pos += nm[0].length;
+        const val = Number(nm[1]);
+        if (!isFinite(val)) return null;
+        let unit = (nm[2] || "").toLowerCase();
+        let scaled = val;
+        if (Object.prototype.hasOwnProperty.call(ABS_PX, unit)) {
+          scaled = val * ABS_PX[unit];
+          unit = "px";
+        }
+        const res = new Map();
+        res.set(unit, scaled);
+        return res;
+      };
+      const combined = parseExpr();
+      skipWs();
+      if (!combined || pos !== src.length) return t;
+      const entries = [];
+      for (const [u, v] of combined.entries()) {
+        const r = Number(v.toFixed(6));
+        if (r !== 0 || combined.size === 1) entries.push({ unit: u, val: r });
       }
-      terms.sort((a, b) => {
+      if (entries.length === 0) entries.push({ unit: combined.has("px") ? "px" : "", val: 0 });
+      entries.sort((a, b) => {
         const ra = a.unit === "" ? 0 : (a.unit === "%" ? 1 : 2);
         const rb = b.unit === "" ? 0 : (b.unit === "%" ? 1 : 2);
         if (ra !== rb) return ra - rb;
         return a.unit < b.unit ? -1 : (a.unit > b.unit ? 1 : 0);
       });
       let out = "";
-      for (let i = 0; i < terms.length; i++) {
-        const tm = terms[i];
-        const mag = tm.val + tm.unit;
-        if (i === 0) out += (tm.sign < 0 ? "-" : "") + mag;
-        else out += (tm.sign < 0 ? " - " : " + ") + mag;
+      for (let i = 0; i < entries.length; i++) {
+        const e = entries[i];
+        const absMag = String(Math.abs(e.val)) + e.unit;
+        if (i === 0) out += (e.val < 0 ? "-" : "") + absMag;
+        else out += (e.val < 0 ? " - " : " + ") + absMag;
       }
       return "calc(" + out + ")";
     }
@@ -6518,6 +6603,9 @@
       if (ZERO_PX_PROPS.has(key)) {
         if (s === "0" || s === "+0" || s === "-0") return "0px";
         if (/^calc\(/i.test(s)) return canonicalizeCalcToken(s);
+      }
+      if (key === "background-position" || key === "background-position-x" || key === "background-position-y") {
+        return splitCssTokens(s).map((tok) => (/^calc\(/i.test(tok) ? canonicalizeCalcToken(tok) : tok)).join(" ");
       }
       if (key === "margin-trim") {
         const p = splitCssTokens(s.toLowerCase());

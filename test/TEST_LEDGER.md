@@ -2189,3 +2189,7 @@
 ### Phase 627: `position: absolute` `width: auto` shrink-to-fit 与 `block` `height: auto` 解析全绿
 - **Filter `/css/css-sizing/inheritance-002`**: **FAIL->PASS (4/4)**（`window.js` `computeElementUsedWidthPx` 支持 `position: absolute|fixed` 且 `width: auto` 时的 shrink-to-fit 宽度计算，`applyUsedValuesToComputedMap` 补齐 `block` 元素 `height: auto` 使用值解析）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 628: `canonicalizeCalcToken` 递归线性组合化简 + `calc-background-position-003` 全绿
+- **Filter `/css/css-values/calc-background-position-003`**: **FAIL->PASS (6/6)**（`cssom.js` 将 `canonicalizeCalcToken` 升级为递归线性组合化简器，支持嵌套 `calc()`、同量纲合并及绝对物理长度转 `px`，并接入 `background-position*`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
