@@ -42153,7 +42153,20 @@
 
     function matchesSelector(element, selectorStr, normalizedPseudo) {
       if (!element || !selectorStr) return false;
-      const selectors = selectorStr.split(",");
+      const selectors = [];
+      {
+        let cur = "", sd = 0, sq = "";
+        for (let si = 0; si < selectorStr.length; si++) {
+          const ch = selectorStr[si];
+          if (sq) { cur += ch; if (ch === "\\" && si + 1 < selectorStr.length) cur += selectorStr[++si]; else if (ch === sq) sq = ""; continue; }
+          if (ch === '"' || ch === "'") { sq = ch; cur += ch; }
+          else if (ch === "(" || ch === "[") { sd++; cur += ch; }
+          else if ((ch === ")" || ch === "]") && sd > 0) { sd--; cur += ch; }
+          else if (ch === "," && sd === 0) { selectors.push(cur); cur = ""; }
+          else cur += ch;
+        }
+        if (cur) selectors.push(cur);
+      }
       for (let i = 0; i < selectors.length; i++) {
         const raw = selectors[i].trim();
         if (!raw) continue;
@@ -42181,42 +42194,175 @@
       return false;
     }
 
+    function calcSingleSelectorSpecificity(sel) {
+      const s = String(sel || "").trim();
+      if (!s) return 0;
+      let a = 0, b = 0, c = 0;
+      let i = 0;
+      const len = s.length;
+      while (i < len) {
+        const ch = s[i];
+        if (/\s|>|\+|~|\*/.test(ch)) { i++; continue; }
+        if (ch === "#") {
+          i++;
+          while (i < len && /[a-zA-Z0-9_-]|\\./.test(s[i])) { if (s[i] === "\\") i++; i++; }
+          a++;
+          continue;
+        }
+        if (ch === ".") {
+          i++;
+          while (i < len && /[a-zA-Z0-9_-]|\\./.test(s[i])) { if (s[i] === "\\") i++; i++; }
+          b++;
+          continue;
+        }
+        if (ch === "[") {
+          let d = 1; i++;
+          while (i < len && d > 0) {
+            if (s[i] === '"' || s[i] === "'") {
+              const q = s[i++];
+              while (i < len && s[i] !== q) { if (s[i] === "\\") i++; i++; }
+            } else if (s[i] === "[") d++;
+            else if (s[i] === "]") d--;
+            i++;
+          }
+          b++;
+          continue;
+        }
+        if (ch === ":") {
+          if (s[i + 1] === ":") {
+            i += 2;
+            while (i < len && /[a-zA-Z0-9_-]/.test(s[i])) i++;
+            if (s[i] === "(") {
+              let d = 1; i++;
+              while (i < len && d > 0) { if (s[i] === "(") d++; else if (s[i] === ")") d--; i++; }
+            }
+            c++;
+            continue;
+          }
+          i++;
+          const ns = i;
+          while (i < len && /[a-zA-Z0-9_-]/.test(s[i])) i++;
+          const pName = s.slice(ns, i).toLowerCase();
+          if (s[i] === "(") {
+            let d = 1; i++;
+            const argStart = i;
+            while (i < len && d > 0) {
+              if (s[i] === "(") d++;
+              else if (s[i] === ")") d--;
+              i++;
+            }
+            const inner = s.slice(argStart, i - 1);
+            if (pName === "where") {
+              continue;
+            }
+            if (pName === "is" || pName === "not" || pName === "has") {
+              const args = [];
+              let cur = "", ad = 0, aq = "";
+              for (let k = 0; k < inner.length; k++) {
+                const c2 = inner[k];
+                if (aq) { cur += c2; if (c2 === "\\" && k + 1 < inner.length) cur += inner[++k]; else if (c2 === aq) aq = ""; continue; }
+                if (c2 === '"' || c2 === "'") { aq = c2; cur += c2; }
+                else if (c2 === "(" || c2 === "[") { ad++; cur += c2; }
+                else if ((c2 === ")" || c2 === "]") && ad > 0) { ad--; cur += c2; }
+                else if (c2 === "," && ad === 0) { args.push(cur); cur = ""; }
+                else cur += c2;
+              }
+              if (cur.trim()) args.push(cur);
+              let maxSub = 0;
+              for (let k = 0; k < args.length; k++) {
+                const sub = calcSingleSelectorSpecificity(args[k].replace(/^\s*[>+~]\s*/, ""));
+                if (sub > maxSub) maxSub = sub;
+              }
+              a += (maxSub >> 16) & 0xff;
+              b += (maxSub >> 8) & 0xff;
+              c += maxSub & 0xff;
+              continue;
+            }
+            b++;
+            continue;
+          }
+          b++;
+          continue;
+        }
+        if (/[a-zA-Z_-]|\\/.test(ch)) {
+          while (i < len && /[a-zA-Z0-9_|-]|\\./.test(s[i])) { if (s[i] === "\\") i++; i++; }
+          c++;
+          continue;
+        }
+        i++;
+      }
+      return ((a & 0xff) << 16) | ((b & 0xff) << 8) | (c & 0xff);
+    }
+
+    function calcMatchedSelectorSpecificity(element, selStr, normalizedPseudo) {
+      if (!selStr.includes(",")) return calcSingleSelectorSpecificity(selStr);
+      const parts = [];
+      let cur = "", d = 0, q = "";
+      for (let i = 0; i < selStr.length; i++) {
+        const ch = selStr[i];
+        if (q) { cur += ch; if (ch === "\\" && i + 1 < selStr.length) cur += selStr[++i]; else if (ch === q) q = ""; continue; }
+        if (ch === '"' || ch === "'") { q = ch; cur += ch; }
+        else if (ch === "(" || ch === "[") { d++; cur += ch; }
+        else if ((ch === ")" || ch === "]") && d > 0) { d--; cur += ch; }
+        else if (ch === "," && d === 0) { if (cur.trim()) parts.push(cur.trim()); cur = ""; }
+        else cur += ch;
+      }
+      if (cur.trim()) parts.push(cur.trim());
+      let maxSpec = 0;
+      for (let i = 0; i < parts.length; i++) {
+        if (matchesSelector(element, parts[i], normalizedPseudo)) {
+          const sp = calcSingleSelectorSpecificity(parts[i]);
+          if (sp > maxSpec) maxSpec = sp;
+        }
+      }
+      return maxSpec;
+    }
+
     function parseCssRulesInto(element, cssText, computedMap, normalizedPseudo) {
       const cleanCss = String(cssText || "").replace(/\/\*[\s\S]*?\*\//g, "");
       const parseFn = global.splitStylesheetRules || (typeof globalThis !== "undefined" && globalThis.splitStylesheetRules);
-      if (typeof parseFn === "function") {
-        const rules = parseFn(cleanCss);
-        for (let i = 0; i < rules.length; i++) {
-          const r = rules[i];
-          if (!r) continue;
-          const sel = String(r.selectorText || "").trim();
-          if (sel.startsWith("@media")) {
-            const query = sel.replace(/^@media\s*/i, "");
-            if (evaluateMediaQuery(query)) {
-              parseCssRulesInto(element, r.declText || "", computedMap, normalizedPseudo);
-            }
-          } else if (sel.startsWith("@supports")) {
-            parseCssRulesInto(element, r.declText || "", computedMap, normalizedPseudo);
-          } else if (sel.startsWith("@")) {
-            continue;
-          } else if (sel) {
-            if (matchesSelector(element, sel, normalizedPseudo)) {
-              parseDeclarationsBlockInto(element, r.declText || "", computedMap);
+      const matched = [];
+      let seq = 0;
+      const collectFromText = (text) => {
+        if (typeof parseFn === "function") {
+          const rules = parseFn(text);
+          for (let i = 0; i < rules.length; i++) {
+            const r = rules[i];
+            if (!r) continue;
+            const sel = String(r.selectorText || "").trim();
+            if (sel.startsWith("@media")) {
+              const query = sel.replace(/^@media\s*/i, "");
+              if (evaluateMediaQuery(query)) {
+                collectFromText(r.declText || "");
+              }
+            } else if (sel.startsWith("@supports")) {
+              collectFromText(r.declText || "");
+            } else if (sel.startsWith("@")) {
+              continue;
+            } else if (sel) {
+              if (matchesSelector(element, sel, normalizedPseudo)) {
+                matched.push({ decl: r.declText || "", spec: calcMatchedSelectorSpecificity(element, sel, normalizedPseudo), order: seq++ });
+              }
             }
           }
+          return;
         }
-        return;
+        const ruleRegex = /([^{}]+)\{([^{}]+)\}/g;
+        let match;
+        while ((match = ruleRegex.exec(text)) !== null) {
+          const selectorStr = match[1].trim();
+          const declBlock = match[2];
+          if (matchesSelector(element, selectorStr, normalizedPseudo)) {
+            matched.push({ decl: declBlock, spec: calcMatchedSelectorSpecificity(element, selectorStr, normalizedPseudo), order: seq++ });
+          }
+        }
+      };
+      collectFromText(cleanCss);
+      if (matched.length > 1) {
+        matched.sort((x, y) => (x.spec !== y.spec ? x.spec - y.spec : x.order - y.order));
       }
-
-      const clean = cssText.replace(/\/\*[\s\S]*?\*\//g, "");
-      const ruleRegex = /([^{}]+)\{([^{}]+)\}/g;
-      let match;
-      while ((match = ruleRegex.exec(clean)) !== null) {
-        const selectorStr = match[1].trim();
-        const declBlock = match[2];
-        if (matchesSelector(element, selectorStr, normalizedPseudo)) {
-          parseDeclarationsBlockInto(element, declBlock, computedMap);
-        }
+      for (let i = 0; i < matched.length; i++) {
+        parseDeclarationsBlockInto(element, matched[i].decl, computedMap);
       }
     }
 

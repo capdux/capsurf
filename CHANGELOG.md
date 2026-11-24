@@ -3772,3 +3772,5 @@
 - **Phase 651** (`src/js/shim/window.js`, `src/js/shim/cssom.js`, `src/js/shim/element/element.js`, `src/js/shim/index.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 计算值 `color` 接入命名色规范化（补全 `yellowgreen`）并拦截非法 `:dir(...)` 选择器参数；`attribute-or-elemental-selectors-in-has` (31/31) 与 `dir-selector-querySelector` (4/4) 全绿。
 
 - **Phase 652** (`src/css/matcher.cp`, `test/TEST_LEDGER.md`): `PseudoKind` 新增 `Link` 与 `Visited` 枚举值并实现匹配逻辑，修复 `:not(:link div)` 与 `:not(:visited div)` 回落为 `:root` 的缺陷；`not-complex.html` (20/20) 全绿。
+
+- **Phase 653** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 实现 `parseCssRulesInto` 选择器优先级计算与排序，及 `matchesSelector` 括号深度感知逗号拆分；`has-specificity.html` (8/8) 全绿。

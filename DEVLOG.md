@@ -3111,3 +3111,7 @@
 ### Phase 652: `not-complex` (20/20) 全绿
 - **核心修复 (`src/css/matcher.cp`)**：`PseudoKind` 新增 `Link`（`a`/`area`/`link` 且含 `href`）与 `Visited`（`false`），避免未知伪类默认为枚举首项 `Root` 引发 `:not(:link div)` 误匹配。
 - **WPT & Smoke 验收**：`cpc brief` 4 门禁全绿，`not-complex.html` (20/20) 与 `--smoke` 3/3 suites PASS。
+
+### Phase 653: `has-specificity` (8/8) 全绿
+- **核心修复 (`src/js/shim/window.js`)**：`calcSingleSelectorSpecificity` 支持 `#id`/`.class`/`[attr]`/`:is`/`:not`/`:has`/`:where` 权重计算并在 `parseCssRulesInto` 按 `(spec, order)` 排序；`matchesSelector` 改用括号/引号深度感知拆分。
+- **WPT & Smoke 验收**：`has-specificity.html` (8/8) 与 `--smoke` 3/3 suites PASS。

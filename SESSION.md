@@ -8055,3 +8055,7 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Agent]**: 完成 Phase 652（`src/css/matcher.cp`）：
   1. **`src/css/matcher.cp`**：`PseudoKind` 枚举新增 `Link` 与 `Visited`，消除 `:link`/`:visited` 默认回落为 `PseudoKind.Root` 导致的 `:not(:link div)` 误匹配；通过 `cpc fix` + `cpc brief` 4 门禁。
   2. **全绿验证**：`not-complex.html`（20/20）与 `--smoke`（3/3 suites, 6/6 tests）全绿。
+- **[Agent]**: 完成 Phase 653（`src/js/shim/window.js`）：
+  1. **`window.js`**：新增 `calcSingleSelectorSpecificity`/`calcMatchedSelectorSpecificity` 与 `parseCssRulesInto` 优先级排序；将 `matchesSelector` 逗号拆分升级为括号深度感知解析，支持 `:has(.bar, #foo)` 等逗号列表。
+  2. **全绿验证**：`has-specificity.html`（8/8）与 `--smoke`（3/3 suites, 6/6 tests）全绿。
+  3. **子智能体并发汇报**：`588db2f6` 完成 `/css/css-transitions/`（19/20 PASS）、`0612b4f1` 完成 `/css/css-transforms/`（29/31 PASS）；已接力派发 `7ea13cb8`（`19720`, `/css/css-sizing/`）。
