@@ -2094,3 +2094,9 @@
 - **子智能体只读摸底记录**：
   - `/css/css-overflow/parsing/` (`b512`, 32 files): `22 PASS / 10 FAIL / 0 TIMEOUT` (32/32 matched)
   - `/css/css-ui/parsing/` (`b513`, 39 files): `35 PASS / 3 FAIL / 1 TIMEOUT` (39/39 matched)
+
+### Phase 609: `scroll-axis-lock-invalid` & `scroll-target-group-{invalid,computed}` 三连全绿收紧
+- **Filter `/css/css-overflow/parsing/scroll-axis-lock-invalid`**: **FAIL->PASS (7/7)**（`cssom.js` `STANDARD_CSS_PROPERTIES` & `ENUM_PROPS` 补全 `scroll-axis-lock: auto | none`；已收紧 `wpt-expectations.json` 基线为 `PASS`）。
+- **Filter `/css/css-overflow/parsing/scroll-target-group-invalid`**: **FAIL->PASS (5/5)**（`cssom.js` `STANDARD_CSS_PROPERTIES` & `ENUM_PROPS` 补全 `scroll-target-group: none | auto`；已收紧基线为 `PASS`）。
+- **Filter `/css/css-overflow/parsing/scroll-target-group-computed`**: **FAIL->PASS (8/8)**（`window.js` `STANDARD_COMPUTED_LONGHANDS` & `textDecorDefs` 补全 `scroll-target-group: "none"`；已收紧基线为 `PASS`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

@@ -4862,12 +4862,12 @@
     "reason": "Records the outcome this produces: valid scroll-markers pass"
   },
   "/css/css-overflow/parsing/scroll-target-group-computed.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-overflow/parsing/scroll-target-group-invalid.html": {
-    "expected": "FAIL",
-    "reason": "Records the outcome this produces: CSS Overflow Level 5 / tentative scroll features and complex webkit-box sub-cases"
+    "expected": "PASS",
+    "reason": null
   },
   "/css/css-overflow/parsing/scroll-target-group-valid.html": {
     "expected": "PASS",
@@ -39026,8 +39026,8 @@
     "reason": "Test uses interpolation-testcommon.js which creates large keyframe animations and timeouts scraping testharness within 5000ms"
   },
   "/css/css-overflow/parsing/scroll-axis-lock-invalid.html": {
-    "expected": "FAIL",
-    "reason": "Records the outcome this produces: CSS Overflow Level 5 / tentative scroll features and complex webkit-box sub-cases"
+    "expected": "PASS",
+    "reason": null
   },
   "/css/css-scroll-anchoring/parsing/overflow-anchor-invalid.html": {
     "expected": "PASS",

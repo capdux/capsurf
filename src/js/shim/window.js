@@ -8368,7 +8368,7 @@ function installWindow(global) {
       const cv = (computedMap.get(ck) || "").trim();
       if (ck === "background-color" && (!cv || cv.toLowerCase() === "transparent")) {
         computedMap.set(ck, "rgba(0, 0, 0, 0)");
-      } else if (ck === "outline-color" && cv.toLowerCase() === "auto") {
+      } else if (ck === "outline-color" && (!cv || cv.toLowerCase() === "auto")) {
         const os = (computedMap.get("outline-style") || "none").trim().toLowerCase();
         computedMap.set(ck, os === "auto" ? "auto" : elColor);
       } else if (!cv || cv.toLowerCase() === "currentcolor") {
@@ -8659,7 +8659,8 @@ function installWindow(global) {
       ["mask-type", "luminance"],
       ["mask-composite", "add"],
       ["mask-repeat", "repeat"],
-      ["mask-size", "auto"]
+      ["mask-size", "auto"],
+      ["scroll-target-group", "none"]
     ];
     const acRaw = (computedMap.get("accent-color") || "").trim();
     if (acRaw) {
@@ -8929,7 +8930,7 @@ function installWindow(global) {
     "padding-block-end", "padding-block-start", "padding-bottom", "padding-inline-end", "padding-inline-start",
     "padding-left", "padding-right", "padding-top", "perspective", "perspective-origin", "pointer-events",
     "position", "position-try-order", "position-visibility", "quotes", "resize", "right", "rotate", "row-gap",
-    "ruby-align", "ruby-merge", "ruby-overhang", "ruby-position", "scale", "scroll-behavior", "scrollbar-gutter",
+    "ruby-align", "ruby-merge", "ruby-overhang", "ruby-position", "scale", "scroll-behavior", "scroll-target-group", "scrollbar-gutter",
     "-webkit-transform", "-moz-transform",
     "scroll-margin-block-end", "scroll-margin-block-start", "scroll-margin-bottom",
     "scroll-margin-inline-end", "scroll-margin-inline-start", "scroll-margin-left",

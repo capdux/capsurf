@@ -3682,3 +3682,5 @@
 - **Phase 607** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 扩充 `NAMED_COLORS_MAP` 补全 `grey`/`gray`/`orangered` 等标准 CSS 命名颜色 RGB 映射；4 项 `/css/selectors/invalidation/` 全绿。
 
 - **Phase 608** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 规范化 `grid-auto-flow`、`grid-template-areas`（含 cell 校验）与 `grid-template-{columns,rows}` 空线名 `[]`；9 项 `css-grid/parsing/*` 全绿。
+
+- **Phase 609** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 补全 `scroll-axis-lock` 与 `scroll-target-group` 枚举校验与 computed 支持；3 项 `css-overflow/parsing/*` 全绿并收紧基线为 `PASS`。

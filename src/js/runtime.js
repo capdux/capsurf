@@ -3875,7 +3875,7 @@
       "scroll-padding-block", "scroll-padding-block-end", "scroll-padding-block-start",
       "scroll-padding-bottom", "scroll-padding-inline", "scroll-padding-inline-end",
       "scroll-padding-inline-start", "scroll-padding-left", "scroll-padding-right",
-      "scroll-initial-target", "scroll-padding-top", "scroll-snap-align", "scroll-snap-stop", "scroll-snap-type",
+      "scroll-initial-target", "scroll-axis-lock", "scroll-target-group", "scroll-padding-top", "scroll-snap-align", "scroll-snap-stop", "scroll-snap-type",
       "scrollbar-color", "scrollbar-gutter", "scrollbar-width", "shape-image-threshold",
       "shape-margin", "shape-outside", "size", "src", "tab-size", "table-layout",
       "text-align", "text-align-last", "text-autospace", "text-combine-upright", "text-decoration",
@@ -4235,6 +4235,8 @@
         "white-space-collapse": ["collapse", "preserve", "preserve-breaks", "preserve-spaces", "break-spaces"],
         "clip-rule": ["nonzero", "evenodd"],
         "mask-type": ["luminance", "alpha"],
+        "scroll-axis-lock": ["auto", "none"],
+        "scroll-target-group": ["none", "auto"],
         "font-kerning": ["auto", "normal", "none"],
         "font-optical-sizing": ["auto", "none"],
         "border-top-style": ["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset"],
@@ -43689,7 +43691,7 @@
         const cv = (computedMap.get(ck) || "").trim();
         if (ck === "background-color" && (!cv || cv.toLowerCase() === "transparent")) {
           computedMap.set(ck, "rgba(0, 0, 0, 0)");
-        } else if (ck === "outline-color" && cv.toLowerCase() === "auto") {
+        } else if (ck === "outline-color" && (!cv || cv.toLowerCase() === "auto")) {
           const os = (computedMap.get("outline-style") || "none").trim().toLowerCase();
           computedMap.set(ck, os === "auto" ? "auto" : elColor);
         } else if (!cv || cv.toLowerCase() === "currentcolor") {
@@ -43980,7 +43982,8 @@
         ["mask-type", "luminance"],
         ["mask-composite", "add"],
         ["mask-repeat", "repeat"],
-        ["mask-size", "auto"]
+        ["mask-size", "auto"],
+        ["scroll-target-group", "none"]
       ];
       const acRaw = (computedMap.get("accent-color") || "").trim();
       if (acRaw) {
@@ -44250,7 +44253,7 @@
       "padding-block-end", "padding-block-start", "padding-bottom", "padding-inline-end", "padding-inline-start",
       "padding-left", "padding-right", "padding-top", "perspective", "perspective-origin", "pointer-events",
       "position", "position-try-order", "position-visibility", "quotes", "resize", "right", "rotate", "row-gap",
-      "ruby-align", "ruby-merge", "ruby-overhang", "ruby-position", "scale", "scroll-behavior", "scrollbar-gutter",
+      "ruby-align", "ruby-merge", "ruby-overhang", "ruby-position", "scale", "scroll-behavior", "scroll-target-group", "scrollbar-gutter",
       "-webkit-transform", "-moz-transform",
       "scroll-margin-block-end", "scroll-margin-block-start", "scroll-margin-bottom",
       "scroll-margin-inline-end", "scroll-margin-inline-start", "scroll-margin-left",
