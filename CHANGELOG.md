@@ -3809,3 +3809,7 @@
   - `src/js/shim/cssom.js`: `normalizeCssSpecifiedValue("shape-outside"|"clip-path")` 提取前置 `<geometry-box>` 并后置、`clip-path` 省略默认 `border-box`、`inset`/`xywh`/`rect`/`polygon` 省略 `round 0px`、以及 `circle`/`ellipse` 内 `calc()` 规范化。
   - `test/wpt/wpt-expectations.json`: `/css/css-masking/parsing/clip-path-valid.html` 从 `FAIL` 收紧为 `PASS`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 668**:
+  - `src/js/shim/cssom.js`: `isValidCssPositionTokens` 补齐 3 值位置语法校验；`isValidCssValue("background-position")` 与 `normalizeCssSpecifiedValue("background-position")` 接入多图层校验及 `normalizePositionLayer`（含 3 值规范重排）。
+  - `src/js/shim/window.js`: `background-position` 计算样式支持 1/2/3/4 值边缘偏移解析（`right`/`bottom` 换算 `calc(100% - ...)` / `100% - %`）及 `getShorthandComputed("background-position")` 兜底。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

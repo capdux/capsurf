@@ -968,9 +968,16 @@
       };
       if (toks.length === 1) return HX.has(toks[0]) || VY.has(toks[0]) || isValidLenPct(toks[0], true);
       if (toks.length === 2) return is2Pos(toks[0], toks[1]);
+      const EX = new Set(["left", "right"]);
+      const EY = new Set(["top", "bottom"]);
+      if (toks.length === 3) {
+        if (HX.has(toks[0]) && EY.has(toks[1]) && isValidLenPct(toks[2], true)) return true;
+        if (EX.has(toks[0]) && isValidLenPct(toks[1], true) && VY.has(toks[2])) return true;
+        if (VY.has(toks[0]) && EX.has(toks[1]) && isValidLenPct(toks[2], true)) return true;
+        if (EY.has(toks[0]) && isValidLenPct(toks[1], true) && HX.has(toks[2])) return true;
+        return false;
+      }
       if (toks.length === 4) {
-        const EX = new Set(["left", "right"]);
-        const EY = new Set(["top", "bottom"]);
         if (EX.has(toks[0]) && isValidLenPct(toks[1], true) && EY.has(toks[2]) && isValidLenPct(toks[3], true)) return true;
         if (EY.has(toks[0]) && isValidLenPct(toks[1], true) && EX.has(toks[2]) && isValidLenPct(toks[3], true)) return true;
       }
@@ -1729,6 +1736,12 @@
         }
       }
       return true;
+    }
+    if (prop === "background-position") {
+      return splitTopLevelComma(vLower).every((layer) => {
+        const toks = splitCssTokens(layer.trim());
+        return toks.length >= 1 && isValidCssPositionTokens(toks);
+      });
     }
     if (prop === "background-position-x" || prop === "background-position-y") {
       const isX = prop === "background-position-x";
@@ -3203,7 +3216,10 @@
       if (s === "0" || s === "+0" || s === "-0") return "0px";
       if (/^calc\(/i.test(s)) return canonicalizeCalcToken(s);
     }
-    if (key === "background-position" || key === "background-position-x" || key === "background-position-y") {
+    if (key === "background-position") {
+      return splitTopLevelComma(s).map((layer) => normalizePositionLayer(layer.trim(), false)).join(", ");
+    }
+    if (key === "background-position-x" || key === "background-position-y") {
       return splitTopLevelComma(s).map((layer) => splitCssTokens(layer).map((tok) => (/^calc\(/i.test(tok) ? canonicalizeCalcToken(tok) : tok)).join(" ")).join(", ");
     }
     if (key === "font-family") {
@@ -3568,6 +3584,13 @@
         if (isY(a) || (a === "center" && isX(b))) {
           const tmp = parts[0]; parts[0] = parts[1]; parts[1] = tmp;
         }
+      }
+      if (!allowZ && parts.length === 3) {
+        const a = parts[0].toLowerCase(), b = parts[1].toLowerCase();
+        const isY = (x) => x === "top" || x === "bottom";
+        const isX = (x) => x === "left" || x === "right";
+        if (isY(a) && !isX(b)) return parts[2] + " " + parts[0] + " " + parts[1];
+        if ((isY(a) || a === "center") && isX(b)) return parts[1] + " " + parts[2] + " " + parts[0];
       }
       if (parts.length === 4) {
         const a = parts[0].toLowerCase();

@@ -3164,3 +3164,6 @@
 - `normalizeCssSpecifiedValue` 为 `shape-outside` 与 `clip-path` 统一补齐 `circle`/`ellipse` 省略 `closest-side`、`inset`/`xywh`/`rect` 零值补 `px`、以及 `polygon` 省略默认 `nonzero` 的规范化序列化。
 ### Phase 667 — `clip-path-valid` 54/54 全量收口
 - 在 `normalizeCssSpecifiedValue` 中为 `shape-outside`/`clip-path` 统一处理前置 `<geometry-box>` 重排（`clip-path` 存在形状时省略默认 `border-box`），并剥离 `inset`/`xywh`/`rect`/`polygon` 中等价于零的 `round 0px` 子句，使 `clip-path-valid.html` 54/54 全部通过并收紧预期基线。
+### Phase 668 — `background-position` 1~4 值解析、规范化与计算值收口
+- 为 `isValidCssPositionTokens` 补充 3 值位置语法（`<edge> <len> <center|edge>` 与 `<center|edge> <edge> <len>`），并在 `normalizePositionLayer` 中为 3 值非 Z 轴场景执行规范顺序重排。
+- 在 `window.js` 中补全 `background-position` 的 1/2/3/4 值计算值解析与 `getShorthandComputed("background-position")` 默认兜底，使 `background-position-{invalid,valid,computed}.html` 全数通过。

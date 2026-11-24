@@ -9477,20 +9477,58 @@ function installWindow(global) {
           if (tl === "right" || tl === "bottom" || tl === "x-end" || tl === "y-end") return "100%";
           return evalLinLenPctTok(t);
         };
-        if (toks.length === 1) return norm1(toks[0]);
-        if (toks.length === 2) {
-          if (bpKey === "background-position") {
-            return norm1(toks[0]) + " " + norm1(toks[1]);
-          }
-          const edge = toks[0].toLowerCase();
-          const off = evalLinLenPctTok(toks[1]);
-          if (edge === "x-start" || edge === "x-end" || edge === "y-start" || edge === "y-end") return edge + " " + off;
+        const resolveEdge = (edge, rawOff) => {
+          const off = evalLinLenPctTok(rawOff);
           if (edge === "right" || edge === "bottom") {
             if (off.endsWith("%")) return String(Number((100 - parseFloat(off)).toFixed(6))) + "%";
             const px = evalCssLengthExpr(off, 0, fontSize);
             if (px !== null) return px === 0 ? "100%" : (px > 0 ? ("calc(100% - " + formatCssPx(px) + ")") : ("calc(100% + " + formatCssPx(-px) + ")"));
           }
           return off;
+        };
+        if (bpKey === "background-position") {
+          if (toks.length === 1) {
+            const tl = toks[0].toLowerCase();
+            if (tl === "left") return "0% 50%";
+            if (tl === "right") return "100% 50%";
+            if (tl === "top") return "50% 0%";
+            if (tl === "bottom") return "50% 100%";
+            if (tl === "center") return "50% 50%";
+            return norm1(toks[0]) + " 50%";
+          }
+          if (toks.length === 2) {
+            const t0 = toks[0].toLowerCase(), t1 = toks[1].toLowerCase();
+            if ((t0 === "top" || t0 === "bottom") && (t1 === "left" || t1 === "right" || t1 === "center")) {
+              return norm1(toks[1]) + " " + norm1(toks[0]);
+            }
+            return norm1(toks[0]) + " " + norm1(toks[1]);
+          }
+          if (toks.length === 3) {
+            const t0 = toks[0].toLowerCase(), t1 = toks[1].toLowerCase(), t2 = toks[2].toLowerCase();
+            if (t0 === "left" || t0 === "right") {
+              if (t1 === "top" || t1 === "bottom") return norm1(t0) + " " + resolveEdge(t1, t2);
+              return resolveEdge(t0, t1) + " " + norm1(t2);
+            }
+            if (t0 === "top" || t0 === "bottom") {
+              if (t1 === "left" || t1 === "right") return resolveEdge(t1, t2) + " " + norm1(t0);
+              return norm1(t2) + " " + resolveEdge(t0, t1);
+            }
+            if (t1 === "top" || t1 === "bottom") return norm1(t0) + " " + resolveEdge(t1, t2);
+            return resolveEdge(t1, t2) + " " + norm1(t0);
+          }
+          if (toks.length === 4) {
+            const t0 = toks[0].toLowerCase(), t2 = toks[2].toLowerCase();
+            if (t0 === "left" || t0 === "right") return resolveEdge(t0, toks[1]) + " " + resolveEdge(t2, toks[3]);
+            return resolveEdge(t2, toks[3]) + " " + resolveEdge(t0, toks[1]);
+          }
+          return layer;
+        }
+        if (toks.length === 1) return norm1(toks[0]);
+        if (toks.length === 2) {
+          const edge = toks[0].toLowerCase();
+          const off = evalLinLenPctTok(toks[1]);
+          if (edge === "x-start" || edge === "x-end" || edge === "y-start" || edge === "y-end") return edge + " " + off;
+          return resolveEdge(edge, toks[1]);
         }
         return layer;
       }).join(", "));
@@ -9851,6 +9889,12 @@ function installWindow(global) {
         const fd = computedMap.get("flex-direction") || "row";
         const fw = computedMap.get("flex-wrap") || "nowrap";
         return fd + " " + fw;
+      }
+      if (name === "background-position") {
+        if (computedMap.has("background-position")) return computedMap.get("background-position");
+        const x = computedMap.get("background-position-x") || "0%";
+        const y = computedMap.get("background-position-y") || "0%";
+        return x + " " + y;
       }
       if (name === "flex") {
         const fg = computedMap.get("flex-grow") || "0";

@@ -4758,9 +4758,16 @@
         };
         if (toks.length === 1) return HX.has(toks[0]) || VY.has(toks[0]) || isValidLenPct(toks[0], true);
         if (toks.length === 2) return is2Pos(toks[0], toks[1]);
+        const EX = new Set(["left", "right"]);
+        const EY = new Set(["top", "bottom"]);
+        if (toks.length === 3) {
+          if (HX.has(toks[0]) && EY.has(toks[1]) && isValidLenPct(toks[2], true)) return true;
+          if (EX.has(toks[0]) && isValidLenPct(toks[1], true) && VY.has(toks[2])) return true;
+          if (VY.has(toks[0]) && EX.has(toks[1]) && isValidLenPct(toks[2], true)) return true;
+          if (EY.has(toks[0]) && isValidLenPct(toks[1], true) && HX.has(toks[2])) return true;
+          return false;
+        }
         if (toks.length === 4) {
-          const EX = new Set(["left", "right"]);
-          const EY = new Set(["top", "bottom"]);
           if (EX.has(toks[0]) && isValidLenPct(toks[1], true) && EY.has(toks[2]) && isValidLenPct(toks[3], true)) return true;
           if (EY.has(toks[0]) && isValidLenPct(toks[1], true) && EX.has(toks[2]) && isValidLenPct(toks[3], true)) return true;
         }
@@ -5519,6 +5526,12 @@
           }
         }
         return true;
+      }
+      if (prop === "background-position") {
+        return splitTopLevelComma(vLower).every((layer) => {
+          const toks = splitCssTokens(layer.trim());
+          return toks.length >= 1 && isValidCssPositionTokens(toks);
+        });
       }
       if (prop === "background-position-x" || prop === "background-position-y") {
         const isX = prop === "background-position-x";
@@ -6993,7 +7006,10 @@
         if (s === "0" || s === "+0" || s === "-0") return "0px";
         if (/^calc\(/i.test(s)) return canonicalizeCalcToken(s);
       }
-      if (key === "background-position" || key === "background-position-x" || key === "background-position-y") {
+      if (key === "background-position") {
+        return splitTopLevelComma(s).map((layer) => normalizePositionLayer(layer.trim(), false)).join(", ");
+      }
+      if (key === "background-position-x" || key === "background-position-y") {
         return splitTopLevelComma(s).map((layer) => splitCssTokens(layer).map((tok) => (/^calc\(/i.test(tok) ? canonicalizeCalcToken(tok) : tok)).join(" ")).join(", ");
       }
       if (key === "font-family") {
@@ -7358,6 +7374,13 @@
           if (isY(a) || (a === "center" && isX(b))) {
             const tmp = parts[0]; parts[0] = parts[1]; parts[1] = tmp;
           }
+        }
+        if (!allowZ && parts.length === 3) {
+          const a = parts[0].toLowerCase(), b = parts[1].toLowerCase();
+          const isY = (x) => x === "top" || x === "bottom";
+          const isX = (x) => x === "left" || x === "right";
+          if (isY(a) && !isX(b)) return parts[2] + " " + parts[0] + " " + parts[1];
+          if ((isY(a) || a === "center") && isX(b)) return parts[1] + " " + parts[2] + " " + parts[0];
         }
         if (parts.length === 4) {
           const a = parts[0].toLowerCase();
@@ -45787,20 +45810,58 @@
             if (tl === "right" || tl === "bottom" || tl === "x-end" || tl === "y-end") return "100%";
             return evalLinLenPctTok(t);
           };
-          if (toks.length === 1) return norm1(toks[0]);
-          if (toks.length === 2) {
-            if (bpKey === "background-position") {
-              return norm1(toks[0]) + " " + norm1(toks[1]);
-            }
-            const edge = toks[0].toLowerCase();
-            const off = evalLinLenPctTok(toks[1]);
-            if (edge === "x-start" || edge === "x-end" || edge === "y-start" || edge === "y-end") return edge + " " + off;
+          const resolveEdge = (edge, rawOff) => {
+            const off = evalLinLenPctTok(rawOff);
             if (edge === "right" || edge === "bottom") {
               if (off.endsWith("%")) return String(Number((100 - parseFloat(off)).toFixed(6))) + "%";
               const px = evalCssLengthExpr(off, 0, fontSize);
               if (px !== null) return px === 0 ? "100%" : (px > 0 ? ("calc(100% - " + formatCssPx(px) + ")") : ("calc(100% + " + formatCssPx(-px) + ")"));
             }
             return off;
+          };
+          if (bpKey === "background-position") {
+            if (toks.length === 1) {
+              const tl = toks[0].toLowerCase();
+              if (tl === "left") return "0% 50%";
+              if (tl === "right") return "100% 50%";
+              if (tl === "top") return "50% 0%";
+              if (tl === "bottom") return "50% 100%";
+              if (tl === "center") return "50% 50%";
+              return norm1(toks[0]) + " 50%";
+            }
+            if (toks.length === 2) {
+              const t0 = toks[0].toLowerCase(), t1 = toks[1].toLowerCase();
+              if ((t0 === "top" || t0 === "bottom") && (t1 === "left" || t1 === "right" || t1 === "center")) {
+                return norm1(toks[1]) + " " + norm1(toks[0]);
+              }
+              return norm1(toks[0]) + " " + norm1(toks[1]);
+            }
+            if (toks.length === 3) {
+              const t0 = toks[0].toLowerCase(), t1 = toks[1].toLowerCase(), t2 = toks[2].toLowerCase();
+              if (t0 === "left" || t0 === "right") {
+                if (t1 === "top" || t1 === "bottom") return norm1(t0) + " " + resolveEdge(t1, t2);
+                return resolveEdge(t0, t1) + " " + norm1(t2);
+              }
+              if (t0 === "top" || t0 === "bottom") {
+                if (t1 === "left" || t1 === "right") return resolveEdge(t1, t2) + " " + norm1(t0);
+                return norm1(t2) + " " + resolveEdge(t0, t1);
+              }
+              if (t1 === "top" || t1 === "bottom") return norm1(t0) + " " + resolveEdge(t1, t2);
+              return resolveEdge(t1, t2) + " " + norm1(t0);
+            }
+            if (toks.length === 4) {
+              const t0 = toks[0].toLowerCase(), t2 = toks[2].toLowerCase();
+              if (t0 === "left" || t0 === "right") return resolveEdge(t0, toks[1]) + " " + resolveEdge(t2, toks[3]);
+              return resolveEdge(t2, toks[3]) + " " + resolveEdge(t0, toks[1]);
+            }
+            return layer;
+          }
+          if (toks.length === 1) return norm1(toks[0]);
+          if (toks.length === 2) {
+            const edge = toks[0].toLowerCase();
+            const off = evalLinLenPctTok(toks[1]);
+            if (edge === "x-start" || edge === "x-end" || edge === "y-start" || edge === "y-end") return edge + " " + off;
+            return resolveEdge(edge, toks[1]);
           }
           return layer;
         }).join(", "));
@@ -46161,6 +46222,12 @@
           const fd = computedMap.get("flex-direction") || "row";
           const fw = computedMap.get("flex-wrap") || "nowrap";
           return fd + " " + fw;
+        }
+        if (name === "background-position") {
+          if (computedMap.has("background-position")) return computedMap.get("background-position");
+          const x = computedMap.get("background-position-x") || "0%";
+          const y = computedMap.get("background-position-y") || "0%";
+          return x + " " + y;
         }
         if (name === "flex") {
           const fg = computedMap.get("flex-grow") || "0";
