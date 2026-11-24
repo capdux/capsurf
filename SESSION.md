@@ -8117,3 +8117,4 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - [Phase 685] `cssom.js` (`radial-gradient` 跳过首参为颜色的 shape/size 校验) & `window.js` (`background-position-x/y` 2-token 逻辑关键字分支): `/css/css-images/parsing/gradient-position-computed.html` 43/43 PASS，`--smoke` 3/3 PASS。
 - [Phase 686] `window.js` (`background-position-x/y` 单层保留 `x-start/x-end/y-start/y-end`、多层与 2-token 分别按规范解析) & `wpt-expectations.json` (收紧 `background-position-{x,y}-computed` 为 `PASS`): `/css/css-backgrounds/parsing/background-position-*` 9/9 PASS，`--smoke` 3/3 PASS。
 - [Phase 687] `cssom.js` (补齐 `row-rule`/`rule`、`row-rule-width`/`rule-width`、`row-rule-style`/`rule-style` 及 15 个 `*-rule-inset*` 属性校验): `/css/css-gaps/` 全目录 32/32 PASS，`--smoke` 3/3 PASS。
+- [Phase 688] `cssom.js` & `window.js` (接入 `scroll-marker-group` 校验/默认值/计算列表与 `overflow-clip-margin` 默认值/计算列表) & `wpt-expectations.json` (4 项收紧为 `PASS`): `/css/css-overflow/parsing/` 32/32 匹配基线，`--smoke` 3/3 PASS。

@@ -4813,8 +4813,8 @@
     "reason": "Fixed: max-lines supports auto and positive integers"
   },
   "/css/css-overflow/parsing/overflow-clip-margin-computed.html": {
-    "expected": "FAIL",
-    "reason": "Records the outcome this produces: CSS Overflow Level 5 / tentative scroll features and complex webkit-box sub-cases"
+    "expected": "PASS",
+    "reason": null
   },
   "/css/css-overflow/parsing/overflow-clip-margin.html": {
     "expected": "PASS",
@@ -4845,16 +4845,16 @@
     "reason": null
   },
   "/css/css-overflow/parsing/scroll-markers-computed.tentative.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-overflow/parsing/scroll-markers-invalid.html": {
-    "expected": "FAIL",
-    "reason": "Records the outcome this produces: CSS Overflow Level 5 / tentative scroll features and complex webkit-box sub-cases"
+    "expected": "PASS",
+    "reason": null
   },
   "/css/css-overflow/parsing/scroll-markers-invalid.tentative.html": {
-    "expected": "FAIL",
-    "reason": "Records the outcome this produces: CSS Overflow Level 5 / tentative scroll features and complex webkit-box sub-cases"
+    "expected": "PASS",
+    "reason": null
   },
   "/css/css-overflow/parsing/scroll-markers-valid.html": {
     "expected": "PASS",

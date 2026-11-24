@@ -3214,3 +3214,5 @@
 - 区分 `background-position-x/y` 单层保留逻辑关键字与多层解析为 `0%`/`100%` 的行为，打通 `/css/css-backgrounds/parsing/background-position-*` 全部 9/9 测试并将 `background-position-{x,y}-computed.html` 收紧为 `PASS`。
 ### Phase 687 — `/css/css-gaps/` 全量规则与 `rule-inset` 语法校验闭环
 - 在 `cssom.js` 中补全 `row-rule*`/`rule*` 与全套 `*-rule-inset*`（含 `cap`/`junction`/`start`/`end` 与 `overlap-join`）语法校验，使 `/css/css-gaps/` 全目录 32/32 用例全数 PASS。
+### Phase 688 — `scroll-marker-group` 与 `overflow-clip-margin` 闭环及 4 项基线收紧
+- 在 `cssom.js` 与 `window.js` 中补全 `scroll-marker-group` 校验/默认值及 `overflow-clip-margin` 计算属性暴露，一次性打通 `overflow-clip-margin-computed`、`scroll-markers-computed.tentative`、`scroll-markers-invalid`、`scroll-markers-invalid.tentative` 4 项测试并全部收紧为 `PASS`。

@@ -3875,7 +3875,7 @@
       "scroll-padding-block", "scroll-padding-block-end", "scroll-padding-block-start",
       "scroll-padding-bottom", "scroll-padding-inline", "scroll-padding-inline-end",
       "scroll-padding-inline-start", "scroll-padding-left", "scroll-padding-right",
-      "scroll-initial-target", "scroll-axis-lock", "scroll-target-group", "scroll-padding-top", "scroll-snap-align", "scroll-snap-stop", "scroll-snap-type",
+      "scroll-initial-target", "scroll-axis-lock", "scroll-marker-group", "scroll-target-group", "scroll-padding-top", "scroll-snap-align", "scroll-snap-stop", "scroll-snap-type",
       "scrollbar-color", "scrollbar-gutter", "scrollbar-width", "shape-image-threshold",
       "shape-margin", "shape-outside", "size", "src", "tab-size", "table-layout",
       "text-align", "text-align-last", "text-autospace", "text-combine-upright", "text-decoration",
@@ -6841,6 +6841,12 @@
       }
       if (prop === "scroll-initial-target") {
         return vLower === "none" || vLower === "nearest";
+      }
+      if (prop === "scroll-marker-group") {
+        const toks = splitCssTokens(vLower);
+        if (toks.length === 1) return toks[0] === "none" || toks[0] === "before" || toks[0] === "after";
+        if (toks.length === 2) return (toks[0] === "before" || toks[0] === "after") && (toks[1] === "tabs" || toks[1] === "links");
+        return false;
       }
       if (prop === "color-interpolation-filters") {
         return vLower === "auto" || vLower === "srgb" || vLower === "linearrgb";
@@ -45826,6 +45832,8 @@
         ["column-span", "none"],
         ["column-width", "auto"],
         ["margin-trim", "none"],
+        ["overflow-clip-margin", "0px"],
+        ["scroll-marker-group", "none"],
         ["aspect-ratio", "auto"],
         ["box-sizing", "content-box"],
         ["max-height", "none"],
@@ -46577,11 +46585,11 @@
       "min-block-size", "min-height", "min-inline-size", "min-width", "mix-blend-mode", "object-fit", "object-position", "opacity",
       "order", "orphans", "outline-color", "outline-offset", "outline-style", "outline-width",
       "overscroll-behavior-block", "overscroll-behavior-inline", "overscroll-behavior-x", "overscroll-behavior-y",
-      "overflow-anchor", "overflow-block", "overflow-inline", "overflow-wrap", "overflow-x", "overflow-y",
+      "overflow-anchor", "overflow-block", "overflow-clip-margin", "overflow-inline", "overflow-wrap", "overflow-x", "overflow-y",
       "padding-block-end", "padding-block-start", "padding-bottom", "padding-inline-end", "padding-inline-start",
       "padding-left", "padding-right", "padding-top", "perspective", "perspective-origin", "pointer-events",
       "position", "position-try-order", "position-visibility", "quotes", "reading-flow", "reading-order", "resize", "right", "rotate", "row-gap",
-      "ruby-align", "ruby-merge", "ruby-overhang", "ruby-position", "scale", "scroll-behavior", "scroll-target-group", "scrollbar-gutter",
+      "ruby-align", "ruby-merge", "ruby-overhang", "ruby-position", "scale", "scroll-behavior", "scroll-marker-group", "scroll-target-group", "scrollbar-gutter",
       "-webkit-transform", "-moz-transform",
       "scroll-margin-block-end", "scroll-margin-block-start", "scroll-margin-bottom",
       "scroll-margin-inline-end", "scroll-margin-inline-start", "scroll-margin-left",

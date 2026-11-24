@@ -3877,3 +3877,8 @@
 - **Phase 687**:
   - `src/js/shim/cssom.js`: `KEYWORD_PROPS` 新增 `row-rule-style`/`rule-style`；`isValidCssValue` 接入 `row-rule-width`/`rule-width`、`row-rule`/`rule` 及 15 个 `*-rule-inset*` 属性校验（含 `overlap-join` 与 `/` 分隔）。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 688**:
+  - `src/js/shim/cssom.js`: `CSS_PROPERTIES` 与 `isValidCssValue` 新增 `scroll-marker-group`（`none | [ before | after ] [ tabs | links ]?`）。
+  - `src/js/shim/window.js`: `STANDARD_COMPUTED_LONGHANDS` 与默认值表补齐 `overflow-clip-margin` 与 `scroll-marker-group`。
+  - `test/wpt/wpt-expectations.json`: 将 `overflow-clip-margin-computed.html`、`scroll-markers-computed.tentative.html`、`scroll-markers-invalid.html`、`scroll-markers-invalid.tentative.html` 从 `FAIL` 收紧为 `PASS`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
