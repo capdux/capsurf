@@ -4160,3 +4160,6 @@
 - **Phase 759**:
   - `src/js/shim/cssom.js`: 修复 `hwb()` 验证的括号感知斜杠分割；在 `normalizeSingleColor` 中完善 `hwb(... none)`、`lab`/`lch`/`oklab`/`oklch`、`color()` 与 `canvastext` 规范化序列化。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 760**:
+  - `src/js/shim/window.js`: `list-style` 计算值简写序列化省略默认值 `outside`/`none`/`disc`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

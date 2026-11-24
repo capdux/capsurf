@@ -49854,7 +49854,11 @@
           const pos = computedMap.get("list-style-position") || "outside";
           const img = computedMap.get("list-style-image") || "none";
           const typ = computedMap.get("list-style-type") || "disc";
-          return pos + " " + img + " " + typ;
+          const parts = [];
+          if (pos !== "outside") parts.push(pos);
+          if (img !== "none") parts.push(img);
+          if (typ !== "disc") parts.push(typ);
+          return parts.length ? parts.join(" ") : "outside none disc";
         }
         if (name === "column-rule") {
           const w = computedMap.get("column-rule-width") || "0px";
