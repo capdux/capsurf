@@ -9762,6 +9762,34 @@ function installWindow(global) {
         if (cv) computedMap.set(ck, global.__capsurf_normalizeCssValue(ck, cv));
       }
     }
+    const fvsRaw = (computedMap.get("font-variation-settings") || "").trim();
+    if (fvsRaw && fvsRaw.toLowerCase() !== "normal") {
+      const fvsMap = new Map();
+      const fvsItems = fvsRaw.split(",");
+      let fvsOk = true;
+      for (let fi = 0; fi < fvsItems.length; fi++) {
+        const m = /^\s*(?:"([^"]{4})"|'([^']{4})')\s+(.+?)\s*$/.exec(fvsItems[fi]);
+        if (!m) { fvsOk = false; break; }
+        const tag = m[1] !== undefined ? m[1] : m[2];
+        let v = m[3].trim();
+        if (/^calc\(/i.test(v)) {
+          const inner = v.slice(5, -1).trim();
+          if (/^[\d+\-*/().\s]+$/.test(inner)) {
+            try {
+              const nv = Function("return (" + inner + ")")();
+              if (typeof nv === "number" && isFinite(nv)) v = String(Number(nv.toFixed(6)));
+            } catch (_) {}
+          }
+        } else if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(v)) {
+          v = String(Number(v));
+        }
+        fvsMap.set(tag, v);
+      }
+      if (fvsOk && fvsMap.size > 0) {
+        const sorted = Array.from(fvsMap.entries()).sort((a, b) => (a[0] < b[0] ? -1 : (a[0] > b[0] ? 1 : 0)));
+        computedMap.set("font-variation-settings", sorted.map((e) => '"' + e[0] + '" ' + e[1]).join(", "));
+      }
+    }
   }
 
   const STANDARD_COMPUTED_LONGHANDS = [

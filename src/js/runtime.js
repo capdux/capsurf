@@ -6888,6 +6888,21 @@
         if (toks.length === 2) return (toks[0] === "before" || toks[0] === "after") && (toks[1] === "tabs" || toks[1] === "links");
         return false;
       }
+      if (prop === "font-variation-settings") {
+        if (vLower === "normal") return true;
+        const items = splitTopLevelComma(trimmed);
+        if (items.length === 0) return false;
+        for (let i = 0; i < items.length; i++) {
+          const toks = splitCssTokens(items[i]);
+          if (toks.length !== 2) return false;
+          const t0 = toks[0], t1 = toks[1];
+          if (!((t0.startsWith('"') && t0.endsWith('"')) || (t0.startsWith("'") && t0.endsWith("'")))) return false;
+          const tag = t0.slice(1, -1);
+          if (tag.length !== 4 || !/^[\x20-\x7e]{4}$/.test(tag)) return false;
+          if (!(/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(t1) || (/^(?:calc|min|max|clamp)\(/i.test(t1) && !/[a-z%]/i.test(t1.replace(/^(?:calc|min|max|clamp)\(/i, ""))))) return false;
+        }
+        return true;
+      }
       if (prop === "grid-auto-columns" || prop === "grid-auto-rows") {
         const toks = splitCssTokens(trimmed.replace(/\/\*[\s\S]*?\*\//g, " ").trim());
         if (toks.length === 0) return false;
@@ -46682,6 +46697,34 @@
           const ck = canonComputedProps[ci];
           const cv = computedMap.get(ck);
           if (cv) computedMap.set(ck, global.__capsurf_normalizeCssValue(ck, cv));
+        }
+      }
+      const fvsRaw = (computedMap.get("font-variation-settings") || "").trim();
+      if (fvsRaw && fvsRaw.toLowerCase() !== "normal") {
+        const fvsMap = new Map();
+        const fvsItems = fvsRaw.split(",");
+        let fvsOk = true;
+        for (let fi = 0; fi < fvsItems.length; fi++) {
+          const m = /^\s*(?:"([^"]{4})"|'([^']{4})')\s+(.+?)\s*$/.exec(fvsItems[fi]);
+          if (!m) { fvsOk = false; break; }
+          const tag = m[1] !== undefined ? m[1] : m[2];
+          let v = m[3].trim();
+          if (/^calc\(/i.test(v)) {
+            const inner = v.slice(5, -1).trim();
+            if (/^[\d+\-*/().\s]+$/.test(inner)) {
+              try {
+                const nv = Function("return (" + inner + ")")();
+                if (typeof nv === "number" && isFinite(nv)) v = String(Number(nv.toFixed(6)));
+              } catch (_) {}
+            }
+          } else if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(v)) {
+            v = String(Number(v));
+          }
+          fvsMap.set(tag, v);
+        }
+        if (fvsOk && fvsMap.size > 0) {
+          const sorted = Array.from(fvsMap.entries()).sort((a, b) => (a[0] < b[0] ? -1 : (a[0] > b[0] ? 1 : 0)));
+          computedMap.set("font-variation-settings", sorted.map((e) => '"' + e[0] + '" ' + e[1]).join(", "));
         }
       }
     }

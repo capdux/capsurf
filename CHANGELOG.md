@@ -3908,3 +3908,7 @@
 - **Phase 696**:
   - `src/js/shim/window.js`: `STANDARD_COMPUTED_LONGHANDS` 与默认值表补齐 `font-variant-{caps,east-asian,ligatures,numeric}`、`font-synthesis*`、`font-variation-settings`、`font-size-adjust`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 697**:
+  - `src/js/shim/cssom.js`: `isValidCssValue("font-variation-settings")` 校验 4 字符 ASCII OpenType tag 与 `<number>`/`calc()`。
+  - `src/js/shim/window.js`: `font-variation-settings` 计算值按 tag 去重保留最右、按字典序排序并求值 `calc()`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

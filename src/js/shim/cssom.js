@@ -3098,6 +3098,21 @@
       if (toks.length === 2) return (toks[0] === "before" || toks[0] === "after") && (toks[1] === "tabs" || toks[1] === "links");
       return false;
     }
+    if (prop === "font-variation-settings") {
+      if (vLower === "normal") return true;
+      const items = splitTopLevelComma(trimmed);
+      if (items.length === 0) return false;
+      for (let i = 0; i < items.length; i++) {
+        const toks = splitCssTokens(items[i]);
+        if (toks.length !== 2) return false;
+        const t0 = toks[0], t1 = toks[1];
+        if (!((t0.startsWith('"') && t0.endsWith('"')) || (t0.startsWith("'") && t0.endsWith("'")))) return false;
+        const tag = t0.slice(1, -1);
+        if (tag.length !== 4 || !/^[\x20-\x7e]{4}$/.test(tag)) return false;
+        if (!(/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(t1) || (/^(?:calc|min|max|clamp)\(/i.test(t1) && !/[a-z%]/i.test(t1.replace(/^(?:calc|min|max|clamp)\(/i, ""))))) return false;
+      }
+      return true;
+    }
     if (prop === "grid-auto-columns" || prop === "grid-auto-rows") {
       const toks = splitCssTokens(trimmed.replace(/\/\*[\s\S]*?\*\//g, " ").trim());
       if (toks.length === 0) return false;

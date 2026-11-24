@@ -3232,3 +3232,5 @@
 - 在 `cssom.js` 中补全 `grid-auto-columns` 与 `grid-auto-rows` 的 `<track-size>+` 语法校验及内联注释剥离，`grid-auto-{columns,rows}-{valid,invalid}` 4 项测试全部 PASS。
 ### Phase 696 — `font-variant-*` 与 `font-synthesis` 计算样式暴露
 - 在 `window.js` 中补全 `font-variant-{caps,east-asian,ligatures,numeric}`、`font-synthesis*`、`font-variation-settings` 与 `font-size-adjust` 的默认值与 `STANDARD_COMPUTED_LONGHANDS` 注册，`font-variant-*-computed` (4/4) 与 `font-synthesis-computed` (21/21) 全数 PASS。
+### Phase 697 — `font-variation-settings` 校验与计算值规范化闭环
+- 在 `cssom.js` 与 `window.js` 中补全 `font-variation-settings` 的 4 字符 tag + `<number>` 语法校验、去重保留最右项、字母序排序及 `calc()` 数值求值，`font-variation-settings-{valid,invalid,computed}` 全部 PASS。
