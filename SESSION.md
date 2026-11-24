@@ -7690,3 +7690,10 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
      - `border-image` 指定值按顶层 `/` 切分（避开 `url(...)` 内斜杠）并将 `fill` 移至切片数字之后，保留 `/ /` 空斜杠段。
   2. **全绿验证与基线收紧**：`border-color-*` **4/4 PASS**、`border-image-valid.html` **PASS**、`--smoke` **3/3 suites PASS**；收紧 `animation-shorthand.html` 基线为 `PASS`。
   3. **并行摸底汇总**：`/css/css-animations/parsing/` **35/35 PASS**、`/css/css-transitions/parsing/` **14/14 PASS**、`/css/selectors/parsing/` **16/16 PASS**、`/css/css-shapes/` **23/70 PASS**、`/css/css-masking/` **15/94 PASS**。
+
+### 2026-11-24 Phase 577 (`border-style` 4/4 & `border-width` 4/4 全绿闭环)
+- **[Agent]**: 自主推导并完成 Phase 577（`src/js/shim/element/element.js`, `src/js/shim/cssom.js`, `src/js/shim/window.js`）：
+  1. **`border-style` & `border-width` 简写全闭环 (`src/js/shim/element/element.js`, `src/js/shim/cssom.js`)**：
+     - `element.js` 将 `border-style`/`border-width` 接入 `setEntryWithShorthand`；`cssom.js` 参数化合并 `border-{color,style,width}` 四边展开与对称折叠序列化。
+  2. **`background-position-{x,y}` 计算值 (`src/js/shim/window.js`)**：补全 `center -> 50%`、`left/top -> 0%`、`right/bottom <off>` 计算期解析。
+  3. **全绿验证**：`border-style-*` **4/4 PASS**、`border-width-*` **4/4 PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。

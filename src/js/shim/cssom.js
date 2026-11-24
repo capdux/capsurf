@@ -3551,18 +3551,19 @@
       }
       return null;
     }
-    if (key === "border-color") {
+    if (key === "border-color" || key === "border-style" || key === "border-width") {
       const p = splitCssTokens(normV);
       if (p.length < 1 || p.length > 4) return null;
+      const suffix = key.slice("border-".length);
       const t = p[0];
       const r = p.length >= 2 ? p[1] : t;
       const b = p.length >= 3 ? p[2] : t;
       const l = p.length >= 4 ? p[3] : r;
       return [
-        ["border-top-color", t],
-        ["border-right-color", r],
-        ["border-bottom-color", b],
-        ["border-left-color", l],
+        ["border-top-" + suffix, t],
+        ["border-right-" + suffix, r],
+        ["border-bottom-" + suffix, b],
+        ["border-left-" + suffix, l],
       ];
     }
     if (key === "text-decoration") {
@@ -3913,6 +3914,8 @@
 
   const SHORTHAND_EXPAND_LONGHANDS = {
     "border-color": ["border-top-color", "border-right-color", "border-bottom-color", "border-left-color"],
+    "border-style": ["border-top-style", "border-right-style", "border-bottom-style", "border-left-style"],
+    "border-width": ["border-top-width", "border-right-width", "border-bottom-width", "border-left-width"],
     "text-decoration": ["text-decoration-line", "text-decoration-style", "text-decoration-thickness", "text-decoration-color"],
     "list-style": ["list-style-position", "list-style-image", "list-style-type"],
     "place-content": ["align-content", "justify-content"],
@@ -3977,7 +3980,7 @@
     if (key === "text-decoration") {
       return normalizeCssSpecifiedValue("text-decoration", vals.join(" "));
     }
-    if (key === "border-color") {
+    if (key === "border-color" || key === "border-style" || key === "border-width") {
       if (vals[1] === vals[3]) {
         if (vals[0] === vals[2]) {
           return vals[0] === vals[1] ? vals[0] : (vals[0] + " " + vals[1]);

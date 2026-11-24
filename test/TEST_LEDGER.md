@@ -1836,3 +1836,11 @@
   - `/css/css-masking/` (`b441`, partial 94 recorded): `15 PASS / 75 FAIL / 4 TIMEOUT`
   - `/css/css-shapes/` (`b442`): `23 PASS / 46 FAIL / 1 TIMEOUT`
   - `/css/selectors/parsing/` (`b444`): **16/16 PASS (100% ALL GREEN)**
+
+### Phase 577 `border-style` 4/4 & `border-width` 4/4 全绿闭环 (bin_dev Phase 577, 2026-11-24)
+- **Filter `/css/css-backgrounds/parsing/border-style`**: **4/4 PASS (100% ALL GREEN)**（`border-style-{invalid,computed,shorthand,valid}.html` 全绿）。
+- **Filter `/css/css-backgrounds/parsing/border-width`**: **4/4 PASS (100% ALL GREEN)**（`border-width-{invalid,computed,shorthand,valid}.html` 全绿）。
+  - `element.js`：`parseStyleMap` 内联 `border-style`/`border-width` 接入 `setEntryWithShorthand`。
+  - `cssom.js`：将 `border-style`/`border-width` 与 `border-color` 参数化合并至 `SHORTHAND_EXPAND_LONGHANDS`、`expandCssShorthand` 4 边展开与 `serializeExpandedShorthand` 4 边折叠序列化。
+  - `window.js`：补全 `background-position-{x,y}` 计算期 `left`/`center`/`right`/`top`/`bottom` 及 `right/bottom <off>` 求值。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

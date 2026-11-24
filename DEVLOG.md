@@ -2804,3 +2804,7 @@
 ### Phase 576: `border-color` 4/4 与 `border-image-valid` 全绿
 - **核心修复 (`src/js/shim/cssom.js`)**：`border-color` 接入 `SHORTHAND_EXPAND_LONGHANDS` 与 4 边展开/折叠序列化；`border-image` 顶层 `/` 切分避开 `url()` 并规范化 `fill` 位置。
 - **WPT & Smoke 验收**：`border-color-*` 4/4 PASS、`border-image-valid` PASS、收紧 `animation-shorthand.html` 实现 `css-animations/parsing` 35/35 PASS、`--smoke` 3/3 suites PASS。
+
+### Phase 577: `border-style` 4/4 与 `border-width` 4/4 全绿闭环
+- **核心修复 (`src/js/shim/element/element.js`, `src/js/shim/cssom.js`, `src/js/shim/window.js`)**：参数化统一 `border-{color,style,width}` 四边展开与对称折叠，补齐 `background-position-x/y` 计算期关键词与偏移求值。
+- **WPT & Smoke 验收**：`border-style-*` 4/4 PASS、`border-width-*` 4/4 PASS、`--smoke` 3/3 suites PASS。

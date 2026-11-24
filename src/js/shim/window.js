@@ -8584,6 +8584,49 @@ function installWindow(global) {
     } else if (bgImgRaw && /^(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(bgImgRaw)) {
       computedMap.set("background-image", evalGradientComputed(bgImgRaw));
     }
+    for (const bpKey of ["background-position-x", "background-position-y"]) {
+      const bpRaw = (computedMap.get(bpKey) || "").trim();
+      if (!bpRaw) continue;
+      const bpLayers = [];
+      let bCur = "", bD = 0;
+      for (let i = 0; i < bpRaw.length; i++) {
+        const ch = bpRaw[i];
+        if (ch === "(") bD++; else if (ch === ")" && bD > 0) bD--;
+        if (bD === 0 && ch === ",") { bpLayers.push(bCur.trim()); bCur = ""; }
+        else bCur += ch;
+      }
+      if (bCur.trim()) bpLayers.push(bCur.trim());
+      computedMap.set(bpKey, bpLayers.map((layer) => {
+        const toks = [];
+        let tc = "", td = 0;
+        for (let i = 0; i < layer.length; i++) {
+          const ch = layer[i];
+          if (ch === "(") td++; else if (ch === ")" && td > 0) td--;
+          if (td === 0 && /\s/.test(ch)) { if (tc) { toks.push(tc); tc = ""; } }
+          else tc += ch;
+        }
+        if (tc) toks.push(tc);
+        const norm1 = (t) => {
+          const tl = t.toLowerCase();
+          if (tl === "left" || tl === "top" || tl === "x-start" || tl === "y-start") return "0%";
+          if (tl === "center") return "50%";
+          if (tl === "right" || tl === "bottom" || tl === "x-end" || tl === "y-end") return "100%";
+          return evalLinLenPctTok(t);
+        };
+        if (toks.length === 1) return norm1(toks[0]);
+        if (toks.length === 2) {
+          const edge = toks[0].toLowerCase();
+          const off = evalLinLenPctTok(toks[1]);
+          if (edge === "right" || edge === "bottom" || edge === "x-end" || edge === "y-end") {
+            if (off.endsWith("%")) return String(Number((100 - parseFloat(off)).toFixed(6))) + "%";
+            const px = evalCssLengthExpr(off, 0, fontSize);
+            if (px !== null) return px === 0 ? "100%" : ("calc(100% + " + formatCssPx(-px) + ")");
+          }
+          return off;
+        }
+        return layer;
+      }).join(", "));
+    }
     const curRaw = (computedMap.get("cursor") || "").trim();
     if (curRaw && /(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(curRaw)) {
       const cParts = [];
