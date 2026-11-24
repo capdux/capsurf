@@ -685,6 +685,10 @@
       if (/^(?:calc|min|max|clamp|var|env)\(/i.test(t)) return true;
       return /^\+?[1-9]\d*$/.test(t);
     }
+    if (prop === "transform-origin-z") {
+      const toks = splitCssTokens(vLower);
+      return toks.length === 1 && !toks[0].includes("%") && isValidLenPct(toks[0], true);
+    }
     if (prop === "reading-flow") {
       const toks = splitCssTokens(vLower);
       return toks.length === 1 && (toks[0] === "normal" || toks[0] === "source-order" || toks[0] === "flex-visual" || toks[0] === "flex-flow" || toks[0] === "grid-rows" || toks[0] === "grid-columns" || toks[0] === "grid-order");
@@ -3950,6 +3954,7 @@
       return [["flex-direction", dir], ["flex-wrap", wr]];
     }
     if (key === "flex") {
+      if (!isValidCssValue("flex", normV)) return null;
       const p = splitCssTokens(normV);
       if (p.length === 1 && p[0].toLowerCase() === "none") {
         return [["flex-grow", "0"], ["flex-shrink", "0"], ["flex-basis", "auto"]];

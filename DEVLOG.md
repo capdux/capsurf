@@ -3003,3 +3003,7 @@
 ### Phase 625: 非 MathML 元素 `display: math` 降级计算全绿收紧
 - **核心修复 (`src/js/shim/window.js`)**：在 `applyUsedValuesToComputedMap` 中对非 MathML 元素与伪元素的 `display: math|inline math|math inline` 归化为 `"inline"`、`block math|math block` 归化为 `"block"`。
 - **WPT & Smoke 验收**：`display-math-on-non-mathml-elements.html` FAIL->PASS (10/10，收紧基线)、`--smoke` 3/3 suites PASS。
+
+### Phase 626: `flex` 展开前置校验与 `transform-origin-z` 校验全绿
+- **核心修复 (`src/js/shim/cssom.js`)**：`expandCssShorthand("flex")` 前置 `isValidCssValue("flex", normV)` 校验，拦截 CSSOM 规则解析阶段对非法 `flex: 0 1 1` 的误展开；`isValidCssValue` 补全 `transform-origin-z` `<length>` 校验（拒绝 `calc-mix()`）。
+- **WPT & Smoke 验收**：`flexbox_computedstyle_flex-shorthand-invalid.html` (1/1) & `calc-mix-invalid.tentative.html` (18/18) PASS，`--smoke` 3/3 suites PASS。

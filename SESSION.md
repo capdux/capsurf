@@ -7959,3 +7959,6 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`window.js`**：非 MathML 元素与伪元素的 `display: math` 系列值降级计算为 `"inline"`/`"block"`。
   2. **全绿验证与基线收紧**：`display-math-on-non-mathml-elements.html` **FAIL->PASS (10/10)**（已收紧为 `PASS`）、`--smoke` **3/3 suites, 6/6 tests PASS**。
   3. **子智能体并发汇报**：`0302000f` 完成 `/css/css-flexbox/` 摸底（**95/120 PASS**），已接力派发 `bf393f0e`（`19720`, `/css/css-position/`）。
+- **[Agent]**: 完成 Phase 626（`src/js/shim/cssom.js`）：
+  1. **`cssom.js`**：`expandCssShorthand("flex")` 前置 `isValidCssValue("flex", normV)` 校验，`isValidCssValue` 补全 `transform-origin-z` 校验。
+  2. **全绿验证**：`flexbox_computedstyle_flex-shorthand-invalid.html` **FAIL->PASS (1/1)**、`calc-mix-invalid.tentative.html` **FAIL->PASS (18/18)**、`--smoke` **3/3 suites, 6/6 tests PASS**。

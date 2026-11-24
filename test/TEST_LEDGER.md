@@ -2181,3 +2181,7 @@
 ### Phase 625: 非 MathML 元素 `display: math` 降级计算全绿收紧
 - **Filter `/css/css-display/display-math-on-non-mathml-elements`**: **FAIL->PASS (10/10)**（`window.js` 对非 MathML 元素及伪元素的 `display: math|inline math|math inline` 降级计算为 `"inline"`、`block math|math block` 降级计算为 `"block"`；已收紧 `display-math-on-non-mathml-elements.html` 基线为 `PASS`）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 626: `flex` 展开前置校验与 `transform-origin-z` 校验全绿
+- **Filter `/css/css-flexbox/getcomputedstyle/flexbox_computedstyle_flex-shorthand-invalid` & `/css/css-values/calc-mix-invalid.tentative`**: **FAIL->PASS (2/2: 1/1 + 18/18)**（`cssom.js` `expandCssShorthand("flex")` 前置 `isValidCssValue("flex", normV)` 校验拦截非法 `flex: 0 1 1`；`isValidCssValue` 补全 `transform-origin-z` 非百分比 `<length>` 校验）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
