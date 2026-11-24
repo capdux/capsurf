@@ -3019,3 +3019,7 @@
 ### Phase 629: `/css/css-values/calc-nesting` 8/8 全绿
 - **核心修复 (`src/js/shim/cssom.js`)**：`canonicalizeCalcToken` 保留 `0%` 项，并在 `outline`/`border`/`column-rule` 中接入 `canonicalizeCalcToken`。
 - **WPT & Smoke 验收**：`/css/css-values/calc-nesting.html` (8/8) PASS，`--smoke` 3/3 suites PASS。
+
+### Phase 630: `canonicalizeCalcToken` 保留 `0px` 项与 `calc-unit-analysis` 推进
+- **核心修复 (`src/js/shim/cssom.js`)**：`canonicalizeCalcToken` 保留 `0px` 项，使 `calc(4vmin + 0pt)` 规范化为 `calc(0px + 4vmin)`。
+- **WPT & Smoke 验收**：`calc-serialization-002` (23/24) & `calc-unit-analysis` (7/10) 推进，`--smoke` 3/3 suites PASS。

@@ -6572,7 +6572,7 @@
       const entries = [];
       for (const [u, v] of combined.entries()) {
         const r = Number(v.toFixed(6));
-        if (r !== 0 || combined.size === 1 || u === "%") entries.push({ unit: u, val: r });
+        if (r !== 0 || combined.size === 1 || u === "%" || u === "px") entries.push({ unit: u, val: r });
       }
       if (entries.length === 0) entries.push({ unit: combined.has("px") ? "px" : "", val: 0 });
       entries.sort((a, b) => {

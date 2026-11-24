@@ -3726,3 +3726,5 @@
 - **Phase 628** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 升级 `canonicalizeCalcToken` 为递归线性组合化简器并接入 `background-position*`；`calc-background-position-003` 全绿。
 
 - **Phase 629** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `canonicalizeCalcToken` 保留 `0%` 项并接入 `outline`/`border`/`column-rule`；`/css/css-values/calc-nesting.html` 全绿。
+
+- **Phase 630** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `canonicalizeCalcToken` 保留 `0px` 项；`calc-serialization-002` 推进至 23/24、`calc-unit-analysis` 推进至 7/10。

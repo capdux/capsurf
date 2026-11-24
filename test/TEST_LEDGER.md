@@ -2197,3 +2197,7 @@
 ### Phase 629: `/css/css-values/calc-nesting` 8/8 全绿
 - **Filter `/css/css-values/calc-nesting.html`**: **FAIL->PASS (8/8)**（`cssom.js` `canonicalizeCalcToken` 保留 `0%` 项，并在 `outline`/`border`/`column-rule` 中接入 `canonicalizeCalcToken` 化简嵌套 `calc()`）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 630: `canonicalizeCalcToken` 保留 `0px` 项与 `calc-unit-analysis` 推进至 7/10
+- **Filter `/css/css-values/calc-serialization-002` & `/css/css-values/calc-unit-analysis`**: `calc-serialization-002` 推进至 **23/24 PASS**（`calc(4vmin + 0pt)` -> `calc(0px + 4vmin)` 修复），`calc-unit-analysis` 推进至 **7/10 PASS**（`number + length` 加减校验全部通过）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
