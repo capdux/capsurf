@@ -661,6 +661,12 @@
           const after = body[i + idM[0].length];
           if (after === "(") {
             if (!CALC_FUNCS.has(idLow)) return false;
+            if ((idLow === "sibling-index" || idLow === "sibling-count") && body[i + idM[0].length + 1] === ")") {
+              topAddTerms[topAddTerms.length - 1] += idM[0] + "()";
+              i += idM[0].length + 2;
+              expectVal = false;
+              continue;
+            }
             topAddTerms[topAddTerms.length - 1] += idM[0] + "(";
             depth++;
             i += idM[0].length + 1;

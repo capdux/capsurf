@@ -3987,3 +3987,7 @@
   - `src/js/shim/cssom.js`: 新增 `parseBackgroundLayers` 与 `expandCssShorthand("background")` 8-longhand 展开（支持 `<bg-layer>#`、`/` 尺寸、`background-origin`/`clip` 单双 `<box>` 与末尾 `background-color`）。
   - `src/js/shim/window.js`: 默认值表补齐 `background-attachment: "scroll"`，并修复 `background-size` 单值 `<length-percentage>` 计算值补 `" auto"`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 718**:
+  - `src/js/shim/cssom.js`: 修复 `isValidCalcSyntax` 对零参数 `sibling-index()`/`sibling-count()` 的解析拦截。
+  - `src/js/shim/window.js`: `shape-outside` 计算值中 `evalTok` 接入 `evalSignCalls`、新增 `path(...)` 相对指令转绝对坐标、`shape(...)` 位置关键字转百分比。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

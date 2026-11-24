@@ -9698,7 +9698,7 @@ function installWindow(global) {
         if (cur) out.push(cur);
         return out;
       };
-      const evalTok = (t) => (/^[+-]?(?:\d|\.)/.test(t) || /^calc\(/i.test(t)) ? evalLinLenPctTok(t) : t;
+      const evalTok = (t) => (/^[+-]?(?:\d|\.)/.test(t) || /^(?:calc|min|max|clamp)\(/i.test(t)) ? evalLinLenPctTok((/(?:sign|sibling-index)\(/i.test(t) ? evalSignCalls(t, element) : t)) : t;
       const clamp0 = (t) => (/^-\d/.test(t)) ? "0px" : t;
       const parsePctPx = (evStr) => {
         const ev = String(evStr || "").trim();
@@ -9821,6 +9821,63 @@ function installWindow(global) {
           }
         }
         res = "inset(" + sides.join(" ") + postStr + ")";
+      } else if (fn === "path") {
+        const commaI = inner.indexOf(",");
+        let fr = "", strTok = inner;
+        if (commaI !== -1 && /^(?:nonzero|evenodd)$/i.test(inner.slice(0, commaI).trim())) {
+          fr = inner.slice(0, commaI).trim().toLowerCase();
+          strTok = inner.slice(commaI + 1).trim();
+        }
+        const rawD = strTok.replace(/^['"]|['"]$/g, "").trim();
+        const toks = rawD.match(/[MmLlHhVvCcSsQqTtAaZz]|[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?/g) || [];
+        let ti = 0, cmd = "", cx = 0, cy = 0, sx = 0, sy = 0;
+        const out = [], fmtN = (n) => String(Number(n.toFixed(6)));
+        const nextN = () => Number(toks[ti++]);
+        const isNum = () => ti < toks.length && !/^[A-Za-z]$/.test(toks[ti]);
+        while (ti < toks.length) {
+          if (/^[A-Za-z]$/.test(toks[ti])) cmd = toks[ti++];
+          const up = cmd.toUpperCase(), rel = cmd !== up;
+          if (up === "Z") { out.push("Z"); cx = sx; cy = sy; cmd = ""; continue; }
+          if (!isNum()) break;
+          if (up === "M") {
+            let first = true;
+            while (isNum()) {
+              const x = (rel ? cx : 0) + nextN(), y = (rel ? cy : 0) + nextN();
+              cx = x; cy = y;
+              if (first) { sx = x; sy = y; out.push("M", fmtN(x), fmtN(y)); first = false; cmd = rel ? "l" : "L"; }
+              else out.push("L", fmtN(x), fmtN(y));
+            }
+          } else if (up === "L" || up === "T") {
+            while (isNum()) {
+              const x = (rel ? cx : 0) + nextN(), y = (rel ? cy : 0) + nextN();
+              cx = x; cy = y; out.push(up, fmtN(x), fmtN(y));
+            }
+          } else if (up === "H") {
+            while (isNum()) { cx = (rel ? cx : 0) + nextN(); out.push("H", fmtN(cx)); }
+          } else if (up === "V") {
+            while (isNum()) { cy = (rel ? cy : 0) + nextN(); out.push("V", fmtN(cy)); }
+          } else if (up === "C") {
+            while (isNum()) {
+              const x1 = (rel ? cx : 0) + nextN(), y1 = (rel ? cy : 0) + nextN();
+              const x2 = (rel ? cx : 0) + nextN(), y2 = (rel ? cy : 0) + nextN();
+              const x = (rel ? cx : 0) + nextN(), y = (rel ? cy : 0) + nextN();
+              cx = x; cy = y; out.push("C", fmtN(x1), fmtN(y1), fmtN(x2), fmtN(y2), fmtN(x), fmtN(y));
+            }
+          } else if (up === "S" || up === "Q") {
+            while (isNum()) {
+              const x1 = (rel ? cx : 0) + nextN(), y1 = (rel ? cy : 0) + nextN();
+              const x = (rel ? cx : 0) + nextN(), y = (rel ? cy : 0) + nextN();
+              cx = x; cy = y; out.push(up, fmtN(x1), fmtN(y1), fmtN(x), fmtN(y));
+            }
+          } else if (up === "A") {
+            while (isNum()) {
+              const rx = nextN(), ry = nextN(), rot = nextN(), la = nextN(), sw = nextN();
+              const x = (rel ? cx : 0) + nextN(), y = (rel ? cy : 0) + nextN();
+              cx = x; cy = y; out.push("A", fmtN(rx), fmtN(ry), fmtN(rot), fmtN(la), fmtN(sw), fmtN(x), fmtN(y));
+            }
+          } else break;
+        }
+        res = "path(" + (fr === "evenodd" ? "evenodd, " : "") + '"' + out.join(" ") + '")';
       } else {
         const segs = []; let cur = "", pd = 0;
         for (let k = 0; k < inner.length; k++) {
@@ -9830,7 +9887,15 @@ function installWindow(global) {
           else cur += c;
         }
         if (cur.trim()) segs.push(cur.trim());
-        const outSegs = segs.map((seg) => splitWs(seg).map(evalTok).join(" "));
+        const outSegs = segs.map((seg) => splitWs(seg).map((tk) => {
+          if (fn === "shape") {
+            const tl = tk.toLowerCase();
+            if (tl === "left" || tl === "top") return "0%";
+            if (tl === "center") return "50%";
+            if (tl === "right" || tl === "bottom") return "100%";
+          }
+          return evalTok(tk);
+        }).join(" "));
         if (fn === "polygon" && outSegs.length > 1 && outSegs[0] === "round 0px") outSegs.shift();
         res = fn + "(" + outSegs.join(", ") + ")";
       }

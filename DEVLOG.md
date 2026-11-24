@@ -3274,3 +3274,5 @@
 - `element.js` 内联样式与 `cssom.js` CSSOM 声明各自维护 shorthand 展开逻辑，`font` 简写需在 `setEntryWithShorthand` 中显式将 7 个 `font-variant-*` 长属性重置为 `"normal"`，才能让 `font-variant` 简写序列化与重置保持幂等；同步修复 `font-variant-alternates` 规范序、`font-language-override` 前导空格校验及 `oblique 14deg` 计算值保留。
 ### Phase 717 — `background` 简写展开与初始值修复 (`css-backgrounds`)
 - `window.js` 解析样式表声明时会调用 `globalThis.__capsurf_expandShorthand`，此前 `cssom.js` 缺少 `background` 展开实现且 `window.js` 默认值表遗漏 `background-attachment: "scroll"`；补齐 `parseBackgroundLayers` + `expandCssShorthand("background")` 后一次性打通 `background-331/332/333/335/336.html` 全绿。
+### Phase 718 — `css-shapes/parsing` 回归修复与 `path()`/`shape()`/`sibling-index()` 增强
+- `isValidCalcSyntax` 此前在遇到 `sibling-index()` 空参数括号时因 `expectVal === true` 误判失败；放行零参数函数后修复 `shape-outside-valid-position.html` 全量通过，并补全 `window.js` `path(...)` 相对转绝对与 `shape(...)` 关键字百分比化。
