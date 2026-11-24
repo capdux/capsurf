@@ -3983,3 +3983,7 @@
   - `src/js/shim/window.js`: 修复 `font-style` 计算值 `oblique 14deg` 不再错误折叠为 `oblique`。
   - `test/wpt/wpt-expectations.json`: 将 `/css/css-fonts/parsing/font-style-computed.html` 收紧为 `PASS`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 717**:
+  - `src/js/shim/cssom.js`: 新增 `parseBackgroundLayers` 与 `expandCssShorthand("background")` 8-longhand 展开（支持 `<bg-layer>#`、`/` 尺寸、`background-origin`/`clip` 单双 `<box>` 与末尾 `background-color`）。
+  - `src/js/shim/window.js`: 默认值表补齐 `background-attachment: "scroll"`，并修复 `background-size` 单值 `<length-percentage>` 计算值补 `" auto"`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

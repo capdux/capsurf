@@ -9212,6 +9212,7 @@ function installWindow(global) {
       ["widows", "2"],
       ["background-clip", "border-box"],
       ["background-origin", "padding-box"],
+      ["background-attachment", "scroll"],
       ["background-size", "auto"],
       ["background-image", "none"],
       ["background-position-x", "0%"],
@@ -9641,12 +9642,16 @@ function installWindow(global) {
       if (sCur.trim()) bsLayers.push(sCur.trim());
       computedMap.set(szKey, bsLayers.map((layer) => {
         const toks = splitCssTopLevelWhitespace(layer);
-        return toks.map((tk) => {
+        const mapped = toks.map((tk) => {
           const tl = tk.toLowerCase();
           if (tl === "auto" || tl === "cover" || tl === "contain") return tl;
           const ev = evalLinLenPctTok(tk);
           return /^-[\d.]+px$/.test(ev) ? "0px" : ev;
-        }).join(" ");
+        });
+        if (szKey === "background-size" && mapped.length === 1 && mapped[0] !== "auto" && mapped[0] !== "cover" && mapped[0] !== "contain") {
+          mapped.push("auto");
+        }
+        return mapped.join(" ");
       }).join(", "));
     }
     const curRaw = (computedMap.get("cursor") || "").trim();

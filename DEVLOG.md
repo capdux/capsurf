@@ -3272,3 +3272,5 @@
 - 定位 `cssom.js` `wrapComputedStyleDecl` 对所有 `*-color` 属性整串调用 `normalizeCssColor` 导致 `border-color`、`border-block-color`、`border-inline-color`、`caret-color` 丢失第 2~4 个颜色的隐蔽缺陷；新增 `MULTI_COLOR_PROPS` + `normalizePropColors` 逐 token 规范化，一次性打通上述 4 项 WPT 计算值测试。
 ### Phase 716 — `css-fonts/parsing` 批量高 ROI 修复 (`font-variant`, `font-language-override`, `font-style`, `calc`)
 - `element.js` 内联样式与 `cssom.js` CSSOM 声明各自维护 shorthand 展开逻辑，`font` 简写需在 `setEntryWithShorthand` 中显式将 7 个 `font-variant-*` 长属性重置为 `"normal"`，才能让 `font-variant` 简写序列化与重置保持幂等；同步修复 `font-variant-alternates` 规范序、`font-language-override` 前导空格校验及 `oblique 14deg` 计算值保留。
+### Phase 717 — `background` 简写展开与初始值修复 (`css-backgrounds`)
+- `window.js` 解析样式表声明时会调用 `globalThis.__capsurf_expandShorthand`，此前 `cssom.js` 缺少 `background` 展开实现且 `window.js` 默认值表遗漏 `background-attachment: "scroll"`；补齐 `parseBackgroundLayers` + `expandCssShorthand("background")` 后一次性打通 `background-331/332/333/335/336.html` 全绿。

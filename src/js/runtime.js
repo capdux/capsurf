@@ -6775,7 +6775,14 @@
         const layers = splitTopLevelComma(trimmed);
         if (layers.length === 0) return false;
         const POS_KW = new Set(["left", "center", "right", "top", "bottom"]);
-        const isPosTok = (t) => POS_KW.has(t.toLowerCase()) || isValidLenPct(t, true);
+        const isPosTok = (t) => {
+        const tl = t.toLowerCase();
+        return POS_KW.has(tl) || (tl !== "auto" && isValidCssValue("margin-top", t));
+      };
+      const isSizeLenPct = (t) => {
+        const tl = t.toLowerCase();
+        return tl !== "auto" && tl !== "cover" && tl !== "contain" && !t.startsWith("-") && isValidCssValue("padding-top", t);
+      };
         for (let li = 0; li < layers.length; li++) {
           const layer = layers[li].trim();
           if (!layer) return false;
@@ -8996,6 +9003,129 @@
       return out;
     }
 
+    function parseBackgroundLayers(raw) {
+      const layers = splitTopLevelComma(String(raw || "").trim());
+      if (layers.length === 0) return null;
+      const POS_KW = new Set(["left", "center", "right", "top", "bottom"]);
+      const BOX_KW = new Set(["border-box", "padding-box", "content-box"]);
+      const ATT_KW = new Set(["scroll", "fixed", "local"]);
+      const REP_SINGLE = new Set(["repeat-x", "repeat-y"]);
+      const REP_PAIR = new Set(["repeat", "space", "round", "no-repeat"]);
+      const isPosTok = (t) => {
+        const tl = t.toLowerCase();
+        return POS_KW.has(tl) || (tl !== "auto" && isValidCssValue("margin-top", t));
+      };
+      const isSizeLenPct = (t) => {
+        const tl = t.toLowerCase();
+        return tl !== "auto" && tl !== "cover" && tl !== "contain" && !t.startsWith("-") && isValidCssValue("padding-top", t);
+      };
+      const isImgTok = (t) => {
+        const tl = t.toLowerCase();
+        return tl === "none" || /^(?:url|image|(?:-webkit-)?image-set|(?:repeating-)?(?:linear|radial|conic)-gradient)\(/i.test(t);
+      };
+      const out = [];
+      for (let li = 0; li < layers.length; li++) {
+        const layer = layers[li].trim();
+        if (!layer) return null;
+        const slashes = [];
+        let cur = "", d = 0, q = "";
+        for (let ci = 0; ci < layer.length; ci++) {
+          const ch = layer[ci];
+          if (q) { cur += ch; if (ch === q && layer[ci - 1] !== "\\") q = ""; continue; }
+          if (ch === "\"" || ch === "'") { q = ch; cur += ch; continue; }
+          if (ch === "(") d++; else if (ch === ")" && d > 0) d--;
+          if (d === 0 && ch === "/") { slashes.push(cur.trim()); cur = ""; }
+          else cur += ch;
+        }
+        slashes.push(cur.trim());
+        if (slashes.length > 2) return null;
+        let img = "none", pos = "0% 0%", size = "auto", rep = "repeat", att = "scroll";
+        let origin = "padding-box", clip = "border-box", color = "transparent";
+        let seenImg = false, seenPos = false, seenRep = false, seenAtt = false, seenCol = false, boxCount = 0;
+        const parseTokens = (toks, startIdx) => {
+          for (let i = startIdx; i < toks.length; i++) {
+            const t = toks[i], tl = t.toLowerCase();
+            if (BOX_KW.has(tl)) {
+              if (boxCount === 0) { origin = tl; clip = tl; boxCount = 1; }
+              else if (boxCount === 1) { clip = tl; boxCount = 2; }
+              else return false;
+            } else if (ATT_KW.has(tl)) {
+              if (seenAtt) return false;
+              seenAtt = true; att = tl;
+            } else if (REP_SINGLE.has(tl)) {
+              if (seenRep) return false;
+              seenRep = true; rep = tl;
+            } else if (REP_PAIR.has(tl)) {
+              if (seenRep) return false;
+              seenRep = true;
+              if (i + 1 < toks.length && REP_PAIR.has(toks[i + 1].toLowerCase())) {
+                rep = normalizeCssSpecifiedValue("background-repeat", tl + " " + toks[i + 1].toLowerCase());
+                i++;
+              } else {
+                rep = tl;
+              }
+            } else if (isImgTok(t)) {
+              if (seenImg) return false;
+              seenImg = true; img = t;
+            } else if (isPosTok(t)) {
+              if (seenPos) return false;
+              seenPos = true;
+              const pToks = [t];
+              while (pToks.length < 4 && i + 1 < toks.length && isPosTok(toks[i + 1])) {
+                pToks.push(toks[++i]);
+              }
+              if (!isValidCssValue("background-position", pToks.join(" "))) return false;
+              pos = normalizeCssSpecifiedValue("background-position", pToks.join(" "));
+            } else if (isValidColor(t)) {
+              if (li < layers.length - 1 || seenCol) return false;
+              seenCol = true;
+              color = t;
+            } else {
+              return false;
+            }
+          }
+          return true;
+        };
+        if (slashes.length === 1) {
+          if (!parseTokens(splitCssTokens(slashes[0]), 0)) return null;
+        } else {
+          const leftToks = splitCssTokens(slashes[0]);
+          const rightToks = splitCssTokens(slashes[1]);
+          if (leftToks.length === 0 || rightToks.length === 0) return null;
+          let posEnd = leftToks.length;
+          let posStart = posEnd;
+          while (posStart > 0 && isPosTok(leftToks[posStart - 1])) posStart--;
+          if (posStart === posEnd) return null;
+          const pToks = leftToks.slice(posStart, posEnd);
+          if (!isValidCssValue("background-position", pToks.join(" "))) return null;
+          seenPos = true;
+          pos = normalizeCssSpecifiedValue("background-position", pToks.join(" "));
+          if (!parseTokens(leftToks.slice(0, posStart), 0)) return null;
+          const sz0 = rightToks[0].toLowerCase();
+          let szUsed = 0;
+          if (sz0 === "cover" || sz0 === "contain") {
+            szUsed = 1; size = sz0;
+          } else if (sz0 === "auto" || isSizeLenPct(rightToks[0])) {
+            szUsed = 1;
+            const s0 = sz0 === "auto" ? "auto" : ((rightToks[0] === "0" || rightToks[0] === "+0") ? "0px" : rightToks[0]);
+            if (rightToks.length >= 2 && (rightToks[1].toLowerCase() === "auto" || isSizeLenPct(rightToks[1]))) {
+              szUsed = 2;
+              const sz1 = rightToks[1].toLowerCase();
+              const s1 = sz1 === "auto" ? "auto" : ((rightToks[1] === "0" || rightToks[1] === "+0") ? "0px" : rightToks[1]);
+              size = (s0 === "auto" && s1 === "auto") ? "auto" : (s1 === "auto" ? s0 : (s0 + " " + s1));
+            } else {
+              size = s0;
+            }
+          } else {
+            return null;
+          }
+          if (!parseTokens(rightToks, szUsed)) return null;
+        }
+        out.push({ img, pos, size, rep, att, origin, clip, color });
+      }
+      return out;
+    }
+
     function parseGridLine(raw) {
       const s = String(raw || "").trim();
       if (!s || /["'/]/.test(s)) return null;
@@ -9757,6 +9887,28 @@
           ["font-variant-east-asian", ea.length ? normalizeCssSpecifiedValue("font-variant-east-asian", ea.join(" ")) : "normal"],
           ["font-variant-position", pos],
           ["font-variant-emoji", emo]
+        ];
+      }
+      if (key === "background") {
+        const vl = normV.toLowerCase();
+        if (/^(?:inherit|initial|unset|revert|revert-layer)$/i.test(vl)) {
+          return [
+            ["background-image", vl], ["background-position", vl], ["background-size", vl],
+            ["background-repeat", vl], ["background-attachment", vl], ["background-origin", vl],
+            ["background-clip", vl], ["background-color", vl]
+          ];
+        }
+        const layers = parseBackgroundLayers(normV);
+        if (!layers) return null;
+        return [
+          ["background-image", layers.map((l) => l.img).join(", ")],
+          ["background-position", layers.map((l) => l.pos).join(", ")],
+          ["background-size", layers.map((l) => l.size).join(", ")],
+          ["background-repeat", layers.map((l) => l.rep).join(", ")],
+          ["background-attachment", layers.map((l) => l.att).join(", ")],
+          ["background-origin", layers.map((l) => l.origin).join(", ")],
+          ["background-clip", layers.map((l) => l.clip).join(", ")],
+          ["background-color", layers[layers.length - 1].color]
         ];
       }
       return null;
@@ -46991,6 +47143,7 @@
         ["widows", "2"],
         ["background-clip", "border-box"],
         ["background-origin", "padding-box"],
+        ["background-attachment", "scroll"],
         ["background-size", "auto"],
         ["background-image", "none"],
         ["background-position-x", "0%"],
@@ -47420,12 +47573,16 @@
         if (sCur.trim()) bsLayers.push(sCur.trim());
         computedMap.set(szKey, bsLayers.map((layer) => {
           const toks = splitCssTopLevelWhitespace(layer);
-          return toks.map((tk) => {
+          const mapped = toks.map((tk) => {
             const tl = tk.toLowerCase();
             if (tl === "auto" || tl === "cover" || tl === "contain") return tl;
             const ev = evalLinLenPctTok(tk);
             return /^-[\d.]+px$/.test(ev) ? "0px" : ev;
-          }).join(" ");
+          });
+          if (szKey === "background-size" && mapped.length === 1 && mapped[0] !== "auto" && mapped[0] !== "cover" && mapped[0] !== "contain") {
+            mapped.push("auto");
+          }
+          return mapped.join(" ");
         }).join(", "));
       }
       const curRaw = (computedMap.get("cursor") || "").trim();
