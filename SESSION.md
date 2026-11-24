@@ -7745,3 +7745,9 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Agent]**: 自主推导并完成 Phase 586（`src/js/shim/window.js`, `test/wpt/wpt-expectations.json`）：
   1. **`window.js`**：将 `ruby-align`、`ruby-position`、`ruby-merge`、`ruby-overhang` 纳入 `INHERITED_CSS_PROPS` 与 `STANDARD_COMPUTED_LONGHANDS` 并补全默认初始值。
   2. **全绿验证与基线收紧**：`/css/css-ruby/inheritance.html` **FAIL->PASS**（已收紧为 `PASS`）、`/css/css-ruby/parsing/` **8/8 PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+
+### 2026-11-24 Phase 587 (`getComputedStyle-listing` 30/30 & `/css/css-text/parsing/` 86/86 全绿收紧)
+- **[Agent]**: 自主推导并完成 Phase 587（`src/js/shim/window.js`, `test/wpt/wpt-expectations.json`）：
+  1. **`window.js`**：为 `getComputedStyle` Proxy 补全 `getOwnPropertyDescriptor` trap，暴露 `STANDARD_COMPUTED_LONGHANDS` 与简写属性描述符。
+  2. **全绿验证与基线收紧**：`/css/css-logical/getComputedStyle-listing.html` **PASS (30/30)**、`/css/css-text/parsing/` **86/86 PASS (100% ALL GREEN)**（收紧 21 项基线为 `PASS`）、`--smoke` **3/3 suites, 6/6 tests PASS**。
+  3. **并行摸底汇总**：`/css/css-contain/`（49/55 PASS）、`/css/css-logical/`（55/58 PASS）、`/css/css-grid/inheritance`（10/20 subtests）。

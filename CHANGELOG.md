@@ -3638,3 +3638,5 @@
 - **Phase 585** (`src/js/shim/element/element.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 内联 `place-self`/`place-items`/`place-content` 接入 `setEntryWithShorthand`，补全 `justify-self`/`justify-items`/`align-content`/`justify-content` 默认初始值；`parse-justify-self-002` 与 `place-self-shorthand-001` 转绿。
 
 - **Phase 586** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 补齐 `ruby-{align,position,merge,overhang}` 继承集、`STANDARD_COMPUTED_LONGHANDS` 与默认初始值；`/css/css-ruby/inheritance.html` 转绿并收紧基线。
+
+- **Phase 587** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 为 `getComputedStyle` Proxy 补全 `getOwnPropertyDescriptor` trap；`css-logical/getComputedStyle-listing` 30/30 全绿，收紧 `/css/css-text/parsing/` 21 项基线实现 86/86 全绿。

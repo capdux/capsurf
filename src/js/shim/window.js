@@ -9225,6 +9225,18 @@ function installWindow(global) {
         }
         return false;
       },
+      getOwnPropertyDescriptor: function (target, prop) {
+        const own = Reflect.getOwnPropertyDescriptor(target, prop);
+        if (own) return own;
+        if (typeof prop === "string") {
+          const kebab = prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
+          if (prop === "cssFloat" || getShorthandComputed(prop) !== null || propSet.has(prop) || computedMap.has(prop) ||
+              getShorthandComputed(kebab) !== null || propSet.has(kebab) || computedMap.has(kebab)) {
+            return { value: target.getPropertyValue(kebab), writable: false, enumerable: false, configurable: true };
+          }
+        }
+        return undefined;
+      },
       preventExtensions: function () {
         return false;
       },

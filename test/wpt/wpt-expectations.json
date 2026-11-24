@@ -5583,7 +5583,7 @@
     "reason": null
   },
   "/css/css-text/parsing/hanging-punctuation-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-text/parsing/hyphenate-character-computed.html": {
@@ -5679,7 +5679,7 @@
     "reason": null
   },
   "/css/css-text/parsing/text-align-all-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-text/parsing/text-align-computed.html": {
@@ -5691,7 +5691,7 @@
     "reason": null
   },
   "/css/css-text/parsing/text-align-last-computed.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-text/parsing/text-align-last-invalid.html": {
@@ -5699,15 +5699,15 @@
     "reason": null
   },
   "/css/css-text/parsing/text-align-last-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-text/parsing/text-align-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-text/parsing/text-autospace-computed.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-text/parsing/text-autospace-invalid.html": {
@@ -5715,11 +5715,11 @@
     "reason": null
   },
   "/css/css-text/parsing/text-autospace-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-text/parsing/text-fit-computed.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-text/parsing/text-fit-invalid.html": {
@@ -5727,7 +5727,7 @@
     "reason": null
   },
   "/css/css-text/parsing/text-fit-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-text/parsing/text-group-align-invalid.html": {
@@ -5735,11 +5735,11 @@
     "reason": null
   },
   "/css/css-text/parsing/text-group-align-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-text/parsing/text-indent-computed.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-text/parsing/text-indent-invalid.html": {
@@ -5747,7 +5747,7 @@
     "reason": null
   },
   "/css/css-text/parsing/text-indent-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-text/parsing/text-justify-computed-legacy.html": {
@@ -5767,7 +5767,7 @@
     "reason": null
   },
   "/css/css-text/parsing/text-spacing-computed.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-text/parsing/text-spacing-invalid.html": {
@@ -5775,7 +5775,7 @@
     "reason": null
   },
   "/css/css-text/parsing/text-spacing-trim-computed.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-text/parsing/text-spacing-trim-invalid.html": {
@@ -5783,11 +5783,11 @@
     "reason": null
   },
   "/css/css-text/parsing/text-spacing-trim-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-text/parsing/text-spacing-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-text/parsing/text-transform-computed.html": {
@@ -5823,7 +5823,7 @@
     "reason": null
   },
   "/css/css-text/parsing/text-wrap-pretty.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-text/parsing/text-wrap-style-computed.html": {
@@ -5875,7 +5875,7 @@
     "reason": null
   },
   "/css/css-text/parsing/word-break-computed.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-text/parsing/word-break-invalid.html": {
@@ -5883,11 +5883,11 @@
     "reason": null
   },
   "/css/css-text/parsing/word-break-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-text/parsing/word-space-transform-computed.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-text/parsing/word-space-transform-invalid.html": {
@@ -5895,7 +5895,7 @@
     "reason": null
   },
   "/css/css-text/parsing/word-space-transform-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-text/parsing/word-spacing-computed.html": {

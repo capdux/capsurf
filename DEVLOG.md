@@ -2843,3 +2843,7 @@
 ### Phase 586: `/css/css-ruby/inheritance` 全绿收紧
 - **核心修复 (`src/js/shim/window.js`)**：补全 `ruby-{align,position,merge,overhang}` 继承与默认初始值（`"space-around"` / `"alternate"` / `"separate"` / `"auto"`）。
 - **WPT & Smoke 验收**：`/css/css-ruby/inheritance.html` FAIL->PASS（已收紧）、`css-ruby/parsing/` 8/8 PASS、`--smoke` 3/3 suites PASS。
+
+### Phase 587: `getComputedStyle-listing` 30/30 与 `/css/css-text/parsing/` 86/86 全绿收紧
+- **核心修复 (`src/js/shim/window.js`)**：为 `getComputedStyle` Proxy 添加 `getOwnPropertyDescriptor` trap。
+- **WPT & Smoke 验收**：`css-logical/getComputedStyle-listing.html` PASS（30/30）、`/css/css-text/parsing/` 86/86 PASS（收紧 21 项基线）、`--smoke` 3/3 suites PASS。

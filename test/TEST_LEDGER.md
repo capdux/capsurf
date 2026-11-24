@@ -1927,3 +1927,13 @@
 - **Filter `/css/css-ruby/inheritance`**: **PASS (FAIL -> PASS)**（`ruby-align`, `ruby-position`, `ruby-merge`, `ruby-overhang` 纳入 `INHERITED_CSS_PROPS` 与 `STANDARD_COMPUTED_LONGHANDS`，补全 `"space-around"` / `"alternate"` / `"separate"` / `"auto"` 默认初始值，已收紧基线为 `PASS`）。
 - **Filter `/css/css-ruby/parsing/`**: **8/8 PASS** 回归全绿。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 587 `getComputedStyle-listing` 30/30 & `/css/css-text/parsing/` 86/86 全绿收紧 & WPT-B475~B482 摸底 (bin_dev Phase 587, 2026-11-24)
+- **Filter `/css/css-logical/getComputedStyle-listing`**: **PASS (30/30)**（`window.js` 为 `getComputedStyle` Proxy 补全 `getOwnPropertyDescriptor` trap，支持所有 `STANDARD_COMPUTED_LONGHANDS` 与简写属性描述符查询）。
+- **Filter `/css/css-text/parsing/`**: **86/86 PASS (100% ALL GREEN)**（收紧 `hanging-punctuation-valid`, `text-align*-valid/computed`, `text-autospace-*`, `text-fit-*`, `text-group-align-valid`, `text-indent-*`, `text-spacing*`, `text-wrap-pretty`, `word-break-*`, `word-space-transform-*` 共 21 项基线为 `PASS`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-contain/` (`b475`, partial 55 recorded): `49 PASS / 1 FAIL / 5 TIMEOUT`
+  - `/css/css-logical/` (`b476`): `58` files (`54 PASS / 1 FAIL / 3 TIMEOUT`) -> Phase 587 修复 `getComputedStyle-listing.html` 后 `55/58 PASS`
+  - `/css/css-text/parsing/` (`b479`): **86/86 PASS (100% ALL GREEN)**
+  - `/css/css-grid/inheritance` (`b482`): `1` file (`0 PASS / 1 FAIL`, 10/20 subtests)
