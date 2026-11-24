@@ -3668,3 +3668,5 @@
 - **Phase 600** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 令 `mask-repeat` 复用 `background-repeat` 序列化并补齐 `clip-rule`/`mask-*` computed 属性支持；`mask-repeat-valid.html`、`mask-type-computed.html`、`mask-composite-computed.html` 全绿。
 
 - **Phase 601** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `STANDARD_CSS_PROPERTIES` 补全 `"clip-rule"`，优化 `isValidColor` 命名颜色纯 ASCII 校验并补全 `hwb()` 语法校验；`clip-rule-computed.html`、`color-invalid-named-color.html`、`color-invalid-hwb.html` 全绿。
+
+- **Phase 602** (`src/js/shim/window.js`, `src/js/shim/element/element.js`, `src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `-webkit-transform`/`-moz-transform` computed 别名映射、互斥清理与 `perspective(<len>)`/2D `matrix3d()` 求值，并将 `NAMED_COLORS` 改为惰性单例缓存；`transform-computed.html` 9/9 全绿。

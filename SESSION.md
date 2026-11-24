@@ -7835,3 +7835,10 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Agent]**: 完成 Phase 601（`src/js/shim/cssom.js`）：
   1. **`cssom.js`**：`STANDARD_CSS_PROPERTIES` 加入 `"clip-rule"`；`isValidColor` 对命名颜色加纯 ASCII 字母预检，并为 `hwb()` 增加禁止逗号及参数段数校验。
   2. **全绿验证**：`clip-rule-computed.html` **PASS**、`color-invalid-hwb.html` **PASS**、`color-invalid-named-color.html` **PASS (184/184, --timeout 15000)**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+
+### 2026-11-24 Phase 602 (`/css/css-transforms/parsing/transform-computed` 9/9 全绿)
+- **[Agent]**: 完成 Phase 602（`src/js/shim/window.js`, `src/js/shim/element/element.js`, `src/js/shim/cssom.js`）：
+  1. **`window.js` / `element.js`**：实现 `-webkit-transform`/`-moz-transform` computed 别名全链路映射、互斥清理以及 `perspective(<len>)` / 2D `matrix3d()` 降维求值。
+  2. **`cssom.js`**：`NAMED_COLORS` `Set` 改为惰性单例缓存。
+  3. **全绿验证**：`transform-computed.html` **PASS (9/9)**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+  4. **并行摸底汇总**：`/css/css-images/parsing/` 21/24 PASS（197/197 subtests）；`/css/css-transforms/parsing/` 22/28 PASS。

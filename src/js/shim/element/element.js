@@ -226,8 +226,11 @@ function removeKeyFromStyleMap(map, key) {
   const old = map.get(key);
   map.delete(key);
   if (key === "float") map.delete("css-float");
-  if (key === "transform") map.delete("-webkit-transform");
-  if (key === "-webkit-transform") map.delete("transform");
+  if (key === "transform" || key === "-webkit-transform" || key === "-moz-transform") {
+    map.delete("transform");
+    map.delete("-webkit-transform");
+    map.delete("-moz-transform");
+  }
   return old ? old.value : "";
 }
 

@@ -2903,3 +2903,7 @@
 ### Phase 601: `clip-rule-computed`, `color-invalid-named-color`, `color-invalid-hwb` 全绿
 - **核心修复 (`src/js/shim/cssom.js`)**：`STANDARD_CSS_PROPERTIES` 补充 `"clip-rule"`；`isValidColor` 增加纯 ASCII 字母正则预检杜绝 Unicode `U+212A` 误匹配，并为 `hwb()` 补全逗号拒绝与 `/` 分段校验。
 - **WPT & Smoke 验收**：`clip-rule-computed.html` PASS、`color-invalid-hwb.html` PASS、`color-invalid-named-color.html` PASS (`--timeout 15000`)、`--smoke` 3/3 suites PASS。
+
+### Phase 602: `/css/css-transforms/parsing/transform-computed` 9/9 全绿
+- **核心修复 (`window.js`, `element.js`, `cssom.js`)**：`getComputedStyle` Proxy `get` 与 `getPropertyValue` 前置 `-webkit-transform`/`-moz-transform` -> `transform` 映射，`removeKeyFromStyleMap` 三者互斥清理，补全 `perspective(<len>)` 与 2D `matrix3d()` 降维计算；`NAMED_COLORS` 惰性单例缓存。
+- **WPT & Smoke 验收**：`transform-computed.html` 9/9 PASS、`--smoke` 3/3 suites PASS。

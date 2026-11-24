@@ -7574,10 +7574,39 @@ function installWindow(global) {
     if (!computedMap.has("color") || computedMap.get("color") === "") {
       computedMap.set("color", "rgb(0, 0, 0)");
     }
+    const mozTf = (computedMap.get("-moz-transform") || "").trim();
+    const wkTf = (computedMap.get("-webkit-transform") || "").trim();
+    if (mozTf) {
+      computedMap.set("transform", mozTf);
+    } else if ((!computedMap.has("transform") || !computedMap.get("transform") || computedMap.get("transform") === "none") && wkTf) {
+      computedMap.set("transform", wkTf);
+    }
     if (!computedMap.has("transform") || computedMap.get("transform") === "") {
       computedMap.set("transform", "none");
-    } else if (computedMap.get("transform") === "perspective(none)") {
-      computedMap.set("transform", "matrix(1, 0, 0, 1, 0, 0)");
+    } else {
+      const tfVal = computedMap.get("transform").trim();
+      if (tfVal === "perspective(none)") {
+        computedMap.set("transform", "matrix(1, 0, 0, 1, 0, 0)");
+      } else {
+        const pm = /^perspective\(\s*([^)]+)\s*\)$/i.exec(tfVal);
+        if (pm) {
+          const dpx = evalCssLengthExpr(pm[1].trim(), 0, fontSize);
+          if (dpx !== null && dpx > 0) {
+            computedMap.set("transform", "matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, " + Number((-1 / dpx).toFixed(6)) + ", 0, 0, 0, 1)");
+          }
+        } else {
+          const m3 = /^matrix3d\(\s*([^)]+)\s*\)$/i.exec(tfVal);
+          if (m3) {
+            const v = m3[1].split(",").map(function (x) { return Number(x.trim()); });
+            if (v.length === 16 && v.every(Number.isFinite) &&
+                v[2] === 0 && v[3] === 0 && v[6] === 0 && v[7] === 0 &&
+                v[8] === 0 && v[9] === 0 && v[10] === 1 && v[11] === 0 &&
+                v[14] === 0 && v[15] === 1) {
+              computedMap.set("transform", "matrix(" + [v[0], v[1], v[4], v[5], v[12], v[13]].join(", ") + ")");
+            }
+          }
+        }
+      }
     }
     if (!computedMap.has("display") || computedMap.get("display") === "") {
       const tag = String(element && (element.localName || element.tagName) || "").toLowerCase();
@@ -8901,6 +8930,7 @@ function installWindow(global) {
     "padding-left", "padding-right", "padding-top", "perspective", "perspective-origin", "pointer-events",
     "position", "position-try-order", "position-visibility", "quotes", "resize", "right", "rotate", "row-gap",
     "ruby-align", "ruby-merge", "ruby-overhang", "ruby-position", "scale", "scroll-behavior", "scrollbar-gutter",
+    "-webkit-transform", "-moz-transform",
     "scroll-margin-block-end", "scroll-margin-block-start", "scroll-margin-bottom",
     "scroll-margin-inline-end", "scroll-margin-inline-start", "scroll-margin-left",
     "scroll-margin-right", "scroll-margin-top",
@@ -9198,11 +9228,15 @@ function installWindow(global) {
 
     declTarget.getPropertyValue = markNative(function (prop) {
       const p = String(prop).trim();
+      const pLow = p.toLowerCase();
+      if (pLow === "-webkit-transform" || pLow === "-moz-transform") {
+        return computedMap.get("transform") || "none";
+      }
       const sh = getShorthandComputed(p);
       if (sh !== null) return sh;
       if (computedMap.has(p)) return computedMap.get(p);
       if (p.startsWith("--")) return "";
-      const lower = p.toLowerCase().startsWith("scroll-snap-margin") ? p.toLowerCase().replace("scroll-snap-margin", "scroll-margin") : p.toLowerCase();
+      const lower = pLow.startsWith("scroll-snap-margin") ? pLow.replace("scroll-snap-margin", "scroll-margin") : pLow;
       const shL = getShorthandComputed(lower);
       if (shL !== null) return shL;
       if (computedMap.has(lower)) return computedMap.get(lower);
@@ -9271,6 +9305,9 @@ function installWindow(global) {
         if (typeof prop === "symbol") return target[prop];
         if (prop in target) return target[prop];
         if (typeof prop === "string") {
+          if (prop === "-webkit-transform" || prop === "-moz-transform" || prop === "webkitTransform" || prop === "MozTransform") {
+            return computedMap.get("transform") || "none";
+          }
           const shDirect = getShorthandComputed(prop);
           if (shDirect !== null) return shDirect;
           if (prop === "cssFloat") return computedMap.get("float") || "";

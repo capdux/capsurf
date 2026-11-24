@@ -152,6 +152,7 @@
   global.__isCssPropertySupported = isCssPropertySupported;
   if (typeof globalThis !== "undefined") globalThis.__isCssPropertySupported = isCssPropertySupported;
 
+  let _NAMED_COLORS_CACHE = null;
   function isValidColor(val) {
     const rawTrimmed = val.trim();
     const v = rawTrimmed.toLowerCase();
@@ -201,7 +202,8 @@
       return true;
     }
     if (!/^[a-zA-Z]+$/.test(rawTrimmed)) return false;
-    const NAMED_COLORS = new Set([
+    if (!_NAMED_COLORS_CACHE) {
+      _NAMED_COLORS_CACHE = new Set([
       "black", "silver", "gray", "white", "maroon", "red", "purple", "fuchsia",
       "green", "lime", "olive", "yellow", "navy", "blue", "teal", "aqua",
       "orange", "aliceblue", "antiquewhite", "aquamarine", "azure", "beige",
@@ -228,8 +230,9 @@
       "skyblue", "slateblue", "slategray", "slategrey", "snow", "springgreen",
       "steelblue", "tan", "thistle", "tomato", "turquoise", "violet", "wheat",
       "whitesmoke", "yellowgreen"
-    ]);
-    return NAMED_COLORS.has(v);
+      ]);
+    }
+    return _NAMED_COLORS_CACHE.has(v);
   }
 
   function splitTopLevelComma(s) {

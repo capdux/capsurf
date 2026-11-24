@@ -2037,3 +2037,10 @@
 - **Filter `/css/css-color/parsing/color-invalid-named-color`**: **PASS (184/184)**（`--timeout 15000` 下 `9907ms` PASS，`isValidColor` 在查表前校验纯 ASCII 字母 `/^[a-zA-Z]+$/`，拒绝 `U+212A` `K` 等非 ASCII 大小写折叠）。
 - **Filter `/css/css-color/parsing/color-invalid-hwb`**: **PASS (6/6)**（`isValidColor` 为 `hwb()` 补全禁止逗号与参数段数校验）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 602: `/css/css-transforms/parsing/transform-computed` 9/9 全绿 & Images/Transforms Parsing 摸底
+- **Filter `/css/css-transforms/parsing/transform-computed`**: **PASS (9/9)**（`window.js` 支持 `-webkit-transform`/`-moz-transform` computed 别名映射并补全 `perspective(<len>)` 与 2D `matrix3d()` 降维求值，`element.js` 同步三者互斥清理；`cssom.js` `NAMED_COLORS` 改为惰性单例缓存）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-images/parsing/` (`b504`, 24 files): `21 PASS (197/197 subtests) / 1 FAIL / 2 TIMEOUT`
+  - `/css/css-transforms/parsing/` (`b505`, 28 files): `21 PASS / 7 FAIL / 0 TIMEOUT` -> Phase 602 修复 `transform-computed.html` 后 `22/28 PASS`
