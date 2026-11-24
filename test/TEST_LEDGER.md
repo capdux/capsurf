@@ -1668,3 +1668,21 @@
 - **子智能体只读摸底记录**：
   - `/css/css-animations/` (partial): `16/58` ran (`8 PASS / 5 FAIL / 3 TIMEOUT`)
   - `/css/css-backgrounds/` (partial): `50/115` ran (`22 PASS / 22 FAIL / 5 TIMEOUT / 1 ERROR`)
+
+### WPT-B371 ~ B380 摸底与 Phase 560 `/css/css-multicol/parsing/` 31/31 全绿闭环 (bin_dev Phase 560, 2026-11-24)
+- **Filter `/css/css-multicol/parsing/`**: `31` files (**31 PASS / 0 FAIL / 0 TIMEOUT**, **100% ALL GREEN**!);
+  - `selector.js`: 放行 `::column`、`::scroll-marker` 及合法链式伪元素组合（`::before::column`、`::column::scroll-marker`、`::before::column::scroll-marker`），拦截 `::column:hover`、`::column::before`/`::first-letter`/`::first-line`。
+  - `cssom.js`: 实现 `columns` 简写展开与序列化（含 `0` 宽度 -> `0px` 与 `/ <column-height>` 语法）及 `column-rule` 默认序列化修复（`medium`）。
+  - `window.js`: 打通 `::column` 伪元素匹配、伪元素 `inherit` 原生元素回溯、`applyUsedValuesToComputedMap` 伪元素 `scroll-margin-*` `em -> px` 求值、`nonNegLenProps` 新增 `column-height`、`column-rule`/`columns` 计算值以及 `scrollSnapMargin* -> scrollMargin*` 代理映射；收紧 6 项基线为 `PASS`。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-will-change/`: `3` files (**3/3 PASS, 100% ALL GREEN**)
+  - `/css/css-scroll-snap/`: `8` files (`7 PASS / 1 FAIL`)
+  - `/css/css-writing-modes/`: `20` files (`15 PASS / 5 FAIL`)
+  - `/css/css-break/`: `209` files (`163 PASS / 44 FAIL / 2 TIMEOUT`)
+  - `/css/css-overflow/`: `33` files (`22 PASS / 11 FAIL`)
+  - `/css/css-flexbox/` (partial): `120/261` ran (`85 PASS / 25 FAIL / 10 TIMEOUT`)
+  - `/css/css-align/` (partial): `35/119` ran (`23 PASS / 4 FAIL / 8 TIMEOUT`)
+  - `/css/css-display/`: `52` files (`15 PASS / 31 FAIL / 6 TIMEOUT`)
+  - `/css/css-shapes/`: `70` files (`20 PASS / 47 FAIL / 3 TIMEOUT`)
+  - `/css/css-masking/`: `94` files (`15 PASS / 75 FAIL / 4 TIMEOUT`)

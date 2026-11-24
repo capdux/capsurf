@@ -6210,7 +6210,7 @@ function installWindow(global) {
       if (pseudoMatch) {
         let p = pseudoMatch[1].toLowerCase();
         if (p.startsWith(":") && !p.startsWith("::")) p = ":" + p;
-        if (p === "::before" || p === "::after" || p === "::marker" || p === "::selection") {
+        if (p === "::before" || p === "::after" || p === "::marker" || p === "::selection" || p === "::column") {
           selPseudo = p;
           baseSel = raw.slice(0, -pseudoMatch[1].length).trim();
         }
@@ -6483,9 +6483,10 @@ function installWindow(global) {
       const low = String(cv || "").trim().toLowerCase();
       if (low === "inherit" || (low === "unset" && INHERITED_CSS_PROPS.has(ck))) {
         let resolved = null;
-        for (let ai = 0; ai < ancestors.length; ai++) {
+        const inheritChain = normalizedPseudo ? [element].concat(ancestors) : ancestors;
+        for (let ai = 0; ai < inheritChain.length; ai++) {
           const ancMap = new Map();
-          collectElementOwnDeclarations(ancestors[ai], styleNodes, "", ancMap);
+          collectElementOwnDeclarations(inheritChain[ai], styleNodes, "", ancMap);
           if (ancMap.has(ck)) {
             const av = String(ancMap.get(ck) || "").trim();
             const alow = av.toLowerCase();
@@ -6817,7 +6818,17 @@ function installWindow(global) {
   }
 
   function applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo) {
-    if (normalizedPseudo || !element || element.nodeType !== 1) return;
+    if (!element || element.nodeType !== 1) return;
+    if (normalizedPseudo) {
+      const pFontSize = evalCssLengthExpr(computedMap.get("font-size") || "16px", 16, 16) || 16;
+      for (const smProp of ["scroll-margin-top", "scroll-margin-right", "scroll-margin-bottom", "scroll-margin-left"]) {
+        if (computedMap.has(smProp)) {
+          const px = evalCssLengthExpr(String(computedMap.get(smProp) || "").trim(), null, pFontSize);
+          if (px !== null && isFinite(px)) computedMap.set(smProp, formatCssPx(px));
+        }
+      }
+      return;
+    }
     const fsRaw = computedMap.get("font-size");
     if (fsRaw !== undefined && fsRaw.trim() === "0") {
       computedMap.set("font-size", "0px");
@@ -7718,7 +7729,7 @@ function installWindow(global) {
         computedMap.set("justify-items", resolvedJi);
       }
     }
-    const nonNegLenProps = ["column-width", "perspective", "row-gap", "column-gap", "min-width", "max-width", "min-height", "max-height", "flex-basis"];
+    const nonNegLenProps = ["column-width", "column-height", "perspective", "row-gap", "column-gap", "min-width", "max-width", "min-height", "max-height", "flex-basis", "scroll-margin-top", "scroll-margin-right", "scroll-margin-bottom", "scroll-margin-left"];
     for (let i = 0; i < nonNegLenProps.length; i++) {
       const nk = nonNegLenProps[i];
       let nv = (computedMap.get(nk) || "").trim().toLowerCase();
@@ -8666,6 +8677,21 @@ function installWindow(global) {
           return (!v || v === "initial" || v === "unset") ? lDefs[lh] : v;
         });
       }
+      if (name === "column-rule") {
+        const w = computedMap.get("column-rule-width") || "0px";
+        const st = computedMap.get("column-rule-style") || "none";
+        const defC = computedMap.get("color") || "rgb(0, 0, 0)";
+        const rawC = computedMap.get("column-rule-color");
+        const c = (!rawC || rawC.toLowerCase() === "currentcolor") ? defC : rawC;
+        return st === "none" ? (w + " " + c) : (w + " " + st + " " + c);
+      }
+      if (name === "columns") {
+        const w = computedMap.get("column-width") || "auto";
+        const c = computedMap.get("column-count") || "auto";
+        const h = computedMap.get("column-height") || "auto";
+        const left = (w === "auto" && c === "auto") ? "auto" : (w === "auto" ? c : (c === "auto" ? w : (w + " " + c)));
+        return h === "auto" ? left : (left + " / " + h);
+      }
       return null;
     }
 
@@ -8675,7 +8701,7 @@ function installWindow(global) {
       if (sh !== null) return sh;
       if (computedMap.has(p)) return computedMap.get(p);
       if (p.startsWith("--")) return "";
-      const lower = p.toLowerCase();
+      const lower = p.toLowerCase().startsWith("scroll-snap-margin") ? p.toLowerCase().replace("scroll-snap-margin", "scroll-margin") : p.toLowerCase();
       const shL = getShorthandComputed(lower);
       if (shL !== null) return shL;
       if (computedMap.has(lower)) return computedMap.get(lower);
@@ -8749,6 +8775,10 @@ function installWindow(global) {
           const shKebab = getShorthandComputed(kebab);
           if (shKebab !== null) return shKebab;
           if (computedMap.has(kebab)) return computedMap.get(kebab);
+          if (kebab.startsWith("scroll-snap-margin")) {
+            const smK = kebab.replace("scroll-snap-margin", "scroll-margin");
+            return computedMap.get(smK) || "0px";
+          }
           const lower = prop.toLowerCase();
           if (computedMap.has(lower)) return computedMap.get(lower);
           return "";

@@ -27,7 +27,8 @@ const KNOWN_PSEUDO_ELEMENTS = new Set([
   "::before", "::after", "::first-line", "::first-letter", "::selection",
   "::marker", "::placeholder", "::backdrop", "::slotted", "::part",
   "::file-selector-button", "::target-text", "::spelling-error", "::grammar-error",
-  "::highlight", "::search-text", "::view-transition", "::details-content"
+  "::highlight", "::search-text", "::view-transition", "::details-content",
+  "::column", "::scroll-marker"
 ]);
 
 function splitTopLevelSelectorList(str) {
@@ -66,13 +67,14 @@ function canonicalizeComplexSelector(raw, inHas, inFunc) {
   let prevWasCombinator = false;
   let atStart = true;
   let seenTerminalPseudoEl = false;
+  let lastPseudoEl = "";
 
   while (i < s.length) {
     // Whitespace -> descendant combinator (unless adjacent to > + ~ or start)
     if (/\s/.test(s[i])) {
       while (i < s.length && /\s/.test(s[i])) i++;
       if (i < s.length && s[i] !== ">" && s[i] !== "+" && s[i] !== "~" && !prevWasCombinator && !atStart) {
-        if (seenTerminalPseudoEl) return null;
+        if (seenTerminalPseudoEl && s[i] !== ":") return null;
         out += " ";
         prevWasCombinator = true;
       }
@@ -80,7 +82,7 @@ function canonicalizeComplexSelector(raw, inHas, inFunc) {
     }
     // Combinator > + ~
     if (s[i] === ">" || s[i] === "+" || s[i] === "~") {
-      if (seenTerminalPseudoEl) return null;
+      if (seenTerminalPseudoEl && s[i] !== ":") return null;
       const comb = s[i++];
       while (i < s.length && /\s/.test(s[i])) i++;
       if (i >= s.length || s[i] === ">" || s[i] === "+" || s[i] === "~") return null;
@@ -94,7 +96,7 @@ function canonicalizeComplexSelector(raw, inHas, inFunc) {
       atStart = false;
       continue;
     }
-    if (seenTerminalPseudoEl) return null;
+    if (seenTerminalPseudoEl && s[i] !== ":") return null;
     const atSimpleStart = (atStart || prevWasCombinator);
     atStart = false;
     prevWasCombinator = false;
@@ -151,6 +153,13 @@ function canonicalizeComplexSelector(raw, inHas, inFunc) {
       if (j >= s.length || !/[a-zA-Z_-]/.test(s[j])) return null;
       while (j < s.length && /[a-zA-Z0-9_-]/.test(s[j])) j++;
       const pName = s.slice(i, j).toLowerCase();
+      if (seenTerminalPseudoEl) {
+        const allowChain = isDouble && (
+          (pName === "::column" && (lastPseudoEl === "::before" || lastPseudoEl === "::after")) ||
+          (pName === "::scroll-marker" && lastPseudoEl === "::column")
+        );
+        if (!allowChain) return null;
+      }
       if (isDouble) {
         if (inFunc || !KNOWN_PSEUDO_ELEMENTS.has(pName)) return null;
       } else {
@@ -208,14 +217,14 @@ function canonicalizeComplexSelector(raw, inHas, inFunc) {
           out += ":state(" + inner + ")";
         } else {
           out += pName + "(" + inner + ")";
-          if (isDouble && pName !== "::part") seenTerminalPseudoEl = true;
+          if (isDouble && pName !== "::part") { seenTerminalPseudoEl = true; lastPseudoEl = pName; }
         }
         i = k;
         continue;
       } else {
         if (REQUIRED_FUNC_PSEUDOS.has(pName)) return null;
         out += pName;
-        if (isDouble && pName !== "::part") seenTerminalPseudoEl = true;
+        if (isDouble && pName !== "::part") { seenTerminalPseudoEl = true; lastPseudoEl = pName; }
         i = j;
         continue;
       }

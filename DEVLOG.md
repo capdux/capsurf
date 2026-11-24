@@ -2732,3 +2732,8 @@
 - **`margin-*` / `padding-*` 与 `calc()` (`src/js/shim/cssom.js`)**：在 `ZERO_PX_PROPS` 归一化路径增加 `canonicalizeCalcToken`，并拦截不在 `STANDARD_CSS_PROPERTIES` 中的 `margin-*`/`padding-*` 属性。
 - **`margin-trim` (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：支持 `none | block | block-start | block-end` 解析校验、双值折叠 `block` 以及 `getComputedStyle().marginTrim` 默认值 `"none"`。
 - **WPT 验收**：`/css/css-box/parsing/` **29/29 PASS**、`--smoke` **3/3 suites PASS**。
+
+### Phase 560: CSS Multicol Parsing 31/31 全绿闭环
+- **伪元素链与计算值 (`src/js/shim/selector.js`, `src/js/shim/window.js`)**：在 `canonicalizeComplexSelector` 放行 `::before::column` 与 `::column::scroll-marker` 并拦截其余伪元素后续组合；`collectRawComputedMap` 在 `normalizedPseudo` 场景将宿主 `element` 纳入 `inherit` 查找链；`applyUsedValuesToComputedMap` 为伪元素解析 `scroll-margin-*` `em -> px`；Proxy `get` 映射 `scrollSnapMargin* -> scrollMargin*`。
+- **`columns` 与 `column-rule` (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：`columns` 扩展至 `["column-width", "column-count", "column-height"]` 并支持 `0` 宽度与 `/` 分隔符；`column-rule` 计算值在 `style === "none"` 时省略 `none` 并解析 `currentcolor`。
+- **WPT 验收**：`/css/css-multicol/parsing/` **31/31 PASS**、`--smoke` **3/3 suites PASS**。

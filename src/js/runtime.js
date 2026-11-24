@@ -7188,6 +7188,29 @@
         }
         return [["text-wrap-mode", m], ["text-wrap-style", st]];
       }
+      if (key === "columns") {
+        const slashIdx = normV.indexOf("/");
+        const leftStr = slashIdx === -1 ? normV : normV.slice(0, slashIdx);
+        const rightStr = slashIdx === -1 ? "" : normV.slice(slashIdx + 1).trim();
+        const p = splitCssTokens(leftStr.toLowerCase());
+        let w = "auto", c = "auto";
+        for (let i = 0; i < p.length; i++) {
+          if (p[i] === "auto") continue;
+          if (p[i] === "0" || p[i] === "+0" || p[i] === "-0") {
+            w = "0px";
+          } else if (/^[+]?[1-9]\d*$/.test(p[i]) || (/^(?:calc|min|max|clamp)\(/i.test(p[i]) && !/[a-z%]/i.test(p[i].replace(/^(?:calc|min|max|clamp)\(/i, "")))) {
+            c = p[i];
+          } else {
+            w = p[i];
+          }
+        }
+        let h = "auto";
+        if (rightStr) {
+          const rl = rightStr.toLowerCase();
+          h = (rl === "0" || rl === "+0" || rl === "-0") ? "0px" : rl;
+        }
+        return [["column-width", w], ["column-count", c], ["column-height", h]];
+      }
       if (key === "outline" || key === "column-rule") {
         const p = splitCssTokens(normV);
         const STY = new Set(["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset", "auto"]);
@@ -7292,6 +7315,7 @@
       transition: ["transition-property", "transition-duration", "transition-timing-function", "transition-delay", "transition-behavior"],
       outline: ["outline-color", "outline-style", "outline-width"],
       "column-rule": ["column-rule-width", "column-rule-style", "column-rule-color"],
+      columns: ["column-width", "column-count", "column-height"],
       overflow: ["overflow-x", "overflow-y"],
       gap: ["row-gap", "column-gap"],
       "grid-gap": ["row-gap", "column-gap"],
@@ -7455,10 +7479,17 @@
         return [oc, ost, ow].filter(Boolean).join(" ") || "none";
       }
       if (key === "column-rule") {
-        const cw = vals[0] === "medium" ? "" : vals[0];
-        const cst = vals[1] === "none" ? "" : vals[1];
+        const cw = vals[0] === "medium" && (vals[1] !== "none" || vals[2].toLowerCase() !== "currentcolor") ? "" : vals[0];
+        const cst = vals[1] === "none" && (cw || vals[2].toLowerCase() !== "currentcolor") ? "" : vals[1];
         const cc = vals[2].toLowerCase() === "currentcolor" ? "" : vals[2];
-        return [cw, cst, cc].filter(Boolean).join(" ") || "none";
+        return [cw, cst, cc].filter(Boolean).join(" ") || "medium";
+      }
+      if (key === "columns") {
+        const cw = vals[0] || "auto";
+        const cc = vals[1] || "auto";
+        const ch = vals[2] || "auto";
+        const left = (cw === "auto" && cc === "auto") ? "auto" : (cw === "auto" ? cc : (cc === "auto" ? cw : (cw + " " + cc)));
+        return ch === "auto" ? left : (left + " / " + ch);
       }
       return vals.join(" ");
     }
@@ -12282,7 +12313,8 @@
     "::before", "::after", "::first-line", "::first-letter", "::selection",
     "::marker", "::placeholder", "::backdrop", "::slotted", "::part",
     "::file-selector-button", "::target-text", "::spelling-error", "::grammar-error",
-    "::highlight", "::search-text", "::view-transition", "::details-content"
+    "::highlight", "::search-text", "::view-transition", "::details-content",
+    "::column", "::scroll-marker"
   ]);
 
   function splitTopLevelSelectorList(str) {
@@ -12321,13 +12353,14 @@
     let prevWasCombinator = false;
     let atStart = true;
     let seenTerminalPseudoEl = false;
+    let lastPseudoEl = "";
 
     while (i < s.length) {
       // Whitespace -> descendant combinator (unless adjacent to > + ~ or start)
       if (/\s/.test(s[i])) {
         while (i < s.length && /\s/.test(s[i])) i++;
         if (i < s.length && s[i] !== ">" && s[i] !== "+" && s[i] !== "~" && !prevWasCombinator && !atStart) {
-          if (seenTerminalPseudoEl) return null;
+          if (seenTerminalPseudoEl && s[i] !== ":") return null;
           out += " ";
           prevWasCombinator = true;
         }
@@ -12335,7 +12368,7 @@
       }
       // Combinator > + ~
       if (s[i] === ">" || s[i] === "+" || s[i] === "~") {
-        if (seenTerminalPseudoEl) return null;
+        if (seenTerminalPseudoEl && s[i] !== ":") return null;
         const comb = s[i++];
         while (i < s.length && /\s/.test(s[i])) i++;
         if (i >= s.length || s[i] === ">" || s[i] === "+" || s[i] === "~") return null;
@@ -12349,7 +12382,7 @@
         atStart = false;
         continue;
       }
-      if (seenTerminalPseudoEl) return null;
+      if (seenTerminalPseudoEl && s[i] !== ":") return null;
       const atSimpleStart = (atStart || prevWasCombinator);
       atStart = false;
       prevWasCombinator = false;
@@ -12406,6 +12439,13 @@
         if (j >= s.length || !/[a-zA-Z_-]/.test(s[j])) return null;
         while (j < s.length && /[a-zA-Z0-9_-]/.test(s[j])) j++;
         const pName = s.slice(i, j).toLowerCase();
+        if (seenTerminalPseudoEl) {
+          const allowChain = isDouble && (
+            (pName === "::column" && (lastPseudoEl === "::before" || lastPseudoEl === "::after")) ||
+            (pName === "::scroll-marker" && lastPseudoEl === "::column")
+          );
+          if (!allowChain) return null;
+        }
         if (isDouble) {
           if (inFunc || !KNOWN_PSEUDO_ELEMENTS.has(pName)) return null;
         } else {
@@ -12463,14 +12503,14 @@
             out += ":state(" + inner + ")";
           } else {
             out += pName + "(" + inner + ")";
-            if (isDouble && pName !== "::part") seenTerminalPseudoEl = true;
+            if (isDouble && pName !== "::part") { seenTerminalPseudoEl = true; lastPseudoEl = pName; }
           }
           i = k;
           continue;
         } else {
           if (REQUIRED_FUNC_PSEUDOS.has(pName)) return null;
           out += pName;
-          if (isDouble && pName !== "::part") seenTerminalPseudoEl = true;
+          if (isDouble && pName !== "::part") { seenTerminalPseudoEl = true; lastPseudoEl = pName; }
           i = j;
           continue;
         }
@@ -40781,7 +40821,7 @@
         if (pseudoMatch) {
           let p = pseudoMatch[1].toLowerCase();
           if (p.startsWith(":") && !p.startsWith("::")) p = ":" + p;
-          if (p === "::before" || p === "::after" || p === "::marker" || p === "::selection") {
+          if (p === "::before" || p === "::after" || p === "::marker" || p === "::selection" || p === "::column") {
             selPseudo = p;
             baseSel = raw.slice(0, -pseudoMatch[1].length).trim();
           }
@@ -41054,9 +41094,10 @@
         const low = String(cv || "").trim().toLowerCase();
         if (low === "inherit" || (low === "unset" && INHERITED_CSS_PROPS.has(ck))) {
           let resolved = null;
-          for (let ai = 0; ai < ancestors.length; ai++) {
+          const inheritChain = normalizedPseudo ? [element].concat(ancestors) : ancestors;
+          for (let ai = 0; ai < inheritChain.length; ai++) {
             const ancMap = new Map();
-            collectElementOwnDeclarations(ancestors[ai], styleNodes, "", ancMap);
+            collectElementOwnDeclarations(inheritChain[ai], styleNodes, "", ancMap);
             if (ancMap.has(ck)) {
               const av = String(ancMap.get(ck) || "").trim();
               const alow = av.toLowerCase();
@@ -41388,7 +41429,17 @@
     }
 
     function applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo) {
-      if (normalizedPseudo || !element || element.nodeType !== 1) return;
+      if (!element || element.nodeType !== 1) return;
+      if (normalizedPseudo) {
+        const pFontSize = evalCssLengthExpr(computedMap.get("font-size") || "16px", 16, 16) || 16;
+        for (const smProp of ["scroll-margin-top", "scroll-margin-right", "scroll-margin-bottom", "scroll-margin-left"]) {
+          if (computedMap.has(smProp)) {
+            const px = evalCssLengthExpr(String(computedMap.get(smProp) || "").trim(), null, pFontSize);
+            if (px !== null && isFinite(px)) computedMap.set(smProp, formatCssPx(px));
+          }
+        }
+        return;
+      }
       const fsRaw = computedMap.get("font-size");
       if (fsRaw !== undefined && fsRaw.trim() === "0") {
         computedMap.set("font-size", "0px");
@@ -42289,7 +42340,7 @@
           computedMap.set("justify-items", resolvedJi);
         }
       }
-      const nonNegLenProps = ["column-width", "perspective", "row-gap", "column-gap", "min-width", "max-width", "min-height", "max-height", "flex-basis"];
+      const nonNegLenProps = ["column-width", "column-height", "perspective", "row-gap", "column-gap", "min-width", "max-width", "min-height", "max-height", "flex-basis", "scroll-margin-top", "scroll-margin-right", "scroll-margin-bottom", "scroll-margin-left"];
       for (let i = 0; i < nonNegLenProps.length; i++) {
         const nk = nonNegLenProps[i];
         let nv = (computedMap.get(nk) || "").trim().toLowerCase();
@@ -43237,6 +43288,21 @@
             return (!v || v === "initial" || v === "unset") ? lDefs[lh] : v;
           });
         }
+        if (name === "column-rule") {
+          const w = computedMap.get("column-rule-width") || "0px";
+          const st = computedMap.get("column-rule-style") || "none";
+          const defC = computedMap.get("color") || "rgb(0, 0, 0)";
+          const rawC = computedMap.get("column-rule-color");
+          const c = (!rawC || rawC.toLowerCase() === "currentcolor") ? defC : rawC;
+          return st === "none" ? (w + " " + c) : (w + " " + st + " " + c);
+        }
+        if (name === "columns") {
+          const w = computedMap.get("column-width") || "auto";
+          const c = computedMap.get("column-count") || "auto";
+          const h = computedMap.get("column-height") || "auto";
+          const left = (w === "auto" && c === "auto") ? "auto" : (w === "auto" ? c : (c === "auto" ? w : (w + " " + c)));
+          return h === "auto" ? left : (left + " / " + h);
+        }
         return null;
       }
 
@@ -43246,7 +43312,7 @@
         if (sh !== null) return sh;
         if (computedMap.has(p)) return computedMap.get(p);
         if (p.startsWith("--")) return "";
-        const lower = p.toLowerCase();
+        const lower = p.toLowerCase().startsWith("scroll-snap-margin") ? p.toLowerCase().replace("scroll-snap-margin", "scroll-margin") : p.toLowerCase();
         const shL = getShorthandComputed(lower);
         if (shL !== null) return shL;
         if (computedMap.has(lower)) return computedMap.get(lower);
@@ -43320,6 +43386,10 @@
             const shKebab = getShorthandComputed(kebab);
             if (shKebab !== null) return shKebab;
             if (computedMap.has(kebab)) return computedMap.get(kebab);
+            if (kebab.startsWith("scroll-snap-margin")) {
+              const smK = kebab.replace("scroll-snap-margin", "scroll-margin");
+              return computedMap.get(smK) || "0px";
+            }
             const lower = prop.toLowerCase();
             if (computedMap.has(lower)) return computedMap.get(lower);
             return "";

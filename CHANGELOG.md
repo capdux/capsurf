@@ -3584,3 +3584,5 @@
 - **Phase 559** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 为 `ZERO_PX_PROPS` 接入 `canonicalizeCalcToken`、拦截未注册 `margin-*`/`padding-*` 属性名，并实现 `margin-trim` 文法校验与 `block` 折叠序列化及计算值默认值；WPT `/css/css-box/parsing/` 29/29 用例 100% 全绿通过。
 
 - **Phase 559** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 为 `ZERO_PX_PROPS` 接入 `canonicalizeCalcToken`、拦截未注册 `margin-*`/`padding-*` 属性名，并实现 `margin-trim` 文法校验与 `block` 折叠序列化及计算值默认值；WPT `/css/css-box/parsing/` 29/29 用例 100% 全绿通过。
+
+- **Phase 560** (`src/js/shim/selector.js`, `src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 支持 `::column`/`::scroll-marker` 合法链式伪元素、伪元素 `inherit` 宿主回溯与 `scrollSnapMargin*` 别名映射，完善 `columns`（含 `0` 宽度与 `/ <column-height>`）及 `column-rule` 简写与计算值序列化；WPT `/css/css-multicol/parsing/` 31/31 用例 100% 全绿通过。

@@ -4678,7 +4678,7 @@
     "reason": null
   },
   "/css/css-multicol/parsing/column-pseudo-computed.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-multicol/parsing/column-pseudo-invalid.html": {
@@ -4686,7 +4686,7 @@
     "reason": null
   },
   "/css/css-multicol/parsing/column-pseudo-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-multicol/parsing/column-rule-color-computed.html": {
@@ -4702,7 +4702,7 @@
     "reason": null
   },
   "/css/css-multicol/parsing/column-rule-computed.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-multicol/parsing/column-rule-invalid.html": {
@@ -4726,7 +4726,7 @@
     "reason": null
   },
   "/css/css-multicol/parsing/column-rule-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-multicol/parsing/column-rule-width-computed.html": {
@@ -4766,7 +4766,7 @@
     "reason": null
   },
   "/css/css-multicol/parsing/columns-computed.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-multicol/parsing/columns-invalid.html": {
@@ -4774,7 +4774,7 @@
     "reason": null
   },
   "/css/css-multicol/parsing/columns-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-overflow/inheritance.html": {

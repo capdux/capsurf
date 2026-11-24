@@ -3398,6 +3398,29 @@
       }
       return [["text-wrap-mode", m], ["text-wrap-style", st]];
     }
+    if (key === "columns") {
+      const slashIdx = normV.indexOf("/");
+      const leftStr = slashIdx === -1 ? normV : normV.slice(0, slashIdx);
+      const rightStr = slashIdx === -1 ? "" : normV.slice(slashIdx + 1).trim();
+      const p = splitCssTokens(leftStr.toLowerCase());
+      let w = "auto", c = "auto";
+      for (let i = 0; i < p.length; i++) {
+        if (p[i] === "auto") continue;
+        if (p[i] === "0" || p[i] === "+0" || p[i] === "-0") {
+          w = "0px";
+        } else if (/^[+]?[1-9]\d*$/.test(p[i]) || (/^(?:calc|min|max|clamp)\(/i.test(p[i]) && !/[a-z%]/i.test(p[i].replace(/^(?:calc|min|max|clamp)\(/i, "")))) {
+          c = p[i];
+        } else {
+          w = p[i];
+        }
+      }
+      let h = "auto";
+      if (rightStr) {
+        const rl = rightStr.toLowerCase();
+        h = (rl === "0" || rl === "+0" || rl === "-0") ? "0px" : rl;
+      }
+      return [["column-width", w], ["column-count", c], ["column-height", h]];
+    }
     if (key === "outline" || key === "column-rule") {
       const p = splitCssTokens(normV);
       const STY = new Set(["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset", "auto"]);
@@ -3502,6 +3525,7 @@
     transition: ["transition-property", "transition-duration", "transition-timing-function", "transition-delay", "transition-behavior"],
     outline: ["outline-color", "outline-style", "outline-width"],
     "column-rule": ["column-rule-width", "column-rule-style", "column-rule-color"],
+    columns: ["column-width", "column-count", "column-height"],
     overflow: ["overflow-x", "overflow-y"],
     gap: ["row-gap", "column-gap"],
     "grid-gap": ["row-gap", "column-gap"],
@@ -3665,10 +3689,17 @@
       return [oc, ost, ow].filter(Boolean).join(" ") || "none";
     }
     if (key === "column-rule") {
-      const cw = vals[0] === "medium" ? "" : vals[0];
-      const cst = vals[1] === "none" ? "" : vals[1];
+      const cw = vals[0] === "medium" && (vals[1] !== "none" || vals[2].toLowerCase() !== "currentcolor") ? "" : vals[0];
+      const cst = vals[1] === "none" && (cw || vals[2].toLowerCase() !== "currentcolor") ? "" : vals[1];
       const cc = vals[2].toLowerCase() === "currentcolor" ? "" : vals[2];
-      return [cw, cst, cc].filter(Boolean).join(" ") || "none";
+      return [cw, cst, cc].filter(Boolean).join(" ") || "medium";
+    }
+    if (key === "columns") {
+      const cw = vals[0] || "auto";
+      const cc = vals[1] || "auto";
+      const ch = vals[2] || "auto";
+      const left = (cw === "auto" && cc === "auto") ? "auto" : (cw === "auto" ? cc : (cc === "auto" ? cw : (cw + " " + cc)));
+      return ch === "auto" ? left : (left + " / " + ch);
     }
     return vals.join(" ");
   }

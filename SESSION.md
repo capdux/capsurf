@@ -7559,3 +7559,14 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
      - 将 `margin-trim` 加入 `STANDARD_CSS_PROPERTIES` 与 `STANDARD_COMPUTED_LONGHANDS`，实现 `none | block | block-start | block-end` 文法校验及 `block-start block-end` -> `block` 折叠，并收紧基线为 `PASS`。
   2. **全绿验证**：
      - `/css/css-box/parsing/`: **29/29 PASS (100% ALL GREEN)**；`scripts/e2e_suite.py --smoke`: **3/3 suites, 6/6 tests PASS**。
+
+### 2026-11-24 Phase 560 (`/css/css-multicol/parsing/` 31/31 全绿闭环与 WPT/PW 状态答疑)
+- **[User <-> Agent]**: 回答用户关于 WPT（7,042 PASS / 2,683 未通过，共 9,725 条基线）与 PW（`pw-expectations.json` 为 11-15 只记例外项的旧快照，近期 PW-B157~160 已有多批转绿）的进度问询。
+- **[Agent]**: 自主推导并完成 Phase 560（`src/js/shim/selector.js`, `src/js/shim/cssom.js`, `src/js/shim/window.js`, `test/wpt/wpt-expectations.json`）：
+  1. **`::column` / `::scroll-marker` 伪元素链与伪元素计算值 (`src/js/shim/selector.js`, `src/js/shim/window.js`)**：
+     - 放行 `::column`、`::scroll-marker` 及 `::before::column` / `::column::scroll-marker` / `::before::column::scroll-marker` 链式伪元素，同时阻断 `::column:hover` / `::column::before` 等非法后续组合。
+     - `window.js` 中为 `::column` 开启规则匹配、`inherit` 优先回溯宿主元素、`applyUsedValuesToComputedMap` 伪元素分支解析 `scroll-margin-*` `em -> px`，并支持 `scrollSnapMargin*` 别名查询。
+  2. **`columns` 与 `column-rule` 简写/计算值闭环 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：
+     - 支持 `columns` 的 `0` 宽度（`0px`）与 `/ <column-height>` 语法及计算期 `em -> px`；修复 `column-rule` 默认序列与计算期省略 `none`。
+  3. **全绿验证**：
+     - `/css/css-multicol/parsing/`: **31/31 PASS (100% ALL GREEN)**；`scripts/e2e_suite.py --smoke`: **3/3 suites, 6/6 tests PASS**。
