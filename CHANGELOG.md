@@ -4024,3 +4024,6 @@
   - `src/js/shim/element/element.js`: 移除仅返回 `background-image` 的旧 `background` 截断分支，统一走 `SHORTHAND_EXPAND_LONGHANDS`。
   - `src/js/shim/cssom.js`: 补齐 `background` 8-longhand 规范序列化并将默认 `background-color` 规范化为 `"rgba(0, 0, 0, 0)"`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 727**:
+  - `src/js/shim/cssom.js`: 新增 `isValidEnvSyntax`，严格校验 `env()` 变量名与可选整数索引，拒绝 `env()` 空名与非法括号。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

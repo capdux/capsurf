@@ -492,7 +492,28 @@
       return ["auto", "block", "swap", "fallback", "optional"].includes(vLower);
     }
 
-    if (/^(?:var|env)\(/i.test(trimmed) && !/\s/.test(trimmed)) {
+    function isValidEnvSyntax(tok) {
+      const m = /^env\((.*)\)$/i.exec(String(tok || "").trim());
+      if (!m) return false;
+      const body = m[1];
+      const commaI = body.indexOf(",");
+      const head = (commaI === -1 ? body : body.slice(0, commaI)).trim();
+      if (!head) return false;
+      const toks = splitCssTokens(head);
+      if (toks.length === 0) return false;
+      const id = toks[0];
+      if (!/^(?:--|-?[a-z_]|-?[^\x00-\x7f])(?:[a-z0-9_-]|[^\x00-\x7f])*$/i.test(id)) return false;
+      if (/^(?:initial|inherit|unset|revert|revert-layer|default)$/i.test(id)) return false;
+      for (let i = 1; i < toks.length; i++) {
+        if (!/^\+?\d+$/.test(toks[i])) return false;
+      }
+      return true;
+    }
+
+    if (/^env\(/i.test(trimmed) && splitCssTokens(trimmed).length === 1) {
+      return isValidEnvSyntax(trimmed);
+    }
+    if (/^var\(/i.test(trimmed) && !/\s/.test(trimmed)) {
       return true;
     }
 
@@ -595,7 +616,8 @@
     }
 
     function isValidCalcSyntax(tok) {
-      if (/^(?:var|env|attr|anchor|anchor-size)\(/i.test(tok)) return true;
+      if (/^env\(/i.test(tok)) return isValidEnvSyntax(tok);
+      if (/^(?:var|attr|anchor|anchor-size)\(/i.test(tok)) return true;
       const m = /^(calc|min|max|clamp)\((.*)\)$/i.exec(tok);
       if (!m) return true;
       const fn = m[1].toLowerCase();
@@ -695,7 +717,8 @@
     _isValidCalcSyntax = isValidCalcSyntax;
 
     function isValidLenPct(tok, allowNegative) {
-      if (/^(?:var|env|attr|anchor|anchor-size)\(/i.test(tok)) return true;
+      if (/^env\(/i.test(tok)) return isValidEnvSyntax(tok);
+      if (/^(?:var|attr|anchor|anchor-size)\(/i.test(tok)) return true;
       if (/^(?:calc|min|max|clamp)\(/i.test(tok)) {
         if (!isValidCalcSyntax(tok)) return false;
         if (/^calc\(\s*[+-]?(?:\d+\.?\d*|\.\d+)\s*\/\s*(?:max|min)?\(?[+-]?(?:\d+\.?\d*|\.\d+)(?:px|em|rem|ex|ch|vw|vh|vmin|vmax|cm|mm|in|pt|pc)\b/i.test(tok)) {

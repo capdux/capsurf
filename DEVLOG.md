@@ -3292,3 +3292,5 @@
 - 在 `cssom.js` 新增 `canonicalizePageSize` 统一处理 `@page` 声明块与 `setProperty` 中的 `size` 非法值过滤及 `<page-size>` + `<orientation>` 规范序，并隔离非 `@page` 规则上的 `size`/`page-orientation`，打通 `page-orientation.tentative.html` 与 `page-rule-declarations-000.html` 全绿。
 ### Phase 726 — `background` 简写 8-longhand 序列化闭环
 - 移除 `element.js` 中仅返回 `background-image` 的陈旧 `background` 分支，在 `cssom.js` `serializeExpandedShorthand` 补齐多层 `background` 简写序列化，打通 `background-valid.html` 多层序列化与 `background-33*` 5/5 全绿。
+### Phase 727 — `css-env` `env()` 严格语法校验闭环
+- 在 `cssom.js` 新增 `isValidEnvSyntax` 并在 `isValidCssValue` / `isValidCalcSyntax` / `isValidLenPct` 中统一调用，拒绝 `env()` 与 `env(name ())` 非法形式，打通 `env-parsing.html` (8/8 PASS) 与 `seralization-round-tripping.tentative.html` (PASS)。
