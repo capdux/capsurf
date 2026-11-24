@@ -5107,7 +5107,7 @@
     "reason": null
   },
   "/css/css-pseudo/parsing/marker-supported-properties.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-pseudo/parsing/tree-abiding-pseudo-elements.html": {

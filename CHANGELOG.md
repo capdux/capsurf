@@ -4077,3 +4077,8 @@
 - **Phase 739**:
   - `src/js/shim/cssom.js`: `normalizeSingleColor` 内 `evalColorExpr` 支持 `infinity`/`nan`/`pi`/`e` 与除零常量折叠，完善 `rgb`/`hsl`/`hwb` 的无穷与 `NaN` 钳位（保留含相对单位的未求值 `calc()`）。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 740**:
+  - `src/js/shim/window.js`: `::marker` 屏蔽自身 `list-style-*` 声明并重置 `display`/`position`/`float` 初始值；`STANDARD_COMPUTED_LONGHANDS` 增加 `animation-timeline`；`getShorthandComputed` 增加 `font`/`font-variant`/`animation-range` 并修正 `list-style` 为 `outside none disc`。
+  - `src/js/shim/cssom.js`: `KNOWN_CSS_PROPERTIES`、`isValidCssValue` 与 `expandCssShorthand` 补全 `animation-range` 支持。
+  - `test/wpt/wpt-expectations.json`: 将 `/css/css-pseudo/parsing/marker-supported-properties.html` 收紧为 `PASS`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

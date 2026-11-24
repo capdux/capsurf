@@ -13,7 +13,7 @@
     "anchor-scope",
     "animation", "animation-composition", "animation-delay", "animation-direction",
     "animation-duration", "animation-fill-mode", "animation-iteration-count",
-    "animation-name", "animation-play-state", "animation-range-end", "animation-range-start",
+    "animation-name", "animation-play-state", "animation-range", "animation-range-end", "animation-range-start",
     "animation-timeline", "animation-timing-function",
     "appearance", "aspect-ratio", "backdrop-filter", "backface-visibility",
     "background", "background-attachment", "background-blend-mode", "background-clip",
@@ -2508,6 +2508,30 @@
       if (items.length === 0) return false;
       for (let i = 0; i < items.length; i++) {
         if (items[i] !== "replace" && items[i] !== "add" && items[i] !== "accumulate") return false;
+      }
+      return true;
+    }
+    if (prop === "animation-range") {
+      const RANGE_NAMES = new Set(["cover", "contain", "entry", "exit", "entry-crossing", "exit-crossing"]);
+      const items = splitTopLevelComma(vLower);
+      if (items.length === 0) return false;
+      for (let i = 0; i < items.length; i++) {
+        const toks = splitCssTokens(items[i]);
+        if (toks.length === 0 || toks.length > 4) return false;
+        let idx = 0;
+        const parseOne = () => {
+          if (idx >= toks.length) return false;
+          const t = toks[idx++];
+          if (t === "normal" || isValidLenPct(t, true)) return true;
+          if (RANGE_NAMES.has(t)) {
+            if (idx < toks.length && isValidLenPct(toks[idx], true)) idx++;
+            return true;
+          }
+          return false;
+        };
+        if (!parseOne()) return false;
+        if (idx < toks.length && !parseOne()) return false;
+        if (idx !== toks.length) return false;
       }
       return true;
     }
@@ -6288,6 +6312,26 @@
         [pfx + "bottom", b],
         [pfx + "left", l]
       ];
+    }
+    if (key === "animation-range") {
+      const RANGE_NAMES = new Set(["cover", "contain", "entry", "exit", "entry-crossing", "exit-crossing"]);
+      const toks = splitCssTokens(normV);
+      let idx = 0;
+      const takeOne = () => {
+        if (idx >= toks.length) return null;
+        const t = toks[idx++];
+        if (RANGE_NAMES.has(t.toLowerCase())) {
+          if (idx < toks.length && !RANGE_NAMES.has(toks[idx].toLowerCase()) && toks[idx].toLowerCase() !== "normal") {
+            return t + " " + toks[idx++];
+          }
+          return t;
+        }
+        return t;
+      };
+      const rs = takeOne();
+      if (!rs) return null;
+      const re = idx < toks.length ? takeOne() : (RANGE_NAMES.has(rs.split(/\s+/)[0].toLowerCase()) ? rs.split(/\s+/)[0] : "normal");
+      return [["animation-range-start", rs], ["animation-range-end", re || "normal"]];
     }
     if (key === "scroll-margin-block" || key === "scroll-margin-inline" ||
         key === "scroll-padding-block" || key === "scroll-padding-inline" ||

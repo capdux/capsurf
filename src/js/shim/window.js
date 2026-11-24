@@ -6665,7 +6665,19 @@ function installWindow(global) {
       const vp = valCheckProps[vi];
       if (computedMap.has(vp)) preOwn.set(vp, computedMap.get(vp));
     }
-    collectElementOwnDeclarations(element, styleNodes, normalizedPseudo, computedMap);
+    if (normalizedPseudo === "::marker") {
+      const savedList = {};
+      for (const lk of ["list-style-image", "list-style-position", "list-style-type"]) {
+        if (computedMap.has(lk)) savedList[lk] = computedMap.get(lk);
+      }
+      collectElementOwnDeclarations(element, styleNodes, normalizedPseudo, computedMap);
+      for (const lk of ["list-style-image", "list-style-position", "list-style-type"]) {
+        if (Object.prototype.hasOwnProperty.call(savedList, lk)) computedMap.set(lk, savedList[lk]);
+        else computedMap.delete(lk);
+      }
+    } else {
+      collectElementOwnDeclarations(element, styleNodes, normalizedPseudo, computedMap);
+    }
     for (let vi = 0; vi < valCheckProps.length; vi++) {
       const vp = valCheckProps[vi];
       if (computedMap.has(vp)) {
@@ -7031,6 +7043,14 @@ function installWindow(global) {
           const px = evalCssLengthExpr(String(computedMap.get(smProp) || "").trim(), null, pFontSize);
           if (px !== null && isFinite(px)) computedMap.set(smProp, formatCssPx(px));
         }
+      }
+      if (normalizedPseudo === "::marker") {
+        computedMap.set("display", "inline");
+        computedMap.set("position", "static");
+        computedMap.set("float", "none");
+        if (!computedMap.get("list-style-image")) computedMap.set("list-style-image", "none");
+        if (!computedMap.get("list-style-position")) computedMap.set("list-style-position", "outside");
+        if (!computedMap.get("list-style-type")) computedMap.set("list-style-type", "disc");
       }
       return;
     }
@@ -10155,7 +10175,7 @@ function installWindow(global) {
   const STANDARD_COMPUTED_LONGHANDS = [
     "align-content", "align-items", "align-self", "alignment-baseline", "anchor-scope", "animation-composition", "animation-delay", "animation-direction",
     "animation-duration", "animation-fill-mode", "animation-iteration-count", "animation-name",
-    "animation-play-state", "animation-range-end", "animation-range-start", "animation-timing-function", "appearance", "aspect-ratio",
+    "animation-play-state", "animation-range-end", "animation-range-start", "animation-timeline", "animation-timing-function", "appearance", "aspect-ratio",
     "backdrop-filter", "backface-visibility", "background-attachment", "background-blend-mode",
     "background-clip", "background-color", "background-image", "background-origin",
     "background-position-x", "background-position-y", "background-repeat", "background-size", "baseline-shift",
@@ -10473,6 +10493,32 @@ function installWindow(global) {
         const oy = computedMap.get("overflow-y") || "visible";
         return ox === oy ? ox : (ox + " " + oy);
       }
+      if (name === "font") {
+        if (computedMap.has("font")) return computedMap.get("font");
+        const fst = computedMap.get("font-style") || "normal";
+        const fvc = computedMap.get("font-variant-caps") || "normal";
+        const fwt = computedMap.get("font-weight") || "400";
+        const fwd = computedMap.get("font-width") || computedMap.get("font-stretch") || "100%";
+        const fsz = computedMap.get("font-size") || "16px";
+        const lh = computedMap.get("line-height") || "normal";
+        const ff = computedMap.get("font-family") || "sans-serif";
+        const parts = [];
+        if (fst !== "normal") parts.push(fst);
+        if (fvc === "small-caps") parts.push("small-caps");
+        if (fwt !== "400" && fwt !== "normal") parts.push(fwt);
+        if (fwd !== "100%" && fwd !== "normal") parts.push(fwd);
+        parts.push(lh !== "normal" ? (fsz + " / " + lh) : fsz);
+        parts.push(ff);
+        return parts.join(" ");
+      }
+      if (name === "font-variant" && typeof globalThis.__capsurf_serializeShorthand === "function") {
+        return globalThis.__capsurf_serializeShorthand("font-variant", (lh) => computedMap.get(lh) || "normal");
+      }
+      if (name === "animation-range") {
+        const rs = computedMap.get("animation-range-start") || "normal";
+        const re = computedMap.get("animation-range-end") || "normal";
+        return rs === re ? rs : (rs + " " + re);
+      }
       if (name === "text-decoration") {
         const elColor = computedMap.get("color") || "rgb(0, 0, 0)";
         const tdl = computedMap.get("text-decoration-line") || "none";
@@ -10493,16 +10539,11 @@ function installWindow(global) {
         if (tec === "currentcolor") tec = elColor;
         return tes + " " + tec;
       }
-      if (name === "list-style" && typeof globalThis.__capsurf_serializeShorthand === "function") {
-        const lDefs = {
-          "list-style-position": "outside",
-          "list-style-image": "none",
-          "list-style-type": "disc"
-        };
-        return globalThis.__capsurf_serializeShorthand("list-style", (lh) => {
-          const v = computedMap.get(lh);
-          return (!v || v === "initial" || v === "unset") ? lDefs[lh] : v;
-        });
+      if (name === "list-style") {
+        const pos = computedMap.get("list-style-position") || "outside";
+        const img = computedMap.get("list-style-image") || "none";
+        const typ = computedMap.get("list-style-type") || "disc";
+        return pos + " " + img + " " + typ;
       }
       if (name === "column-rule") {
         const w = computedMap.get("column-rule-width") || "0px";

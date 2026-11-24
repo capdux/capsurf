@@ -6,6 +6,7 @@
 
 | 测试时间 | 目录 / Filter | 分片 | 用例数 | 结果摘要 | 备注 |
 | :--- | :--- | :--- | :---: | :--- | :--- |
+| 2026-11-25 06:54 | `Phase 740`: `marker-supported-properties.html` | 定向 | 1 | **FAIL→PASS** (67/67) | `--smoke` 3/3 PASS |
 | 2026-11-25 06:40 | `Phase 739`: `color-valid-rgb/hsl/hwb` | 定向 | 3 | `rgb` 32→48/70, `hsl` 35→41/59, `hwb` 24→28/38 (+26 subtests) | `--smoke` 3/3 PASS |
 | 2026-11-25 06:34 | `Phase 738`: `/css/css-backgrounds/parsing/` (5 项) | 定向 | 5 | **5/5 FAIL→PASS** (`/css/css-backgrounds/parsing/` 74/74 全绿) | `--smoke` 3/3 PASS |
 | 2026-11-25 06:28 | `Phase 737`: `/css/css-masking/parsing/mask-computed.html` | 定向 | 1 | **FAIL→PASS** (32/32, `/css/css-masking/parsing/` 28/28 全绿) | `--smoke` 3/3 PASS |
