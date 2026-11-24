@@ -42664,8 +42664,23 @@
         return;
       }
       const fsRaw = computedMap.get("font-size");
-      if (fsRaw !== undefined && fsRaw.trim() === "0") {
-        computedMap.set("font-size", "0px");
+      if (fsRaw !== undefined) {
+        const fst = fsRaw.trim();
+        if (fst === "0") {
+          computedMap.set("font-size", "0px");
+        } else if (/^(?:calc|min|max|clamp)\s*\(/i.test(fst)) {
+          let parentFs = 16;
+          const pEl = element.parentElement || element.parentNode;
+          if (pEl && pEl.nodeType === 1) {
+            const pMap = collectRawComputedMap(pEl, "");
+            const pVal = evalCssLengthExpr(pMap.get("font-size") || "16px", 16, 16);
+            if (pVal !== null && isFinite(pVal)) parentFs = Math.max(0, pVal);
+          }
+          const fpx = evalCssLengthExpr(fst, parentFs, parentFs);
+          if (fpx !== null && isFinite(fpx)) {
+            computedMap.set("font-size", formatCssPx(Math.max(0, fpx)));
+          }
+        }
       }
       if (!computedMap.has("z-index")) {
         computedMap.set("z-index", "auto");

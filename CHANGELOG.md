@@ -3748,3 +3748,5 @@
 - **Phase 639** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): `mask-repeat` 复用校验并补齐 `mask-image` 枚举及 `clip: rect(...)` 计算值求值；`clip-computed` (4/4) 与 `mask-repeat-invalid` (5/5) 全绿并收紧基线。
 
 - **Phase 640** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 修复 `font-weight: bolder` 阈值、补全 `font-style: oblique <angle>`/`sign()` 求值与 `font-variant-alternates` 小写；4 项 `css-fonts` 用例全绿。
+
+- **Phase 641** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `font-size` `calc()`/`sign()` 求值与负值归零；`font-size-sign-function` 与 `font-size-relative-across-calc-ff-bug-001` 全绿。

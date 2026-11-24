@@ -3063,3 +3063,7 @@
 ### Phase 640: `css-fonts` 4 项全绿 (`font-weight-lighter-bolder` / `font-style-*` / `font-variant-alternates`)
 - **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：`window.js` 将 `bolder` 升档阈值修正为 `inh < 900 -> 900`，新增 `font-style: oblique <angle>` 角度单位换算（`rad`/`grad`/`turn` -> `deg`，`0deg` -> `normal`）与 `sign()` 求值；`cssom.js` 将 `font-variant-alternates` 关键字规范为小写。
 - **WPT & Smoke 验收**：`font-weight-lighter-bolder` (22/22)、`font-style-angle` (1/1)、`font-style-sign-function` (1/1)、`font-variant-alternates-parsing` (1/1) PASS，`--smoke` 3/3 suites PASS。
+
+### Phase 641: `font-size` `calc()`/`sign()` 求值与负值归零全绿
+- **核心修复 (`src/js/shim/window.js`)**：`applyUsedValuesToComputedMap` 对 `font-size` 中的 `calc()`/`min()`/`max()`/`clamp()`/`sign()` 解析父元素字号作为参考基准并夹紧负值为 `0px`。
+- **WPT & Smoke 验收**：`font-size-sign-function.html` (1/1) & `font-size-relative-across-calc-ff-bug-001.html` (1/1) PASS，`--smoke` 3/3 suites PASS。

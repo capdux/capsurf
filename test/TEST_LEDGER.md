@@ -2241,3 +2241,7 @@
 ### Phase 640: `font-weight-lighter-bolder` / `font-style-angle` / `font-style-sign-function` / `font-variant-alternates-parsing` 4 项全绿
 - **Filter `font-weight-lighter-bolder` / `font-style-angle` / `font-style-sign-function` / `font-variant-alternates-parsing`**: **FAIL->PASS (4/4: 22/22 + 1/1 + 1/1 + 1/1)**（`window.js` 修复 `font-weight: bolder` 阈值 `inh < 900 -> 900`、补全 `font-style: oblique <angle>` 角度与 `sign()` 求值；`cssom.js` 规范化 `font-variant-alternates` 关键字小写）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 641: `font-size` `calc()`/`sign()` 求值与负值归零全绿
+- **Filter `/css/css-fonts/font-size-sign-function` & `/css/css-fonts/font-size-relative-across-calc-ff-bug-001`**: **FAIL->PASS (2/2)**（`window.js` `applyUsedValuesToComputedMap` 为 `font-size` 补全基于父元素字号的 `calc()`/`min()`/`max()`/`clamp()`/`sign()` 求值并夹紧负值为 `0px`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

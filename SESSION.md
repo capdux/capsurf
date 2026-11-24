@@ -8013,3 +8013,7 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`window.js` & `cssom.js`**：修复 `font-weight: bolder` 阈值 `inh < 900 -> 900`、补全 `font-style: oblique <angle>` 角度与 `sign()` 求值，并规范化 `font-variant-alternates` 关键字小写。
   2. **全绿验证**：`font-weight-lighter-bolder` (22/22)、`font-style-angle` (1/1)、`font-style-sign-function` (1/1)、`font-variant-alternates-parsing` (1/1) **4/4 FAIL->PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
   3. **子智能体并发汇报**：`bc82c8a1` 完成 `/css/css-fonts/` 摸底（59/121 PASS）；`a277fff3` 完成 `/css/css-overflow/` 全量摸底（25/33 PASS，0 unexpected）；`4333ceda` 完成 `/css/css-shapes/` 摸底（25/70 PASS）；已接力派发 `3c500030`（`19710`, `/css/css-box/`）与 `fe87f3bb`（`19720`, `/css/css-color/`）。
+- **[Agent]**: 完成 Phase 641（`src/js/shim/window.js`）：
+  1. **`window.js`**：为 `font-size` 补全基于父元素字号的 `calc()`/`sign()` 求值与负值归零（`0px`）。
+  2. **全绿验证**：`font-size-sign-function.html` **FAIL->PASS (1/1)**、`font-size-relative-across-calc-ff-bug-001.html` **FAIL->PASS (1/1)**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+  3. **子智能体并发汇报**：`3c500030` 完成 `/css/css-box/` 全量摸底（**31/33 PASS**，0 FAIL），已接力派发 `d3de51a9`（`19710`, `/css/css-syntax/`）。
