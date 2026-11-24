@@ -2053,3 +2053,10 @@
 - **子智能体只读摸底记录**：
   - `/css/css-sizing/parsing/` (`b507`, 19 files): **19/19 PASS (100% ALL GREEN, 145/145 subtests)**
   - `/css/css-align/` (`b506`, 49 recorded of 119): `37 PASS / 3 FAIL / 9 TIMEOUT`
+
+### Phase 604: `/css/css-masking/parsing/{clip-rule,mask-type,mask-size,clip}-invalid` 四连全绿
+- **Filter `/css/css-masking/parsing/clip-rule-invalid`**: **PASS (2/2)**（`cssom.js` `isValidCssValue` 枚举表加入 `clip-rule`）。
+- **Filter `/css/css-masking/parsing/mask-type-invalid`**: **PASS (3/3)**（`cssom.js` `isValidCssValue` 枚举表加入 `mask-type`）。
+- **Filter `/css/css-masking/parsing/mask-size-invalid`**: **PASS (3/3)**（`cssom.js` `isValidCssValue` 令 `mask-size` 复用 `background-size` 校验）。
+- **Filter `/css/css-masking/parsing/clip-invalid`**: **PASS (4/4)**（`cssom.js` `isValidCssValue` 补全 `clip: auto | rect(...)` 严格校验）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

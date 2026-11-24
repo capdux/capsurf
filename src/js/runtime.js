@@ -4233,6 +4233,8 @@
         "text-wrap-mode": ["wrap", "nowrap"],
         "text-wrap-style": ["auto", "balance", "stable", "pretty", "avoid-orphans"],
         "white-space-collapse": ["collapse", "preserve", "preserve-breaks", "preserve-spaces", "break-spaces"],
+        "clip-rule": ["nonzero", "evenodd"],
+        "mask-type": ["luminance", "alpha"],
         "font-kerning": ["auto", "normal", "none"],
         "font-optical-sizing": ["auto", "none"],
         "border-top-style": ["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset"],
@@ -4955,6 +4957,18 @@
         }
         return true;
       }
+      if (prop === "clip") {
+        if (vLower === "auto") return true;
+        const rm = /^rect\((.+)\)$/i.exec(vLower);
+        if (!rm) return false;
+        const args = splitTopLevelComma(rm[1]);
+        if (args.length !== 4) return false;
+        return args.every((a) => {
+          if (a === "auto") return true;
+          if (a.endsWith("%") || (/^(?:calc|min|max|clamp)\(/i.test(a) && a.includes("%"))) return false;
+          return isValidLenPct(a, true);
+        });
+      }
       if (prop === "perspective" || prop === "-webkit-perspective") {
         const toks = splitCssTokens(vLower);
         if (toks.length !== 1) return false;
@@ -4997,7 +5011,7 @@
         }
         return isValidCssPositionTokens(toks);
       }
-      if (prop === "background-size") {
+      if (prop === "background-size" || prop === "mask-size") {
         const layers = vLower.split(",");
         for (let i = 0; i < layers.length; i++) {
           const toks = splitCssTokens(layers[i].trim());
