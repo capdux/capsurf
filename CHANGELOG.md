@@ -4074,3 +4074,6 @@
   - `src/js/shim/window.js`: `background-image` 计算值解析 `light-dark()`（`none` -> `image(rgba(0, 0, 0, 0))`）。
   - `test/wpt/wpt-expectations.json`: 将 `/css/css-backgrounds/parsing/` 剩余 5 项全部收紧为 `PASS`（74/74 全绿）。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 739**:
+  - `src/js/shim/cssom.js`: `normalizeSingleColor` 内 `evalColorExpr` 支持 `infinity`/`nan`/`pi`/`e` 与除零常量折叠，完善 `rgb`/`hsl`/`hwb` 的无穷与 `NaN` 钳位（保留含相对单位的未求值 `calc()`）。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

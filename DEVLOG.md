@@ -3316,3 +3316,5 @@
 - 在 `window.js` `resolveContentGradients` 中补全 `background-image`/`mask-image` 渐变求值以覆盖 `display: none` 提前返回分支，并在 `cssom.js` `parseMaskLayers` 自动闭合 EOF 缺失括号，打通 `mask-computed.html` (32/32 **FAIL→PASS**)，实现 `/css/css-masking/parsing/` 28/28 全绿。
 ### Phase 738 — `/css/css-backgrounds/parsing/` `74/74 (100% PASS)` 全绿闭环
 - 打通 `element.js` `background` 简写全量展开与 `cssom.js`/`window.js` 中 `border-area`/`text`、`cross-fade()`、`light-dark()` 及 `background-size` 单值 `" auto"` 序列化，实现 `/css/css-backgrounds/parsing/` 74/74 100% 全绿。
+### Phase 739 — `rgb`/`hsl`/`hwb` 数学常量折叠 (`calc(infinity/NaN)` +26 子测试)
+- 在 `cssom.js` `evalColorExpr` 中支持 `infinity`/`-infinity`/`nan`/`pi`/`e` 与 `0 / 0`，并在 `fmtRgb`/`hsl`/`hwb` 正确区分已折叠的 `Infinity`/`NaN` 与含相对单位的未求值 `calc()`，净增 +26 个颜色解析子测试通过。

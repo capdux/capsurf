@@ -13238,11 +13238,12 @@
         }
       }
       const fmtRgb = (r, g, b, a) => {
-        const rr = Math.max(0, Math.min(255, Math.round(r)));
-        const gg = Math.max(0, Math.min(255, Math.round(g)));
-        const bb = Math.max(0, Math.min(255, Math.round(b)));
+        const clamp255 = (x) => (isNaN(x) ? 0 : (x === Infinity ? 255 : (x === -Infinity ? 0 : Math.max(0, Math.min(255, Math.round(x))))));
+        const rr = clamp255(r);
+        const gg = clamp255(g);
+        const bb = clamp255(b);
         if (a === undefined || a >= 1) return "rgb(" + rr + ", " + gg + ", " + bb + ")";
-        const aa = Math.max(0, Math.min(1, a));
+        const aa = isNaN(a) ? 0 : (a === -Infinity ? 0 : Math.max(0, Math.min(1, a)));
         return "rgba(" + rr + ", " + gg + ", " + bb + ", " + Number(aa.toFixed(6)) + ")";
       };
       const splitTopSlash = (str) => {
@@ -13306,7 +13307,6 @@
             if (right === null) return null;
             if (op === "*") left = { v: left.v * right.v, u: left.u || right.u };
             else {
-              if (right.v === 0) return null;
               left = { v: left.v / right.v, u: left.u };
             }
           }
@@ -13314,6 +13314,12 @@
         };
         const parseFactor = () => {
           skipWs();
+          if (body[pos] === "+" || body[pos] === "-") {
+            const sgn = body[pos++] === "-" ? -1 : 1;
+            const inner = parseFactor();
+            if (inner === null) return null;
+            return { v: sgn * inner.v, u: inner.u };
+          }
           if (body[pos] === "(") {
             pos++;
             const inner = parseExpr();
@@ -13322,6 +13328,13 @@
             pos++;
             return inner;
           }
+          const cm = /^(infinity|nan|pi|e)(?![a-z0-9_-])/i.exec(body.slice(pos));
+          if (cm) {
+            pos += cm[0].length;
+            const kw = cm[1].toLowerCase();
+            const val = kw === "infinity" ? Infinity : (kw === "nan" ? NaN : (kw === "pi" ? Math.PI : Math.E));
+            return { v: val, u: "" };
+          }
           const m = /^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(%|deg|rad|grad|turn)?/i.exec(body.slice(pos));
           if (!m) return null;
           pos += m[0].length;
@@ -13329,7 +13342,8 @@
         };
         const res = parseExpr();
         skipWs();
-        if (!res || pos !== body.length || !isFinite(res.v)) return t;
+        if (!res || pos !== body.length) return t;
+        if (isNaN(res.v)) return "0" + res.u;
         return String(res.v) + res.u;
       };
       const rgbM = /^rgba?\(\s*(.+)\s*\)$/i.exec(s);
@@ -13350,7 +13364,7 @@
             const at = evalColorExpr(chParts[3]);
             a = at.endsWith("%") ? (parseFloat(at) / 100) : parseFloat(at);
           }
-          if (isFinite(r) && isFinite(g) && isFinite(b) && isFinite(a)) return fmtRgb(r, g, b, a);
+          if (!isNaN(r) && !isNaN(g) && !isNaN(b) && !isNaN(a)) return fmtRgb(r, g, b, a);
         }
       }
       const hslM = /^hsla?\(\s*(.+)\s*\)$/i.exec(s);
@@ -13377,9 +13391,11 @@
           if (hTok.endsWith("rad")) h = h * 180 / Math.PI;
           else if (hTok.endsWith("grad")) h = h * 0.9;
           else if (hTok.endsWith("turn")) h = h * 360;
-          h = ((h % 360) + 360) % 360;
-          const sat = Math.max(0, Math.min(1, parseFloat(evalColorExpr(chParts[1])) / 100));
-          const lit = Math.max(0, Math.min(1, parseFloat(evalColorExpr(chParts[2])) / 100));
+          h = isFinite(h) ? (((h % 360) + 360) % 360) : (!/^calc\(/i.test(hTok) ? 0 : NaN);
+          const satRaw = parseFloat(evalColorExpr(chParts[1])) / 100;
+          const litRaw = parseFloat(evalColorExpr(chParts[2])) / 100;
+          const sat = isNaN(satRaw) ? 0 : Math.max(0, Math.min(1, satRaw));
+          const lit = isNaN(litRaw) ? 0 : Math.max(0, Math.min(1, litRaw));
           let a = 1;
           if (slash.length === 2) {
             const at = evalColorExpr(slash[1]);
@@ -13388,7 +13404,7 @@
             const at = evalColorExpr(chParts[3]);
             a = at.endsWith("%") ? (parseFloat(at) / 100) : parseFloat(at);
           }
-          if (isFinite(h) && isFinite(sat) && isFinite(lit) && isFinite(a)) {
+          if (isFinite(h) && !isNaN(sat) && !isNaN(lit) && !isNaN(a)) {
             const c = (1 - Math.abs(2 * lit - 1)) * sat;
             const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
             const m = lit - c / 2;
@@ -13427,17 +13443,19 @@
           if (hTok.endsWith("rad")) h = h * 180 / Math.PI;
           else if (hTok.endsWith("grad")) h = h * 0.9;
           else if (hTok.endsWith("turn")) h = h * 360;
-          h = ((h % 360) + 360) % 360;
-          const w = Math.max(0, parseFloat(evalColorExpr(chParts[1])) / 100);
-          const bk = Math.max(0, parseFloat(evalColorExpr(chParts[2])) / 100);
+          h = isFinite(h) ? (((h % 360) + 360) % 360) : (!/^calc\(/i.test(hTok) ? 0 : NaN);
+          const wRaw = parseFloat(evalColorExpr(chParts[1])) / 100;
+          const bkRaw = parseFloat(evalColorExpr(chParts[2])) / 100;
+          const w = isNaN(wRaw) ? 0 : Math.max(0, wRaw);
+          const bk = isNaN(bkRaw) ? 0 : Math.max(0, bkRaw);
           let a = 1;
           if (slash.length === 2) {
             const at = evalColorExpr(slash[1]);
             a = at.endsWith("%") ? (parseFloat(at) / 100) : parseFloat(at);
           }
-          if (isFinite(h) && isFinite(w) && isFinite(bk) && isFinite(a)) {
+          if (isFinite(h) && !isNaN(w) && !isNaN(bk) && !isNaN(a)) {
             if (w + bk >= 1) {
-              const g = Number((w / (w + bk)).toFixed(10)) * 255;
+              const g = (w === Infinity && bk === Infinity) ? 127.5 : (w === Infinity ? 255 : (bk === Infinity ? 0 : Number((w / (w + bk)).toFixed(10)) * 255));
               return fmtRgb(g, g, g, a);
             }
             const x = 1 - Math.abs(((h / 60) % 2) - 1);
