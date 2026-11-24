@@ -464,7 +464,7 @@ pub struct SelectorParser {
             const c = s[i];
 
             // Combinators: whitespace, '>', '+', '~'
-            if (c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '>' || c == '+' || c == '~') {
+            if (c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == 0x0c || c == '>' || c == '+' || c == '~') {
                 let comb = Combinator.Descendant;
                 while (i < s.len) {
                     const ch = s[i];
@@ -477,7 +477,7 @@ pub struct SelectorParser {
                     } else if (ch == '~') {
                         comb = Combinator.LaterSibling;
                         i += 1;
-                    } else if (ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n') {
+                    } else if (ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n' || ch == 0x0c) {
                         i += 1;
                     } else {
                         break;

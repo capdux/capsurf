@@ -3893,3 +3893,5 @@
   - `src/js/shim/cssom.js`: `CSSStyleRule.prototype` 新增 `selectorText` getter/setter，非法选择器静默忽略并触发变更回调。
   - `src/js/shim/selector.js`: 为 `:nth-child`/`nth-last-child`/`nth-of-type`/`nth-last-of-type` 实现完整 `An+B` 与 `of <selector-list>` 校验及规范序列化。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 692**:
+  - `src/css/matcher.cp`: 组合子分隔循环补充 `0x0c` (`U+000C` 换页符) 判定为合法 CSS 空白符。

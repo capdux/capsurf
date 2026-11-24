@@ -3222,3 +3222,5 @@
 - 修复 `cssom.js` `serializeCssValue` 对 `url( "foo")` 误包外层引号的正则缺陷，并规范独立数字/维度字面量序列化，打通 `decimal-points-in-numbers.html` 与 `url-whitespace-consumption.html`。
 ### Phase 691 — `CSSStyleRule.selectorText` 与 `An+B` 语法解析序列化闭环
 - 在 `cssom.js` 为 `CSSStyleRule.prototype.selectorText` 接入合法性校验与规范化 setter，并在 `selector.js` 实现 `:nth-*` 的 `An+B [of S]` 解析及最小化序列化，`anb-parsing.html` (67/67) 与 `anb-serialization.html` (20/20) 全数 PASS。
+### Phase 692 — `matcher.cp` 组合子 `U+000C` CSS 空白符补齐
+- 在 `src/css/matcher.cp` 组合子分词循环中补全 `0x0c` 换页符，通过 `cpc fix`/`cpc brief` 4 门禁，使 `/css/css-syntax/whitespace.html` 全部 31/31 PASS。
