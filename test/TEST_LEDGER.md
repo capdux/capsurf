@@ -1994,3 +1994,11 @@
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
 - **子智能体只读摸底记录**：
   - `/css/css-tables/parsing/` (`b496`): **15/15 PASS (100% ALL GREEN, 37/37 subtests)**
+
+### Phase 596: `/css/css-syntax/{charset-is-not-a-rule,trailing-braces}` 全绿 & Syntax/Backgrounds 摸底
+- **Filter `/css/css-syntax/charset-is-not-a-rule`**: **PASS**（`cssom.js` `constructRule` 对 `kind === "charset" || kind === "invalid"` 返回 `null`，不再进入 `CSSStyleSheet.cssRules`）。
+- **Filter `/css/css-syntax/trailing-braces`**: **PASS**（`cssom.js` `isValidCssValue` 与 `makeRuleStyleDeclaration.parseInitial` 拒绝非 `--*` 属性且非 `var(...)` 中的 `{`/`}` 块）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-syntax/` (`b498`, 24 files): `7 PASS / 17 FAIL / 0 TIMEOUT`
+  - `/css/css-backgrounds/parsing/` (`b499`, 74 files): `51 PASS / 23 FAIL / 0 TIMEOUT`

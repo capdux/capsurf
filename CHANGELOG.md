@@ -3656,3 +3656,5 @@
 - **Phase 594** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 在 `textDecorDefs` 补全 `direction: "ltr"`；`/css/css-writing-modes/inheritance.html` 实现 10/10 全绿并收紧基线为 `PASS`。
 
 - **Phase 595** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 为 `@import ... supports(...)` 实现括号平衡扫描解析；`/css/css-cascade/parsing/supports-import-parsing.html` 全绿。
+
+- **Phase 596** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `constructRule` 丢弃 `@charset`/`invalid` 规则并拦截常规声明中的非法 `{`/`}` 块；`charset-is-not-a-rule.html` 与 `trailing-braces.html` 全绿。

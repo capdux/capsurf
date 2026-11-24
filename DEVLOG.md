@@ -2879,3 +2879,7 @@
 ### Phase 595: `/css/css-cascade/parsing/supports-import-parsing` 全绿
 - **核心修复 (`src/js/shim/cssom.js`)**：替换 `@import ... supports(...)` 的非贪婪正则为带引号感知的括号平衡扫描，消除嵌套括号（如 `supports((display:flex))` / `supports(selector(p > a))`）被提前截断的问题。
 - **WPT & Smoke 验收**：`supports-import-parsing.html` PASS、`--smoke` 3/3 suites PASS；并行确认 `/css/css-tables/parsing/` 15/15 PASS。
+
+### Phase 596: `/css/css-syntax/{charset-is-not-a-rule,trailing-braces}` 全绿
+- **核心修复 (`src/js/shim/cssom.js`)**：`constructRule` 对 `charset`/`invalid` 返回 `null`；`isValidCssValue` 与 `makeRuleStyleDeclaration.parseInitial` 对非 `--*` 且非 `var(...)` 的 `{`/`}` 块直接拒绝。
+- **WPT & Smoke 验收**：`charset-is-not-a-rule.html`、`trailing-braces.html` PASS，`--smoke` 3/3 suites PASS。

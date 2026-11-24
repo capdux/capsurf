@@ -357,6 +357,7 @@
     }
     if (prop === "all") return false;
     if (vLower === "bogus") return false;
+    if (/[{}]/.test(trimmed) && !/(?:^|[^a-z0-9_-])var\(/i.test(vLower)) return false;
 
     if (prop === "display") {
       const validDisplays = new Set([
@@ -4533,6 +4534,7 @@
           continue;
         }
         const key = rawName.startsWith("--") ? rawName : rawName.toLowerCase();
+        if (!key.startsWith("--") && /[{}]/.test(val) && !/(?:^|[^a-z0-9_-])var\(/i.test(val)) continue;
         if (!data.has(key)) {
           authoredOrder.push(key);
         }
@@ -5686,6 +5688,7 @@
 
   function constructRule(parsed, parentSheet, parentRule, onMutate) {
     const kind = parsed.kind || classifyRuleKind(parsed);
+    if (kind === "charset" || kind === "invalid") return null;
     const sel = String(parsed.selectorText || "").trim();
     const raw = String(parsed.cssText || "").trim();
 

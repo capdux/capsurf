@@ -7798,3 +7798,9 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`cssom.js`**：将 `@import ... supports(...)` 解析从非贪婪正则替换为括号深度平衡扫描，修复嵌套括号截断问题。
   2. **全绿验证**：`/css/css-cascade/parsing/supports-import-parsing.html` **PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
   3. **并行摸底汇总**：`/css/css-tables/parsing/` **15/15 PASS (37/37 subtests)**。
+
+### 2026-11-24 Phase 596 (`/css/css-syntax/{charset-is-not-a-rule,trailing-braces}` 全绿 & Syntax/Backgrounds 摸底)
+- **[Agent]**: 完成 Phase 596（`src/js/shim/cssom.js`）：
+  1. **`cssom.js`**：`constructRule` 丢弃 `charset`/`invalid` 规则；`isValidCssValue` 与 `makeRuleStyleDeclaration.parseInitial` 拦截非 `var(...)` 的 `{`/`}` 块声明。
+  2. **全绿验证**：`charset-is-not-a-rule.html` **PASS**、`trailing-braces.html` **PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+  3. **并行摸底汇总**：`/css/css-syntax/` 7/24 PASS；`/css/css-backgrounds/parsing/` 51/74 PASS。
