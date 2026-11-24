@@ -2915,3 +2915,7 @@
 ### Phase 604: `clip-rule/mask-type/mask-size/clip-invalid` 四连全绿
 - **核心修复 (`src/js/shim/cssom.js`)**：`isValidCssValue` 枚举表补全 `clip-rule`、`mask-type`，`mask-size` 复用 `background-size` 校验，新增 `clip` `auto | rect(...)` 4 参数无百分比校验。
 - **WPT & Smoke 验收**：4 项 `*-invalid.html` 全部 PASS，`--smoke` 3/3 suites PASS。
+
+### Phase 605: `mask-composite-invalid` & `mask-position-{invalid,valid}` 三连全绿
+- **核心修复 (`src/js/shim/cssom.js`)**：`isValidCssValue` 新增 `mask-composite` 与 `mask-position` 逗号分层校验，`normalizeCssSpecifiedValue` 抽取 `normalizePositionLayer` 统一 `mask-position`、`object-position`、`perspective-origin`、`transform-origin` 序列化。
+- **WPT & Smoke 验收**：`mask-composite-invalid.html`、`mask-position-invalid.html`、`mask-position-valid.html` PASS，`--smoke` 3/3 suites PASS。

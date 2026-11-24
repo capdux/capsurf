@@ -1221,6 +1221,22 @@
       }
       return isValidCssPositionTokens(toks);
     }
+    if (prop === "mask-composite") {
+      const layers = vLower.split(",");
+      for (let i = 0; i < layers.length; i++) {
+        const toks = splitCssTokens(layers[i].trim());
+        if (toks.length !== 1 || !/^(?:add|subtract|intersect|exclude)$/.test(toks[0])) return false;
+      }
+      return true;
+    }
+    if (prop === "mask-position") {
+      const layers = vLower.split(",");
+      for (let i = 0; i < layers.length; i++) {
+        const toks = splitCssTokens(layers[i].trim());
+        if (!isValidCssPositionTokens(toks)) return false;
+      }
+      return true;
+    }
     if (prop === "background-size" || prop === "mask-size") {
       const layers = vLower.split(",");
       for (let i = 0; i < layers.length; i++) {
@@ -2831,16 +2847,16 @@
     if (key === "-webkit-transform") {
       return s.replace(/\bperspective\(\s*([+]?(?:\d+(?:\.\d+)?|\.\d+))\s*\)/gi, (_, n) => "perspective(" + String(Number(n)) + "px)");
     }
-    if (key === "perspective-origin" || key === "transform-origin" || key === "object-position") {
-      const parts = splitCssTokens(s);
+    function normalizePositionLayer(layerStr, allowZ) {
+      const parts = splitCssTokens(layerStr);
       for (let i = 0; i < parts.length; i++) {
         if (parts[i] === "0" || parts[i] === "+0" || parts[i] === "-0") parts[i] = "0px";
       }
-      if ((key === "object-position" || key === "perspective-origin" || key === "transform-origin") && parts.length === 1) {
+      if (parts.length === 1) {
         const a = parts[0].toLowerCase();
         return (a === "top" || a === "bottom") ? ("center " + a) : (parts[0] + " center");
       }
-      if (parts.length === 2 || (key === "transform-origin" && parts.length === 3)) {
+      if (parts.length === 2 || (allowZ && parts.length === 3)) {
         const a = parts[0].toLowerCase(), b = parts[1].toLowerCase();
         const isY = (x) => x === "top" || x === "bottom";
         const isX = (x) => x === "left" || x === "right";
@@ -2855,6 +2871,12 @@
         }
       }
       return parts.join(" ");
+    }
+    if (key === "mask-position") {
+      return s.split(",").map((l) => normalizePositionLayer(l.trim(), false)).join(", ");
+    }
+    if (key === "perspective-origin" || key === "transform-origin" || key === "object-position") {
+      return normalizePositionLayer(s, key === "transform-origin");
     }
     if (key === "border-spacing") {
       const parts = splitCssTokens(s);

@@ -2060,3 +2060,9 @@
 - **Filter `/css/css-masking/parsing/mask-size-invalid`**: **PASS (3/3)**（`cssom.js` `isValidCssValue` 令 `mask-size` 复用 `background-size` 校验）。
 - **Filter `/css/css-masking/parsing/clip-invalid`**: **PASS (4/4)**（`cssom.js` `isValidCssValue` 补全 `clip: auto | rect(...)` 严格校验）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 605: `/css/css-masking/parsing/{mask-composite-invalid,mask-position-invalid,mask-position-valid}` 三连全绿
+- **Filter `/css/css-masking/parsing/mask-composite-invalid`**: **PASS (14/14)**（`cssom.js` `isValidCssValue` 补全 `mask-composite` 逗号分层关键字校验）。
+- **Filter `/css/css-masking/parsing/mask-position-invalid`**: **PASS (13/13)**（`cssom.js` `isValidCssValue` 补全 `mask-position` 逗号分层 `<position>` 校验）。
+- **Filter `/css/css-masking/parsing/mask-position-valid`**: **PASS (23/23)**（`cssom.js` `normalizeCssSpecifiedValue` 抽取 `normalizePositionLayer` 共享辅助函数支持 `mask-position` 规范化序列化）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

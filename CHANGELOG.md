@@ -3674,3 +3674,5 @@
 - **Phase 603** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 支持 `-webkit-perspective` 无单位数字 `px` 规范化、拒绝无单位 `calc()`，并为 `-webkit-transform` `perspective(<number>)` 补全 `px` 序列化；3 项 `webkit-*.tentative` 用例全绿（`css-transforms/parsing/` 达 25/28 PASS）。
 
 - **Phase 604** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `clip-rule`、`mask-type`、`mask-size` 与 `clip` 的 `isValidCssValue` 校验；4 项 `css-masking/parsing/*-invalid.html` 全绿。
+
+- **Phase 605** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `mask-composite` / `mask-position` 校验并抽取 `normalizePositionLayer` 规范化 `mask-position` 序列化；3 项 `css-masking/parsing/*` 全绿。

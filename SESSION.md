@@ -7853,3 +7853,8 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Agent]**: 完成 Phase 604（`src/js/shim/cssom.js`）：
   1. **`cssom.js`**：为 `clip-rule`、`mask-type`、`mask-size` 与 `clip` 补全 `isValidCssValue` 合法性校验。
   2. **四连全绿验证**：`clip-rule-invalid.html`、`mask-type-invalid.html`、`mask-size-invalid.html`、`clip-invalid.html` 全部 **PASS**，`--smoke` **3/3 suites, 6/6 tests PASS**。
+
+### 2026-11-24 Phase 605 (`mask-composite-invalid` & `mask-position-{invalid,valid}` 三连全绿)
+- **[Agent]**: 完成 Phase 605（`src/js/shim/cssom.js`）：
+  1. **`cssom.js`**：为 `mask-composite` 与 `mask-position` 补全分层校验，并抽取 `normalizePositionLayer` 共享辅助函数实现 `mask-position` 规范化序列化。
+  2. **三连全绿验证**：`mask-composite-invalid.html`、`mask-position-invalid.html`、`mask-position-valid.html` 全部 **PASS**，`--smoke` **3/3 suites, 6/6 tests PASS**。
