@@ -8512,6 +8512,9 @@ function installWindow(global) {
       ["font-palette", "normal"],
       ["font-variant-emoji", "normal"],
       ["font-variant-position", "normal"],
+      ["anchor-scope", "none"],
+      ["position-try-order", "normal"],
+      ["position-visibility", "anchors-visible"],
       ["image-orientation", "from-image"],
       ["image-rendering", "auto"],
       ["image-resolution", "1dppx"],
@@ -8736,7 +8739,7 @@ function installWindow(global) {
   }
 
   const STANDARD_COMPUTED_LONGHANDS = [
-    "align-content", "align-items", "align-self", "animation-composition", "animation-delay", "animation-direction",
+    "align-content", "align-items", "align-self", "anchor-scope", "animation-composition", "animation-delay", "animation-direction",
     "animation-duration", "animation-fill-mode", "animation-iteration-count", "animation-name",
     "animation-play-state", "animation-range-end", "animation-range-start", "animation-timing-function", "appearance", "aspect-ratio",
     "backdrop-filter", "backface-visibility", "background-attachment", "background-blend-mode",
@@ -8777,7 +8780,7 @@ function installWindow(global) {
     "overflow-anchor", "overflow-block", "overflow-inline", "overflow-wrap", "overflow-x", "overflow-y",
     "padding-block-end", "padding-block-start", "padding-bottom", "padding-inline-end", "padding-inline-start",
     "padding-left", "padding-right", "padding-top", "perspective", "perspective-origin", "pointer-events",
-    "position", "quotes", "resize", "right", "rotate", "row-gap", "scale", "scroll-behavior",
+    "position", "position-try-order", "position-visibility", "quotes", "resize", "right", "rotate", "row-gap", "scale", "scroll-behavior",
     "scroll-margin-block-end", "scroll-margin-block-start", "scroll-margin-bottom",
     "scroll-margin-inline-end", "scroll-margin-inline-start", "scroll-margin-left",
     "scroll-margin-right", "scroll-margin-top",

@@ -10,6 +10,7 @@
 
   const STANDARD_CSS_PROPERTIES = new Set([
     "accent-color", "align-content", "align-items", "align-self", "all",
+    "anchor-scope",
     "animation", "animation-composition", "animation-delay", "animation-direction",
     "animation-duration", "animation-fill-mode", "animation-iteration-count",
     "animation-name", "animation-play-state", "animation-range-end", "animation-range-start",
@@ -76,7 +77,7 @@
     "padding-inline-end", "padding-inline-start", "padding-left", "padding-right",
     "padding-top", "page", "page-break-after", "page-break-before", "page-break-inside",
     "paint-order", "perspective", "perspective-origin", "place-content", "place-items",
-    "place-self", "pointer-events", "position", "quotes", "resize", "right", "rotate",
+    "place-self", "pointer-events", "position", "position-try-order", "position-visibility", "quotes", "resize", "right", "rotate",
     "row-gap", "scale", "scroll-behavior", "scroll-margin", "scroll-margin-block",
     "scroll-margin-block-end", "scroll-margin-block-start", "scroll-margin-bottom",
     "scroll-margin-inline", "scroll-margin-inline-end", "scroll-margin-inline-start",
@@ -2194,6 +2195,32 @@
     if (prop === "image-orientation") {
       return vLower === "from-image" || vLower === "none";
     }
+    if (prop === "anchor-scope") {
+      if (vLower === "none" || vLower === "all") return true;
+      const items = splitTopLevelComma(trimmed);
+      if (items.length === 0) return false;
+      for (let i = 0; i < items.length; i++) {
+        const toks = splitCssTokens(items[i]);
+        if (toks.length !== 1 || !/^--(?:[a-z0-9_-]|[^\x00-\x7f])+$/i.test(toks[0])) return false;
+      }
+      return true;
+    }
+    if (prop === "position-try-order") {
+      return vLower === "normal" || vLower === "most-width" || vLower === "most-height" || vLower === "most-block-size" || vLower === "most-inline-size";
+    }
+    if (prop === "position-visibility") {
+      if (vLower === "always") return true;
+      const toks = splitCssTokens(vLower);
+      if (toks.length < 1 || toks.length > 3) return false;
+      const seen = new Set();
+      for (let i = 0; i < toks.length; i++) {
+        const t = toks[i];
+        if (t !== "anchors-valid" && t !== "anchors-visible" && t !== "no-overflow") return false;
+        if (seen.has(t)) return false;
+        seen.add(t);
+      }
+      return true;
+    }
     if (prop === "border-image-source") {
       if (vLower === "none") return true;
       if (splitTopLevelComma(trimmed).length !== 1) return false;
@@ -2907,6 +2934,12 @@
     }
     if (key === "ruby-overhang") {
       return s.toLowerCase() === "none" ? "spaces" : s.toLowerCase();
+    }
+    if (key === "position-visibility") {
+      const p = splitCssTokens(s.toLowerCase());
+      if (p.length === 1 && p[0] === "always") return "always";
+      const order = ["anchors-valid", "anchors-visible", "no-overflow"];
+      return order.filter((k) => p.indexOf(k) !== -1).join(" ");
     }
     if (key === "font-language-override") {
       if (s.toLowerCase() === "normal") return "normal";

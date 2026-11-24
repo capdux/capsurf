@@ -7719,3 +7719,8 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`cssom.js`**：`font-synthesis-style` 支持 `oblique-only`；`font-palette` 支持 `--`；`font-language-override` 校验 1~4 位 ASCII 可打印串并裁剪尾部空格规范序列化。
   2. **`window.js`**：将 `font-optical-sizing`、`font-palette`、`font-variant-emoji`、`font-variant-position`、`font-language-override` 纳入 `STANDARD_COMPUTED_LONGHANDS` 并补全默认初始值。
   3. **全绿验证**：上述 6 组共 **18/18 PASS (100% ALL GREEN)**、`--smoke` **3/3 suites PASS**。
+
+### 2026-11-24 Phase 582 (`css-anchor-position/parsing` 3 组 6/6 全绿)
+- **[Agent]**: 自主推导并完成 Phase 582（`src/js/shim/cssom.js`, `src/js/shim/window.js`）：
+  1. **`cssom.js` & `window.js`**：注册并严格校验 `anchor-scope`、`position-try-order`、`position-visibility`（含规范序），纳入 `STANDARD_COMPUTED_LONGHANDS` 并设置默认初始值（`"none"` / `"normal"` / `"anchors-visible"`）。
+  2. **全绿验证与摸底**：上述 3 组共 **6/6 PASS (100% ALL GREEN)**、`--smoke` **3/3 suites PASS**；子智能体完成 `/css/css-position/parsing/` **22/22 PASS**、`/css/css-view-transitions/` **8/9 PASS**、`/css/css-conditional/`（38/135）、`/css/css-inline/`（4/16）。

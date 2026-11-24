@@ -3628,3 +3628,5 @@
 - **Phase 580** (`src/js/shim/window.js`, `src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `flex` 简写 `initial`/合法性校验、修复 `flex: 0 1 1` 误放行，并过滤计算期 `align-*/flex-*/order` 非法值及补齐默认初始值；WPT `/css/css-flexbox/getcomputedstyle/` 74/74 全绿通过。
 
 - **Phase 581** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `font-optical-sizing`/`font-palette`/`font-variant-emoji`/`font-variant-position`/`font-synthesis-style`/`font-language-override` 校验、规范序列化与计算期默认值；6 组共 18 项 WPT 全绿通过。
+
+- **Phase 582** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 注册并实现 `anchor-scope`、`position-try-order`、`position-visibility` 文法校验、规范序列化与计算期默认值；3 组共 6 项 WPT 全绿通过。

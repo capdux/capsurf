@@ -1881,3 +1881,15 @@
 - **子智能体只读摸底记录**：
   - `/css/css-anchor-position/` (`b455`, partial 29 recorded): `17 PASS / 7 FAIL / 5 TIMEOUT`
   - `/css/css-anchor-position/parsing/` (`b457`): `10` files (`0 PASS / 10 FAIL`)
+
+### Phase 582 `css-anchor-position/parsing/` (`anchor-scope`, `position-try-order`, `position-visibility`) 6/6 全绿 & WPT-B459~B463 摸底 (bin_dev Phase 582, 2026-11-24)
+- **Filter `/css/css-anchor-position/parsing/`**:
+  - `anchor-scope-{parsing,computed}.html`: **2/2 PASS (100% ALL GREEN)**（`none | all | <dashed-ident>#`，默认 `"none"`）。
+  - `position-try-order-{parsing,computed}.html`: **2/2 PASS (100% ALL GREEN)**（`normal | most-{width,height,block-size,inline-size}`，默认 `"normal"`）。
+  - `position-visibility-{parsing,computed}.html`: **2/2 PASS (100% ALL GREEN)**（`always | [anchors-valid || anchors-visible || no-overflow]` 规范序与默认 `"anchors-visible"`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-view-transitions/` (`b459`): `9` files (`8 PASS / 0 FAIL / 1 TIMEOUT`)
+  - `/css/css-conditional/` (`b460`): `135` files (`38 PASS / 91 FAIL / 6 TIMEOUT`)
+  - `/css/css-position/parsing/` (`b461`): **22/22 PASS (100% ALL GREEN)**
+  - `/css/css-inline/` (`b463`): `16` files (`4 PASS / 10 FAIL`)
