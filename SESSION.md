@@ -8078,3 +8078,6 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`cssom.js`**：补全 `animation` 校验/规范化/展开单次消费标记，及 `serializeExpandedShorthand("animation")` 同名关键字消歧 round-trip 序列化。
   2. **全绿验证**：`style-animation-parsing.html`（5/5）、`computed-style-animation-parsing.html`（7/7）与 `--smoke`（3/3 suites, 6/6 tests）全绿。
   3. **子智能体并发汇报**：`8f248964` 完成 `/css/css-masking/`（31/94 PASS），已接力派发 `4297d9ab`（`19710`, `/css/css-nesting/`）。
+- **[Agent]**: 完成 Phase 659（`src/js/shim/cssom.js`, `src/js/shim/window.js`）：
+  1. **`cssom.js` & `window.js`**：放行 `url(...)` 内 `{}`；统一 `background-image`/`mask-image` 多层渐变/`url()`/`image-set()` 求值，新增 `lhPx` 行高单位支持、`conic-gradient` 省略 `from 0deg` 及 `radial-gradient` 省略 `farthest-corner`/单半径 `circle`。
+  2. **全绿验证**：`mask-image-computed.html`（47/47）、`border-image-source-computed.sub.html`（10/10）、`image-set-computed.sub.html`（36/36）与 `--smoke`（3/3 suites, 6/6 tests）全绿。

@@ -2313,3 +2313,7 @@
 ### Phase 658: `style-animation-parsing` (5/5) & `computed-style-animation-parsing` (7/7) 全绿
 - **Filter `/css/css-animations/{style,computed-style}-animation-parsing`**: **FAIL->PASS (2/2: 5/5 + 7/7)**（`cssom.js` 在 `isValidCssValue`、`normalizeCssSpecifiedValue` 与 `expandCssShorthand` 中为 `animation` 补全 `seenTf`/`seenIter`/`seenDr`/`seenFl`/`seenPl` 单次消费标记（含 `none` 计入 `seenFl`），使二次出现的同名关键字可作为 `<custom-ident>` 落入 `animation-name`；`serializeExpandedShorthand("animation")` 在 `animation-name` 与其他关键字同名时显式输出对应默认关键字保证 round-trip 一致）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 659: `mask-image-computed` (47/47) 全绿
+- **Filter `/css/css-masking/parsing/mask-image-computed` & 回归 (`border-image-source-computed`, `image-set-computed`)**: **FAIL->PASS (47/47) + 2/2 回归全绿**（`cssom.js` 放行 `url(...)` 内部的 `{}` 模板占位；`window.js` 将 `background-image`/`mask-image` 统一至多层求值管线，新增 `evalCssLengthExpr` `lhPx` 精确行高计算、`conic-gradient`/`repeating-conic-gradient` 省略默认 `from 0deg`，以及 `radial-gradient` 省略 `farthest-corner` 与显式半径时的 `circle`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

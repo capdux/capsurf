@@ -388,7 +388,7 @@
     }
     if (prop === "all") return false;
     if (vLower === "bogus") return false;
-    if (/[{}]/.test(trimmed) && !/(?:^|[^a-z0-9_-])var\(/i.test(vLower)) return false;
+    if (/[{}]/.test(trimmed) && !/(?:^|[^a-z0-9_-])var\(/i.test(vLower) && !/\burl\(/i.test(vLower)) return false;
     if (!_isValidCalcSyntax) _isValidCalcSyntax = isValidCalcSyntax;
 
     if (prop === "display") {

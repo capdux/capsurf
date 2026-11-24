@@ -3135,3 +3135,7 @@
 ### Phase 658: `style-animation-parsing` & `computed-style-animation-parsing` 全绿
 - **核心修复 (`src/js/shim/cssom.js`)**：`isValidCssValue`、`normalizeCssSpecifiedValue`、`expandCssShorthand` 统一 `animation` 各子属性单次消费标记，`serializeExpandedShorthand("animation")` 在 `animation-name` 与关键字冲突时显式输出默认关键字。
 - **WPT & Smoke 验收**：`style-animation-parsing` (5/5) 与 `computed-style-animation-parsing` (7/7) 全绿，`--smoke` 3/3 suites PASS。
+
+### Phase 659: `mask-image-computed` (47/47) 全绿
+- **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：`url()` 内允许 `{}`；`mask-image` 复用 `background-image` 多层求值管线，补全 `lhPx`、`from 0deg` 与 `farthest-corner`/单半径 `circle` 省略。
+- **WPT & Smoke 验收**：`mask-image-computed` (47/47)、`border-image-source-computed` (10/10)、`image-set-computed` (36/36) 与 `--smoke` 3/3 suites PASS。
