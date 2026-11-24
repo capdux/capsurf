@@ -6,6 +6,7 @@
 
 | 测试时间 | 目录 / Filter | 分片 | 用例数 | 结果摘要 | 备注 |
 | :--- | :--- | :--- | :---: | :--- | :--- |
+| 2026-11-25 07:40 | `Phase 748`: `Element` 树描述符同步 (`ChildNode` & `textContent`) | 定向 | 6 | `ChildNode-before` (45/45), `ChildNode-after` (45/45), `DocumentType-remove` (4/4), `CharacterData-remove` (12/12), `Node-textContent` (81/81) **5/6 PASS** | `--smoke` 3/3 PASS |
 | 2026-11-25 07:37 | `Phase 747`: `Body-FrameSet-Event-Handlers.html` | 定向 | 3 | `Body-FrameSet-Event-Handlers` **PASS** (48/48), `Event-constructors` PASS, `remove-all-listeners` PASS | `--smoke` 3/3 PASS |
 | 2026-11-25 07:33 | `Phase 746`: `Event-constructors`, `remove-all-listeners`, `HTMLFrameSetElement` | 定向 | 3 | `Event-constructors` PASS (14/14), `remove-all-listeners` PASS (2/2) | `--smoke` 3/3 PASS |
 | 2026-11-25 07:29 | `Phase 745`: `DocumentType-remove` / `CharacterData-remove` & 8x `dom/nodes` 收紧 | 定向 | 14 | `DocumentType-remove` (4/4), `CharacterData-remove` (12/12) PASS; 8x FAIL/TO→PASS 已收紧 | `--smoke` 3/3 PASS |

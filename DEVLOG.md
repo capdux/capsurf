@@ -3334,3 +3334,5 @@
 - 修复 `Event` 构造字典单次读取、事件分发中 `item.removed` 规范语义（修复回调内清全表再加监听及嵌套 `once` 触发偏差），并补齐 `HTMLFrameSetElement` 类定义。
 ### Phase 747 — `Body-FrameSet-Event-Handlers.html` 全绿 (`48/48 PASS`)
 - 补全 `frameset` 原型映射及 `HTMLBodyElement`/`HTMLFrameSetElement` 事件处理器属性反射与窗口转发逻辑，打通 `Body-FrameSet-Event-Handlers.html` 48/48 全绿。
+### Phase 748 — `ChildNode-before/after` 与 `Node-textContent` 等 5 项 `/dom/nodes/` 全绿
+- 解决 `Element.prototype` 原生子节点/兄弟节点 getter 遮蔽 `Node.prototype` JS 树的问题，一举打通 `ChildNode-before` (45/45)、`ChildNode-after` (45/45)、`DocumentType-remove` (4/4)、`CharacterData-remove` (12/12) 与 `Node-textContent` (81/81)。

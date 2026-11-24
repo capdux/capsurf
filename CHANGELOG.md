@@ -4112,3 +4112,6 @@
   - `src/js/shim/index.js`: `createElement("frameset")` 绑定 `HTMLFrameSetElement.prototype`。
   - `src/js/shim/element/html-classes.js`: 为 `HTMLBodyElement`/`HTMLFrameSetElement` 的 `setAttribute`/`removeAttribute` 统一编译并转发窗口事件处理器至 `window[on*]`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 748**:
+  - `src/js/shim/node-base.js`: 将 `Node.prototype` 上 `childNodes`/`firstChild`/`lastChild`/`nextSibling`/`previousSibling` 描述符同步至 `Element.prototype`，统一 JS 树访问。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

@@ -1001,6 +1001,10 @@ if (typeof Element !== "undefined" && Element.prototype) {
   Element.prototype.insertBefore = Node.prototype.insertBefore;
   Element.prototype.removeChild = Node.prototype.removeChild;
   Element.prototype.replaceChild = Node.prototype.replaceChild;
+  for (const _ep of ["childNodes", "firstChild", "lastChild", "nextSibling", "previousSibling"]) {
+    const _desc = Object.getOwnPropertyDescriptor(Node.prototype, _ep);
+    if (_desc) Object.defineProperty(Element.prototype, _ep, _desc);
+  }
 
   const RAW_TEXT_TAGS = {
     script: 1, style: 1, xmp: 1, iframe: 1, noembed: 1, noframes: 1, plaintext: 1, noscript: 1,
