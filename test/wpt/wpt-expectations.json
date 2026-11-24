@@ -3526,7 +3526,7 @@
     "reason": null
   },
   "/css/css-images/parsing/object-fit-computed.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-images/parsing/object-fit-invalid.html": {

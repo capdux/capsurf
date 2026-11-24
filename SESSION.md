@@ -7585,3 +7585,11 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **内联简写 `!important` 展开 (`src/js/shim/element/element.js`)**：`parseStyleMap` 读取内联 `style` 时对 `column-rule`/`columns` 调用 `setEntryWithShorthand`，打通 `gap-decorations-important.html`。
   2. **`*::pseudo` 与 `::file-selector-button` (`src/js/shim/selector.js`)**：规范化 `*::pseudo -> ::pseudo` 并放行 `::file-selector-button` 后续用户交互伪类，保持 `/css/selectors/parsing/` **16/16 PASS** 并收紧 `highlight-pseudos.html` 基线为 `PASS`。
   3. **回归验证**：`scripts/e2e_suite.py --smoke`: **3/3 suites, 6/6 tests PASS**。
+
+### 2026-11-24 Phase 563 (`/css/css-images/parsing/` 强化 & 3小时自进化定时固化)
+- **[Agent]**: 自主推导并完成 Phase 563（`src/js/shim/cssom.js`, `src/js/shim/window.js`, `test/wpt/wpt-expectations.json`, `GEMINI.md`）：
+  1. **`css-images` 解析与计算值增强 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：
+     - 实现 `image-orientation`（`from-image | none`）、`image-resolution`（`[ from-image || <resolution> ] && snap?`）、`object-fit` 双值（`[ contain | cover ] || scale-down` 及规范序）与 `background-image: image(<color>)` 校验及计算期颜色归一化；将 `image-orientation` 纳入 `STANDARD_COMPUTED_LONGHANDS`（默认 `"from-image"`），收紧 `object-fit-computed.html` 基线为 `PASS`。
+  2. **3 小时自进化定时触发 (`task-17699`, `GEMINI.md` 11.9 节)**：
+     - 固化两项高回报提效/省 Token 铁律：① 纯 JS shim（`selector.js`/`cssom.js`/`xpath.js`）修改后先用 `node -e` 0.1 秒冒烟验证再 `cap build`；② 在 `window.js`/`cssom.js` 等万行大文件使用 `edit_file` 时 `Target` 必须包含至少 2~3 行上下文，杜绝短匹配误替换带来的返工。
+  3. **全绿验证**：`image-orientation` **3/3 PASS**、`image-function-{invalid,computed}` **PASS**、`image-resolution-invalid` **PASS**、`object-fit-computed` **PASS**、`--smoke` **3/3 PASS**。

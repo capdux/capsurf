@@ -3844,7 +3844,7 @@
       "grid-column", "grid-column-end", "grid-column-gap", "grid-column-start", "grid-gap",
       "grid-row", "grid-row-end", "grid-row-gap", "grid-row-start", "grid-template",
       "grid-template-areas", "grid-template-columns", "grid-template-rows", "hanging-punctuation", "height",
-      "hyphenate-character", "hyphenate-limit-chars", "hyphens", "image-orientation", "image-rendering",
+      "hyphenate-character", "hyphenate-limit-chars", "hyphens", "image-orientation", "image-rendering", "image-resolution",
       "inline-size", "inset", "inset-block", "inset-block-end", "inset-block-start",
       "inset-inline", "inset-inline-end", "inset-inline-start", "interactivity", "isolation", "justify-content",
       "justify-items", "justify-self", "left", "letter-spacing", "line-break", "line-clamp", "line-height",
@@ -4241,7 +4241,6 @@
         "transform-style": ["flat", "preserve-3d"],
         "backface-visibility": ["visible", "hidden"],
         "isolation": ["auto", "isolate"],
-        "object-fit": ["fill", "contain", "cover", "none", "scale-down"],
         "table-layout": ["auto", "fixed"],
         "caption-side": ["top", "bottom", "block-start", "block-end", "inline-start", "inline-end"],
         "empty-cells": ["show", "hide"],
@@ -5915,6 +5914,44 @@
         }
         return true;
       }
+      if (prop === "image-orientation") {
+        return vLower === "from-image" || vLower === "none";
+      }
+      if (prop === "image-resolution") {
+        const toks = splitCssTokens(vLower);
+        if (toks.length < 1 || toks.length > 3) return false;
+        let start = 0, end = toks.length;
+        if (toks[0] === "snap") start = 1;
+        else if (toks[toks.length - 1] === "snap") end = toks.length - 1;
+        const core = toks.slice(start, end);
+        if (core.length < 1 || core.length > 2) return false;
+        let seenFi = false, seenRes = false;
+        for (let i = 0; i < core.length; i++) {
+          if (core[i] === "from-image") {
+            if (seenFi) return false; seenFi = true;
+          } else if (/^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:dpi|dpcm|dppx|x)$/i.test(core[i]) || /^calc\(/i.test(core[i])) {
+            if (seenRes) return false; seenRes = true;
+          } else {
+            return false;
+          }
+        }
+        return true;
+      }
+      if (prop === "object-fit") {
+        const toks = splitCssTokens(vLower);
+        if (toks.length === 1) {
+          return toks[0] === "fill" || toks[0] === "contain" || toks[0] === "cover" || toks[0] === "none" || toks[0] === "scale-down";
+        }
+        if (toks.length === 2) {
+          return (toks[0] === "scale-down" && (toks[1] === "contain" || toks[1] === "cover")) ||
+                 (toks[1] === "scale-down" && (toks[0] === "contain" || toks[0] === "cover"));
+        }
+        return false;
+      }
+      if (prop === "background-image" && /^image\(/i.test(trimmed)) {
+        const im = /^image\(\s*(.*)\s*\)$/i.exec(trimmed);
+        return !!(im && im[1] && isValidColor(im[1]));
+      }
       if (prop === "scroll-initial-target") {
         return vLower === "none" || vLower === "nearest";
       }
@@ -6401,6 +6438,11 @@
           return fill === "filled" ? shape : ("open " + shape);
         }
         return s;
+      }
+      if (key === "object-fit") {
+        const p = splitCssTokens(s.toLowerCase());
+        if (p.length === 2 && p[0] === "scale-down") return p[1] + " scale-down";
+        return p.join(" ");
       }
       if (key === "ruby-overhang") {
         return s.toLowerCase() === "none" ? "spaces" : s.toLowerCase();
@@ -42931,6 +42973,11 @@
       if (lsiRaw && /^(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(lsiRaw)) {
         computedMap.set("list-style-image", evalGradientComputed(lsiRaw));
       }
+      const bgImgRaw = (computedMap.get("background-image") || "").trim();
+      if (bgImgRaw && /^image\(/i.test(bgImgRaw)) {
+        const im = /^image\(\s*(.*)\s*\)$/i.exec(bgImgRaw);
+        if (im && im[1]) computedMap.set("background-image", "image(" + normCol(im[1].trim()) + ")");
+      }
       const curRaw = (computedMap.get("cursor") || "").trim();
       if (curRaw && /(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(curRaw)) {
         const cParts = [];
@@ -43026,7 +43073,7 @@
       "font-stretch", "font-style", "font-variant", "font-weight", "grid-auto-columns",
       "grid-auto-flow", "grid-auto-rows", "grid-column-end", "grid-column-start",
       "grid-row-end", "grid-row-start", "grid-template-areas", "grid-template-columns",
-      "grid-template-rows", "hanging-punctuation", "height", "hyphenate-character", "hyphenate-limit-chars", "hyphens", "image-rendering", "interactivity",
+      "grid-template-rows", "hanging-punctuation", "height", "hyphenate-character", "hyphenate-limit-chars", "hyphens", "image-orientation", "image-rendering", "interactivity",
       "inline-size", "inset-block-end", "inset-block-start", "inset-inline-end", "inset-inline-start",
       "isolation", "justify-content", "justify-items", "justify-self", "left", "letter-spacing", "line-break",
       "line-height", "list-style-image", "list-style-position", "list-style-type",
@@ -43350,6 +43397,7 @@
         }
         if (lower === "text-combine-upright") return "none";
         if (lower === "text-orientation") return "mixed";
+        if (lower === "image-orientation") return "from-image";
         if (lower === "content") return "normal";
         if (lower === "overflow-anchor") return "auto";
         if (lower === "scroll-snap-stop") return "normal";

@@ -1696,3 +1696,11 @@
 - **Filter `/css/css-gaps/parsing/gap-decorations-important.html`**: **1/1 PASS**; 在 `element.js` `parseStyleMap` 对 `column-rule`/`columns` 启用 `setEntryWithShorthand`，使内联 `!important` 简写展开至长手属性。
 - **Selectors & Pseudo**: `selector.js` 支持 `*::pseudo -> ::pseudo` 归一化及 `::file-selector-button` 用户交互伪类组合；`/css/selectors/parsing/` **16/16 PASS**、`/css/css-pseudo/parsing/highlight-pseudos.html` **PASS**（基线收紧为 `PASS`）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 563 `/css/css-images/parsing/` (`image-orientation`, `image-resolution`, `image()`, `object-fit`) 强化 & 3小时自进化固化 (bin_dev Phase 563, 2026-11-24)
+- **Filter `/css/css-images/parsing/`**:
+  - `image-orientation-{computed,invalid,valid}.html`: **3/3 PASS (100% ALL GREEN)**（校验 `from-image | none`，并将 `image-orientation` 纳入 `STANDARD_COMPUTED_LONGHANDS` 默认值 `"from-image"`）。
+  - `image-function-{invalid,computed}.html`: **2/2 PASS**（校验 `image(<color>)` 及计算期颜色归一化）。
+  - `image-resolution-invalid.html`: **PASS**（校验 `[ from-image || <resolution> ] && snap?`）。
+  - `object-fit-computed.html`: **PASS**（支持 `[ contain | cover ] || scale-down` 双值语法与 `scale-down` 后置归一化，基线收紧为 `PASS`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

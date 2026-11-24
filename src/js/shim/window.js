@@ -8305,6 +8305,11 @@ function installWindow(global) {
     if (lsiRaw && /^(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(lsiRaw)) {
       computedMap.set("list-style-image", evalGradientComputed(lsiRaw));
     }
+    const bgImgRaw = (computedMap.get("background-image") || "").trim();
+    if (bgImgRaw && /^image\(/i.test(bgImgRaw)) {
+      const im = /^image\(\s*(.*)\s*\)$/i.exec(bgImgRaw);
+      if (im && im[1]) computedMap.set("background-image", "image(" + normCol(im[1].trim()) + ")");
+    }
     const curRaw = (computedMap.get("cursor") || "").trim();
     if (curRaw && /(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(curRaw)) {
       const cParts = [];
@@ -8400,7 +8405,7 @@ function installWindow(global) {
     "font-stretch", "font-style", "font-variant", "font-weight", "grid-auto-columns",
     "grid-auto-flow", "grid-auto-rows", "grid-column-end", "grid-column-start",
     "grid-row-end", "grid-row-start", "grid-template-areas", "grid-template-columns",
-    "grid-template-rows", "hanging-punctuation", "height", "hyphenate-character", "hyphenate-limit-chars", "hyphens", "image-rendering", "interactivity",
+    "grid-template-rows", "hanging-punctuation", "height", "hyphenate-character", "hyphenate-limit-chars", "hyphens", "image-orientation", "image-rendering", "interactivity",
     "inline-size", "inset-block-end", "inset-block-start", "inset-inline-end", "inset-inline-start",
     "isolation", "justify-content", "justify-items", "justify-self", "left", "letter-spacing", "line-break",
     "line-height", "list-style-image", "list-style-position", "list-style-type",
@@ -8724,6 +8729,7 @@ function installWindow(global) {
       }
       if (lower === "text-combine-upright") return "none";
       if (lower === "text-orientation") return "mixed";
+      if (lower === "image-orientation") return "from-image";
       if (lower === "content") return "normal";
       if (lower === "overflow-anchor") return "auto";
       if (lower === "scroll-snap-stop") return "normal";

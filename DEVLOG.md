@@ -2747,3 +2747,8 @@
 - **内联 `style` 解析 (`src/js/shim/element/element.js`)**：`parseStyleMap` 遇到 `column-rule`/`columns` 时走 `setEntryWithShorthand`，修复内联 `!important` 简写未展开至长手的问题。
 - **选择器规范化 (`src/js/shim/selector.js`)**：剥离 `::` 前多余 `*` 通配符并放行 `::file-selector-button` 的 `:hover`/`:focus`/`:active`/`:is`/`:where` 组合。
 - **WPT 验收**：`gap-decorations-important.html` PASS、`highlight-pseudos.html` PASS、`/css/selectors/parsing/` **16/16 PASS**、`--smoke` **3/3 suites PASS**。
+
+### Phase 563: CSS Images 解析强化与 3 小时自进化规范固化
+- **`css-images` (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：补全 `image-orientation`、`image-resolution`、`object-fit` 双值及 `image(<color>)` 校验与计算期求值，`image-orientation-*` 3/3、`image-function-{invalid,computed}`、`image-resolution-invalid`、`object-fit-computed` 全部 PASS。
+- **自进化固化 (`GEMINI.md` 11.9)**：新增 `node -e` 纯 JS shim 编译前预检与大文件 `edit_file` 多行上下文防误替换规范。
+- **WPT & Smoke 验收**：`image-orientation` 3/3 PASS、`--smoke` 3/3 suites PASS。

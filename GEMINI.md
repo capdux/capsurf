@@ -324,3 +324,9 @@
 - **极简 `--full-out` + Python 失败提取（节省 90% Token）**：运行未知套件摸底时使用 `--full-out /tmp/xxx.json`，严禁直接 `cat` 原始 JSON；统一用 1 行 Python 脚本仅打印 `FAIL` 用例名与前 3 条 `subtest` 断言差值，将单轮上下文消耗从数万 Token 降至 `< 500` Tokens。
 - **跨模块同源合批修复**：将共享底层逻辑的 CSS 模块打包在同一 Phase 中修改（如 `canonicalizeCalcToken` 同时覆盖 `css-logical` 与 `css-tables/border-spacing`），单次 `bundle_runtime.py` + `cap build` 同步打通多套件全绿，减少 50% 构建往返。
 - **后台持久化 `wpt-serve`**：使用 `IsDaemon: true` 在后台启动 `node test/wpt/scripts/wpt-serve.mjs` 监听 `8000` 端口；主智能体与各只读子智能体均**严禁**再传递 `--start-server`，各自使用隔离 CDP 端口（`19700` / `19710` / `19720`）并发运行，彻底消除重复启停开销。
+
+
+### 11.9 纯 JS Shim 亚秒级预检与大文件多行上下文编辑铁律 (2026-11-24 3小时自进化固化)
+
+- **纯 JS Shim 0.1s `node -e` 预检免返工**：修改 `src/js/shim/selector.js`、`cssom.js`（正则/校验/序列化）或 `xpath.js` 等纯 JS 逻辑后，先用 `node -e` 直接加载并跑通关键用例（耗时 **< 0.1s**），确认无误后再执行 `bundle_runtime.py` + `cap build` + `wpt-batched.mjs`，避免每次因正则或循环边界小错浪费 25s+ 重编与 WPT 启动开销。
+- **万行大文件 `edit_file` 多行唯一上下文铁律**：在 `window.js`（16,000+ 行）或 `cssom.js`（6,600+ 行）等大文件中调用 `edit_file` 时，`Target` **严禁**使用通用短结尾（如 `return null;\n}` 或 `return;\n}`），必须包含至少 2~3 行独一无二的函数名/注释/分支上下文，杜绝全文件多点误替换引发的清理返工与 Token 浪费。
