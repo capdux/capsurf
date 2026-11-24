@@ -2935,6 +2935,9 @@
     if (key === "background-position" || key === "background-position-x" || key === "background-position-y") {
       return splitTopLevelComma(s).map((layer) => splitCssTokens(layer).map((tok) => (/^calc\(/i.test(tok) ? canonicalizeCalcToken(tok) : tok)).join(" ")).join(", ");
     }
+    if (key === "font-variant-alternates") {
+      return splitCssTokens(s).map((tk) => (/^[a-z-]+$/i.test(tk) ? tk.toLowerCase() : tk)).join(" ");
+    }
     if (key === "margin-trim") {
       const p = splitCssTokens(s.toLowerCase());
       if (p.length === 2 && ((p[0] === "block-start" && p[1] === "block-end") || (p[0] === "block-end" && p[1] === "block-start"))) {

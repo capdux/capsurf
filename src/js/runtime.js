@@ -6725,6 +6725,9 @@
       if (key === "background-position" || key === "background-position-x" || key === "background-position-y") {
         return splitTopLevelComma(s).map((layer) => splitCssTokens(layer).map((tok) => (/^calc\(/i.test(tok) ? canonicalizeCalcToken(tok) : tok)).join(" ")).join(", ");
       }
+      if (key === "font-variant-alternates") {
+        return splitCssTokens(s).map((tk) => (/^[a-z-]+$/i.test(tk) ? tk.toLowerCase() : tk)).join(" ");
+      }
       if (key === "margin-trim") {
         const p = splitCssTokens(s.toLowerCase());
         if (p.length === 2 && ((p[0] === "block-start" && p[1] === "block-end") || (p[0] === "block-end" && p[1] === "block-start"))) {
@@ -43502,7 +43505,7 @@
           if (fwRaw === "bolder") {
             if (inh < 350) resW = 400;
             else if (inh < 550) resW = 700;
-            else if (inh < 750) resW = 900;
+            else if (inh < 900) resW = 900;
           } else {
             if (inh >= 750) resW = 700;
             else if (inh >= 550) resW = 400;
@@ -43512,6 +43515,38 @@
         } else if (/^calc\(/i.test(fwRaw)) {
           const val = evalCssLengthExpr(fwRaw, 0, fontSize);
           if (val !== null) computedMap.set("font-weight", String(Math.min(1000, Math.max(1, val))));
+        }
+      }
+      const fstRaw = (computedMap.get("font-style") || "").trim();
+      if (/^oblique\s+/i.test(fstRaw)) {
+        const angPart = fstRaw.slice(8).trim();
+        const evalAngDeg = (tok) => {
+          const tl = tok.toLowerCase();
+          const am = /^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(deg|rad|grad|turn)$/i.exec(tl);
+          if (am) {
+            const n = Number(am[1]), u = am[2].toLowerCase();
+            return u === "deg" ? n : (u === "turn" ? n * 360 : (u === "grad" ? n * 0.9 : n * 180 / Math.PI));
+          }
+          if (/^calc\(/i.test(tl)) {
+            const norm = tl
+              .replace(/([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(rad|grad|turn|deg)\b/gi, (_, n, u) => {
+                const v = Number(n), ul = u.toLowerCase();
+                return String(ul === "deg" ? v : (ul === "turn" ? v * 360 : (ul === "grad" ? v * 0.9 : v * 180 / Math.PI)));
+              })
+              .replace(/sign\(([^()]+)\)/gi, (_, inner) => {
+                const v = evalCssLengthExpr(inner, 0, fontSize);
+                return v !== null ? String(Math.sign(v)) : "0";
+              });
+            const v = evalCssLengthExpr(norm, 0, fontSize);
+            if (v !== null && isFinite(v)) return v;
+          }
+          return null;
+        };
+        const deg = evalAngDeg(angPart);
+        if (deg !== null && isFinite(deg)) {
+          const clamped = Math.max(-90, Math.min(90, deg));
+          const r = Number(clamped.toFixed(4));
+          computedMap.set("font-style", r === 0 ? "normal" : (r === 14 ? "oblique" : ("oblique " + r + "deg")));
         }
       }
       const spProps = ["letter-spacing", "word-spacing"];

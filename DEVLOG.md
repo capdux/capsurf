@@ -3059,3 +3059,7 @@
 ### Phase 639: `clip-computed` & `mask-repeat-invalid` 全绿收紧
 - **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：`mask-repeat` 复用 `background-repeat` 校验器；`window.js` 补全 `mask-image` 初始默认值/枚举与 `clip: rect(...)` 4 参长度计算值求值。
 - **WPT & Smoke 验收**：`clip-computed.html` (4/4) & `mask-repeat-invalid.html` (5/5，收紧基线为 `PASS`) PASS，`--smoke` 3/3 suites PASS。
+
+### Phase 640: `css-fonts` 4 项全绿 (`font-weight-lighter-bolder` / `font-style-*` / `font-variant-alternates`)
+- **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：`window.js` 将 `bolder` 升档阈值修正为 `inh < 900 -> 900`，新增 `font-style: oblique <angle>` 角度单位换算（`rad`/`grad`/`turn` -> `deg`，`0deg` -> `normal`）与 `sign()` 求值；`cssom.js` 将 `font-variant-alternates` 关键字规范为小写。
+- **WPT & Smoke 验收**：`font-weight-lighter-bolder` (22/22)、`font-style-angle` (1/1)、`font-style-sign-function` (1/1)、`font-variant-alternates-parsing` (1/1) PASS，`--smoke` 3/3 suites PASS。
