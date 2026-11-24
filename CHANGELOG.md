@@ -4143,3 +4143,9 @@
   - `src/js/shim/cssom.js`: 新增 `isValidVarCallSyntax` / `isValidCustomDeclValue` 对接 `var()` 校验。
   - `test/wpt/wpt-expectations.json`: 收紧 3 项 `/css/css-variables/` `FAIL→PASS` 用例为 `PASS`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 756**:
+  - `src/js/shim/cssom.js`: `font-weight` 校验忽略 `sign(...)` 内含的容器/长度单位。
+  - `src/js/shim/selector.js`: 新增 `stripSelectorComments` 并兼容 `[attr="val"i]`/`[attr=val i]` 修饰符。
+  - `src/js/shim/window.js`: 补全 highlight 系列伪元素匹配、祖先继承链与 `currentcolor` 计算值解析。
+  - `test/wpt/wpt-expectations.json`: 收紧 2 项 `/css/css-pseudo/highlight-cascade/` 用例为 `PASS`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

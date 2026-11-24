@@ -6303,11 +6303,11 @@ function installWindow(global) {
 
       let selPseudo = "";
       let baseSel = raw;
-      const pseudoMatch = raw.match(/(::?[a-zA-Z_-]+)$/);
+      const pseudoMatch = raw.match(/(::?[a-zA-Z_-]+(?:\([^)]*\))?)$/);
       if (pseudoMatch) {
         let p = pseudoMatch[1].toLowerCase();
         if (p.startsWith(":") && !p.startsWith("::")) p = ":" + p;
-        if (p === "::before" || p === "::after" || p === "::marker" || p === "::selection" || p === "::column") {
+        if (p === "::before" || p === "::after" || p === "::marker" || p === "::selection" || p === "::target-text" || p === "::search-text" || p === "::spelling-error" || p === "::grammar-error" || p.startsWith("::highlight(") || p === "::column") {
           selPseudo = p;
           baseSel = raw.slice(0, -pseudoMatch[1].length).trim();
         }
@@ -6811,6 +6811,7 @@ function installWindow(global) {
       ancestors.push(p);
       p = p.parentElement || p.parentNode;
     }
+    const isHlPseudo = normalizedPseudo === "::selection" || normalizedPseudo === "::target-text" || normalizedPseudo === "::search-text" || normalizedPseudo === "::spelling-error" || normalizedPseudo === "::grammar-error" || (normalizedPseudo && normalizedPseudo.startsWith("::highlight("));
     for (let i = ancestors.length - 1; i >= 0; i--) {
       const ancMap = new Map();
       collectElementOwnDeclarations(ancestors[i], styleNodes, "", ancMap);
@@ -6818,6 +6819,9 @@ function installWindow(global) {
         if (k.startsWith("--") || INHERITED_CSS_PROPS.has(k)) {
           computedMap.set(k, v);
         }
+      }
+      if (isHlPseudo) {
+        collectElementOwnDeclarations(ancestors[i], styleNodes, normalizedPseudo, computedMap);
       }
     }
 
@@ -7223,6 +7227,21 @@ function installWindow(global) {
         if (!computedMap.get("list-style-image")) computedMap.set("list-style-image", "none");
         if (!computedMap.get("list-style-position")) computedMap.set("list-style-position", "outside");
         if (!computedMap.get("list-style-type")) computedMap.set("list-style-type", "disc");
+      }
+      const isHlP = normalizedPseudo === "::selection" || normalizedPseudo === "::target-text" || normalizedPseudo === "::search-text" || normalizedPseudo === "::spelling-error" || normalizedPseudo === "::grammar-error" || normalizedPseudo.startsWith("::highlight(");
+      if (isHlP) {
+        const origMap = collectRawComputedMap(element, "");
+        applyUsedValuesToComputedMap(element, origMap, "");
+        const origCol = origMap.get("color") || "rgb(0, 0, 0)";
+        const hlCol = (computedMap.get("color") || "").trim();
+        const resolvedCol = (!hlCol || hlCol.toLowerCase() === "currentcolor") ? origCol : global.__capsurf_normalizeSingleColor(hlCol);
+        computedMap.set("color", resolvedCol);
+        const hlBg = (computedMap.get("background-color") || "").trim();
+        if (hlBg.toLowerCase() === "currentcolor") {
+          computedMap.set("background-color", resolvedCol);
+        } else if (hlBg) {
+          computedMap.set("background-color", global.__capsurf_normalizeSingleColor(hlBg));
+        }
       }
       return;
     }

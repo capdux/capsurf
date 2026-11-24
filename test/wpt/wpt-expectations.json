@@ -5086,14 +5086,8 @@
     "expected": "PASS",
     "reason": null
   },
-  "/css/css-pseudo/highlight-cascade/highlight-currentcolor-computed-inheritance.html": {
-    "expected": "FAIL",
-    "reason": null
-  },
-  "/css/css-pseudo/highlight-cascade/highlight-pseudos-inheritance-computed-001.html": {
-    "expected": "FAIL",
-    "reason": null
-  },
+  "/css/css-pseudo/highlight-cascade/highlight-currentcolor-computed-inheritance.html": "PASS",
+  "/css/css-pseudo/highlight-cascade/highlight-pseudos-inheritance-computed-001.html": "PASS",
   "/css/css-pseudo/parsing/highlight-pseudos-search-text.tentative.html": {
     "expected": "PASS",
     "reason": null

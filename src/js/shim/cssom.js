@@ -1411,7 +1411,8 @@
       const t = toks[0];
       if (t === "normal" || t === "bold" || t === "bolder" || t === "lighter") return true;
       if (/^(?:calc|min|max|clamp|var|env)\(/i.test(t)) {
-        if (/^(?:calc|min|max|clamp)\(/i.test(t) && /(?:\d|\.)(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|%|deg|rad|grad|turn|s|ms)\b/i.test(t)) return false;
+        const noSign = t.replace(/\bsign\([^()]*(?:\([^()]*\)[^()]*)*\)/gi, "1");
+        if (/^(?:calc|min|max|clamp)\(/i.test(noSign) && /(?:\d|\.)(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|%|deg|rad|grad|turn|s|ms)\b/i.test(noSign)) return false;
         return true;
       }
       if (!/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(t)) return false;

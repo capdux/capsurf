@@ -3350,3 +3350,5 @@
 - 修复跨文档 `doc.createRange()` 默认绑定主 `document` 导致的 `Range-cloneRange` 13 项失败，并实现 `comparePoint`/`isPointInRange`/`intersectsNode`，实测 `Range-comparePoint-2`、`Range-intersectsNode-2` 与 `Range-cloneRange`（长超时模式）全部 PASS。
 ### Phase 755 — `/css/css-variables/` `@supports` 与 `<declaration-value>` 批量修复（79/125 PASS，+3 `FAIL→PASS`）
 - 在原生 `cascade.cp` 补全自定义属性 `<declaration-value>` 校验（拦截顶级 `!`、不匹配括号、非法 `var()`）与 `CssRuleKind.Supports` 条件求值，批量打通 `variable-declaration-*` 与 `variable-supports-*` 共 79 项（含 3 项 `FAIL→PASS`，基线达 `7,201/9,725`）。
+### Phase 756 — `font-weight` `sign(cqw)`、`attribute-case/cssom` 与 `highlight-cascade` 继承全绿（5/5 PASS，+2 `FAIL→PASS`）
+- 批量修复 `font-weight` `sign(20cqw - 10px)` 校验、`CSSStyleRule#selectorText` 注释与 `[attr="val"i]` 规范化，以及 highlight 伪元素继承与 `currentcolor` 解析，实现 5/5 全部 PASS（基线增至 `7,203/9,725`）。

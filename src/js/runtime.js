@@ -5306,7 +5306,8 @@
         const t = toks[0];
         if (t === "normal" || t === "bold" || t === "bolder" || t === "lighter") return true;
         if (/^(?:calc|min|max|clamp|var|env)\(/i.test(t)) {
-          if (/^(?:calc|min|max|clamp)\(/i.test(t) && /(?:\d|\.)(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|%|deg|rad|grad|turn|s|ms)\b/i.test(t)) return false;
+          const noSign = t.replace(/\bsign\([^()]*(?:\([^()]*\)[^()]*)*\)/gi, "1");
+          if (/^(?:calc|min|max|clamp)\(/i.test(noSign) && /(?:\d|\.)(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|%|deg|rad|grad|turn|s|ms)\b/i.test(noSign)) return false;
           return true;
         }
         if (!/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(t)) return false;
@@ -16438,8 +16439,8 @@
         if (am[2]) {
           let attrVal = am[3].trim();
           let mod = "";
-          const modMatch = /^(.*)\s+([iIsS])$/.exec(attrVal);
-          if (modMatch && (attrVal.startsWith('"') || attrVal.startsWith("'"))) {
+          const modMatch = /^("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s"']+)\s*([iIsS])$/.exec(attrVal);
+          if (modMatch) {
             attrVal = modMatch[1].trim();
             mod = " " + modMatch[2].toLowerCase();
           }
@@ -16614,10 +16615,34 @@
     return prevWasCombinator ? null : out.trim();
   }
 
+  function stripSelectorComments(str) {
+    let out = "", q = "";
+    for (let i = 0; i < str.length; i++) {
+      const ch = str[i];
+      if (q) {
+        out += ch;
+        if (ch === "\\" && i + 1 < str.length) { out += str[++i]; continue; }
+        if (ch === q) q = "";
+        continue;
+      }
+      if (ch === '"' || ch === "'") { q = ch; out += ch; continue; }
+      if (ch === "/" && i + 1 < str.length && str[i + 1] === "*") {
+        const end = str.indexOf("*/", i + 2);
+        if (end === -1) return null;
+        i = end + 1;
+        continue;
+      }
+      out += ch;
+    }
+    return out;
+  }
+
   function canonicalizeSelectorList(selector, inHas, inFunc) {
     if (typeof selector !== "string") selector = String(selector);
     if (/[\x00-\x08\x0b\x0e-\x1f\x7f]/.test(selector)) return null;
-    const parts = splitTopLevelSelectorList(selector.trim());
+    const noComments = stripSelectorComments(selector);
+    if (noComments === null) return null;
+    const parts = splitTopLevelSelectorList(noComments.trim());
     if (!parts || parts.length === 0) return null;
     const out = [];
     for (let i = 0; i < parts.length; i++) {
@@ -45173,11 +45198,11 @@
 
         let selPseudo = "";
         let baseSel = raw;
-        const pseudoMatch = raw.match(/(::?[a-zA-Z_-]+)$/);
+        const pseudoMatch = raw.match(/(::?[a-zA-Z_-]+(?:\([^)]*\))?)$/);
         if (pseudoMatch) {
           let p = pseudoMatch[1].toLowerCase();
           if (p.startsWith(":") && !p.startsWith("::")) p = ":" + p;
-          if (p === "::before" || p === "::after" || p === "::marker" || p === "::selection" || p === "::column") {
+          if (p === "::before" || p === "::after" || p === "::marker" || p === "::selection" || p === "::target-text" || p === "::search-text" || p === "::spelling-error" || p === "::grammar-error" || p.startsWith("::highlight(") || p === "::column") {
             selPseudo = p;
             baseSel = raw.slice(0, -pseudoMatch[1].length).trim();
           }
@@ -45681,6 +45706,7 @@
         ancestors.push(p);
         p = p.parentElement || p.parentNode;
       }
+      const isHlPseudo = normalizedPseudo === "::selection" || normalizedPseudo === "::target-text" || normalizedPseudo === "::search-text" || normalizedPseudo === "::spelling-error" || normalizedPseudo === "::grammar-error" || (normalizedPseudo && normalizedPseudo.startsWith("::highlight("));
       for (let i = ancestors.length - 1; i >= 0; i--) {
         const ancMap = new Map();
         collectElementOwnDeclarations(ancestors[i], styleNodes, "", ancMap);
@@ -45688,6 +45714,9 @@
           if (k.startsWith("--") || INHERITED_CSS_PROPS.has(k)) {
             computedMap.set(k, v);
           }
+        }
+        if (isHlPseudo) {
+          collectElementOwnDeclarations(ancestors[i], styleNodes, normalizedPseudo, computedMap);
         }
       }
 
@@ -46093,6 +46122,21 @@
           if (!computedMap.get("list-style-image")) computedMap.set("list-style-image", "none");
           if (!computedMap.get("list-style-position")) computedMap.set("list-style-position", "outside");
           if (!computedMap.get("list-style-type")) computedMap.set("list-style-type", "disc");
+        }
+        const isHlP = normalizedPseudo === "::selection" || normalizedPseudo === "::target-text" || normalizedPseudo === "::search-text" || normalizedPseudo === "::spelling-error" || normalizedPseudo === "::grammar-error" || normalizedPseudo.startsWith("::highlight(");
+        if (isHlP) {
+          const origMap = collectRawComputedMap(element, "");
+          applyUsedValuesToComputedMap(element, origMap, "");
+          const origCol = origMap.get("color") || "rgb(0, 0, 0)";
+          const hlCol = (computedMap.get("color") || "").trim();
+          const resolvedCol = (!hlCol || hlCol.toLowerCase() === "currentcolor") ? origCol : global.__capsurf_normalizeSingleColor(hlCol);
+          computedMap.set("color", resolvedCol);
+          const hlBg = (computedMap.get("background-color") || "").trim();
+          if (hlBg.toLowerCase() === "currentcolor") {
+            computedMap.set("background-color", resolvedCol);
+          } else if (hlBg) {
+            computedMap.set("background-color", global.__capsurf_normalizeSingleColor(hlBg));
+          }
         }
         return;
       }

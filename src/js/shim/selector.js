@@ -127,8 +127,8 @@ function canonicalizeComplexSelector(raw, inHas, inFunc) {
       if (am[2]) {
         let attrVal = am[3].trim();
         let mod = "";
-        const modMatch = /^(.*)\s+([iIsS])$/.exec(attrVal);
-        if (modMatch && (attrVal.startsWith('"') || attrVal.startsWith("'"))) {
+        const modMatch = /^("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s"']+)\s*([iIsS])$/.exec(attrVal);
+        if (modMatch) {
           attrVal = modMatch[1].trim();
           mod = " " + modMatch[2].toLowerCase();
         }
@@ -303,10 +303,34 @@ function canonicalizeComplexSelector(raw, inHas, inFunc) {
   return prevWasCombinator ? null : out.trim();
 }
 
+function stripSelectorComments(str) {
+  let out = "", q = "";
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    if (q) {
+      out += ch;
+      if (ch === "\\" && i + 1 < str.length) { out += str[++i]; continue; }
+      if (ch === q) q = "";
+      continue;
+    }
+    if (ch === '"' || ch === "'") { q = ch; out += ch; continue; }
+    if (ch === "/" && i + 1 < str.length && str[i + 1] === "*") {
+      const end = str.indexOf("*/", i + 2);
+      if (end === -1) return null;
+      i = end + 1;
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+
 function canonicalizeSelectorList(selector, inHas, inFunc) {
   if (typeof selector !== "string") selector = String(selector);
   if (/[\x00-\x08\x0b\x0e-\x1f\x7f]/.test(selector)) return null;
-  const parts = splitTopLevelSelectorList(selector.trim());
+  const noComments = stripSelectorComments(selector);
+  if (noComments === null) return null;
+  const parts = splitTopLevelSelectorList(noComments.trim());
   if (!parts || parts.length === 0) return null;
   const out = [];
   for (let i = 0; i < parts.length; i++) {
