@@ -8134,3 +8134,4 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - [Phase 702] `cssom.js` (`isValidColor` 补齐 19 个 CSS System Colors 与 `lab`/`oklab`/`lch`/`oklch`/`color()` 参数/色空间/单位校验): `color-valid-system-color` (19/19)、`color-invalid-lab` (18/18)、`color-invalid-color-function` (124/124) 全通 PASS，`--smoke` 3/3 PASS。
 - [Phase 703] `window.js` (`elColor` 在 `color: currentcolor` 时向上继承父元素非 `currentcolor` 计算色): `color-computed.html` (16/16 PASS)，`--smoke` 3/3 PASS。
 - [Phase 704] `cssom.js` (`normalizeSingleColor` 为 `hsl`/`hsla` 补齐 `none` 通道规范化): `color-valid-hsl.html` 30/59 fails -> 24/59 fails，`--smoke` 3/3 PASS。
+- [Phase 705] `cssom.js` & `window.js` (补全 `position-try-fallbacks` 校验/规范化、`position-try` 简写展开/序列化与 `getComputedStyle` 支持): `/css/css-anchor-position/parsing/` 10/10 PASS，`--smoke` 3/3 PASS。

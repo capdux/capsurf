@@ -9030,6 +9030,7 @@ function installWindow(global) {
       ["font-variant-position", "normal"],
       ["anchor-scope", "none"],
       ["position-try-order", "normal"],
+      ["position-try-fallbacks", "none"],
       ["position-visibility", "anchors-visible"],
       ["image-orientation", "from-image"],
       ["image-rendering", "auto"],
@@ -9863,7 +9864,7 @@ function installWindow(global) {
     "overflow-anchor", "overflow-block", "overflow-clip-margin", "overflow-inline", "overflow-wrap", "overflow-x", "overflow-y",
     "padding-block-end", "padding-block-start", "padding-bottom", "padding-inline-end", "padding-inline-start",
     "padding-left", "padding-right", "padding-top", "perspective", "perspective-origin", "pointer-events",
-    "position", "position-try-order", "position-visibility", "quotes", "reading-flow", "reading-order", "resize", "right", "rotate", "row-gap",
+    "position", "position-try-fallbacks", "position-try-order", "position-visibility", "quotes", "reading-flow", "reading-order", "resize", "right", "rotate", "row-gap",
     "ruby-align", "ruby-merge", "ruby-overhang", "ruby-position", "scale", "scroll-behavior", "scroll-marker-group", "scroll-target-group", "scrollbar-gutter",
     "-webkit-transform", "-moz-transform",
     "scroll-margin-block-end", "scroll-margin-block-start", "scroll-margin-bottom",
@@ -10179,6 +10180,11 @@ function installWindow(global) {
         const cn = computedMap.get("container-name") || "none";
         const ct = computedMap.get("container-type") || "normal";
         return ct === "normal" ? cn : (cn + " / " + ct);
+      }
+      if (name === "position-try") {
+        const o = computedMap.get("position-try-order") || "normal";
+        const f = computedMap.get("position-try-fallbacks") || "none";
+        return o === "normal" ? f : (o + " " + f);
       }
       return null;
     }

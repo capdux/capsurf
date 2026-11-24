@@ -3248,3 +3248,5 @@
 - 修复 `window.js` 中 `color: currentcolor` 硬编码回退 `rgb(0, 0, 0)` 的缺陷，改为沿父链查找首个非 `currentcolor` 祖先色，打通 `/css/css-color/parsing/color-computed.html` 全部 16/16 子测试。
 ### Phase 704 — `hsl`/`hsla` `none` 通道规范化收口
 - 在 `cssom.js` `normalizeSingleColor` 中补全含 `none` 通道的 `hsl`/`hsla` 规范化序列化（`hsla` 转 `hsl`、剥离百分比符号、省略 `/ 1`），`color-valid-hsl.html` 全部 `none` 通道用例通过。
+### Phase 705 — `/css/css-anchor-position/parsing/` `position-try` 与 `position-try-fallbacks` 全量闭环
+- 在 `cssom.js` 与 `window.js` 中补全 `position-try-fallbacks` 的 `<position-area>` / `[--ident || <try-tactic>]` 校验与规范排序，以及 `position-try` 简写展开、序列化和 `getComputedStyle` 支持，使 `/css/css-anchor-position/parsing/` 全目录 10/10 PASS。

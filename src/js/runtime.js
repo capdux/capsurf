@@ -3867,7 +3867,7 @@
       "padding-inline-end", "padding-inline-start", "padding-left", "padding-right",
       "padding-top", "page", "page-break-after", "page-break-before", "page-break-inside",
       "paint-order", "perspective", "perspective-origin", "place-content", "place-items",
-      "place-self", "pointer-events", "position", "position-try-order", "position-visibility", "quotes", "reading-flow", "reading-order", "resize", "right", "rotate",
+      "place-self", "pointer-events", "position", "position-try", "position-try-fallbacks", "position-try-order", "position-visibility", "quotes", "reading-flow", "reading-order", "resize", "right", "rotate",
       "row-gap", "scale", "scroll-behavior", "scroll-margin", "scroll-margin-block",
       "scroll-margin-block-end", "scroll-margin-block-start", "scroll-margin-bottom",
       "scroll-margin-inline", "scroll-margin-inline-end", "scroll-margin-inline-start",
@@ -6672,6 +6672,12 @@
       if (prop === "position-try-order") {
         return vLower === "normal" || vLower === "most-width" || vLower === "most-height" || vLower === "most-block-size" || vLower === "most-inline-size";
       }
+      if (prop === "position-try-fallbacks") {
+        return normalizePositionTryFallbacks(trimmed) !== null;
+      }
+      if (prop === "position-try") {
+        return !!expandCssShorthand("position-try", trimmed);
+      }
       if (prop === "position-visibility") {
         if (vLower === "always") return true;
         const toks = splitCssTokens(vLower);
@@ -8437,6 +8443,9 @@
       if (key === "grid-auto-columns" || key === "grid-auto-rows") {
         return splitCssTokens(s.replace(/\/\*[\s\S]*?\*\//g, " ").trim()).join(" ");
       }
+      if (key === "position-try-fallbacks") {
+        return normalizePositionTryFallbacks(s) || s;
+      }
       if (key === "text-autospace") {
         const p = splitCssTokens(s.toLowerCase());
         if (p.length === 1 && (p[0] === "normal" || p[0] === "no-autospace" || p[0] === "auto")) return p[0];
@@ -8813,6 +8822,60 @@
     }
     global.__capsurf_normalizeCssValue = normalizeCssSpecifiedValue;
 
+    function normalizePositionTryFallbacks(val) {
+      const s = String(val || "").trim();
+      if (!s) return null;
+      if (s.toLowerCase() === "none") return "none";
+      const items = splitTopLevelComma(s);
+      if (items.length === 0) return null;
+      const TACTICS = new Set(["flip-block", "flip-inline", "flip-start", "flip-x", "flip-y"]);
+      const AREA_H = new Set(["left", "right", "x-start", "x-end", "x-self-start", "x-self-end", "span-left", "span-right", "span-x-start", "span-x-end", "span-x-self-start", "span-x-self-end"]);
+      const AREA_V = new Set(["top", "bottom", "y-start", "y-end", "y-self-start", "y-self-end", "span-top", "span-bottom", "span-y-start", "span-y-end", "span-y-self-start", "span-y-self-end"]);
+      const AREA_BOTH = new Set(["center", "start", "end", "self-start", "self-end", "span-start", "span-end", "span-self-start", "span-self-end", "span-all"]);
+      const isArea = (t) => AREA_H.has(t) || AREA_V.has(t) || AREA_BOTH.has(t);
+      const out = [];
+      for (let i = 0; i < items.length; i++) {
+        const toks = splitCssTokens(items[i]);
+        if (toks.length === 0) return null;
+        const t0 = toks[0], t0l = t0.toLowerCase();
+        if (isArea(t0l)) {
+          if (toks.length === 1) { out.push(t0l); continue; }
+          if (toks.length === 2) {
+            const t1l = toks[1].toLowerCase();
+            if (!isArea(t1l)) return null;
+            if ((AREA_H.has(t0l) && AREA_H.has(t1l)) || (AREA_V.has(t0l) && AREA_V.has(t1l))) return null;
+            if (t0l === t1l && AREA_BOTH.has(t0l)) { out.push(t0l); continue; }
+            if (AREA_V.has(t0l) || AREA_H.has(t1l)) out.push(t1l + " " + t0l);
+            else out.push(t0l + " " + t1l);
+            continue;
+          }
+          return null;
+        }
+        let dashed = null;
+        const tactics = [];
+        const seenT = new Set();
+        for (let j = 0; j < toks.length; j++) {
+          const tk = toks[j], tkl = tk.toLowerCase();
+          if (tk.startsWith("--") && tk.length > 2 && !/\s/.test(tk)) {
+            if (dashed !== null || (j > 0 && j < toks.length - 1)) return null;
+            dashed = tk;
+          } else if (TACTICS.has(tkl)) {
+            if (seenT.has(tkl)) return null;
+            seenT.add(tkl);
+            tactics.push(tkl);
+          } else {
+            return null;
+          }
+        }
+        if (!dashed && tactics.length === 0) return null;
+        const parts = [];
+        if (dashed) parts.push(dashed);
+        for (let j = 0; j < tactics.length; j++) parts.push(tactics[j]);
+        out.push(parts.join(" "));
+      }
+      return out.join(", ");
+    }
+
     function expandCssShorthand(key, normV) {
       if (/\bvar\(/i.test(normV)) return null;
       if (/^(?:initial|inherit|unset|revert|revert-layer)$/i.test(normV)) {
@@ -8822,6 +8885,19 @@
           return lhs.map((lh) => [lh, kw]);
         }
         return null;
+      }
+      if (key === "position-try") {
+        const ORDERS = new Set(["normal", "most-width", "most-height", "most-block-size", "most-inline-size"]);
+        const toks = splitCssTokens(normV);
+        if (toks.length === 0) return null;
+        let order = "normal", rest = normV;
+        if (ORDERS.has(toks[0].toLowerCase())) {
+          order = toks[0].toLowerCase();
+          rest = normV.slice(toks[0].length).trim();
+        }
+        const fb = normalizePositionTryFallbacks(rest);
+        if (!fb) return null;
+        return [["position-try-order", order], ["position-try-fallbacks", fb]];
       }
       if (key === "border-image") {
         const slashes = [];
@@ -9313,6 +9389,7 @@
       "border-right": ["border-right-width", "border-right-style", "border-right-color"],
       "border-bottom": ["border-bottom-width", "border-bottom-style", "border-bottom-color"],
       "border-left": ["border-left-width", "border-left-style", "border-left-color"],
+      "position-try": ["position-try-order", "position-try-fallbacks"],
       "border-image": ["border-image-source", "border-image-slice", "border-image-width", "border-image-outset", "border-image-repeat"],
       "text-decoration": ["text-decoration-line", "text-decoration-style", "text-decoration-thickness", "text-decoration-color"],
       "list-style": ["list-style-position", "list-style-image", "list-style-type"],
@@ -9463,6 +9540,9 @@
         const cst = vals[1] === "none" && (cw || vals[2] !== "currentcolor") ? "" : vals[1];
         const cc = vals[2].toLowerCase() === "currentcolor" ? "" : vals[2];
         return [cw, cst, cc].filter(Boolean).join(" ") || "none";
+      }
+      if (key === "position-try") {
+        return vals[0] === "normal" ? vals[1] : (vals[0] + " " + vals[1]);
       }
       if (key === "border-image") {
         const src = vals[0], slice = vals[1], width = vals[2], outset = vals[3], rep = vals[4];
@@ -46151,6 +46231,7 @@
         ["font-variant-position", "normal"],
         ["anchor-scope", "none"],
         ["position-try-order", "normal"],
+        ["position-try-fallbacks", "none"],
         ["position-visibility", "anchors-visible"],
         ["image-orientation", "from-image"],
         ["image-rendering", "auto"],
@@ -46984,7 +47065,7 @@
       "overflow-anchor", "overflow-block", "overflow-clip-margin", "overflow-inline", "overflow-wrap", "overflow-x", "overflow-y",
       "padding-block-end", "padding-block-start", "padding-bottom", "padding-inline-end", "padding-inline-start",
       "padding-left", "padding-right", "padding-top", "perspective", "perspective-origin", "pointer-events",
-      "position", "position-try-order", "position-visibility", "quotes", "reading-flow", "reading-order", "resize", "right", "rotate", "row-gap",
+      "position", "position-try-fallbacks", "position-try-order", "position-visibility", "quotes", "reading-flow", "reading-order", "resize", "right", "rotate", "row-gap",
       "ruby-align", "ruby-merge", "ruby-overhang", "ruby-position", "scale", "scroll-behavior", "scroll-marker-group", "scroll-target-group", "scrollbar-gutter",
       "-webkit-transform", "-moz-transform",
       "scroll-margin-block-end", "scroll-margin-block-start", "scroll-margin-bottom",
@@ -47300,6 +47381,11 @@
           const cn = computedMap.get("container-name") || "none";
           const ct = computedMap.get("container-type") || "normal";
           return ct === "normal" ? cn : (cn + " / " + ct);
+        }
+        if (name === "position-try") {
+          const o = computedMap.get("position-try-order") || "normal";
+          const f = computedMap.get("position-try-fallbacks") || "none";
+          return o === "normal" ? f : (o + " " + f);
         }
         return null;
       }
