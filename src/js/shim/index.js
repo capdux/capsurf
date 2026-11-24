@@ -2266,7 +2266,19 @@ function installShim(global) {
                 if (cachedBody) {
                   setDocOwner(cachedBody);
                   setParent(cachedBody, cachedDocEl || doc);
-                  Object.defineProperty(doc, "body", { value: cachedBody, configurable: true });
+                  Object.defineProperty(doc, "body", {
+                    get: function () {
+                      const de = this.documentElement;
+                      if (de && de.children) {
+                        for (let i = 0; i < de.children.length; i++) {
+                          const t = (de.children[i].tagName || "").toUpperCase();
+                          if (t === "BODY" || t === "FRAMESET") return upgradeElement(de.children[i]);
+                        }
+                      }
+                      return cachedBody;
+                    },
+                    configurable: true
+                  });
                 }
                 const origDocCreateElement = doc.createElement;
                 if (typeof origDocCreateElement === "function") {

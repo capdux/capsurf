@@ -2686,3 +2686,13 @@
 
 
 
+
+### Phase 554: HTML5 `InCell` 表格闭合修复与 `/domxpath/` 28/28 全绿闭环
+- **HTML5 TreeBuilder (`src/html/tree_builder.cp`)**：
+  - `processInCell` 增加 `Table`/`Tbody`/`Tfoot`/`Thead`/`Tr` 结束标签分支，先 `closeCell()` 退出单元格上下文再重派发令牌，解决 `predicates.html` 中相邻 `<table>` 错误嵌套的问题。
+  - 增加 `adjustSvgAttrName` 与 `isInSvgContext()`，通过 `cpc fix` + `cpc brief -n 8` 全部 4 门禁检查。
+- **XPath 与命名空间解析 (`src/js/shim/xpath.js`, `node-base.js`, `element/element.js`, `index.js`, `parser.js`)**：
+  - `lookupNamespaceURI` 将 `xml`/`xmlns` 前缀内置解析严格限制在 `Element` (`nodeType === 1`)，并为 `Attr.prototype` 复用 `Node.prototype.lookupNamespaceURI`。
+  - `resolvePrefix` 捕获回调异常并派发 `ErrorEvent` 后抛出 `NAMESPACE_ERR`；`localName` 与 XPath 匹配统一采用 ASCII 小写且对 SVG/MathML 外部元素保留原始大小写。
+  - `createHTMLDocument().body` 改为动态查找 `BODY`/`FRAMESET` 子节点；`serializeXmlNode` 直接读取 `ParsedElement._attrs` Map 避免与 `outerHTML` 互相递归。
+- **WPT 验收**：`/domxpath/` **28/28 PASS (100% ALL GREEN)**；`--smoke` **3/3 suites PASS**。

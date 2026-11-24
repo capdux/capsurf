@@ -513,14 +513,88 @@ pub struct TreeBuilder {
         return buf.toOwnedSlice(allocator) catch raw;
     }
 
+    static fn adjustSvgAttrName(name: []const u8): []const u8 {
+        if (std.mem.eql(u8, name, "refx")) return "refX";
+        if (std.mem.eql(u8, name, "refy")) return "refY";
+        if (std.mem.eql(u8, name, "viewbox")) return "viewBox";
+        if (std.mem.eql(u8, name, "attributename")) return "attributeName";
+        if (std.mem.eql(u8, name, "attributetype")) return "attributeType";
+        if (std.mem.eql(u8, name, "basefrequency")) return "baseFrequency";
+        if (std.mem.eql(u8, name, "calcmode")) return "calcMode";
+        if (std.mem.eql(u8, name, "clippathunits")) return "clipPathUnits";
+        if (std.mem.eql(u8, name, "diffuseconstant")) return "diffuseConstant";
+        if (std.mem.eql(u8, name, "edgemode")) return "edgeMode";
+        if (std.mem.eql(u8, name, "filterunits")) return "filterUnits";
+        if (std.mem.eql(u8, name, "glyphref")) return "glyphRef";
+        if (std.mem.eql(u8, name, "gradienttransform")) return "gradientTransform";
+        if (std.mem.eql(u8, name, "gradientunits")) return "gradientUnits";
+        if (std.mem.eql(u8, name, "kernelmatrix")) return "kernelMatrix";
+        if (std.mem.eql(u8, name, "kernelunitlength")) return "kernelUnitLength";
+        if (std.mem.eql(u8, name, "keypoints")) return "keyPoints";
+        if (std.mem.eql(u8, name, "keysplines")) return "keySplines";
+        if (std.mem.eql(u8, name, "keytimes")) return "keyTimes";
+        if (std.mem.eql(u8, name, "lengthadjust")) return "lengthAdjust";
+        if (std.mem.eql(u8, name, "limitingconeangle")) return "limitingConeAngle";
+        if (std.mem.eql(u8, name, "markerheight")) return "markerHeight";
+        if (std.mem.eql(u8, name, "markerunits")) return "markerUnits";
+        if (std.mem.eql(u8, name, "markerwidth")) return "markerWidth";
+        if (std.mem.eql(u8, name, "maskcontentunits")) return "maskContentUnits";
+        if (std.mem.eql(u8, name, "maskunits")) return "maskUnits";
+        if (std.mem.eql(u8, name, "numoctaves")) return "numOctaves";
+        if (std.mem.eql(u8, name, "pathlength")) return "pathLength";
+        if (std.mem.eql(u8, name, "patterncontentunits")) return "patternContentUnits";
+        if (std.mem.eql(u8, name, "patterntransform")) return "patternTransform";
+        if (std.mem.eql(u8, name, "patternunits")) return "patternUnits";
+        if (std.mem.eql(u8, name, "pointsatx")) return "pointsAtX";
+        if (std.mem.eql(u8, name, "pointsaty")) return "pointsAtY";
+        if (std.mem.eql(u8, name, "pointsatz")) return "pointsAtZ";
+        if (std.mem.eql(u8, name, "preservealpha")) return "preserveAlpha";
+        if (std.mem.eql(u8, name, "preserveaspectratio")) return "preserveAspectRatio";
+        if (std.mem.eql(u8, name, "primitiveunits")) return "primitiveUnits";
+        if (std.mem.eql(u8, name, "repeatcount")) return "repeatCount";
+        if (std.mem.eql(u8, name, "repeatdur")) return "repeatDur";
+        if (std.mem.eql(u8, name, "requiredextensions")) return "requiredExtensions";
+        if (std.mem.eql(u8, name, "requiredfeatures")) return "requiredFeatures";
+        if (std.mem.eql(u8, name, "specularconstant")) return "specularConstant";
+        if (std.mem.eql(u8, name, "specularexponent")) return "specularExponent";
+        if (std.mem.eql(u8, name, "spreadmethod")) return "spreadMethod";
+        if (std.mem.eql(u8, name, "startoffset")) return "startOffset";
+        if (std.mem.eql(u8, name, "stddeviation")) return "stdDeviation";
+        if (std.mem.eql(u8, name, "stitchtiles")) return "stitchTiles";
+        if (std.mem.eql(u8, name, "surfacescale")) return "surfaceScale";
+        if (std.mem.eql(u8, name, "systemlanguage")) return "systemLanguage";
+        if (std.mem.eql(u8, name, "tablevalues")) return "tableValues";
+        if (std.mem.eql(u8, name, "targetx")) return "targetX";
+        if (std.mem.eql(u8, name, "targety")) return "targetY";
+        if (std.mem.eql(u8, name, "textlength")) return "textLength";
+        if (std.mem.eql(u8, name, "xchannelselector")) return "xChannelSelector";
+        if (std.mem.eql(u8, name, "ychannelselector")) return "yChannelSelector";
+        if (std.mem.eql(u8, name, "zoomandpan")) return "zoomAndPan";
+        return name;
+    }
+
+    fn isInSvgContext(): bool {
+        let idx: usize = _.open_elements_len;
+        while (idx > 0) {
+            idx -= 1;
+            const el = _.open_elements[idx];
+            const tn = _.doc.getTagName(el);
+            if (std.mem.eql(u8, tn, "svg")) return true;
+            if (std.mem.eql(u8, tn, "foreignobject") || std.mem.eql(u8, tn, "desc") || std.mem.eql(u8, tn, "title")) return false;
+        }
+        return false;
+    }
+
     fn insertElement(*_, tag_tok: *const TagToken): NodeId {
         const nid = _.doc.createElement(tag_tok.name) catch NULL_NODE;
         if (nid == NULL_NODE) return NULL_NODE;
 
+        const is_svg = std.mem.eql(u8, tag_tok.name, "svg") || _.isInSvgContext();
         let i: usize = 0;
         while (i < tag_tok.attr_count) : (i += 1) {
             const decoded_val = TreeBuilder.decodeAttrValue(_.doc.allocator, tag_tok.attrs[i].value);
-            _.doc.setAttribute(nid, tag_tok.attrs[i].name, decoded_val);
+            const attr_name = if (is_svg) TreeBuilder.adjustSvgAttrName(tag_tok.attrs[i].name) else tag_tok.attrs[i].name;
+            _.doc.setAttribute(nid, attr_name, decoded_val);
         }
 
         if (_.foster_parenting) {
@@ -1409,6 +1483,13 @@ pub struct TreeBuilder {
                     if (tag_tok.tag == HtmlTag.Td || tag_tok.tag == HtmlTag.Th) {
                         if (_.inTableScope(tag_tok.tag)) {
                             _.closeCell();
+                        }
+                        return NextTokenizerState.Data;
+                    }
+                    if (tag_tok.tag == HtmlTag.Table || tag_tok.tag.isTableBodyContext() || tag_tok.tag == HtmlTag.Tr) {
+                        if (_.inTableScope(tag_tok.tag)) {
+                            _.closeCell();
+                            return _.processToken(tok);
                         }
                         return NextTokenizerState.Data;
                     }

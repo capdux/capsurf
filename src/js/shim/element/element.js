@@ -695,7 +695,7 @@ function installElementExtensions(proto) {
 
   Object.defineProperty(proto, "localName", {
     get: function () {
-      return (this.tagName || "").toLowerCase();
+      return (this.tagName || "").replace(/[A-Z]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 32));
     },
     configurable: true,
   });

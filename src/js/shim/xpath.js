@@ -218,6 +218,14 @@ function lex(src) {
   return toks;
 }
 
+function reportResolverError(err) {
+  if (typeof globalThis !== "undefined" && typeof globalThis.dispatchEvent === "function" && typeof ErrorEvent === "function") {
+    try {
+      globalThis.dispatchEvent(new ErrorEvent("error", { error: err, message: String(err) }));
+    } catch (_) {}
+  }
+}
+
 function resolvePrefix(resolver, prefix) {
   let ns = null;
   try {
@@ -231,17 +239,20 @@ function resolvePrefix(resolver, prefix) {
       ns = lookupNamespaceURI.call(resolver, prefix);
     }
   } catch (error) {
+    reportResolverError(error);
     throw namespaceError(prefix);
   }
   if (ns === null || ns === undefined) {
     throw namespaceError(prefix);
   }
   if (typeof ns === "symbol") {
+    reportResolverError(new TypeError("Cannot convert a Symbol value to a string"));
     throw namespaceError(prefix);
   }
   try {
     return String(ns);
   } catch (error) {
+    reportResolverError(error);
     throw namespaceError(prefix);
   }
 }
@@ -659,7 +670,20 @@ function isHtmlDocumentNode(el) {
 }
 
 function asciiLowercase(s) {
-  return String(s || "").toLowerCase();
+  return String(s || "").replace(/[A-Z]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 32));
+}
+
+function isForeignElement(el) {
+  let cur = el;
+  while (cur && cur.nodeType === 1) {
+    const ns = cur.namespaceURI;
+    if (ns === "http://www.w3.org/2000/svg" || ns === "http://www.w3.org/1998/Math/MathML") return true;
+    const tn = asciiLowercase(cur.localName || cur.tagName);
+    if (tn === "svg" || tn === "math") return true;
+    if (tn === "foreignobject" || tn === "desc" || tn === "title") return false;
+    cur = cur.parentElement || cur.parentNode;
+  }
+  return false;
 }
 
 function matches(test, axis, n) {
@@ -683,6 +707,7 @@ function matches(test, axis, n) {
       test.ns === null &&
       ns === null &&
       owner &&
+      !isForeignElement(owner) &&
       (owner.namespaceURI === "http://www.w3.org/1999/xhtml" || !owner.namespaceURI) &&
       isHtmlDocumentNode(owner)
     ) {
@@ -1019,14 +1044,20 @@ const FUNCTIONS = new Map(
     lang: {
       arity: [1, 1],
       run: (c, a) => {
-        const want = str(c, a, 0).toLowerCase();
+        const want = asciiLowercase(str(c, a, 0));
         for (let n = isAttr(c.node) ? c.node.ownerElement : c.node; n; n = parentOf(n)) {
           if (n.nodeType !== 1) continue;
-          const lang = typeof n.getAttributeNS === "function"
-            ? (n.getAttributeNS("http://www.w3.org/XML/1998/namespace", "lang") ?? n.getAttribute?.("xml:lang") ?? n.getAttribute?.("lang"))
-            : (typeof n.getAttribute === "function" ? n.getAttribute("lang") : null);
+          let lang = null;
+          if (typeof n.hasAttributeNS === "function" && n.hasAttributeNS("http://www.w3.org/XML/1998/namespace", "lang")) {
+            lang = n.getAttributeNS("http://www.w3.org/XML/1998/namespace", "lang");
+          } else if (typeof n.hasAttribute === "function" && n.hasAttribute("xml:lang")) {
+            lang = n.getAttribute("xml:lang");
+          } else if (typeof n.getAttribute === "function") {
+            const xl = n.getAttribute("xml:lang");
+            if (xl !== null && xl !== undefined && xl !== "") lang = xl;
+          }
           if (lang === null || lang === undefined) continue;
-          const l = String(lang).toLowerCase();
+          const l = asciiLowercase(String(lang));
           return l === want || l.startsWith(want + "-");
         }
         return false;

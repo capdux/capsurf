@@ -11306,9 +11306,9 @@
 
   Node.prototype.lookupNamespaceURI = function (prefix) {
     let p = prefix === "" ? null : prefix;
-    if (p === "xml") return "http://www.w3.org/XML/1998/namespace";
-    if (p === "xmlns") return "http://www.w3.org/2000/xmlns/";
     if (this.nodeType === 1) { // ELEMENT_NODE
+      if (p === "xml") return "http://www.w3.org/XML/1998/namespace";
+      if (p === "xmlns") return "http://www.w3.org/2000/xmlns/";
       let n = this;
       while (n && n.nodeType === 1) {
         if (n.prefix === p && n.namespaceURI) return n.namespaceURI;
@@ -11340,6 +11340,9 @@
     }
     if (this.nodeType === 9) { // DOCUMENT_NODE
       return this.documentElement ? this.documentElement.lookupNamespaceURI(p) : null;
+    }
+    if (this.nodeType === 10 || this.nodeType === 11) { // DOCUMENT_TYPE_NODE || DOCUMENT_FRAGMENT_NODE
+      return null;
     }
     if (this.nodeType === 2) { // ATTRIBUTE_NODE
       return this.ownerElement ? this.ownerElement.lookupNamespaceURI(p) : null;
@@ -11389,6 +11392,9 @@
   markNative(Node.prototype.replaceChild, "replaceChild");
   markNative(Node.prototype.hasChildNodes, "hasChildNodes");
   markNative(Node.prototype.lookupNamespaceURI, "lookupNamespaceURI");
+  if (typeof Attr !== "undefined" && Attr.prototype && !Attr.prototype.lookupNamespaceURI) {
+    Attr.prototype.lookupNamespaceURI = Node.prototype.lookupNamespaceURI;
+  }
   markNative(Node.prototype.getRootNode, "getRootNode");
   markNative(Node.prototype.normalize, "normalize");
 
@@ -13447,7 +13453,7 @@
 
     Object.defineProperty(proto, "localName", {
       get: function () {
-        return (this.tagName || "").toLowerCase();
+        return (this.tagName || "").replace(/[A-Z]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 32));
       },
       configurable: true,
     });
@@ -28649,6 +28655,13 @@
     return this.querySelectorAll("." + cls);
   };
 
+  Object.defineProperty(ParsedElement.prototype, "outerHTML", {
+    get: function () {
+      return serializeXmlNode(this, true);
+    },
+    configurable: true,
+  });
+
   ParsedElement.prototype.lookupNamespaceURI = function (prefix) {
     const p = prefix === "" || prefix === undefined ? null : String(prefix);
     let n = this;
@@ -29243,6 +29256,29 @@
     }
     if (nt === 8) return "<!--" + String(node.data !== undefined ? node.data : (node.textContent || "")) + "-->";
     if (nt === 7) return "<?" + String(node.target || "") + " " + String(node.data || "") + "?>";
+    if (nt === 1 && (node instanceof ParsedElement)) {
+      const tag = node.localName || node.tagName || "div";
+      let attrsStr = "";
+      if (node._attrs instanceof Map) {
+        node._attrs.forEach((val, key) => {
+          const origName = (node._attrCases && node._attrCases.get(key)) || key;
+          const v = String(val || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+          attrsStr += " " + origName + '="' + v + '"';
+        });
+      } else if (node.attributes) {
+        const attrs = node.attributes;
+        for (let i = 0; i < attrs.length; i++) {
+          const a = attrs[i];
+          if (!a) continue;
+          const v = String(a.value || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+          attrsStr += " " + a.name + '="' + v + '"';
+        }
+      }
+      const cs = node.childNodes || [];
+      let inner = "";
+      for (let i = 0; i < cs.length; i++) inner += serializeXmlNode(cs[i]);
+      return "<" + tag + attrsStr + ">" + inner + "</" + tag + ">";
+    }
     if (typeof node.outerHTML === "string") return node.outerHTML;
     return "";
   }
@@ -29486,6 +29522,14 @@
     return toks;
   }
 
+  function reportResolverError(err) {
+    if (typeof globalThis !== "undefined" && typeof globalThis.dispatchEvent === "function" && typeof ErrorEvent === "function") {
+      try {
+        globalThis.dispatchEvent(new ErrorEvent("error", { error: err, message: String(err) }));
+      } catch (_) {}
+    }
+  }
+
   function resolvePrefix(resolver, prefix) {
     let ns = null;
     try {
@@ -29499,17 +29543,20 @@
         ns = lookupNamespaceURI.call(resolver, prefix);
       }
     } catch (error) {
+      reportResolverError(error);
       throw namespaceError(prefix);
     }
     if (ns === null || ns === undefined) {
       throw namespaceError(prefix);
     }
     if (typeof ns === "symbol") {
+      reportResolverError(new TypeError("Cannot convert a Symbol value to a string"));
       throw namespaceError(prefix);
     }
     try {
       return String(ns);
     } catch (error) {
+      reportResolverError(error);
       throw namespaceError(prefix);
     }
   }
@@ -29927,7 +29974,20 @@
   }
 
   function asciiLowercase(s) {
-    return String(s || "").toLowerCase();
+    return String(s || "").replace(/[A-Z]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 32));
+  }
+
+  function isForeignElement(el) {
+    let cur = el;
+    while (cur && cur.nodeType === 1) {
+      const ns = cur.namespaceURI;
+      if (ns === "http://www.w3.org/2000/svg" || ns === "http://www.w3.org/1998/Math/MathML") return true;
+      const tn = asciiLowercase(cur.localName || cur.tagName);
+      if (tn === "svg" || tn === "math") return true;
+      if (tn === "foreignobject" || tn === "desc" || tn === "title") return false;
+      cur = cur.parentElement || cur.parentNode;
+    }
+    return false;
   }
 
   function matches(test, axis, n) {
@@ -29951,6 +30011,7 @@
         test.ns === null &&
         ns === null &&
         owner &&
+        !isForeignElement(owner) &&
         (owner.namespaceURI === "http://www.w3.org/1999/xhtml" || !owner.namespaceURI) &&
         isHtmlDocumentNode(owner)
       ) {
@@ -30287,14 +30348,20 @@
       lang: {
         arity: [1, 1],
         run: (c, a) => {
-          const want = str(c, a, 0).toLowerCase();
+          const want = asciiLowercase(str(c, a, 0));
           for (let n = isAttr(c.node) ? c.node.ownerElement : c.node; n; n = parentOf(n)) {
             if (n.nodeType !== 1) continue;
-            const lang = typeof n.getAttributeNS === "function"
-              ? (n.getAttributeNS("http://www.w3.org/XML/1998/namespace", "lang") ?? n.getAttribute?.("xml:lang") ?? n.getAttribute?.("lang"))
-              : (typeof n.getAttribute === "function" ? n.getAttribute("lang") : null);
+            let lang = null;
+            if (typeof n.hasAttributeNS === "function" && n.hasAttributeNS("http://www.w3.org/XML/1998/namespace", "lang")) {
+              lang = n.getAttributeNS("http://www.w3.org/XML/1998/namespace", "lang");
+            } else if (typeof n.hasAttribute === "function" && n.hasAttribute("xml:lang")) {
+              lang = n.getAttribute("xml:lang");
+            } else if (typeof n.getAttribute === "function") {
+              const xl = n.getAttribute("xml:lang");
+              if (xl !== null && xl !== undefined && xl !== "") lang = xl;
+            }
             if (lang === null || lang === undefined) continue;
-            const l = String(lang).toLowerCase();
+            const l = asciiLowercase(String(lang));
             return l === want || l.startsWith(want + "-");
           }
           return false;
@@ -53247,7 +53314,19 @@
                   if (cachedBody) {
                     setDocOwner(cachedBody);
                     setParent(cachedBody, cachedDocEl || doc);
-                    Object.defineProperty(doc, "body", { value: cachedBody, configurable: true });
+                    Object.defineProperty(doc, "body", {
+                      get: function () {
+                        const de = this.documentElement;
+                        if (de && de.children) {
+                          for (let i = 0; i < de.children.length; i++) {
+                            const t = (de.children[i].tagName || "").toUpperCase();
+                            if (t === "BODY" || t === "FRAMESET") return upgradeElement(de.children[i]);
+                          }
+                        }
+                        return cachedBody;
+                      },
+                      configurable: true
+                    });
                   }
                   const origDocCreateElement = doc.createElement;
                   if (typeof origDocCreateElement === "function") {

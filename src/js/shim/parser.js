@@ -628,6 +628,13 @@ ParsedElement.prototype.getElementsByClassName = function (cls) {
   return this.querySelectorAll("." + cls);
 };
 
+Object.defineProperty(ParsedElement.prototype, "outerHTML", {
+  get: function () {
+    return serializeXmlNode(this, true);
+  },
+  configurable: true,
+});
+
 ParsedElement.prototype.lookupNamespaceURI = function (prefix) {
   const p = prefix === "" || prefix === undefined ? null : String(prefix);
   let n = this;
@@ -1222,6 +1229,29 @@ function serializeXmlNode(node) {
   }
   if (nt === 8) return "<!--" + String(node.data !== undefined ? node.data : (node.textContent || "")) + "-->";
   if (nt === 7) return "<?" + String(node.target || "") + " " + String(node.data || "") + "?>";
+  if (nt === 1 && (node instanceof ParsedElement)) {
+    const tag = node.localName || node.tagName || "div";
+    let attrsStr = "";
+    if (node._attrs instanceof Map) {
+      node._attrs.forEach((val, key) => {
+        const origName = (node._attrCases && node._attrCases.get(key)) || key;
+        const v = String(val || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+        attrsStr += " " + origName + '="' + v + '"';
+      });
+    } else if (node.attributes) {
+      const attrs = node.attributes;
+      for (let i = 0; i < attrs.length; i++) {
+        const a = attrs[i];
+        if (!a) continue;
+        const v = String(a.value || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+        attrsStr += " " + a.name + '="' + v + '"';
+      }
+    }
+    const cs = node.childNodes || [];
+    let inner = "";
+    for (let i = 0; i < cs.length; i++) inner += serializeXmlNode(cs[i]);
+    return "<" + tag + attrsStr + ">" + inner + "</" + tag + ">";
+  }
   if (typeof node.outerHTML === "string") return node.outerHTML;
   return "";
 }

@@ -1085,9 +1085,9 @@ if (typeof Element !== "undefined" && Element.prototype) {
 
 Node.prototype.lookupNamespaceURI = function (prefix) {
   let p = prefix === "" ? null : prefix;
-  if (p === "xml") return "http://www.w3.org/XML/1998/namespace";
-  if (p === "xmlns") return "http://www.w3.org/2000/xmlns/";
   if (this.nodeType === 1) { // ELEMENT_NODE
+    if (p === "xml") return "http://www.w3.org/XML/1998/namespace";
+    if (p === "xmlns") return "http://www.w3.org/2000/xmlns/";
     let n = this;
     while (n && n.nodeType === 1) {
       if (n.prefix === p && n.namespaceURI) return n.namespaceURI;
@@ -1119,6 +1119,9 @@ Node.prototype.lookupNamespaceURI = function (prefix) {
   }
   if (this.nodeType === 9) { // DOCUMENT_NODE
     return this.documentElement ? this.documentElement.lookupNamespaceURI(p) : null;
+  }
+  if (this.nodeType === 10 || this.nodeType === 11) { // DOCUMENT_TYPE_NODE || DOCUMENT_FRAGMENT_NODE
+    return null;
   }
   if (this.nodeType === 2) { // ATTRIBUTE_NODE
     return this.ownerElement ? this.ownerElement.lookupNamespaceURI(p) : null;
@@ -1168,6 +1171,9 @@ markNative(Node.prototype.removeChild, "removeChild");
 markNative(Node.prototype.replaceChild, "replaceChild");
 markNative(Node.prototype.hasChildNodes, "hasChildNodes");
 markNative(Node.prototype.lookupNamespaceURI, "lookupNamespaceURI");
+if (typeof Attr !== "undefined" && Attr.prototype && !Attr.prototype.lookupNamespaceURI) {
+  Attr.prototype.lookupNamespaceURI = Node.prototype.lookupNamespaceURI;
+}
 markNative(Node.prototype.getRootNode, "getRootNode");
 markNative(Node.prototype.normalize, "normalize");
 

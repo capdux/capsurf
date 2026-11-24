@@ -1581,3 +1581,23 @@
 
 
 
+
+### WPT-B319 ~ B331 摸底与 Phase 554 `/domxpath/` 28/28 全绿闭环 (bin_dev Phase 554, 2026-11-24)
+- **Filter `/domxpath/`**: `28` files (**28 PASS / 0 FAIL / 0 TIMEOUT / 0 ERROR**, **100% ALL GREEN**!); 修复 `Attr.prototype.lookupNamespaceURI`、`Node.prototype.lookupNamespaceURI`（`DocumentType`/`DocumentFragment` 返回 `null`，`xml`/`xmlns` 仅限 Element）、`resolvePrefix`（`ErrorEvent` 上报 + `NAMESPACE_ERR`）、`asciiLowercase` 与 SVG/MathML 大小写保留、`lang()` 属性大小写、`createHTMLDocument().body` 动态 getter、`ParsedElement.prototype.outerHTML` 与 `serializeXmlNode` 死循环、以及 `src/html/tree_builder.cp` `processInCell` 遇到 `</table>`/`</tbody>`/`</tr>` 结束标签未退出单元格状态导致后续同级表格嵌套的缺陷。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-animations/parsing/`: `35` files (**35/35 PASS, 100% ALL GREEN**, `animation-shorthand.html` unexpected PASS)
+  - `/css/css-transitions/parsing/`: `14` files (**14/14 PASS, 100% ALL GREEN**)
+  - `/css/css-break/parsing/`: `18` files (**18/18 PASS, 100% ALL GREEN**, 4 unexpected PASS: `orphans-computed/valid`, `widows-computed/valid`)
+  - `/css/css-sizing/parsing/`: `19` files (**19/19 PASS**)
+  - `/css/css-position/parsing/`: `22` files (**22/22 PASS**)
+  - `/css/css-will-change/parsing/`: `3` files (`2 PASS / 1 FAIL`: `will-change-invalid.html`)
+  - `/css/css-align/parsing/`: `50` files (`35 PASS / 15 FAIL`)
+  - `/css/css-multicol/parsing/`: `31` files (`25 PASS / 6 FAIL`)
+  - `/css/css-box/parsing/`: `29` files (`24 PASS / 5 FAIL`)
+  - `/css/css-display/parsing/`: `5` files (`1 PASS / 3 FAIL / 1 TIMEOUT`)
+  - `/css/css-backgrounds/parsing/`: `74` files (`29 PASS / 45 FAIL`)
+  - `/css/css-color/parsing/`: `43` files (`10 PASS / 33 FAIL`)
+  - `/custom-elements/`: `17` files (`10 PASS / 7 FAIL`); `/shadow-dom/` (`1/2`): `60` files (`18 PASS`)
+  - `/user-timing/`: `36` files (`17 PASS`); `/hr-time/`: `14` files (`4 PASS`); `/webidl/`: `43` files (`8 PASS`)
+  - `/console/`: `13` files (`4 PASS`); `/url/`: `18` files (`0 PASS`); `/urlpattern/`: `5` files (`0 PASS`)

@@ -7487,3 +7487,15 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 
 
 
+
+### 2026-11-24 Phase 554 (`/domxpath/` 28/28 全绿闭环与多模块 WPT 摸底)
+- **[Agent]**: 自主推导并完成 Phase 554（`src/html/tree_builder.cp`, `src/js/shim/xpath.js`, `src/js/shim/node-base.js`, `src/js/shim/element/element.js`, `src/js/shim/index.js`, `src/js/shim/parser.js`）：
+  1. **HTML5 TreeBuilder `InCell` 表格闭合修复 (`src/html/tree_builder.cp`)**：
+     - 在 `processInCell` 中处理 `Table`/`Tbody`/`Tfoot`/`Thead`/`Tr` 结束标签（调用 `_.closeCell()` 后重派发 `_.processToken(tok)`），修复 `<tr><th>...</table><table>...` 场景下第二个 `<table>` 错误嵌套进前一个表格的问题；补充 `adjustSvgAttrName` 与 `isInSvgContext()`。通过 `cpc fix` + `cpc brief -n 8` 门禁。
+  2. **DOM XPath & 命名空间解析全绿修复 (`src/js/shim/`)**：
+     - `xpath.js`: `resolvePrefix` 异常通过 `globalThis` `ErrorEvent` 上报并抛出 `NAMESPACE_ERR`；`asciiLowercase` 仅转换 ASCII `A-Z`；新增 `isForeignElement` 保留 SVG/MathML 属性大小写；`lang()` 支持 `xml:lang`（`hasAttributeNS`/`hasAttribute`）与 ASCII 小写归一化。
+     - `node-base.js` & `element.js`: `Node.prototype.lookupNamespaceURI` 将 `xml`/`xmlns` 严格限定在 `nodeType === 1`（`Element`），`DocumentType`/`DocumentFragment` 返回 `null`；为 `Attr.prototype` 挂载 `lookupNamespaceURI`；`Element.prototype.localName` 改用 ASCII 小写。
+     - `index.js` & `parser.js`: `createHTMLDocument().body` 改为实时 getter；为 `ParsedElement.prototype` 添加 `outerHTML` 并在 `serializeXmlNode` 中直接序列化 `_attrs` 消除递归死循环。
+  3. **全绿验证与并行摸底**：
+     - `/domxpath/`: **28/28 PASS (100% ALL GREEN)**；`scripts/e2e_suite.py --smoke`: **3/3 suites, 6/6 tests PASS**。
+     - 双子智能体并行摸底确认 `/css/css-animations/parsing/`（35/35）、`/css/css-transitions/parsing/`（14/14）、`/css/css-break/parsing/`（18/18）、`/css/css-sizing/parsing/`（19/19）、`/css/css-position/parsing/`（22/22）均已全绿；识别出下一批待攻克目标 `/css/css-will-change/parsing/`（2/3）与 `/css/css-align/parsing/`（35/50）。
