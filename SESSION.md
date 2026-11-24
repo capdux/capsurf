@@ -7975,3 +7975,7 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Agent]**: 完成 Phase 630（`src/js/shim/cssom.js`）：
   1. **`cssom.js`**：`canonicalizeCalcToken` 同步保留 `0px` 项，修复 `calc(4vmin + 0pt)` -> `calc(0px + 4vmin)` 序列化。
   2. **验证**：`calc-serialization-002` 推进至 **23/24 PASS**、`calc-unit-analysis` 推进至 **7/10 PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+- **[Agent]**: 完成 Phase 631（`src/js/shim/cssom.js`, `src/js/shim/window.js`）：
+  1. **`cssom.js` & `window.js`**：`isValidCalcSyntax` 拒绝两带单位项相乘（`2px * 1px`），并为 `getComputedStyle` 新增 `ensureLiveComputed()` 实时响应内联 `style` 变更。
+  2. **全绿验证**：`/css/css-values/calc-unit-analysis.html` **FAIL->PASS (10/10)**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+  3. **子智能体并发汇报**：`52cb663b` 完成 `/css/css-images/` 全量摸底（**22/26 PASS**），已接力派发 `5363e101`（`19720`, `/css/css-multicol/`）。

@@ -535,6 +535,7 @@
       if (!body) return false;
       if (/\/\*|\*\//.test(body)) return false;
       if (/\b(?:var|env|attr)\(/i.test(body)) return true;
+      if (/(?:\d|\.)(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|%|deg|rad|grad|turn|s|ms)\s*\*\s*[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|%|deg|rad|grad|turn|s|ms)\b/i.test(body)) return false;
       // Reject unknown bare identifiers (e.g., calc(7px * up), calc((0.25turn error)))
       let i = 0, expectVal = true;
       const topAddTerms = [""];

@@ -2201,3 +2201,7 @@
 ### Phase 630: `canonicalizeCalcToken` 保留 `0px` 项与 `calc-unit-analysis` 推进至 7/10
 - **Filter `/css/css-values/calc-serialization-002` & `/css/css-values/calc-unit-analysis`**: `calc-serialization-002` 推进至 **23/24 PASS**（`calc(4vmin + 0pt)` -> `calc(0px + 4vmin)` 修复），`calc-unit-analysis` 推进至 **7/10 PASS**（`number + length` 加减校验全部通过）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 631: `/css/css-values/calc-unit-analysis` 10/10 全绿
+- **Filter `/css/css-values/calc-unit-analysis`**: **FAIL->PASS (10/10)**（`cssom.js` `isValidCalcSyntax` 禁止两带单位项直接相乘如 `2px * 1px`；`window.js` 为 `getComputedStyle` 新增 `ensureLiveComputed()` 按需实时刷新内联 `style` 变更）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

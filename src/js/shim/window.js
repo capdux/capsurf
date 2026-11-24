@@ -9076,8 +9076,19 @@ function installWindow(global) {
       normalizedPseudo = p;
     }
 
-    const computedMap = collectRawComputedMap(element, normalizedPseudo);
+    let lastStyleAttr = (element && typeof element.getAttribute === "function") ? (element.getAttribute("style") || "") : "";
+    let computedMap = collectRawComputedMap(element, normalizedPseudo);
     applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo);
+    function ensureLiveComputed() {
+      if (element && typeof element.getAttribute === "function") {
+        const curStyleAttr = element.getAttribute("style") || "";
+        if (curStyleAttr !== lastStyleAttr) {
+          lastStyleAttr = curStyleAttr;
+          computedMap = collectRawComputedMap(element, normalizedPseudo);
+          applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo);
+        }
+      }
+    }
 
     const declTarget = Object.create(CSSStyleDeclaration.prototype);
     const propSet = new Set(computedMap.keys());
@@ -9350,6 +9361,7 @@ function installWindow(global) {
     }
 
     declTarget.getPropertyValue = markNative(function (prop) {
+      ensureLiveComputed();
       const p = String(prop).trim();
       const pLow = p.toLowerCase();
       if (pLow === "-webkit-transform" || pLow === "-moz-transform") {
@@ -9432,6 +9444,7 @@ function installWindow(global) {
         if (typeof prop === "symbol") return target[prop];
         if (prop in target) return target[prop];
         if (typeof prop === "string") {
+          ensureLiveComputed();
           if (prop === "-webkit-transform" || prop === "-moz-transform" || prop === "webkitTransform" || prop === "MozTransform") {
             return computedMap.get("transform") || "none";
           }

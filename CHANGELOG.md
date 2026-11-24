@@ -3728,3 +3728,5 @@
 - **Phase 629** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `canonicalizeCalcToken` 保留 `0%` 项并接入 `outline`/`border`/`column-rule`；`/css/css-values/calc-nesting.html` 全绿。
 
 - **Phase 630** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `canonicalizeCalcToken` 保留 `0px` 项；`calc-serialization-002` 推进至 23/24、`calc-unit-analysis` 推进至 7/10。
+
+- **Phase 631** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `isValidCalcSyntax` 禁止两带单位项相乘，并新增 `ensureLiveComputed()` 实时刷新 `getComputedStyle`；`calc-unit-analysis` 实现 10/10 全绿。

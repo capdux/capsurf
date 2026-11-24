@@ -3023,3 +3023,7 @@
 ### Phase 630: `canonicalizeCalcToken` 保留 `0px` 项与 `calc-unit-analysis` 推进
 - **核心修复 (`src/js/shim/cssom.js`)**：`canonicalizeCalcToken` 保留 `0px` 项，使 `calc(4vmin + 0pt)` 规范化为 `calc(0px + 4vmin)`。
 - **WPT & Smoke 验收**：`calc-serialization-002` (23/24) & `calc-unit-analysis` (7/10) 推进，`--smoke` 3/3 suites PASS。
+
+### Phase 631: `/css/css-values/calc-unit-analysis` 10/10 全绿
+- **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：`isValidCalcSyntax` 拒绝两带单位项相乘；`getComputedStyle` 新增 `ensureLiveComputed()` 检测 `style` 属性变更并按需实时重算 `computedMap`。
+- **WPT & Smoke 验收**：`/css/css-values/calc-unit-analysis.html` (10/10) PASS，`--smoke` 3/3 suites PASS。

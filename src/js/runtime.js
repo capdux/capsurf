@@ -4325,6 +4325,7 @@
         if (!body) return false;
         if (/\/\*|\*\//.test(body)) return false;
         if (/\b(?:var|env|attr)\(/i.test(body)) return true;
+        if (/(?:\d|\.)(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|%|deg|rad|grad|turn|s|ms)\s*\*\s*[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|%|deg|rad|grad|turn|s|ms)\b/i.test(body)) return false;
         // Reject unknown bare identifiers (e.g., calc(7px * up), calc((0.25turn error)))
         let i = 0, expectVal = true;
         const topAddTerms = [""];
@@ -44739,8 +44740,19 @@
         normalizedPseudo = p;
       }
 
-      const computedMap = collectRawComputedMap(element, normalizedPseudo);
+      let lastStyleAttr = (element && typeof element.getAttribute === "function") ? (element.getAttribute("style") || "") : "";
+      let computedMap = collectRawComputedMap(element, normalizedPseudo);
       applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo);
+      function ensureLiveComputed() {
+        if (element && typeof element.getAttribute === "function") {
+          const curStyleAttr = element.getAttribute("style") || "";
+          if (curStyleAttr !== lastStyleAttr) {
+            lastStyleAttr = curStyleAttr;
+            computedMap = collectRawComputedMap(element, normalizedPseudo);
+            applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo);
+          }
+        }
+      }
 
       const declTarget = Object.create(CSSStyleDeclaration.prototype);
       const propSet = new Set(computedMap.keys());
@@ -45013,6 +45025,7 @@
       }
 
       declTarget.getPropertyValue = markNative(function (prop) {
+        ensureLiveComputed();
         const p = String(prop).trim();
         const pLow = p.toLowerCase();
         if (pLow === "-webkit-transform" || pLow === "-moz-transform") {
@@ -45095,6 +45108,7 @@
           if (typeof prop === "symbol") return target[prop];
           if (prop in target) return target[prop];
           if (typeof prop === "string") {
+            ensureLiveComputed();
             if (prop === "-webkit-transform" || prop === "-moz-transform" || prop === "webkitTransform" || prop === "MozTransform") {
               return computedMap.get("transform") || "none";
             }
