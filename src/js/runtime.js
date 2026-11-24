@@ -6759,6 +6759,19 @@
       if (prop === "position-try") {
         return !!expandCssShorthand("position-try", trimmed);
       }
+      if (prop === "size" || prop === "page-orientation") {
+        return false;
+      }
+      if (prop === "page") {
+        const toks = splitCssTokens(trimmed);
+        if (toks.length !== 1) return false;
+        const t = toks[0];
+        const tLow = t.toLowerCase();
+        if (tLow === "auto") return true;
+        if (tLow === "default" || tLow === "inherit" || tLow === "initial" || tLow === "unset" || tLow === "revert" || tLow === "revert-layer") return false;
+        if (/^["']/.test(t) || /\(/.test(t)) return false;
+        return /^(?:--|-?[a-z_]|-?[^\x00-\x7f])(?:[a-z0-9_-]|[^\x00-\x7f])*$/i.test(t);
+      }
       if (prop === "position-visibility") {
         if (vLower === "always") return true;
         const toks = splitCssTokens(vLower);
@@ -10087,7 +10100,7 @@
             if (!/^[+]?(?:\d+(?:\.\d+)?|\.\d+)%$/.test(val.trim()) || isNaN(num) || num < 0) continue;
           }
           if (context === "page" && rawName.toLowerCase() === "size") {
-            val = val.toLowerCase();
+            val = val.toLowerCase().replace(/^((?:a[345]|b[45]|jis-b[45]|letter|legal|ledger))\s+portrait$/, "$1");
           }
           if (context === "margin" && rawName.toLowerCase() === "size") {
             continue;
@@ -10266,7 +10279,7 @@
           v = normalizeCssSpecifiedValue(key, v);
         }
         if (context === "page" && key === "size") {
-          v = v.toLowerCase();
+          v = v.toLowerCase().replace(/^((?:a[345]|b[45]|jis-b[45]|letter|legal|ledger))\s+portrait$/, "$1");
         }
         if (context === "margin" && key === "size") {
           return;
@@ -10401,7 +10414,7 @@
             const kebab = cssPropCamelToKebab(prop);
             let val = decl.getPropertyValue(kebab);
             if (!val && prop.startsWith("--")) val = decl.getPropertyValue(prop);
-            if (context === "page" && kebab === "size" && val) return val.toLowerCase();
+            if (context === "page" && kebab === "size" && val) return val.toLowerCase().replace(/^((?:a[345]|b[45]|jis-b[45]|letter|legal|ledger))\s+portrait$/, "$1");
             return val;
           }
           return undefined;
@@ -10724,6 +10737,7 @@
             ident += part[i++];
           }
           if (ident.startsWith("--")) return null;
+          if (!/^(?:[a-z_]|[^\x00-\x7f]|-[a-z_-]|-[^\x00-\x7f]|\\.)(?:[a-z0-9_-]|[^\x00-\x7f]|\\.)*$/i.test(ident)) return null;
           while (i < part.length && /\s/.test(part[i])) i++;
         }
 
@@ -15752,6 +15766,7 @@
   function isValidInlinePropValue(key, val) {
     const v = String(val).trim();
     if (!v) return false;
+    if (key === "size" || key === "page-orientation") return false;
     if (key.startsWith("--")) return key.length > 2;
     const lower = v.toLowerCase();
     if (CSS_WIDE_KEYWORDS.has(lower)) return true;
@@ -45454,6 +45469,10 @@
         const px = evalCssLengthExpr(ooRaw, 0, fontSize);
         if (px !== null) computedMap.set("outline-offset", formatCssPx(px));
       }
+      const pageRaw = (computedMap.get("page") || "").trim().toLowerCase();
+      if (pageRaw === "auto" || pageRaw === "initial" || pageRaw === "unset" || pageRaw === "revert" || pageRaw === "revert-layer") {
+        computedMap.set("page", "auto");
+      }
       const ocmRaw = (computedMap.get("overflow-clip-margin") || "").trim();
       const smgRaw = (computedMap.get("scroll-marker-group") || "").trim().toLowerCase();
       if (smgRaw === "before" || smgRaw === "after") {
@@ -46314,6 +46333,7 @@
         ["position-try-order", "normal"],
         ["position-try-fallbacks", "none"],
         ["position-visibility", "anchors-visible"],
+        ["page", "auto"],
         ["image-orientation", "from-image"],
         ["image-rendering", "auto"],
         ["image-resolution", "1dppx"],
@@ -47145,7 +47165,7 @@
       "overscroll-behavior-block", "overscroll-behavior-inline", "overscroll-behavior-x", "overscroll-behavior-y",
       "overflow-anchor", "overflow-block", "overflow-clip-margin", "overflow-inline", "overflow-wrap", "overflow-x", "overflow-y",
       "padding-block-end", "padding-block-start", "padding-bottom", "padding-inline-end", "padding-inline-start",
-      "padding-left", "padding-right", "padding-top", "perspective", "perspective-origin", "pointer-events",
+      "padding-left", "padding-right", "padding-top", "page", "perspective", "perspective-origin", "pointer-events",
       "position", "position-try-fallbacks", "position-try-order", "position-visibility", "quotes", "reading-flow", "reading-order", "resize", "right", "rotate", "row-gap",
       "ruby-align", "ruby-merge", "ruby-overhang", "ruby-position", "scale", "scroll-behavior", "scroll-marker-group", "scroll-target-group", "scrollbar-gutter",
       "-webkit-transform", "-moz-transform",
@@ -47482,6 +47502,9 @@
         ensureLiveComputed();
         const p = String(prop).trim();
         const pLow = p.toLowerCase();
+        if (pLow === "size" || pLow === "page-orientation") {
+          return "";
+        }
         if (pLow === "-webkit-transform" || pLow === "-moz-transform") {
           return computedMap.get("transform") || "none";
         }
@@ -47570,6 +47593,9 @@
           if (prop in target) return target[prop];
           if (typeof prop === "string") {
             ensureLiveComputed();
+            if (prop === "size" || prop === "page-orientation" || prop === "pageOrientation") {
+              return "";
+            }
             if (prop === "-webkit-transform" || prop === "-moz-transform" || prop === "webkitTransform" || prop === "MozTransform") {
               return computedMap.get("transform") || "none";
             }
@@ -47605,6 +47631,7 @@
         has: function (target, prop) {
           if (prop in target) return true;
           if (typeof prop === "string") {
+            if (prop === "size" || prop === "page-orientation" || prop === "pageOrientation") return false;
             if (prop === "cssFloat" || prop === "fontStretch" || prop === "font-stretch" || getShorthandComputed(prop) !== null) return true;
             if (propSet.has(prop) || computedMap.has(prop)) return true;
             const kebab = prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
@@ -47617,6 +47644,7 @@
           const own = Reflect.getOwnPropertyDescriptor(target, prop);
           if (own) return own;
           if (typeof prop === "string") {
+            if (prop === "size" || prop === "page-orientation" || prop === "pageOrientation") return undefined;
             const kebab = prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
             if (prop === "cssFloat" || prop === "fontStretch" || prop === "font-stretch" || getShorthandComputed(prop) !== null || propSet.has(prop) || computedMap.has(prop) ||
                 getShorthandComputed(kebab) !== null || propSet.has(kebab) || computedMap.has(kebab)) {

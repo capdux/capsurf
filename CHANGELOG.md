@@ -3940,3 +3940,9 @@
 - **Phase 706**:
   - `src/js/shim/cssom.js`: `isValidCssValue("mask")` 补齐 `<mask-layer>#` 全分支校验（拒绝多余位置长度、`margin-box`、`no-clip` 重复、多合成算子等）。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 707**:
+  - `src/js/shim/cssom.js`: 阻止 `size`/`page-orientation` 进入元素 `isValidCssValue`，新增 `page` 单一 unquoted `<custom-ident>`/`auto` 校验，`canonicalizePageSelectorList` 补齐 `<ident>` 合法性校验，以及 `@page` `size: <page-size> portrait` 序列化省略 `portrait`。
+  - `src/js/shim/element/element.js`: `isValidInlinePropValue` 在 `CSS_WIDE_KEYWORDS` 之前拦截 `size` 与 `page-orientation`。
+  - `src/js/shim/window.js`: `getComputedStyle` 注册 `page` 默认值 `"auto"`、`AUTO` 规范化及 `size`/`page-orientation` 访问拦截。
+  - `test/wpt/wpt-expectations.json`: 将 `page-rule-declarations-001.html` 与 `margin-rules-002.html` 收紧为 `PASS`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

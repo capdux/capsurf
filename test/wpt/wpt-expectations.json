@@ -4937,8 +4937,8 @@
     "reason": null
   },
   "/css/css-page/page-rule-declarations-001.html": {
-    "expected": "FAIL",
-    "reason": "3/5: the @page :left and :right selector blocks read back empty from CSSOM. Pinned PASS on 2026-09-16, failing on every main run since 2026-09-17."
+    "expected": "PASS",
+    "reason": null
   },
   "/css/css-page/page-rule-declarations-002.html": {
     "expected": "PASS",
@@ -4957,7 +4957,7 @@
     "reason": null
   },
   "/css/css-page/parsing/margin-rules-002.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-page/parsing/nested-rules-001.html": {

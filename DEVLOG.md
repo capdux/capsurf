@@ -3252,3 +3252,5 @@
 - 在 `cssom.js` 与 `window.js` 中补全 `position-try-fallbacks` 的 `<position-area>` / `[--ident || <try-tactic>]` 校验与规范排序，以及 `position-try` 简写展开、序列化和 `getComputedStyle` 支持，使 `/css/css-anchor-position/parsing/` 全目录 10/10 PASS。
 ### Phase 706 — `mask` 简写 `<mask-layer>#` 语法校验闭环
 - 在 `cssom.js` `isValidCssValue("mask")` 中实现完整 `<mask-layer>#` 校验，使 `/css/css-masking/parsing/mask-invalid.html` 全部 13/13 子测试 PASS。
+### Phase 707 — `/css/css-page/` `page` 属性与 `@page` 描述符隔离/序列化闭环
+- 隔离 `@page` 专属描述符 `size` 与 `page-orientation`（元素内联样式与 `getComputedStyle` 均不可见且拒绝 CSS-wide keywords），补齐 `page` 属性校验与 `AUTO -> auto` 规范化、`@page` 选择器 `<ident>` 校验及 `<page-size> portrait` 序列化省略 `portrait`，一举打通 `page-rule-declarations-001/004`、`margin-rules-002`、`page-computed`、`size-valid/invalid` 等 6 项测试。

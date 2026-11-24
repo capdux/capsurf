@@ -8172,6 +8172,10 @@ function installWindow(global) {
       const px = evalCssLengthExpr(ooRaw, 0, fontSize);
       if (px !== null) computedMap.set("outline-offset", formatCssPx(px));
     }
+    const pageRaw = (computedMap.get("page") || "").trim().toLowerCase();
+    if (pageRaw === "auto" || pageRaw === "initial" || pageRaw === "unset" || pageRaw === "revert" || pageRaw === "revert-layer") {
+      computedMap.set("page", "auto");
+    }
     const ocmRaw = (computedMap.get("overflow-clip-margin") || "").trim();
     const smgRaw = (computedMap.get("scroll-marker-group") || "").trim().toLowerCase();
     if (smgRaw === "before" || smgRaw === "after") {
@@ -9032,6 +9036,7 @@ function installWindow(global) {
       ["position-try-order", "normal"],
       ["position-try-fallbacks", "none"],
       ["position-visibility", "anchors-visible"],
+      ["page", "auto"],
       ["image-orientation", "from-image"],
       ["image-rendering", "auto"],
       ["image-resolution", "1dppx"],
@@ -9863,7 +9868,7 @@ function installWindow(global) {
     "overscroll-behavior-block", "overscroll-behavior-inline", "overscroll-behavior-x", "overscroll-behavior-y",
     "overflow-anchor", "overflow-block", "overflow-clip-margin", "overflow-inline", "overflow-wrap", "overflow-x", "overflow-y",
     "padding-block-end", "padding-block-start", "padding-bottom", "padding-inline-end", "padding-inline-start",
-    "padding-left", "padding-right", "padding-top", "perspective", "perspective-origin", "pointer-events",
+    "padding-left", "padding-right", "padding-top", "page", "perspective", "perspective-origin", "pointer-events",
     "position", "position-try-fallbacks", "position-try-order", "position-visibility", "quotes", "reading-flow", "reading-order", "resize", "right", "rotate", "row-gap",
     "ruby-align", "ruby-merge", "ruby-overhang", "ruby-position", "scale", "scroll-behavior", "scroll-marker-group", "scroll-target-group", "scrollbar-gutter",
     "-webkit-transform", "-moz-transform",
@@ -10200,6 +10205,9 @@ function installWindow(global) {
       ensureLiveComputed();
       const p = String(prop).trim();
       const pLow = p.toLowerCase();
+      if (pLow === "size" || pLow === "page-orientation") {
+        return "";
+      }
       if (pLow === "-webkit-transform" || pLow === "-moz-transform") {
         return computedMap.get("transform") || "none";
       }
@@ -10288,6 +10296,9 @@ function installWindow(global) {
         if (prop in target) return target[prop];
         if (typeof prop === "string") {
           ensureLiveComputed();
+          if (prop === "size" || prop === "page-orientation" || prop === "pageOrientation") {
+            return "";
+          }
           if (prop === "-webkit-transform" || prop === "-moz-transform" || prop === "webkitTransform" || prop === "MozTransform") {
             return computedMap.get("transform") || "none";
           }
@@ -10323,6 +10334,7 @@ function installWindow(global) {
       has: function (target, prop) {
         if (prop in target) return true;
         if (typeof prop === "string") {
+          if (prop === "size" || prop === "page-orientation" || prop === "pageOrientation") return false;
           if (prop === "cssFloat" || prop === "fontStretch" || prop === "font-stretch" || getShorthandComputed(prop) !== null) return true;
           if (propSet.has(prop) || computedMap.has(prop)) return true;
           const kebab = prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
@@ -10335,6 +10347,7 @@ function installWindow(global) {
         const own = Reflect.getOwnPropertyDescriptor(target, prop);
         if (own) return own;
         if (typeof prop === "string") {
+          if (prop === "size" || prop === "page-orientation" || prop === "pageOrientation") return undefined;
           const kebab = prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
           if (prop === "cssFloat" || prop === "fontStretch" || prop === "font-stretch" || getShorthandComputed(prop) !== null || propSet.has(prop) || computedMap.has(prop) ||
               getShorthandComputed(kebab) !== null || propSet.has(kebab) || computedMap.has(kebab)) {

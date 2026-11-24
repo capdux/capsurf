@@ -2969,6 +2969,19 @@
     if (prop === "position-try") {
       return !!expandCssShorthand("position-try", trimmed);
     }
+    if (prop === "size" || prop === "page-orientation") {
+      return false;
+    }
+    if (prop === "page") {
+      const toks = splitCssTokens(trimmed);
+      if (toks.length !== 1) return false;
+      const t = toks[0];
+      const tLow = t.toLowerCase();
+      if (tLow === "auto") return true;
+      if (tLow === "default" || tLow === "inherit" || tLow === "initial" || tLow === "unset" || tLow === "revert" || tLow === "revert-layer") return false;
+      if (/^["']/.test(t) || /\(/.test(t)) return false;
+      return /^(?:--|-?[a-z_]|-?[^\x00-\x7f])(?:[a-z0-9_-]|[^\x00-\x7f])*$/i.test(t);
+    }
     if (prop === "position-visibility") {
       if (vLower === "always") return true;
       const toks = splitCssTokens(vLower);
@@ -6297,7 +6310,7 @@
           if (!/^[+]?(?:\d+(?:\.\d+)?|\.\d+)%$/.test(val.trim()) || isNaN(num) || num < 0) continue;
         }
         if (context === "page" && rawName.toLowerCase() === "size") {
-          val = val.toLowerCase();
+          val = val.toLowerCase().replace(/^((?:a[345]|b[45]|jis-b[45]|letter|legal|ledger))\s+portrait$/, "$1");
         }
         if (context === "margin" && rawName.toLowerCase() === "size") {
           continue;
@@ -6476,7 +6489,7 @@
         v = normalizeCssSpecifiedValue(key, v);
       }
       if (context === "page" && key === "size") {
-        v = v.toLowerCase();
+        v = v.toLowerCase().replace(/^((?:a[345]|b[45]|jis-b[45]|letter|legal|ledger))\s+portrait$/, "$1");
       }
       if (context === "margin" && key === "size") {
         return;
@@ -6611,7 +6624,7 @@
           const kebab = cssPropCamelToKebab(prop);
           let val = decl.getPropertyValue(kebab);
           if (!val && prop.startsWith("--")) val = decl.getPropertyValue(prop);
-          if (context === "page" && kebab === "size" && val) return val.toLowerCase();
+          if (context === "page" && kebab === "size" && val) return val.toLowerCase().replace(/^((?:a[345]|b[45]|jis-b[45]|letter|legal|ledger))\s+portrait$/, "$1");
           return val;
         }
         return undefined;
@@ -6934,6 +6947,7 @@
           ident += part[i++];
         }
         if (ident.startsWith("--")) return null;
+        if (!/^(?:[a-z_]|[^\x00-\x7f]|-[a-z_-]|-[^\x00-\x7f]|\\.)(?:[a-z0-9_-]|[^\x00-\x7f]|\\.)*$/i.test(ident)) return null;
         while (i < part.length && /\s/.test(part[i])) i++;
       }
 
