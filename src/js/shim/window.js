@@ -6609,7 +6609,7 @@ function installWindow(global) {
     "font-language-override", "font-optical-sizing", "font-variant-emoji", "font-variant-position",
     "hanging-punctuation", "hyphens", "line-break", "overflow-wrap", "tab-size",
     "text-align-all", "text-align-last", "text-fit", "text-indent", "text-justify",
-    "text-transform", "word-break", "word-wrap", "clip-rule", "orphans", "widows", "quotes",
+    "text-transform", "word-break", "word-wrap", "clip-rule", "orphans", "widows", "quotes", "block-ellipsis",
   ]);
 
   function getDefaultDisplayForElement(element) {
@@ -7914,8 +7914,24 @@ function installWindow(global) {
     }
     const cbW = (cbEl && cbEl.nodeType === 1) ? computeElementUsedWidthPx(cbEl, 0) : 800;
 
+    // Check if an ancestor is replaced via CSS `content: url(...)` / gradient / image-set (CSS Content 3)
+    let isInsideReplacedContent = false;
+    {
+      let anc = element.parentElement || element.parentNode;
+      while (anc && anc.nodeType === 1) {
+        const ancMap = collectRawComputedMap(anc, "");
+        const ancContent = (ancMap.get("content") || "").trim().toLowerCase();
+        if (ancContent && ancContent !== "normal" && ancContent !== "none" &&
+            /^(?:url|linear-gradient|radial-gradient|conic-gradient|repeating-linear-gradient|repeating-radial-gradient|repeating-conic-gradient|image-set|cross-fade)\(/i.test(ancContent)) {
+          isInsideReplacedContent = true;
+          break;
+        }
+        anc = anc.parentElement || anc.parentNode;
+      }
+    }
+
     // Resolve width for elements with a box (except non-replaced inline)
-    if (!isNonReplacedInline) {
+    if (!isNonReplacedInline && !isInsideReplacedContent) {
       const wRaw = (computedMap.get("width") || "").trim().toLowerCase();
       if (wRaw === "" && disp === "block") {
         computedMap.set("width", formatCssPx(computeElementUsedWidthPx(element, 0)));
@@ -8524,7 +8540,7 @@ function installWindow(global) {
         }
       }
       let ji = (computedMap.get("justify-items") || "").trim().toLowerCase();
-      if (ji === "legacy") {
+      if (ji === "" || ji === "legacy") {
         let resolvedJi = "normal";
         let cur = element && element.parentElement;
         while (cur) {
@@ -9325,7 +9341,14 @@ function installWindow(global) {
       ["align-items", "normal"],
       ["align-self", "auto"],
       ["justify-self", "auto"],
-      ["justify-items", "normal"],
+      ["justify-items", "legacy"],
+      ["row-gap", "normal"],
+      ["column-gap", "normal"],
+      ["block-ellipsis", "no-ellipsis"],
+      ["continue", "normal"],
+      ["max-lines", "auto"],
+      ["width", "auto"],
+      ["height", "auto"],
       ["align-content", "normal"],
       ["justify-content", "normal"],
       ["order", "0"],
@@ -10370,7 +10393,7 @@ function installWindow(global) {
     "backdrop-filter", "backface-visibility", "background-attachment", "background-blend-mode",
     "background-clip", "background-color", "background-image", "background-origin",
     "background-position-x", "background-position-y", "background-repeat", "background-size", "baseline-shift",
-    "block-size", "bookmark-level", "bookmark-state", "border-block-end-color", "border-block-end-style", "border-block-end-width",
+    "block-ellipsis", "block-size", "bookmark-level", "bookmark-state", "border-block-end-color", "border-block-end-style", "border-block-end-width",
     "border-block-start-color", "border-block-start-style", "border-block-start-width",
     "border-bottom-color", "border-bottom-left-radius", "border-bottom-right-radius",
     "border-bottom-style", "border-bottom-width", "border-collapse",
@@ -10388,7 +10411,7 @@ function installWindow(global) {
     "flood-color", "lighting-color",
     "column-rule-color", "column-rule-style", "column-rule-width", "column-span", "column-width", "contain",
     "contain-intrinsic-block-size", "contain-intrinsic-height", "contain-intrinsic-inline-size", "contain-intrinsic-width",
-    "content", "content-visibility", "container-name", "container-type", "counter-increment", "counter-reset", "counter-set", "cursor", "direction", "display", "margin-trim",
+    "content", "content-visibility", "continue", "container-name", "container-type", "counter-increment", "counter-reset", "counter-set", "cursor", "direction", "display", "margin-trim",
     "clip-rule", "mask-composite", "mask-image", "mask-repeat", "mask-size", "mask-type",
     "empty-cells", "field-sizing", "filter", "flex-basis", "flex-direction", "flex-grow", "flex-shrink",
     "flex-wrap", "float", "font-family", "font-feature-settings", "font-kerning", "font-language-override", "font-optical-sizing", "font-palette", "font-size", "font-size-adjust", "font-synthesis", "font-synthesis-position", "font-synthesis-small-caps", "font-synthesis-style", "font-synthesis-weight",
@@ -10400,7 +10423,7 @@ function installWindow(global) {
     "isolation", "justify-content", "justify-items", "justify-self", "left", "letter-spacing", "line-break",
     "line-height", "list-style-image", "list-style-position", "list-style-type",
     "margin-block-end", "margin-block-start", "margin-bottom", "margin-inline-end", "margin-inline-start",
-    "margin-left", "margin-right", "margin-top", "max-block-size", "max-height", "max-inline-size", "max-width",
+    "margin-left", "margin-right", "margin-top", "max-block-size", "max-height", "max-inline-size", "max-lines", "max-width",
     "min-block-size", "min-height", "min-inline-size", "min-width", "mix-blend-mode", "object-fit", "object-position", "opacity",
     "order", "orphans", "outline-color", "outline-offset", "outline-style", "outline-width",
     "overscroll-behavior-block", "overscroll-behavior-inline", "overscroll-behavior-x", "overscroll-behavior-y",

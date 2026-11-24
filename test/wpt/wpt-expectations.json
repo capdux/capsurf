@@ -712,7 +712,7 @@
     "reason": null
   },
   "/css/css-align/inheritance.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-align/parsing/align-content-computed.html": {
@@ -4775,7 +4775,7 @@
     "reason": null
   },
   "/css/css-overflow/inheritance.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-overflow/parsing/block-ellipsis-invalid.html": {
@@ -35622,8 +35622,8 @@
     "reason": null
   },
   "/css/css-content/element-replacement-dynamic-002.html": {
-    "expected": "FAIL",
-    "reason": "Regressed on main with the getComputedStyle used-value resolver: height resolves to the stale 22px layout box after the ancestor gains `content: linear-gradient(...)`, where the spec wants `auto` because a replaced element lays out no descendants. Pinned FAIL so the gate reads main honestly; the fix is to not consult the layout box under a replaced ancestor."
+    "expected": "PASS",
+    "reason": null
   },
   "/encoding/api-invalid-label.any.html?1-1000": {
     "expected": "PASS",

@@ -4177,3 +4177,8 @@
   - `src/js/shim/window.js`: `BLOCKIFY` 新增 `inline-grid-lanes` 与 `inline grid-lanes` 映射至 `grid-lanes`。
   - `test/wpt/wpt-expectations.json`: 收紧 `/css/css-display/parsing/tentative/display-{computed,valid}.html` 为 `PASS`（`7,207` PASS）。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 764**:
+  - `src/js/shim/cssom.js`: `KNOWN_PROPS` 补全 `block-ellipsis`、`continue`、`max-lines`。
+  - `src/js/shim/window.js`: 补全 `row-gap`/`column-gap`/`justify-items`/`block-ellipsis`/`continue`/`max-lines`/`width`/`height` 初始值与继承，`justify-items: legacy` 兼容空值继承，并跳过替换 `content` 祖先子孙的 used `width`/`height` 覆盖。
+  - `test/wpt/wpt-expectations.json`: 收紧 `/css/css-align/inheritance.html`、`/css/css-overflow/inheritance.html`、`/css/css-content/element-replacement-dynamic-002.html` 为 `PASS`（`7,210` PASS）。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
