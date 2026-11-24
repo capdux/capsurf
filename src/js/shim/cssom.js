@@ -3013,17 +3013,19 @@
             }
             if (gKind === "radial") {
               const preAt = atIdx === -1 ? toks0 : toks0.slice(0, atIdx);
-              const RADIAL_KW = new Set(["circle", "ellipse", "closest-side", "closest-corner", "farthest-side", "farthest-corner"]);
-              let lenCount = 0, shapeKw = "";
-              for (let ri = 0; ri < preAt.length; ri++) {
-                const rt = preAt[ri];
-                if (rt === "circle" || rt === "ellipse") shapeKw = rt;
-                else if (!RADIAL_KW.has(rt)) {
-                  if (!isValidLenPct(rt, false)) return false;
-                  lenCount++;
+              if (atIdx !== -1 || (preAt.length > 0 && !isValidColor(preAt[0]))) {
+                const RADIAL_KW = new Set(["circle", "ellipse", "closest-side", "closest-corner", "farthest-side", "farthest-corner"]);
+                let lenCount = 0, shapeKw = "";
+                for (let ri = 0; ri < preAt.length; ri++) {
+                  const rt = preAt[ri];
+                  if (rt === "circle" || rt === "ellipse") shapeKw = rt;
+                  else if (!RADIAL_KW.has(rt)) {
+                    if (!isValidLenPct(rt, false)) return false;
+                    lenCount++;
+                  }
                 }
+                if ((shapeKw === "circle" && lenCount > 1) || (shapeKw === "ellipse" && lenCount === 1) || lenCount > 2) return false;
               }
-              if ((shapeKw === "circle" && lenCount > 1) || (shapeKw === "ellipse" && lenCount === 1) || lenCount > 2) return false;
             }
           }
           if (gKind === "conic" && toks0[0] === "from" && toks0.length >= 2 && /^calc\(/i.test(toks0[1]) && toks0[1].includes("%")) {

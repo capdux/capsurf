@@ -9531,8 +9531,8 @@ function installWindow(global) {
         if (toks.length === 1) return norm1(toks[0]);
         if (toks.length === 2) {
           const edge = toks[0].toLowerCase();
-          const off = evalLinLenPctTok(toks[1]);
-          if (edge === "x-start" || edge === "x-end" || edge === "y-start" || edge === "y-end") return edge + " " + off;
+          if (edge === "x-start" || edge === "y-start") return resolveEdge("left", toks[1]);
+          if (edge === "x-end" || edge === "y-end") return resolveEdge("right", toks[1]);
           return resolveEdge(edge, toks[1]);
         }
         return layer;

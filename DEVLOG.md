@@ -3208,3 +3208,5 @@
 - 为 `border-image` 补齐 `SHORTHAND_EXPAND_LONGHANDS` 映射、`serializeExpandedShorthand` 最小化序列化（省略默认 `width` `1` 时保留 ` / / outset`）、`isValidCssValue` 校验及 `expandCssShorthand` 子属性校验/规范化，`border-image*` 18/18 用例全通。
 ### Phase 684 — `background` 简写多层与 `/ <bg-size>` 语法校验修复
 - 在 `cssom.js` `isValidCssValue("background")` 中新增多层 `<bg-layer>` `<color>` 禁令与 `/ <bg-size>` 前置 `<bg-position>` 校验，修复 `/css/css-backgrounds/parsing/background-invalid.html` 全部 2/2 用例。
+### Phase 685 — `radial-gradient` 首参色值回环校验修复
+- 修复 `cssom.js` 中 `radial-gradient(rgb(...), ...)` 因首个色标被误判为 `<radial-size>` 长度而无法 round-trip 的问题，打通 `/css/css-images/parsing/gradient-position-computed.html` 全部 43/43 子测试。

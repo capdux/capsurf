@@ -3866,3 +3866,7 @@
 - **Phase 684**:
   - `src/js/shim/cssom.js`: `isValidCssValue("background")` 补充多层逗号分隔检验，拒绝非末层 `<bg-layer>` 中的 `<color>` 及 `/` 左侧非 `<bg-position>` 的 `/ <bg-size>`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 685**:
+  - `src/js/shim/cssom.js`: `isValidCssValue` 修复 `radial-gradient` 首参为 `<color>`（无 `at` 与 shape/size 关键字）时误当长度校验失败的问题。
+  - `src/js/shim/window.js`: `background-position-x/y` 双 token 逻辑边关键字分支统一走 `resolveEdge`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
