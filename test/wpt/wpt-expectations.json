@@ -3174,7 +3174,7 @@
     "reason": null
   },
   "/css/css-grid/grid-lanes/tentative/parsing/grid-lanes-direction-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-grid/grid-lanes/tentative/parsing/grid-lanes-pack-computed.html": {
@@ -3186,7 +3186,7 @@
     "reason": null
   },
   "/css/css-grid/grid-lanes/tentative/parsing/grid-lanes-pack-valid.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-grid/grid-lanes/tentative/parsing/grid-lanes-shorthand-computed.html": {
@@ -26645,7 +26645,7 @@
     "reason": null
   },
   "/css/css-grid/subgrid/line-names-004.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-grid/subgrid/line-names-005.html": {
@@ -26653,7 +26653,7 @@
     "reason": null
   },
   "/css/css-grid/subgrid/line-names-006.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-grid/subgrid/line-names-007.html": {
@@ -26665,15 +26665,15 @@
     "reason": null
   },
   "/css/css-grid/subgrid/line-names-009.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-grid/subgrid/line-names-010.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-grid/subgrid/line-names-011.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-grid/subgrid/line-names-012.html": {
@@ -27649,19 +27649,19 @@
     "reason": null
   },
   "/css/css-grid/abspos/grid-abspos-staticpos-align-self-img-001.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-grid/abspos/grid-abspos-staticpos-align-self-img-002.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-grid/abspos/grid-abspos-staticpos-align-self-img-last-baseline-001.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-grid/abspos/grid-abspos-staticpos-align-self-img-last-baseline-002.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-grid/abspos/grid-abspos-staticpos-align-self-last-baseline-001.html": {
@@ -27741,11 +27741,11 @@
     "reason": null
   },
   "/css/css-grid/abspos/grid-abspos-staticpos-align-self-vertWM-last-baseline-003.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-grid/abspos/grid-abspos-staticpos-align-self-vertWM-last-baseline-004.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-grid/abspos/grid-abspos-staticpos-justify-self-001.html": {
@@ -27757,15 +27757,15 @@
     "reason": null
   },
   "/css/css-grid/abspos/grid-abspos-staticpos-justify-self-img-001.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-grid/abspos/grid-abspos-staticpos-justify-self-img-002.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-grid/abspos/grid-abspos-staticpos-justify-self-img-last-baseline-001.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-grid/abspos/grid-abspos-staticpos-justify-self-img-last-baseline-002.html": {
@@ -28217,7 +28217,7 @@
     "reason": null
   },
   "/css/css-grid/grid-definition/grid-template-rows-fit-content-001.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-grid/placement/grid-layout-grid-span.html": {
@@ -28301,27 +28301,27 @@
     "reason": null
   },
   "/css/css-grid/layout-algorithm/grid-as-flex-item-should-not-shrink-to-fit-001.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-grid/layout-algorithm/grid-as-flex-item-should-not-shrink-to-fit-002.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-grid/layout-algorithm/grid-as-flex-item-should-not-shrink-to-fit-003.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-grid/layout-algorithm/grid-as-flex-item-should-not-shrink-to-fit-004.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-grid/layout-algorithm/grid-as-flex-item-should-not-shrink-to-fit-005.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-grid/layout-algorithm/grid-as-flex-item-should-not-shrink-to-fit-006.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-grid/layout-algorithm/grid-as-flex-item-should-not-shrink-to-fit-007.html": {
@@ -28329,7 +28329,7 @@
     "reason": null
   },
   "/css/css-grid/layout-algorithm/grid-as-flex-item-should-not-shrink-to-fit-008.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-grid/layout-algorithm/grid-find-fr-size-restart-algorithm.html": {
@@ -28565,7 +28565,7 @@
     "reason": null
   },
   "/css/css-grid/alignment/grid-content-distribution-029.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-grid/alignment/grid-content-distribution-with-collapsed-tracks-001.html": {
@@ -28765,11 +28765,11 @@
     "reason": null
   },
   "/css/css-grid/alignment/grid-item-content-baseline-001.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-grid/alignment/grid-item-content-baseline-002.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-grid/alignment/grid-item-content-baseline-003.html": {
@@ -28781,15 +28781,15 @@
     "reason": null
   },
   "/css/css-grid/alignment/grid-item-mixed-baseline-001.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-grid/alignment/grid-item-mixed-baseline-002.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-grid/alignment/grid-item-mixed-baseline-003.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-grid/alignment/grid-item-mixed-baseline-004.html": {
@@ -28825,7 +28825,7 @@
     "reason": null
   },
   "/css/css-grid/alignment/grid-justify-baseline-001.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-grid/alignment/grid-justify-content-end-001.html": {

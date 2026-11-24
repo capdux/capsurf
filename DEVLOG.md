@@ -3320,3 +3320,5 @@
 - 在 `cssom.js` `evalColorExpr` 中支持 `infinity`/`-infinity`/`nan`/`pi`/`e` 与 `0 / 0`，并在 `fmtRgb`/`hsl`/`hwb` 正确区分已折叠的 `Infinity`/`NaN` 与含相对单位的未求值 `calc()`，净增 +26 个颜色解析子测试通过。
 ### Phase 740 — `::marker` 伪元素支持属性全绿 (`marker-supported-properties.html` 67/67 PASS)
 - 补全 `::marker` 禁用属性屏蔽、`list-style` 计算值全量序列化及 `font`/`font-variant`/`animation-range`/`animation-timeline` 支持，`marker-supported-properties.html` 67/67 全通过并收紧为 `PASS`。
+### Phase 741 — `/css/css-grid/` 31 项 `FAIL→PASS` 批量复测与基线收紧
+- 对 `/css/css-grid/` 审计报告中的 31 项意外通过用例执行独立复测，31/31 全部通过（含 29 个 `reftest [match] byte-equal` 与 2 个 `grid-lanes` 解析用例），统一收紧为 `PASS`，使 WPT `PASS` 基线提升至 `7,189/9,725 (73.92%)`。

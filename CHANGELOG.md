@@ -4082,3 +4082,5 @@
   - `src/js/shim/cssom.js`: `KNOWN_CSS_PROPERTIES`、`isValidCssValue` 与 `expandCssShorthand` 补全 `animation-range` 支持。
   - `test/wpt/wpt-expectations.json`: 将 `/css/css-pseudo/parsing/marker-supported-properties.html` 收紧为 `PASS`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 741**:
+  - `test/wpt/wpt-expectations.json`: 经独立复测 31/31 全过（reftest 全像素一致 + testharness 全过），将 `/css/css-grid/` 31 项 `FAIL` 收紧为 `PASS`（`PASS` 基线达到 7,189 项）。
