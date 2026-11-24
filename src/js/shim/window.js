@@ -14370,6 +14370,7 @@ const CSS_TYPED_OM_GLOBALS = {
     this.systemId = systemId || "";
     this.nodeName = this.name;
     this.nodeType = (global.Node && global.Node.DOCUMENT_TYPE_NODE) || 10;
+    this.parentNode = null;
   }
   DocumentType.prototype = Object.create(global.Node ? global.Node.prototype : Object.prototype);
   DocumentType.prototype.constructor = DocumentType;

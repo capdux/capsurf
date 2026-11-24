@@ -2364,6 +2364,7 @@ function installShim(global) {
               dt.publicId = String(publicId || "");
               dt.systemId = String(systemId || "");
               dt.ownerDocument = ownerDoc;
+              dt.parentNode = null;
               return dt;
             }, "createDocumentType");
           }

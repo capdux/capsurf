@@ -10427,7 +10427,7 @@
     "reason": null
   },
   "/dom/nodes/Document-contentType/contentType/contenttype_datauri_02.html": {
-    "expected": "TIMEOUT",
+    "expected": "PASS",
     "reason": null
   },
   "/dom/nodes/Document-contentType/contentType/contenttype_gif.html": {
@@ -10487,8 +10487,8 @@
     "reason": null
   },
   "/dom/nodes/Document-createCDATASection.html": {
-    "expected": "TIMEOUT",
-    "reason": "createCDATASection only valid on XMLDocument; our path throws NotSupportedError on the HTML document but the test then constructs an XMLDocument via implementation.createDocument(null,'foo'). The createDocument response handling hangs."
+    "expected": "PASS",
+    "reason": null
   },
   "/dom/nodes/Document-createComment.html": {
     "expected": "PASS",
@@ -10870,7 +10870,7 @@
     "reason": null
   },
   "/dom/nodes/Node-isConnected.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/dom/nodes/Node-isEqualNode-xhtml.xhtml": {
@@ -10950,10 +10950,8 @@
     "reason": null
   },
   "/dom/nodes/NodeList-static-length-getter-tampered-1.html": {
-    "expected": "TIMEOUT",
-    "slow": true,
-    "timeout": 60000,
-    "reason": "A new Function() JIT microbenchmark: ~2.5e8 NodeList index reads (1e5 inner x 50 outer), each a V8<->boa proxy crossing. Trivial for V8's JIT, unreachable in the boa interpreter, so it has never passed. Pinned TIMEOUT rather than PASS so --skip-expected-timeouts short-circuits it: left running it burns 60s AND starves /health, which makes wpt-exec in sibling lanes exit 2 and strands their whole batch. Six of these cost ~390s and 3 workerd restarts per run, and were a major source of collateral TIMEOUTs elsewhere in the suite."
+    "expected": "PASS",
+    "reason": null
   },
   "/dom/nodes/NodeList-static-length-getter-tampered-2.html": {
     "expected": "TIMEOUT",
@@ -10968,10 +10966,8 @@
     "reason": "A new Function() JIT microbenchmark: ~2.5e8 NodeList index reads (1e5 inner x 50 outer), each a V8<->boa proxy crossing. Trivial for V8's JIT, unreachable in the boa interpreter, so it has never passed. Pinned TIMEOUT rather than PASS so --skip-expected-timeouts short-circuits it: left running it burns 60s AND starves /health, which makes wpt-exec in sibling lanes exit 2 and strands their whole batch. Six of these cost ~390s and 3 workerd restarts per run, and were a major source of collateral TIMEOUTs elsewhere in the suite."
   },
   "/dom/nodes/NodeList-static-length-getter-tampered-indexOf-1.html": {
-    "expected": "TIMEOUT",
-    "slow": true,
-    "timeout": 60000,
-    "reason": "A new Function() JIT microbenchmark: ~2.5e8 NodeList index reads (1e5 inner x 50 outer), each a V8<->boa proxy crossing. Trivial for V8's JIT, unreachable in the boa interpreter, so it has never passed. Pinned TIMEOUT rather than PASS so --skip-expected-timeouts short-circuits it: left running it burns 60s AND starves /health, which makes wpt-exec in sibling lanes exit 2 and strands their whole batch. Six of these cost ~390s and 3 workerd restarts per run, and were a major source of collateral TIMEOUTs elsewhere in the suite."
+    "expected": "PASS",
+    "reason": null
   },
   "/dom/nodes/NodeList-static-length-getter-tampered-indexOf-2.html": {
     "expected": "TIMEOUT",
@@ -11158,7 +11154,7 @@
     "reason": null
   },
   "/dom/nodes/getElementsByClassName-20.htm": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/dom/nodes/getElementsByClassName-21.htm": {
@@ -11166,7 +11162,7 @@
     "reason": null
   },
   "/dom/nodes/getElementsByClassName-22.htm": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/dom/nodes/getElementsByClassName-23.htm": {
@@ -11178,7 +11174,7 @@
     "reason": null
   },
   "/dom/nodes/getElementsByClassName-25.htm": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/dom/nodes/getElementsByClassName-26.htm": {

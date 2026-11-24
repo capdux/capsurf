@@ -16,6 +16,7 @@ function registerParsedNode(node) {
 
 function Node() {
   EventTarget.call(this);
+  this.parentNode = null;
 }
 Node.prototype = Object.create(EventTarget.prototype);
 Node.prototype.constructor = Node;
@@ -1636,11 +1637,19 @@ function installChildNodeMethods(proto) {
     proto.replaceWith = markNative(function (...nodes) {
       const parent = this.parentNode;
       if (!parent) return;
+      if (nodes.length === 0) {
+        if (this.parentNode === parent) parent.removeChild(this);
+        return;
+      }
       let viableNext = this.nextSibling;
       while (viableNext && nodes.indexOf(viableNext) !== -1) viableNext = viableNext.nextSibling;
       const node = convertNodesToFragment(nodes, this.ownerDocument);
-      if (this.parentNode === parent) parent.replaceChild(node, this);
-      else parent.insertBefore(node, viableNext);
+      if (this.parentNode === parent) {
+        parent.insertBefore(node, viableNext);
+        if (this.parentNode === parent) parent.removeChild(this);
+      } else {
+        parent.insertBefore(node, viableNext);
+      }
     }, "replaceWith");
   }
   if (!proto.remove) {

@@ -3328,3 +3328,5 @@
 - 在 `window.js` 补全 `all: revert-layer/initial/unset/inherit` 与单属性 `revert-layer` 跨层快照恢复并缓存样式规则解析；同步在 `input.cp` `hitTest` 补全 `z_index` / `position != static` 层级优先命中。
 ### Phase 744 — `ChildNode` (`before`/`after`/`replaceWith`/`remove`) 与 `textContent` 批量修复 (+116 子测试)
 - 在 `node-base.js` 与 `window.js` 补全 `ChildNode` 原型方法及 `Document`/`DocumentType`/`Element` `textContent` 规范行为，`ChildNode-*` 与 `Node-textContent` 合计净增 +116 子测试通过。
+### Phase 745 — `DocumentType-remove` / `CharacterData-remove` 全绿与 8 项 `/dom/nodes/` 基线收紧
+- 补齐 `Node`/`DocumentType` `parentNode = null` 初始化与 `replaceWith` 原生同步，打通 `DocumentType-remove.html` (4/4) 与 `CharacterData-remove.html` (12/12)；同时复测收紧 `/dom/nodes/` 8 项 `FAIL/TIMEOUT→PASS`，WPT `PASS` 基线达到 `7,197/9,725 (74.01%)`。

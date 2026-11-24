@@ -6,6 +6,7 @@
 
 | 测试时间 | 目录 / Filter | 分片 | 用例数 | 结果摘要 | 备注 |
 | :--- | :--- | :--- | :---: | :--- | :--- |
+| 2026-11-25 07:29 | `Phase 745`: `DocumentType-remove` / `CharacterData-remove` & 8x `dom/nodes` 收紧 | 定向 | 14 | `DocumentType-remove` (4/4), `CharacterData-remove` (12/12) PASS; 8x FAIL/TO→PASS 已收紧 | `--smoke` 3/3 PASS |
 | 2026-11-25 07:25 | `Phase 744`: `ChildNode` & `textContent` | 定向 | 6 | `before` 0→35/45, `after` 9→42/45, `replaceWith` 0→26/33, `textContent` 47→65/81 (+116) | `--smoke` 3/3 PASS |
 | 2026-11-25 07:17 | `Phase 743`: `all` + `revert-layer` & `_parsedRulesCache` & `hitTest` | 定向 | 3 | `layer-basic` PASS, `layer-important` PASS | `--smoke` 3/3 PASS |
 | 2026-11-25 07:06 | `Phase 742`: `@layer` 级联 & `@page` `margin` | 定向 | 4 | `page-rule-declarations-001`, `layer-basic` (34/34), `layer-important` (9/9) **PASS** | `--smoke` 3/3 PASS |

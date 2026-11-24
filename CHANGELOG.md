@@ -4098,3 +4098,8 @@
   - `src/js/shim/node-base.js`: 新增 `convertNodesToFragment` 与 `installChildNodeMethods`（`before`/`after`/`replaceWith`/`remove`）并挂载至 `CharacterData`/`Element`/`DocumentType`；修复 `Element.textContent` 赋值 `null/undefined` 转空串、`Document.prototype.textContent` 与 `Text.parentNode` 初始值。
   - `src/js/shim/window.js`: 为 `DocumentType.prototype` 挂载 `ChildNode` 方法与 `textContent: null`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 745**:
+  - `src/js/shim/node-base.js`: `Node()` 构造函数初始化 `this.parentNode = null`；`replaceWith` 支持空参数删除并用 `insertBefore`+`removeChild` 同步原生 DOM。
+  - `src/js/shim/index.js`, `src/js/shim/window.js`: `DocumentType` 与 `createDocumentType` 初始 `parentNode = null`。
+  - `test/wpt/wpt-expectations.json`: 将 `/dom/nodes/` 8 项已实测通过的 `FAIL/TIMEOUT` 用例收紧为 `PASS`（`PASS` 总数 7,197）。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
