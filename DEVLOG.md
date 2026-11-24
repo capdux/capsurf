@@ -3039,3 +3039,7 @@
 ### Phase 634: `scale` 校验与 `evalCssLengthExpr` 支持 `sign()`/`abs()` 全绿
 - **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：`cssom.js` `prop === "scale"` 在检查量纲前剥离 `sign(...)`/`progress(...)`；`window.js` `evalCssLengthExpr` 新增 `sign()`/`abs()` 数学函数求值，且 `evalScaleNum` 自动补全 EOF 未闭合括号。
 - **WPT & Smoke 验收**：`scale-parsing-valid.html` (32/32) & `scale-parsing-computed.html` (38/38) PASS，`--smoke` 3/3 suites PASS。
+
+### Phase 635: `background-position-{x,y}-valid` & `background-size-computed` 全绿
+- **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：`cssom.js` `background-position*` 改用 `splitTopLevelComma` 逐层调用 `canonicalizeCalcToken`；`window.js` 新增 `background-size` 计算值求值（`evalLinLenPctTok` + 负长度 clamp 为 `0px`）与 `x-start`/`y-start`/`x-end`/`y-end` 归一化。
+- **WPT & Smoke 验收**：`background-position-x-valid`、`background-position-y-valid`、`background-size-computed` PASS，`--smoke` 3/3 suites PASS。

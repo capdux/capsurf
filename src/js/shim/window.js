@@ -8990,10 +8990,9 @@ function installWindow(global) {
         if (tc) toks.push(tc);
         const norm1 = (t) => {
           const tl = t.toLowerCase();
-          if (tl === "left" || tl === "top") return "0%";
+          if (tl === "left" || tl === "top" || tl === "x-start" || tl === "y-start") return "0%";
           if (tl === "center") return "50%";
-          if (tl === "right" || tl === "bottom") return "100%";
-          if (tl === "x-start" || tl === "x-end" || tl === "y-start" || tl === "y-end") return tl;
+          if (tl === "right" || tl === "bottom" || tl === "x-end" || tl === "y-end") return "100%";
           return evalLinLenPctTok(t);
         };
         if (toks.length === 1) return norm1(toks[0]);
@@ -9012,6 +9011,27 @@ function installWindow(global) {
           return off;
         }
         return layer;
+      }).join(", "));
+    }
+    const bgSizeRaw = (computedMap.get("background-size") || "").trim();
+    if (bgSizeRaw && bgSizeRaw.toLowerCase() !== "auto") {
+      const bsLayers = [];
+      let sCur = "", sD = 0;
+      for (let i = 0; i < bgSizeRaw.length; i++) {
+        const ch = bgSizeRaw[i];
+        if (ch === "(") sD++; else if (ch === ")" && sD > 0) sD--;
+        if (sD === 0 && ch === ",") { bsLayers.push(sCur.trim()); sCur = ""; }
+        else sCur += ch;
+      }
+      if (sCur.trim()) bsLayers.push(sCur.trim());
+      computedMap.set("background-size", bsLayers.map((layer) => {
+        const toks = splitCssTopLevelWhitespace(layer);
+        return toks.map((tk) => {
+          const tl = tk.toLowerCase();
+          if (tl === "auto" || tl === "cover" || tl === "contain") return tl;
+          const ev = evalLinLenPctTok(tk);
+          return /^-[\d.]+px$/.test(ev) ? "0px" : ev;
+        }).join(" ");
       }).join(", "));
     }
     const curRaw = (computedMap.get("cursor") || "").trim();

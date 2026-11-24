@@ -2217,3 +2217,7 @@
 ### Phase 634: `scale` 校验与 `evalCssLengthExpr` 支持 `sign()`/`abs()` 全绿
 - **Filter `/css/css-transforms/parsing/scale-parsing-valid` & `/css/css-transforms/parsing/scale-parsing-computed`**: **FAIL->PASS (2/2: 32/32 + 38/38)**（`cssom.js` `prop === "scale"` 剥离 `sign(...)`/`progress(...)` 后再校验量纲单位；`window.js` `evalCssLengthExpr` 新增 `sign()`/`abs()` 函数求值并在 `evalScaleNum` 自动补全未闭合括号）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 635: `background-position-{x,y}-valid` & `background-size-computed` 全绿
+- **Filter `background-position-x-valid` / `background-position-y-valid` / `background-size-computed`**: **FAIL->PASS (3/3)**（`cssom.js` `background-position*` 改用 `splitTopLevelComma` 按图层调用 `canonicalizeCalcToken`；`window.js` 新增 `background-size` 计算值求值并夹紧负长度为 `0px`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

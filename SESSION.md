@@ -7990,3 +7990,7 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`cssom.js` & `window.js`**：`prop === "scale"` 剥离 `sign()`/`progress()` 后校验量纲，`evalCssLengthExpr` 支持 `sign()`/`abs()` 且 `evalScaleNum` 自动补全未闭合括号。
   2. **全绿验证**：`scale-parsing-valid.html` **FAIL->PASS (32/32)**、`scale-parsing-computed.html` **FAIL->PASS (38/38)**、`--smoke` **3/3 suites, 6/6 tests PASS**。
   3. **子智能体并发汇报**：`dd837439` 完成 `/css/css-grid/` 全量摸底（**206/872 PASS**，含 39 项意外 PASS），已接力派发 `3681428a`（`19710`, `/css/css-backgrounds/parsing/`）。
+- **[Agent]**: 完成 Phase 635（`src/js/shim/cssom.js`, `src/js/shim/window.js`）：
+  1. **`cssom.js` & `window.js`**：`background-position*` 改用 `splitTopLevelComma` 逐层规范化 `calc()`；`window.js` 补全 `background-size` 计算值求值与负值归零。
+  2. **全绿验证**：`background-position-x-valid`、`background-position-y-valid`、`background-size-computed` **3/3 FAIL->PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+  3. **子智能体并发汇报**：`3681428a` 完成 `/css/css-backgrounds/parsing/` 摸底（**49/74 PASS**）；`960d3492` 完成 `/css/css-text-decor/` 全量摸底（**40/41 PASS**）；已接力派发 `65eba7f3`（`19710`, `/css/css-masking/`）。

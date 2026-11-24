@@ -2817,7 +2817,7 @@
       if (/^calc\(/i.test(s)) return canonicalizeCalcToken(s);
     }
     if (key === "background-position" || key === "background-position-x" || key === "background-position-y") {
-      return splitCssTokens(s).map((tok) => (/^calc\(/i.test(tok) ? canonicalizeCalcToken(tok) : tok)).join(" ");
+      return splitTopLevelComma(s).map((layer) => splitCssTokens(layer).map((tok) => (/^calc\(/i.test(tok) ? canonicalizeCalcToken(tok) : tok)).join(" ")).join(", ");
     }
     if (key === "margin-trim") {
       const p = splitCssTokens(s.toLowerCase());
