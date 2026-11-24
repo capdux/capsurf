@@ -4509,8 +4509,8 @@
     "reason": "T18 enrollment (css-masking): measured PASS"
   },
   "/css/css-masking/parsing/clip-path-computed.html": {
-    "expected": "FAIL",
-    "reason": "T18 enrollment (css-masking): 17/21 subtests pass"
+    "expected": "PASS",
+    "reason": null
   },
   "/css/css-masking/parsing/clip-path-invalid.html": {
     "expected": "PASS",

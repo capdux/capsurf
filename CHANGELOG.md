@@ -3962,3 +3962,7 @@
 - **Phase 711**:
   - `src/js/shim/window.js`: 提取共用 `parsePctPx`/`sub100Sum`，新增 `resolvePos` 规范化 `circle(at ...)`/`ellipse(at ...)` 的 1-4 值 `<position>`（含 2 值独立 X/Y 与 3/4 值边关键词偏移计算）。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 712**:
+  - `src/js/shim/selector.js`: 拒绝 `::view-transition(...)` 带括号参数，修复 `pseudo-elements-invalid.html` 3/675 失败子测试。
+  - `test/wpt/wpt-expectations.json`: 将已通过的 `/css/css-masking/parsing/clip-path-computed.html` 收紧为 `PASS`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

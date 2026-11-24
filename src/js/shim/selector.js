@@ -173,6 +173,7 @@ function canonicalizeComplexSelector(raw, inHas, inFunc) {
         if (!KNOWN_PSEUDO_CLASSES.has(pName)) return null;
       }
       if (j < s.length && s[j] === "(") {
+        if (pName === "::view-transition") return null;
         let k = j + 1, dp = 1, q = "";
         while (k < s.length && dp > 0) {
           if (q) {

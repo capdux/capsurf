@@ -3262,3 +3262,5 @@
 - 在 `window.js` 将 `rect()`/`xywh()` 计算值按规范折算为等价 `inset()`（含 `100% - (x + w)` 线性组合及 `calc(0% - Npx)` round-trip），并在 `cssom.js` 为 `shape-margin` 规范化前导 `+` 与 `.5px`，一次性打通 `rect-function-computed.html`、`xywh-function-computed.html` 与 `shape-margin-002.html`。
 ### Phase 711 — `circle(at ...)`/`ellipse(at ...)` 1-4 值 `<position>` 计算值全覆盖
 - 在 `window.js` 复用 `sub100Sum` 实现完整 `resolvePos`，正确区分 2 值独立 X/Y 轴与 3/4 值边关键词偏移，一举打通 `shape-outside-circle-002.html` (136/136) 与 `shape-outside-ellipse-002.html` (136/136)。
+### Phase 712 — `::view-transition(...)` 参数校验收口与 `clip-path-computed` 预期收紧
+- 在 `selector.js` 中拒绝 `::view-transition` 后的括号参数（`::view-transition(*)`/`(valid)`/`(root)`），并将 Phase 710-711 顺带打通的 `clip-path-computed.html` 收紧为 `PASS`。
