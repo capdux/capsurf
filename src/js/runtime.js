@@ -4006,6 +4006,58 @@
           if (slashParts.length === 2 && splitCssTokens(slashParts[1].trim()).length !== 1) return false;
           return true;
         }
+        if (fn === "lab" || fn === "oklab" || fn === "lch" || fn === "oklch") {
+          if (inner.includes(",")) return false;
+          const slashParts = [];
+          let cur = "", d = 0;
+          for (let i = 0; i < inner.length; i++) {
+            const ch = inner[i];
+            if (ch === "(") d++; else if (ch === ")" && d > 0) d--;
+            if (d === 0 && ch === "/") { slashParts.push(cur.trim()); cur = ""; } else cur += ch;
+          }
+          slashParts.push(cur.trim());
+          if (slashParts.length > 2) return false;
+          const mainToks = splitCssTokens(slashParts[0]);
+          if (mainToks.length !== 3) return false;
+          const isVal = (s, allowPct, allowAng) => {
+            if (s === "none") return true;
+            if (/^(?:calc|min|max|clamp)\(/i.test(s)) return true;
+            if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(s)) return true;
+            if (allowPct && /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?%$/i.test(s)) return true;
+            if (allowAng && /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?(?:deg|rad|grad|turn)$/i.test(s)) return true;
+            return false;
+          };
+          const isLch = fn === "lch" || fn === "oklch";
+          if (!isVal(mainToks[0], true, false) || !isVal(mainToks[1], true, false) || !isVal(mainToks[2], !isLch, isLch)) return false;
+          if (slashParts.length === 2) {
+            const aToks = splitCssTokens(slashParts[1]);
+            if (aToks.length !== 1 || !isVal(aToks[0], true, false)) return false;
+          }
+          return true;
+        }
+        if (fn === "color") {
+          if (inner.includes(",")) return false;
+          const slashParts = [];
+          let cur = "", d = 0;
+          for (let i = 0; i < inner.length; i++) {
+            const ch = inner[i];
+            if (ch === "(") d++; else if (ch === ")" && d > 0) d--;
+            if (d === 0 && ch === "/") { slashParts.push(cur.trim()); cur = ""; } else cur += ch;
+          }
+          slashParts.push(cur.trim());
+          if (slashParts.length > 2) return false;
+          const mainToks = splitCssTokens(slashParts[0]);
+          if (mainToks.length !== 4) return false;
+          const SP = new Set(["srgb", "srgb-linear", "display-p3", "display-p3-linear", "a98-rgb", "prophoto-rgb", "rec2020", "xyz", "xyz-d50", "xyz-d65"]);
+          if (!SP.has(mainToks[0])) return false;
+          const isCh = (s) => s === "none" || /^(?:calc|min|max|clamp)\(/i.test(s) || /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?%?$/i.test(s);
+          if (!isCh(mainToks[1]) || !isCh(mainToks[2]) || !isCh(mainToks[3])) return false;
+          if (slashParts.length === 2) {
+            const aToks = splitCssTokens(slashParts[1]);
+            if (aToks.length !== 1 || !isCh(aToks[0])) return false;
+          }
+          return true;
+        }
         return true;
       }
       if (!/^[a-zA-Z]+$/.test(rawTrimmed)) return false;
@@ -4033,6 +4085,10 @@
         "moccasin", "navajowhite", "oldlace", "olivedrab", "orangered", "orchid",
         "palegoldenrod", "palegreen", "paleturquoise", "palevioletred", "papayawhip",
         "peachpuff", "peru", "pink", "plum", "powderblue", "rosybrown", "royalblue",
+        "activetext", "buttonborder", "buttonface", "buttontext", "canvas", "canvastext",
+        "field", "fieldtext", "graytext", "highlight", "highlighttext", "linktext",
+        "mark", "marktext", "selecteditem", "selecteditemtext", "visitedtext",
+        "accentcolor", "accentcolortext",
         "saddlebrown", "salmon", "sandybrown", "seagreen", "seashell", "sienna",
         "skyblue", "slateblue", "slategray", "slategrey", "snow", "springgreen",
         "steelblue", "tan", "thistle", "tomato", "turquoise", "violet", "wheat",

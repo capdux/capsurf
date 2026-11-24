@@ -3924,3 +3924,6 @@
 - **Phase 701**:
   - `src/js/shim/cssom.js`: `COUNTER_STYLE_RESERVED_NAMES` 与 `parseCounterStyleRule` 补齐 `@counter-style` 禁用名与 `system`/`pad`/`additive-symbols`/`negative`/`fallback`/`range`/`prefix`/`suffix` 严格校验。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 702**:
+  - `src/js/shim/cssom.js`: `isValidColor` 新增 19 个 CSS System Colors 关键字与 `lab`/`oklab`/`lch`/`oklch`/`color()` 通道数量、色空间与单位合法性校验。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

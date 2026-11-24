@@ -3242,3 +3242,5 @@
 - 提升 `resolveContainerW` 与 `evalSignCalls` 作用域并为 `font-weight`/`font-style` 接入容器 `cqw` 单位求值，打通 `/css/css-fonts/parsing/font-weight-computed.html` 全部 58/58 子测试。
 ### Phase 701 — `@counter-style` 禁用名与描述符语法校验闭环
 - 在 `cssom.js` `parseCounterStyleRule` 中补齐内置列表符号禁用名与 `system`/`pad`/`additive-symbols`/`negative`/`fallback`/`range`/`prefix`/`suffix` 描述符严格校验，使 `@counter-style` 7 项回归测试全部 PASS。
+### Phase 702 — CSS System Colors 与 `lab`/`lch`/`color()` 语法校验闭环
+- 在 `cssom.js` `isValidColor` 中补全 19 个系统色关键字以及 `lab`/`oklab`/`lch`/`oklch`/`color()` 的色空间、通道数和单位校验，一次性打通 `color-valid-system-color` (19/19)、`color-invalid-lab` (18/18) 与 `color-invalid-color-function` (124/124)。
