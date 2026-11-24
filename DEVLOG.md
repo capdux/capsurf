@@ -2772,3 +2772,7 @@
 ### Phase 568: `view-transition-*` 全绿与 `css-text-decor/parsing` 31/31 基线收紧
 - **`view-transition-*` (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：补全 `<custom-ident>` 文法校验与 `STANDARD_COMPUTED_LONGHANDS` 默认值、`revert`/`revert-layer` 回退及 `match-element` 规范化，`view-transition-*` 7/7 PASS。
 - **基线收紧与验收**：收紧 `/css/css-text-decor/parsing/` 5 项为 `PASS`（31/31 全绿），`--smoke` 3/3 suites PASS。
+
+### Phase 569: `/css/css-text-decor/` 41/41 全绿闭环
+- **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：`normalizeCssSpecifiedValue` 顶部透传 CSS 全局关键字；`text-decoration-thickness` 支持负值；新增 `text-shadow` 完整解析与计算值；提取 `evalLinLenPctTok` 统一求值并补全 `text-decor` 继承与默认初始值。
+- **WPT & Smoke 验收**：`/css/css-text-decor/` **41/41 PASS (100% ALL GREEN)**、`--smoke` **3/3 suites PASS**。

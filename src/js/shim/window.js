@@ -6284,6 +6284,7 @@ function installWindow(global) {
     "white-space-collapse", "text-wrap-mode", "text-wrap-style", "text-wrap",
     "letter-spacing", "word-spacing", "cursor", "hyphenate-character", "hyphenate-limit-chars", "interactivity", "caret-color",
     "text-combine-upright", "text-orientation", "writing-mode",
+    "text-emphasis-color", "text-emphasis-position", "text-emphasis-style", "text-shadow", "text-underline-position", "text-decoration-skip-ink",
   ]);
 
   function getDefaultDisplayForElement(element) {
@@ -8351,10 +8352,46 @@ function installWindow(global) {
     if ((computedMap.get("text-justify") || "").trim().toLowerCase() === "distribute") {
       computedMap.set("text-justify", "inter-character");
     }
+    const isAhemText = /ahem/i.test(computedMap.get("font-family") || computedMap.get("font") || "");
+    const chUnitText = isAhemText ? fontSize : ((typeof globalThis !== "undefined" && typeof globalThis.__capsurf_tty_cell_w === "number" && globalThis.__capsurf_tty_cell_w > 0) ? globalThis.__capsurf_tty_cell_w : 8);
+    const evalLinLenPctTok = (tok) => {
+      const tl = tok.toLowerCase();
+      if (/^[+-]?0(?:\.0+)?$/.test(tl)) return "0px";
+      if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)%$/.test(tl)) return tl;
+      if (tl.indexOf("%") === -1) {
+        const rep = tl.replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))ch\b/gi, (_, n) => String(Number(n) * chUnitText) + "px");
+        const px = evalCssLengthExpr(rep, 0, fontSize);
+        if (px !== null) return formatCssPx(px);
+      } else if (/^calc\(/i.test(tl)) {
+        const inner = tl.slice(5, -1).trim();
+        const evalLin = (pctV, pxV) => {
+          const e = inner
+            .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))%/g, (_, n) => String(Number(n) * pctV))
+            .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))em\b/gi, (_, n) => String(Number(n) * fontSize * pxV))
+            .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))ch\b/gi, (_, n) => String(Number(n) * chUnitText * pxV))
+            .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))px\b/gi, (_, n) => String(Number(n) * pxV));
+          if (/^[\d+\-*/().\s]+$/.test(e)) {
+            try {
+              const v = Function("return (" + e + ")")();
+              if (typeof v === "number" && isFinite(v)) return v;
+            } catch (_) {}
+          }
+          return null;
+        };
+        const pxC = evalLin(0, 1);
+        const pctC = evalLin(1, 0);
+        if (pxC !== null && pctC !== null) {
+          const pR = Number(pctC.toFixed(6));
+          const xR = Number(pxC.toFixed(6));
+          if (xR === 0) return String(pR) + "%";
+          if (pR === 0) return formatCssPx(xR);
+          return "calc(" + String(pR) + "%" + (xR < 0 ? " - " + formatCssPx(-xR) : " + " + formatCssPx(xR)) + ")";
+        }
+      }
+      return tl;
+    };
     const tdiRaw = (computedMap.get("text-decoration-inset") || "").trim();
     if (tdiRaw && tdiRaw.toLowerCase() !== "auto") {
-      const isAhem = /ahem/i.test(computedMap.get("font-family") || computedMap.get("font") || "");
-      const chUnit = isAhem ? fontSize : ((typeof globalThis !== "undefined" && typeof globalThis.__capsurf_tty_cell_w === "number" && globalThis.__capsurf_tty_cell_w > 0) ? globalThis.__capsurf_tty_cell_w : 8);
       const tdiParts = [];
       let dpt = 0, stIdx = 0;
       for (let ti = 0; ti < tdiRaw.length; ti++) {
@@ -8369,45 +8406,66 @@ function installWindow(global) {
       }
       const tailSeg = tdiRaw.slice(stIdx).trim();
       if (tailSeg) tdiParts.push(tailSeg);
-      const tdiToks = tdiParts.map((tok) => {
-        const tl = tok.toLowerCase();
-        if (/^[+-]?0(?:\.0+)?$/.test(tl)) return "0px";
-        if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)%$/.test(tl)) return tl;
-        if (tl.indexOf("%") === -1) {
-          const rep = tl
-            .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))ch\b/gi, (_, n) => String(Number(n) * chUnit) + "px");
-          const px = evalCssLengthExpr(rep, 0, fontSize);
-          if (px !== null) return formatCssPx(px);
-        } else if (/^calc\(/i.test(tl)) {
-          const inner = tl.slice(5, -1).trim();
-          const evalLin = (pctV, pxV) => {
-            const e = inner
-              .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))%/g, (_, n) => String(Number(n) * pctV))
-              .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))em\b/gi, (_, n) => String(Number(n) * fontSize * pxV))
-              .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))ch\b/gi, (_, n) => String(Number(n) * chUnit * pxV))
-              .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))px\b/gi, (_, n) => String(Number(n) * pxV));
-            if (/^[\d+\-*/().\s]+$/.test(e)) {
-              try {
-                const v = Function("return (" + e + ")")();
-                if (typeof v === "number" && isFinite(v)) return v;
-              } catch (_) {}
-            }
-            return null;
-          };
-          const pxC = evalLin(0, 1);
-          const pctC = evalLin(1, 0);
-          if (pxC !== null && pctC !== null) {
-            const pR = Number(pctC.toFixed(6));
-            const xR = Number(pxC.toFixed(6));
-            if (xR === 0) return String(pR) + "%";
-            if (pR === 0) return formatCssPx(xR);
-            return "calc(" + String(pR) + "%" + (xR < 0 ? " - " + formatCssPx(-xR) : " + " + formatCssPx(xR)) + ")";
-          }
-        }
-        return tl;
-      });
+      const tdiToks = tdiParts.map(evalLinLenPctTok);
       if (tdiToks.length === 2 && tdiToks[0] === tdiToks[1]) tdiToks.pop();
       computedMap.set("text-decoration-inset", tdiToks.join(" "));
+    }
+    const tdtRaw = (computedMap.get("text-decoration-thickness") || "").trim();
+    if (tdtRaw && tdtRaw.toLowerCase() !== "auto" && tdtRaw.toLowerCase() !== "from-font") {
+      computedMap.set("text-decoration-thickness", evalLinLenPctTok(tdtRaw));
+    }
+    const tuoRaw = (computedMap.get("text-underline-offset") || "").trim();
+    if (tuoRaw && tuoRaw.toLowerCase() !== "auto") {
+      computedMap.set("text-underline-offset", evalLinLenPctTok(tuoRaw));
+    }
+    const textDecorDefs = [
+      ["text-decoration-line", "none"],
+      ["text-decoration-style", "solid"],
+      ["text-emphasis-position", "auto"],
+      ["text-emphasis-style", "none"],
+      ["text-underline-position", "auto"],
+      ["text-decoration-skip-ink", "auto"]
+    ];
+    for (let i = 0; i < textDecorDefs.length; i++) {
+      const [dk, dv] = textDecorDefs[i];
+      const cur = (computedMap.get(dk) || "").trim().toLowerCase();
+      if (!cur || cur === "initial" || cur === "revert" || cur === "revert-layer") {
+        computedMap.set(dk, dv);
+      }
+    }
+    const tshRaw = (computedMap.get("text-shadow") || "").trim();
+    if (!tshRaw || tshRaw.toLowerCase() === "none" || tshRaw.toLowerCase() === "initial" || tshRaw.toLowerCase() === "revert" || tshRaw.toLowerCase() === "revert-layer") {
+      computedMap.set("text-shadow", "none");
+    } else {
+      const tshLayers = [];
+      let lCur = "", lD = 0;
+      for (let i = 0; i < tshRaw.length; i++) {
+        const ch = tshRaw[i];
+        if (ch === "(") lD++; else if (ch === ")" && lD > 0) lD--;
+        if (lD === 0 && ch === ",") { tshLayers.push(lCur.trim()); lCur = ""; }
+        else lCur += ch;
+      }
+      if (lCur.trim()) tshLayers.push(lCur.trim());
+      computedMap.set("text-shadow", tshLayers.map((layer) => {
+        const toks = [];
+        let tc = "", td = 0;
+        for (let i = 0; i < layer.length; i++) {
+          const ch = layer[i];
+          if (ch === "(") td++; else if (ch === ")" && td > 0) td--;
+          if (td === 0 && /\s/.test(ch)) { if (tc) { toks.push(tc); tc = ""; } }
+          else tc += ch;
+        }
+        if (tc) toks.push(tc);
+        let col = elColor;
+        const lens = [];
+        for (let i = 0; i < toks.length; i++) {
+          const t = toks[i];
+          if (/^[+-]?(?:\d|\.)/.test(t) || /^calc\(/i.test(t)) lens.push(evalLinLenPctTok(t));
+          else col = (t.toLowerCase() === "currentcolor") ? elColor : normCol(t);
+        }
+        if (lens.length === 2) lens.push("0px");
+        return [col].concat(lens).join(" ");
+      }).join(", "));
     }
     const lsiRaw = (computedMap.get("list-style-image") || "").trim();
     if (lsiRaw && /^(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(lsiRaw)) {

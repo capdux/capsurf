@@ -1892,7 +1892,32 @@
     }
     if (prop === "text-decoration-thickness") {
       const toks = splitCssTokens(vLower);
-      return toks.length === 1 && (toks[0] === "auto" || toks[0] === "from-font" || isValidLenPct(toks[0], false));
+      return toks.length === 1 && (toks[0] === "auto" || toks[0] === "from-font" || isValidLenPct(toks[0], true));
+    }
+    if (prop === "text-shadow") {
+      if (vLower === "none") return true;
+      const layers = splitTopLevelComma(trimmed);
+      if (layers.length === 0) return false;
+      for (let li = 0; li < layers.length; li++) {
+        const toks = splitCssTokens(layers[li]);
+        if (toks.length < 2 || toks.length > 4) return false;
+        let colorCount = 0;
+        const lens = [];
+        for (let ti = 0; ti < toks.length; ti++) {
+          const tok = toks[ti];
+          if (!tok.includes("%") && isValidLenPct(tok, true)) {
+            lens.push(tok);
+          } else if (isValidColor(tok)) {
+            colorCount++;
+            if (colorCount > 1) return false;
+          } else {
+            return false;
+          }
+        }
+        if (lens.length < 2 || lens.length > 3) return false;
+        if (lens.length === 3 && (lens[2].includes("%") || !isValidLenPct(lens[2], false))) return false;
+      }
+      return true;
     }
     if (prop === "text-decoration-skip-spaces") {
       const toks = splitCssTokens(vLower);
@@ -2369,6 +2394,7 @@
   function normalizeCssSpecifiedValue(key, raw) {
     if (!raw || key.startsWith("--")) return raw;
     const s = String(raw).trim();
+    if (/^(?:inherit|initial|unset|revert|revert-layer)$/i.test(s)) return s.toLowerCase();
     if (/\bvar\(/i.test(s)) return s;
     if (NUM_NORM_PROPS.has(key) && /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(s)) {
       const n = Number(s);
@@ -3247,6 +3273,23 @@
       if (p.length === 1 && (p[0] === "none" || p[0] === "spelling-error" || p[0] === "grammar-error")) return p[0];
       const order = ["underline", "overline", "line-through", "blink"];
       return order.filter(k => p.indexOf(k) !== -1).join(" ");
+    }
+    if (key === "text-shadow") {
+      if (s.toLowerCase() === "none") return "none";
+      const layers = splitTopLevelComma(s);
+      return layers.map((layer) => {
+        const toks = splitCssTokens(layer);
+        let col = "";
+        const lens = [];
+        for (let ti = 0; ti < toks.length; ti++) {
+          const t = toks[ti];
+          if (t === "0" || t === "+0" || t === "-0") lens.push("0px");
+          else if (/^calc\(/i.test(t)) lens.push(canonicalizeCalcToken(t));
+          else if (/^[+-]?(?:\d|\.)/.test(t) && !t.startsWith("#")) lens.push(t);
+          else col = t;
+        }
+        return (col ? [col].concat(lens) : lens).join(" ");
+      }).join(", ");
     }
     if (key === "cursor") {
       const normImg = (fn) => {

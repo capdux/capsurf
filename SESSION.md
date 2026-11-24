@@ -7634,3 +7634,9 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
      - `window.js` 将 3 个属性纳入 `STANDARD_COMPUTED_LONGHANDS`（默认 `none`/`none`/`normal`），支持 `initial`/`revert`/`revert-layer` 回退及 `maTch-element -> match-element` 规范化。
   2. **全绿验证与基线收紧**：`view-transition-*` **7/7 PASS**、`/css/css-text-decor/parsing/` **31/31 PASS**（收紧 5 项基线为 `PASS`）、`--smoke` **3/3 suites PASS**。
   3. **并行摸底汇总**：`/css/css-contain/parsing/` **4/4 PASS**、`/css/css-sizing/parsing/` **19/19 PASS**、`/css/css-text-decor/` **34/41 PASS**、`/css/css-nesting/` **11/45 PASS**。
+
+### 2026-11-24 Phase 569 (`/css/css-text-decor/` 41/41 全目录全绿闭环)
+- **[Agent]**: 自主推导并完成 Phase 569（`src/js/shim/cssom.js`, `src/js/shim/window.js`）：
+  1. **`cssom.js`**：在 `normalizeCssSpecifiedValue` 顶部透传 CSS 全局关键字（`inherit`/`initial`/`unset`/`revert`/`revert-layer`，根除 `text-decoration-line: inherit` 被归一化为空串）；`text-decoration-thickness` 放行负 `<length-percentage>`；新增 `text-shadow` 多层 `[<color>? && <length>{2,3}]` 校验与颜色前置规范序。
+  2. **`window.js`**：提取 `evalLinLenPctTok` 复用求解 `text-decoration-inset`、`text-decoration-thickness`、`text-underline-offset` 与 `text-shadow`（补齐默认颜色 `elColor` 与默认模糊半径 `0px`）；补全 `text-emphasis-*`/`text-shadow`/`text-underline-position`/`text-decoration-skip-ink` 继承集合及默认初始值。
+  3. **全绿验证**：`/css/css-text-decor/` **41/41 PASS (100% ALL GREEN)**、`--smoke` **3/3 suites, 6/6 tests PASS**。

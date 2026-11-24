@@ -1756,3 +1756,9 @@
   - `/css/css-nesting/` (`b401`): `45` files (`11 PASS / 34 FAIL`)
   - `/css/css-contain/parsing/` (`b404`): **4/4 PASS (100% ALL GREEN)**
   - `/css/css-sizing/parsing/` (`b406`): **19/19 PASS (100% ALL GREEN, 155/155 subtests)**
+
+### Phase 569 `/css/css-text-decor/` 41/41 全绿闭环 (bin_dev Phase 569, 2026-11-24)
+- **Filter `/css/css-text-decor/`**: **41/41 PASS (100% ALL GREEN)**（`inheritance.html`, `text-decoration-thickness-*`, `text-underline-offset-*`, `text-shadow/parsing/*` 全绿）：
+  - `cssom.js`：修复 `normalizeCssSpecifiedValue` 透传 CSS 全局关键字（`inherit`/`initial`/`unset`/`revert`/`revert-layer`）；`text-decoration-thickness` 放行负值；新增 `text-shadow` 完整文法校验与指定值颜色前置。
+  - `window.js`：提取 `evalLinLenPctTok` 统一求解 `text-decoration-inset` / `text-decoration-thickness` / `text-underline-offset` / `text-shadow`；将 `text-emphasis-*` / `text-shadow` / `text-underline-position` / `text-decoration-skip-ink` 纳入 `INHERITED_CSS_PROPS` 并补全默认初始值。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
