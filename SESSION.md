@@ -7816,3 +7816,10 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   2. **`cssom.js` / `element.js`**：拒绝 `--` 保留空自定义属性名。
   3. **全绿验证与基线收紧**：`variable-empty-name-reserved.html` **FAIL->PASS**（已收紧）、`variable-exponential-blowup.html` **ERROR->PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
   4. **并行摸底汇总**：`/css/css-variables/` 60/194 PASS；`/css/css-masking/parsing/` 4/28 PASS。
+
+### 2026-11-24 Phase 599 (`missing-closing-nested-fallback` & `mask-size-valid` 全绿)
+- **[Agent]**: 完成 Phase 599（`src/js/shim/window.js`, `src/js/shim/cssom.js`）：
+  1. **`window.js`**：`substitute` 修复 EOF 未闭合 `var(` 的 `j - 1` 截断并补全内层括号。
+  2. **`cssom.js`**：`mask-size` 复用 `background-size` 单值补 `"auto"` 与 `"auto auto" -> "auto"` 规范化。
+  3. **全绿验证**：`missing-closing-nested-fallback.html` **PASS**、`mask-size-valid.html` **PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+  4. **并行摸底汇总**：`/css/css-pseudo/parsing/` 1/5 PASS（5/5 符合预期）。

@@ -2828,7 +2828,7 @@
       if (parts.length === 2 && parts[0] === parts[1]) parts.pop();
       return parts.join(" ");
     }
-    if (key === "background-size") {
+    if (key === "background-size" || key === "mask-size") {
       const layers = s.split(",");
       for (let i = 0; i < layers.length; i++) {
         const p = splitCssTokens(layers[i].trim());

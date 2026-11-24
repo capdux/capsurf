@@ -2015,3 +2015,10 @@
 - **子智能体只读摸底记录**：
   - `/css/css-variables/` (`b497`, 194 files): `60 PASS / 124 FAIL / 9 TIMEOUT / 1 ERROR`
   - `/css/css-masking/parsing/` (`b501`, 28 files): `4 PASS / 24 FAIL / 0 TIMEOUT`
+
+### Phase 599: `missing-closing-nested-fallback` & `mask-size-valid` 全绿 & Pseudo Parsing 摸底
+- **Filter `/css/css-variables/missing-closing-nested-fallback`**: **PASS**（`window.js` `substitute` 修复 EOF 未闭合 `var(` 字符截断并按 `d - 1` 自动补全内层括号）。
+- **Filter `/css/css-masking/parsing/mask-size-valid`**: **PASS**（`cssom.js` `mask-size` 复用 `background-size` 规范化序列化规则）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-pseudo/parsing/` (`b502`, 5 files): `1 PASS / 4 FAIL / 0 TIMEOUT`（`tree-abiding-pseudo-elements` 39/41，`highlight-pseudos-search-text.tentative` 31/39）

@@ -6392,7 +6392,7 @@ function installWindow(global) {
           else if (val[j] === ")") d--;
           j++;
         }
-        const inside = val.slice(idx + 4, j - 1);
+        const inside = d === 0 ? val.slice(idx + 4, j - 1) : val.slice(idx + 4, j);
         let commaIdx = -1;
         let pDepth = 0;
         for (let k = 0; k < inside.length; k++) {
@@ -6404,7 +6404,8 @@ function installWindow(global) {
           }
         }
         const varName = (commaIdx === -1 ? inside : inside.slice(0, commaIdx)).trim();
-        const fallback = commaIdx === -1 ? "" : inside.slice(commaIdx + 1).trim();
+        let fallback = commaIdx === -1 ? "" : inside.slice(commaIdx + 1).trim();
+        if (d > 1 && fallback) fallback += ")".repeat(d - 1);
         let rep = computedMap.has(varName) ? computedMap.get(varName) : "";
         if (!rep && fallback) rep = fallback;
         if (rep && rep.indexOf("var(") !== -1) {

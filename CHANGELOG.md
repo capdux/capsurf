@@ -3662,3 +3662,5 @@
 - **Phase 597** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 修正 `background-size` 单值补 `"auto"` 与 `"auto auto" -> "auto"` 规范化；`background-size-valid.html` 全绿，`background-size-computed.html` 跃升至 14/16 PASS。
 
 - **Phase 598** (`src/js/shim/window.js`, `src/js/shim/cssom.js`, `src/js/shim/element/element.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 为 CSS 变量展开增加 65536 字符长度熔断防 OOM 并拒绝 `--` 空名称自定义属性；`variable-empty-name-reserved.html` 与 `variable-exponential-blowup.html` 全绿。
+
+- **Phase 599** (`src/js/shim/window.js`, `src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 修复 EOF 未闭合 `var()` 截断与括号补全，并令 `mask-size` 复用 `background-size` 序列化规则；`missing-closing-nested-fallback.html` 与 `mask-size-valid.html` 全绿。

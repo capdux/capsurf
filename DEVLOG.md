@@ -2891,3 +2891,7 @@
 ### Phase 598: `/css/css-variables/{variable-empty-name-reserved,variable-exponential-blowup}` 全绿
 - **核心修复 (`window.js`, `cssom.js`, `element.js`)**：`resolveVarsInMap` 增加 `MAX_VAR_LEN = 65536` 展开长度熔断保护（超出按 guaranteed-invalid 清除），并在 `isCssPropertySupported` / `isValidCssValue` / `declSupported` / `isValidInlinePropValue` 中拒绝 `--` 空名称自定义属性。
 - **WPT & Smoke 验收**：`variable-empty-name-reserved.html` FAIL->PASS（收紧基线）、`variable-exponential-blowup.html` ERROR->PASS、`--smoke` 3/3 suites PASS。
+
+### Phase 599: `missing-closing-nested-fallback` & `mask-size-valid` 全绿
+- **核心修复 (`window.js`, `cssom.js`)**：`substitute` 遇到 EOF 未闭合 `var(` 时保留完整切片并按括号深度 `d - 1` 补全闭合括号；`cssom.js` 中 `mask-size` 与 `background-size` 共享双值/单值规范化序列化。
+- **WPT & Smoke 验收**：`missing-closing-nested-fallback.html`、`mask-size-valid.html` PASS，`--smoke` 3/3 suites PASS。
