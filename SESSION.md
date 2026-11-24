@@ -8092,3 +8092,4 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Agent]**: 完成 Phase 662（`src/js/shim/cssom.js`）：
   1. **`cssom.js`**：`cursor` `isCursorImg` 支持渐变与 `cross-fade()`，`cursor-computed.html` 提升至 37/39（剩余 2 条为上游测试自身笔误），`--smoke` **3/3 suites, 6/6 tests PASS**。
   2. **子智能体并发汇报**：`766bec49` 完成 `/css/css-shapes/`（26/70 PASS）、`2e617092` 完成 `/css/css-overflow/`（25/33 PASS）；已接力派发 `44f94254`（`19710`, `/css/css-view-transitions/`）。
+- [Phase 663] `cssom.js` (`canonicalizeCalcToken` 保留 `0deg` 解决 `calc(0deg + 100%)`；`shape-outside` 复用 `isValidShape` 并禁用 `path()`、校验 `circle`/`ellipse`/`inset`/`xywh`/`rect` 非法逗号及 `rect`/`xywh` `round` 圆角)：`conic-gradient-calc-angle-percentage-valid`、`shape-outside-path-invalid`、`{circle,ellipse,inset,polygon-round,rect}-function-invalid` 全数 PASS，`--smoke` 3/3 PASS。

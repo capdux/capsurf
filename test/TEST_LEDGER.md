@@ -2329,3 +2329,4 @@
 ### Phase 662: `cursor` 渐变图片函数支持
 - **Filter `/css/css-ui/parsing/cursor-computed`**: `isCursorImg` 放行 `(?:repeating-)?(?:linear|radial|conic)-gradient|cross-fade`，`cursor-computed.html` 由 36/39 提升至 **37/39**（`radial-gradient` 转绿，剩余 2 条为上游 WPT 用例预期串缺失右括号及关键字笔误）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+| Phase 663 | WPT `conic-gradient-calc-angle-percentage-valid` + `shape-outside` / `shape-functions/*-invalid` | `src/js/shim/cssom.js` | `conic-gradient-calc-angle-percentage-valid` PASS; `shape-outside-path-invalid` PASS; `{circle,ellipse,inset,polygon-round,rect}-function-invalid` 5/5 PASS; `--smoke` 3/3 PASS |

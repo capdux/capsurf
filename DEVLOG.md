@@ -3150,3 +3150,6 @@
 
 ### Phase 662: `cursor` 渐变图片函数支持
 - **核心修复 (`src/js/shim/cssom.js`)**：`isCursorImg` 放行渐变函数与 `cross-fade()`，`cursor-computed.html` 提升至 37/39（剩余 2 条为上游测试自身笔误），`--smoke` 3/3 suites PASS。
+### Phase 663 — `calc(0deg + 100%)` 与 `shape-outside` / `shape-functions` 校验收口
+- `canonicalizeCalcToken` 对 `deg` 单位保留 `0deg`，使 `calc(0deg + 100%)` 规范化为 `calc(100% + 0deg)`。
+- `shape-outside` 统一复用 `clip-path` 的 `isValidShape` 验证管线（禁用 `path()`），同时提取 `isValidRoundRadii` 统一校验 `inset`/`xywh`/`rect` 的 `round` 圆角参数并禁止函数内多余逗号；将 `isValidCssPositionTokens` 提升至调用点之前消除 TDZ `ReferenceError`。

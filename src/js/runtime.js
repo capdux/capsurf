@@ -4746,11 +4746,34 @@
         }
         return true;
       }
-      if (prop === "clip-path") {
+      const isValidCssPositionTokens = (toks) => {
+        const HX = new Set(["left", "center", "right"]);
+        const VY = new Set(["top", "center", "bottom"]);
+        const is2Pos = (a, b) => {
+          if (HX.has(a) && VY.has(b)) return true;
+          if (VY.has(a) && HX.has(b)) return true;
+          if (isValidLenPct(a, true) && (VY.has(b) || isValidLenPct(b, true))) return true;
+          if (HX.has(a) && isValidLenPct(b, true)) return true;
+          return false;
+        };
+        if (toks.length === 1) return HX.has(toks[0]) || VY.has(toks[0]) || isValidLenPct(toks[0], true);
+        if (toks.length === 2) return is2Pos(toks[0], toks[1]);
+        if (toks.length === 4) {
+          const EX = new Set(["left", "right"]);
+          const EY = new Set(["top", "bottom"]);
+          if (EX.has(toks[0]) && isValidLenPct(toks[1], true) && EY.has(toks[2]) && isValidLenPct(toks[3], true)) return true;
+          if (EY.has(toks[0]) && isValidLenPct(toks[1], true) && EX.has(toks[2]) && isValidLenPct(toks[3], true)) return true;
+        }
+        return false;
+      };
+      if (prop === "clip-path" || prop === "shape-outside") {
         if (vLower === "none") return true;
         const toks = splitCssTokens(trimmed);
         if (toks.length === 0 || toks.length > 2) return false;
-        const GBOX = new Set(["content-box", "padding-box", "border-box", "margin-box", "fill-box", "stroke-box", "view-box"]);
+        if (prop === "shape-outside" && toks.length === 1 && /^(?:linear-gradient|radial-gradient|conic-gradient|repeating-linear-gradient|repeating-radial-gradient|repeating-conic-gradient|image-set|-webkit-image-set|cross-fade)\(/i.test(toks[0])) return true;
+        const GBOX = prop === "clip-path"
+          ? new Set(["content-box", "padding-box", "border-box", "margin-box", "fill-box", "stroke-box", "view-box"])
+          : new Set(["content-box", "padding-box", "border-box", "margin-box"]);
         let hasShape = false, hasBox = false;
         const isValidShape = (sh) => {
           const sm = /^([a-z-]+)\((.*)\)$/i.exec(sh);
@@ -4815,11 +4838,7 @@
             }
             return true;
           }
-          if (fn === "inset") {
-            const st = splitCssTokens(body.toLowerCase());
-            const rIdx = st.indexOf("round");
-            const pre = rIdx === -1 ? st : st.slice(0, rIdx);
-            if (pre.length < 1 || pre.length > 4 || !pre.every((t) => isValidLenPct(t, true))) return false;
+          const isValidRoundRadii = (st, rIdx) => {
             if (rIdx === -1) return true;
             const post = st.slice(rIdx + 1).join(" ");
             if (!post) return false;
@@ -4830,12 +4849,24 @@
               if (rt.length < 1 || rt.length > 4 || !rt.every((t) => isValidLenPct(t, false))) return false;
             }
             return true;
+          };
+          if (fn === "inset") {
+            if (splitTopLevelComma(body).length > 1) return false;
+            const st = splitCssTokens(body.toLowerCase());
+            const rIdx = st.indexOf("round");
+            const pre = rIdx === -1 ? st : st.slice(0, rIdx);
+            if (pre.length < 1 || pre.length > 4 || !pre.every((t) => isValidLenPct(t, true))) return false;
+            return isValidRoundRadii(st, rIdx);
           }
           if (fn === "circle" || fn === "ellipse") {
+            if (splitTopLevelComma(body).length > 1) return false;
             const st = splitCssTokens(body.toLowerCase());
             const atIdx = st.indexOf("at");
             const pre = atIdx === -1 ? st : st.slice(0, atIdx);
-            if (atIdx !== -1 && st.slice(atIdx + 1).length === 0) return false;
+            if (atIdx !== -1) {
+              const posToks = st.slice(atIdx + 1);
+              if (posToks.length === 0 || !isValidCssPositionTokens(posToks)) return false;
+            }
             if (fn === "circle") {
               if (pre.length > 1) return false;
               if (pre.length === 1 && pre[0] !== "closest-side" && pre[0] !== "farthest-side" && !isValidLenPct(pre[0], false)) return false;
@@ -4867,6 +4898,7 @@
             return true;
           }
           if (fn === "path") {
+            if (prop === "shape-outside") return false;
             const parts = splitTopLevelComma(body);
             if (parts.length < 1 || parts.length > 2) return false;
             let strTok = parts[0].trim();
@@ -4879,11 +4911,13 @@
             return strTok.slice(1, -1).trim().length > 0;
           }
           if (fn === "xywh" || fn === "rect") {
+            if (splitTopLevelComma(body).length > 1) return false;
             const st = splitCssTokens(body.toLowerCase());
             const rIdx = st.indexOf("round");
             const pre = rIdx === -1 ? st : st.slice(0, rIdx);
             if (pre.length !== 4) return false;
-            return pre.every((t) => (fn === "rect" && t === "auto") || isValidLenPct(t, fn === "rect" || pre.indexOf(t) < 2));
+            if (!pre.every((t, idx) => (fn === "rect" && t === "auto") || isValidLenPct(t, fn === "rect" || idx < 2))) return false;
+            return isValidRoundRadii(st, rIdx);
           }
           return false;
         };
@@ -5439,26 +5473,6 @@
         if (/^(?:calc|min|max|clamp)\(/i.test(t) && !/(?:px|em|rem|ex|ch|cap|ic|lh|rlh|vw|vh|vi|vb|vmin|vmax|cm|mm|q|in|pt|pc)\b/i.test(t)) return false;
         return isValidLenPct(t, false);
       }
-      const isValidCssPositionTokens = (toks) => {
-        const HX = new Set(["left", "center", "right"]);
-        const VY = new Set(["top", "center", "bottom"]);
-        const is2Pos = (a, b) => {
-          if (HX.has(a) && VY.has(b)) return true;
-          if (VY.has(a) && HX.has(b)) return true;
-          if (isValidLenPct(a, true) && (VY.has(b) || isValidLenPct(b, true))) return true;
-          if (HX.has(a) && isValidLenPct(b, true)) return true;
-          return false;
-        };
-        if (toks.length === 1) return HX.has(toks[0]) || VY.has(toks[0]) || isValidLenPct(toks[0], true);
-        if (toks.length === 2) return is2Pos(toks[0], toks[1]);
-        if (toks.length === 4) {
-          const EX = new Set(["left", "right"]);
-          const EY = new Set(["top", "bottom"]);
-          if (EX.has(toks[0]) && isValidLenPct(toks[1], true) && EY.has(toks[2]) && isValidLenPct(toks[3], true)) return true;
-          if (EY.has(toks[0]) && isValidLenPct(toks[1], true) && EX.has(toks[2]) && isValidLenPct(toks[3], true)) return true;
-        }
-        return false;
-      };
       if (prop === "perspective-origin" || prop === "object-position" || prop === "transform-origin") {
         const toks = splitCssTokens(vLower);
         if (prop === "transform-origin") {
@@ -6589,17 +6603,6 @@
         }
         return nums.length >= 1 && nums.length <= 4;
       }
-      if (prop === "shape-outside") {
-        const bm = /^(?:circle|ellipse)\(\s*(.*)\s*\)$/i.exec(trimmed);
-        if (bm) {
-          const toks = splitCssTokens(bm[1].toLowerCase());
-          const atIdx = toks.indexOf("at");
-          if (atIdx !== -1) {
-            const posToks = toks.slice(atIdx + 1);
-            if (posToks.length === 0 || !isValidCssPositionTokens(posToks)) return false;
-          }
-        }
-      }
       if (prop === "view-transition-name" || prop === "view-transition-class" || prop === "view-transition-group") {
         const toks = splitCssTokens(trimmed);
         if (toks.length === 0) return false;
@@ -6902,7 +6905,7 @@
       const entries = [];
       for (const [u, v] of combined.entries()) {
         const r = Number(v.toFixed(6));
-        if (r !== 0 || combined.size === 1 || u === "%" || u === "px") entries.push({ unit: u, val: r });
+        if (r !== 0 || combined.size === 1 || u === "%" || u === "px" || u === "deg") entries.push({ unit: u, val: r });
       }
       if (entries.length === 0) entries.push({ unit: combined.has("px") ? "px" : "", val: 0 });
       entries.sort((a, b) => {
