@@ -3845,3 +3845,6 @@
 - **Phase 677**:
   - `src/js/shim/cssom.js`: `normalizeCssSpecifiedValue("shape-outside"|"clip-path")` 中 `normCalcTok` 规范化数字（去 `+`、补前导 `0`、去尾随小数 `0`、无单位 `0` 补 `px`），并为 `inset()` 补齐 `round` 之前 1~4 边折叠逻辑。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 678**:
+  - `src/js/shim/cssom.js`: `isValidRoundRadii` 改用括号深度感知的 `splitTopLevelSlashStr` 避免误拆 `calc()` 内部 `/`；`normalizeCssSpecifiedValue("shape-outside"|"clip-path")` 为 `inset(... round ...)` 补齐水平/垂直圆角 1~4 边折叠及等值省略 `/ ry`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

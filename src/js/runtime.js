@@ -4849,11 +4849,22 @@
             }
             return true;
           }
+          const splitTopLevelSlashStr = (str) => {
+            const out = []; let cur = "", d = 0;
+            for (let i = 0; i < str.length; i++) {
+              const ch = str[i];
+              if (ch === "(") d++; else if (ch === ")" && d > 0) d--;
+              if (d === 0 && ch === "/") { out.push(cur); cur = ""; }
+              else cur += ch;
+            }
+            out.push(cur);
+            return out;
+          };
           const isValidRoundRadii = (st, rIdx) => {
             if (rIdx === -1) return true;
             const post = st.slice(rIdx + 1).join(" ");
             if (!post) return false;
-            const sp = post.split("/");
+            const sp = splitTopLevelSlashStr(post);
             if (sp.length > 2) return false;
             for (let k = 0; k < sp.length; k++) {
               const rt = splitCssTokens(sp[k]);
@@ -7608,13 +7619,28 @@
                 }
               }
               if (fnName === "inset") {
+                const collapse4 = (arr) => {
+                  let p = arr.slice();
+                  if (p.length === 4 && p[1] === p[3]) p = p.slice(0, 3);
+                  if (p.length === 3 && p[0] === p[2]) p = p.slice(0, 2);
+                  if (p.length === 2 && p[0] === p[1]) p = p.slice(0, 1);
+                  return p;
+                };
                 const rI = toks.findIndex((t) => t.toLowerCase() === "round");
-                let pre = rI === -1 ? toks : toks.slice(0, rI);
-                const post = rI === -1 ? [] : toks.slice(rI);
-                if (pre.length === 4 && pre[1] === pre[3]) pre = pre.slice(0, 3);
-                if (pre.length === 3 && pre[0] === pre[2]) pre = pre.slice(0, 2);
-                if (pre.length === 2 && pre[0] === pre[1]) pre = pre.slice(0, 1);
-                return "inset(" + pre.concat(post).join(" ") + ")" + suffix;
+                const pre = collapse4(rI === -1 ? toks : toks.slice(0, rI));
+                let postStr = "";
+                if (rI !== -1) {
+                  const rToks = toks.slice(rI + 1);
+                  const sl = rToks.indexOf("/");
+                  if (sl === -1) {
+                    postStr = " round " + collapse4(rToks).join(" ");
+                  } else {
+                    const rx = collapse4(rToks.slice(0, sl)).join(" ");
+                    const ry = collapse4(rToks.slice(sl + 1)).join(" ");
+                    postStr = " round " + (rx === ry ? rx : (rx + " / " + ry));
+                  }
+                }
+                return "inset(" + pre.join(" ") + postStr + ")" + suffix;
               }
               return fnName + "(" + toks.join(" ") + ")" + suffix;
             } else if (fnName === "polygon") {

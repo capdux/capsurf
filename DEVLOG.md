@@ -3193,3 +3193,6 @@
 - 补全 `rule-overlap`、`column/row/rule-break` 与 `column/row/rule-visibility-items` 枚举校验，5 项 WPT 与 `--smoke` 回归全数通过。
 ### Phase 677 — `shape-outside` 数字规范化与 `inset()` 边折叠
 - 为 `shape-outside`/`clip-path` 补齐数值词法规范化（去除正号 `+`、去小数尾零、无单位零补 `px`）及 `inset()` 四边对称折叠，使 `shape-outside-{circle-006,ellipse-006,polygon-005}` 全数通过且 `clip-path-valid` 无回退。
+### Phase 678 — `inset()` `round` 深度感知分隔与圆角折叠
+- 修复 `isValidRoundRadii` 直接 `split("/")` 误拆 `calc(100%/4)` 的问题，改为括号深度感知 `splitTopLevelSlashStr`。
+- 为 `inset(... round ...)` 补齐圆角 1~4 边折叠与对称 `/` 省略，使 `shape-outside-inset-009.html` 全部 14 项 inline style 用例通过。
