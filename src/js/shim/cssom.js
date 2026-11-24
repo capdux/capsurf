@@ -606,7 +606,7 @@
         }
         return false;
       }
-      if (depth !== 0 || expectVal) return false;
+      if (depth < 0 || expectVal) return false;
       if (fn === "calc" && topAddTerms.length > 1) {
         let hasNumOnly = false, hasUnit = false;
         for (let k = 0; k < topAddTerms.length; k++) {

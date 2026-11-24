@@ -6625,6 +6625,7 @@ function installWindow(global) {
       if (unit === "q") return num * (96 / 101.6);
       if (unit === "vw") return (num / 100) * 800;
       if (unit === "vh") return (num / 100) * 600;
+      if (unit === "cqw" || unit === "cqi" || unit === "cqh" || unit === "cqb") return num;
       if (unit === "ch") {
         const cw = (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_tty_cell_w === "number" && globalThis.__capsurf_tty_cell_w > 0) ? globalThis.__capsurf_tty_cell_w : 8;
         return num * cw;
@@ -6637,7 +6638,7 @@ function installWindow(global) {
     }
 
     // Fast path for simple length/percentage
-    const simple = s.match(/^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(px|%|em|rem|pt|pc|in|cm|mm|q|vw|vh|ch|lh)?$/i);
+    const simple = s.match(/^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(px|%|em|rem|pt|pc|in|cm|mm|q|vw|vh|ch|lh|cqw|cqi|cqh|cqb)?$/i);
     if (simple) {
       return resolveUnitPx(parseFloat(simple[1]), (simple[2] || "").toLowerCase());
     }
@@ -6722,7 +6723,7 @@ function installWindow(global) {
         }
       }
       // Number + optional unit
-      const numMatch = s.slice(pos).match(/^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(px|%|em|rem|pt|pc|in|cm|mm|q|vw|vh|ch|lh)?/i);
+      const numMatch = s.slice(pos).match(/^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(px|%|em|rem|pt|pc|in|cm|mm|q|vw|vh|ch|lh|cqw|cqi|cqh|cqb)?/i);
       if (numMatch) {
         pos += numMatch[0].length;
         return resolveUnitPx(parseFloat(numMatch[1]), (numMatch[2] || "").toLowerCase());
@@ -8648,9 +8649,23 @@ function installWindow(global) {
       }
       if (bc) bioToks.push(bc);
       const bioOut = bioToks.map((t) => {
-        const tl = t.toLowerCase();
+        let tc = t.replace(/;+$/, "");
+        let op = 0;
+        for (let k = 0; k < tc.length; k++) { if (tc[k] === "(") op++; else if (tc[k] === ")" && op > 0) op--; }
+        while (op > 0) { tc += ")"; op--; }
+        const tl = tc.toLowerCase();
         if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(tl)) return tl;
-        const ev = evalLinLenPctTok(t);
+        if (/^(?:calc|min|max|clamp)\(/i.test(tl)) {
+          const stripped = tl.replace(/\bsign\([^()]+\)/gi, "1");
+          if (!/(?:\d|\.)(?:px|em|rem|pt|pc|in|cm|mm|q|vw|vh|ch|lh|%)\b/i.test(stripped)) {
+            const v = evalCssLengthExpr(tc, 0, fontSize);
+            if (v !== null && isFinite(v)) return String(Number(Math.max(0, v).toFixed(6)));
+          }
+        }
+        const ev = evalLinLenPctTok(tc.replace(/\bsign\(([^()]+)\)/gi, (m, inn) => {
+          const sv = evalCssLengthExpr(inn, 0, fontSize);
+          return sv !== null ? String(Math.sign(sv)) : m;
+        }));
         if (/^-[\d.]+px$/.test(ev)) return "0px";
         return ev;
       });
@@ -8658,6 +8673,33 @@ function installWindow(global) {
       if (bioOut.length === 3 && bioOut[0] === bioOut[2]) bioOut.pop();
       if (bioOut.length === 2 && bioOut[0] === bioOut[1]) bioOut.pop();
       computedMap.set("border-image-outset", bioOut.join(" "));
+    }
+    const bisSliceRaw = (computedMap.get("border-image-slice") || "").trim();
+    if (bisSliceRaw && bisSliceRaw !== "100%") {
+      const slToks = [];
+      let sc = "", sd = 0;
+      for (let i = 0; i < bisSliceRaw.length; i++) {
+        const ch = bisSliceRaw[i];
+        if (ch === "(") sd++; else if (ch === ")" && sd > 0) sd--;
+        if (sd === 0 && /\s/.test(ch)) { if (sc) { slToks.push(sc); sc = ""; } }
+        else sc += ch;
+      }
+      if (sc) slToks.push(sc);
+      const slOut = slToks.map((t) => {
+        const tl = t.toLowerCase();
+        if (tl === "fill" || /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)%?$/.test(tl)) return tl;
+        if (/^(?:calc|min|max|clamp)\(/i.test(tl)) {
+          const pre = tl.replace(/\bsign\(([^()]+)\)/gi, (m, inn) => {
+            const sv = evalCssLengthExpr(inn, 0, fontSize);
+            return sv !== null ? String(Math.sign(sv)) : m;
+          });
+          if (pre.indexOf("%") !== -1) return evalLinLenPctTok(pre);
+          const v = evalCssLengthExpr(pre, 0, fontSize);
+          if (v !== null && isFinite(v)) return String(Number(Math.max(0, v).toFixed(6)));
+        }
+        return tl;
+      });
+      computedMap.set("border-image-slice", slOut.join(" "));
     }
     const textDecorDefs = [
       ["text-decoration-line", "none"],

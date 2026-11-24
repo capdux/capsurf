@@ -8021,3 +8021,7 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`cssom.js` & `window.js`**：新增 `font-family` 语法校验与通用字体族小写化，`shape-margin` 接入 `canonicalizeCalcToken` 与 `evalLinLenPctTok`。
   2. **全绿验证**：`font-family-invalid.html` **FAIL->PASS (7/7)**、`shape-margin-003.html` **FAIL->PASS (14/14)**、`--smoke` **3/3 suites, 6/6 tests PASS**。
   3. **子智能体并发汇报**：`d3de51a9` 完成 `/css/css-syntax/` 全量摸底（9/24 PASS），已接力派发 `b07eed50`（`19710`, `/css/css-variables/`）。
+- **[Agent]**: 完成 Phase 643（`src/js/shim/window.js`, `src/js/shim/cssom.js`）：
+  1. **`window.js` & `cssom.js`**：`evalCssLengthExpr` 接入 `cqw`/`cqi`/`cqh`/`cqb`，补全 `border-image-outset` 与 `border-image-slice` 计算值求值；`isValidCalcSyntax` 支持 EOF 未闭合左括号。
+  2. **全绿验证**：`border-image-outset-computed.html` **FAIL->PASS (7/7)**、`border-image-slice-computed.html` **FAIL->PASS (7/7)**、`calc-invalid-parsing.html` **PASS (6/6)**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+  3. **子智能体并发汇报**：`b07eed50` 完成 `/css/css-variables/` 全量摸底（63/194 PASS），已接力派发全新子智能体（`19710`, `/css/css-pseudo/`）。

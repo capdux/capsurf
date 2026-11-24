@@ -3752,3 +3752,5 @@
 - **Phase 641** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `font-size` `calc()`/`sign()` 求值与负值归零；`font-size-sign-function` 与 `font-size-relative-across-calc-ff-bug-001` 全绿。
 
 - **Phase 642** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 新增 `font-family` 语法校验与 `shape-margin` `calc()` 化简求值；`font-family-invalid` (7/7) 与 `shape-margin-003` (14/14) 全绿。
+
+- **Phase 643** (`src/js/shim/window.js`, `src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `evalCssLengthExpr` 接入容器查询单位并补全 `border-image-outset`/`border-image-slice` 计算值求值；`border-image-outset-computed` (7/7) 与 `border-image-slice-computed` (7/7) 全绿。

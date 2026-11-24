@@ -2249,3 +2249,7 @@
 ### Phase 642: `font-family-invalid` (7/7) & `shape-margin-003` (14/14) 全绿
 - **Filter `/css/css-fonts/parsing/font-family-invalid` & `/css/css-shapes/shape-outside/values/shape-margin-003`**: **FAIL->PASS (2/2: 7/7 + 14/14)**（`cssom.js` 新增 `font-family` 语法校验、通用字体族关键字小写化与 `shape-margin` `canonicalizeCalcToken` 接入；`window.js` 将 `shape-margin` 接入 `evalLinLenPctTok`）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 643: `border-image-outset-computed` (7/7) & `border-image-slice-computed` (7/7) 全绿
+- **Filter `/css/css-backgrounds/parsing/border-image-outset-computed` & `/css/css-backgrounds/parsing/border-image-slice-computed`**: **FAIL->PASS (2/2: 7/7 + 7/7)**（`window.js` 在 `evalCssLengthExpr` 接入 `cqw`/`cqi`/`cqh`/`cqb` 单位，并补全 `border-image-outset` 与 `border-image-slice` 的 `sign()`/无单位数值计算值求值；`cssom.js` 在 `isValidCalcSyntax` 允许 EOF 未闭合左括号）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
