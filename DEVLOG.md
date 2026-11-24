@@ -3170,3 +3170,6 @@
 ### Phase 669 — `content: counter(\})` 与 `background-image` 非法值校验收口
 - 在 `isValidCssValue` 的顶层花括号拒绝逻辑前先剥离 `\\.` 转义序列，放行合法的 CSS 转义标识符（如 `counter(\})`）。
 - 补全 `background-image` 逗号分层的 `<image> | none` 校验、`radial-gradient` 半径非负与形状参数数量校验，以及 `cross-fade()` 参数百分比范围 `[0,100]` 校验。
+### Phase 670 — `flood-color` / `lighting-color` / `color-interpolation-filters` / `dominant-baseline` 收口
+- 在 `cssom.js` 的已知属性集合、语法校验与指定值规范化中补全 `flood-color`、`lighting-color`、`color-interpolation-filters` 与 `dominant-baseline`。
+- 在 `window.js` 中补全 `flood-color`（初始 `rgb(0, 0, 0)`）、`lighting-color`（初始 `rgb(255, 255, 255)`）及继承属性 `color-interpolation-filters`（初始 `linearrgb`）的计算值解析与 `CSSStyleDeclaration` 属性暴露，并通过 10 项 WPT 与 `--smoke` 回归。

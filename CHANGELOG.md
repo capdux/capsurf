@@ -3816,3 +3816,8 @@
 - **Phase 669**:
   - `src/js/shim/cssom.js`: `isValidCssValue` 在花括号检测前剔除反斜杠转义序列（修复 `content: counter(\})` 与 `counters(\}, ".")`）；为 `background-image` 补齐图层类型校验、`radial-gradient` 非负半径校验及 `cross-fade()` 百分比 `[0,100]` 与 `<image>|<color>` 校验。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 670**:
+  - `src/js/shim/cssom.js`: `CSS_PROPERTIES` 补齐 `color-interpolation-filters`、`dominant-baseline`、`flood-color`、`lighting-color`；`isValidCssValue` 新增 `color-interpolation-filters` 与 `dominant-baseline` 校验；`normalizeCssSpecifiedValue` 支持 `color-interpolation-filters` 小写化与 `flood-color`/`lighting-color` 颜色规范化。
+  - `src/js/shim/window.js`: `INHERITED_CSS_PROPS`、`COMPUTED_STYLE_PROPS`、`getPropertyValue` 兜底及颜色/关键词计算值逻辑补齐 `flood-color`（默认 `rgb(0, 0, 0)`）、`lighting-color`（默认 `rgb(255, 255, 255)`）与 `color-interpolation-filters`（默认 `linearrgb`）。
+  - `test/wpt/wpt-expectations.json`: 将 `color-interpolation-filters-computed.html` 与 `color-interpolation-filters-parsing-valid.html` 收紧为 `PASS`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

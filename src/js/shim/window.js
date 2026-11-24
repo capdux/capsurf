@@ -6442,7 +6442,7 @@ function installWindow(global) {
     "text-combine-upright", "text-orientation", "writing-mode",
     "text-emphasis-color", "text-emphasis-position", "text-emphasis-style", "text-shadow", "text-underline-position", "text-decoration-skip-ink",
     "border-collapse", "border-spacing", "caption-side", "empty-cells",
-    "image-orientation", "image-rendering", "image-resolution", "accent-color", "color-scheme",
+    "image-orientation", "image-rendering", "image-resolution", "accent-color", "color-scheme", "color-interpolation-filters",
     "ruby-align", "ruby-position", "ruby-merge", "ruby-overhang",
     "list-style-image", "list-style-position", "list-style-type",
     "font-feature-settings", "font-kerning", "font-stretch", "font-width", "font-variant",
@@ -8764,14 +8764,19 @@ function installWindow(global) {
     const rawCol = (computedMap.get("color") || "rgb(0, 0, 0)").trim();
     const elColor = rawCol.toLowerCase() === "currentcolor" ? "rgb(0, 0, 0)" : normCol(rawCol);
     computedMap.set("color", elColor);
-    for (const ck of ["text-decoration-color", "text-emphasis-color", "outline-color", "background-color", "border-top-color", "border-right-color", "border-bottom-color", "border-left-color", "column-rule-color"]) {
+    for (const ck of ["text-decoration-color", "text-emphasis-color", "outline-color", "background-color", "border-top-color", "border-right-color", "border-bottom-color", "border-left-color", "column-rule-color", "flood-color", "lighting-color"]) {
       const cv = (computedMap.get(ck) || "").trim();
-      if (ck === "background-color" && (!cv || cv.toLowerCase() === "transparent")) {
+      const cvLow = cv.toLowerCase();
+      if (ck === "background-color" && (!cv || cvLow === "transparent")) {
         computedMap.set(ck, "rgba(0, 0, 0, 0)");
-      } else if (ck === "outline-color" && (!cv || cv.toLowerCase() === "auto")) {
+      } else if (ck === "flood-color" && (!cv || cvLow === "initial" || cvLow === "revert" || cvLow === "revert-layer")) {
+        computedMap.set(ck, "rgb(0, 0, 0)");
+      } else if (ck === "lighting-color" && (!cv || cvLow === "initial" || cvLow === "revert" || cvLow === "revert-layer")) {
+        computedMap.set(ck, "rgb(255, 255, 255)");
+      } else if (ck === "outline-color" && (!cv || cvLow === "auto")) {
         const os = (computedMap.get("outline-style") || "none").trim().toLowerCase();
         computedMap.set(ck, os === "auto" ? "auto" : elColor);
-      } else if (!cv || cv.toLowerCase() === "currentcolor") {
+      } else if (!cv || cvLow === "currentcolor") {
         computedMap.set(ck, elColor);
       } else {
         computedMap.set(ck, normCol(cv));
@@ -9590,6 +9595,12 @@ function installWindow(global) {
     if (!csVal || csVal === "initial" || csVal === "revert" || csVal === "revert-layer") {
       computedMap.set("color-scheme", "normal");
     }
+    const cifVal = computedMap.get("color-interpolation-filters");
+    if (!cifVal || cifVal === "initial" || cifVal === "revert" || cifVal === "revert-layer") {
+      computedMap.set("color-interpolation-filters", "linearrgb");
+    } else {
+      computedMap.set("color-interpolation-filters", cifVal.toLowerCase());
+    }
     if (!computedMap.get("hyphenate-limit-chars") || computedMap.get("hyphenate-limit-chars") === "initial") {
       computedMap.set("hyphenate-limit-chars", "auto");
     } else if (computedMap.get("hyphenate-limit-chars").indexOf("calc(") !== -1) {
@@ -9660,7 +9671,8 @@ function installWindow(global) {
     "border-top-color", "border-top-left-radius", "border-top-right-radius",
     "border-top-style", "border-top-width", "bottom", "box-decoration-break", "box-shadow",
     "box-sizing", "break-after", "break-before", "break-inside", "caption-side", "caret-color",
-    "clear", "clip", "clip-path", "color", "color-scheme", "column-count", "column-fill", "column-gap",
+    "clear", "clip", "clip-path", "color", "color-interpolation-filters", "color-scheme", "column-count", "column-fill", "column-gap",
+    "flood-color", "lighting-color",
     "column-rule-color", "column-rule-style", "column-rule-width", "column-span", "column-width", "contain",
     "contain-intrinsic-block-size", "contain-intrinsic-height", "contain-intrinsic-inline-size", "contain-intrinsic-width",
     "content", "content-visibility", "container-name", "container-type", "counter-increment", "counter-reset", "counter-set", "cursor", "direction", "display", "margin-trim",
@@ -10041,6 +10053,9 @@ function installWindow(global) {
       if (lower === "perspective-origin" || lower === "transform-origin") return getDefaultOriginComputed();
       if (lower === "image-orientation") return "from-image";
       if (lower === "content" || lower === "color-scheme") return "normal";
+      if (lower === "color-interpolation-filters") return "linearrgb";
+      if (lower === "flood-color") return "rgb(0, 0, 0)";
+      if (lower === "lighting-color") return "rgb(255, 255, 255)";
       if (lower === "overflow-anchor") return "auto";
       if (lower === "scroll-snap-stop") return "normal";
       if (lower === "scroll-snap-type") return "none";
