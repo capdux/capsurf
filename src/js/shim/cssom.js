@@ -167,27 +167,37 @@
       const inner = fnMatch[2].trim();
       if (!inner) return false;
       if (fn === "rgb" || fn === "rgba" || fn === "hsl" || fn === "hsla") {
+        const isCalc = (s) => /^(?:calc|min|max|clamp)\(/i.test(s);
         if (inner.includes(",")) {
           const parts = splitTopLevelComma(inner);
           if (parts.length !== 3 && parts.length !== 4) return false;
-          const isNum = (s) => /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(s);
-          const isPct = (s) => /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)%$/.test(s);
+          const isNum = (s) => /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(s) || (isCalc(s) && !s.includes("%"));
+          const isPct = (s) => /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)%$/.test(s) || (isCalc(s) && s.includes("%"));
           if (fn === "rgb" || fn === "rgba") {
             const allNum = isNum(parts[0]) && isNum(parts[1]) && isNum(parts[2]);
             const allPct = isPct(parts[0]) && isPct(parts[1]) && isPct(parts[2]);
-            if (!allNum && !allPct) return false;
+            if (!allNum && !allPct && !(isCalc(parts[0]) || isCalc(parts[1]) || isCalc(parts[2]))) return false;
           } else {
-            if (!/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:deg|rad|grad|turn)?$/.test(parts[0])) return false;
+            if (!/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:deg|rad|grad|turn)?$/.test(parts[0]) && !isCalc(parts[0])) return false;
             if (!isPct(parts[1]) || !isPct(parts[2])) return false;
           }
-          if (parts.length === 4 && !isNum(parts[3]) && !isPct(parts[3])) return false;
+          if (parts.length === 4 && !isNum(parts[3]) && !isPct(parts[3]) && !isCalc(parts[3])) return false;
           return true;
         }
-        const slashParts = inner.split("/");
+        const slashParts = [];
+        let sc = "", sd = 0;
+        for (let si = 0; si < inner.length; si++) {
+          const ch = inner[si];
+          if (ch === "(") sd++;
+          else if (ch === ")" && sd > 0) sd--;
+          if (sd === 0 && ch === "/") { slashParts.push(sc.trim()); sc = ""; }
+          else sc += ch;
+        }
+        slashParts.push(sc.trim());
         if (slashParts.length > 2) return false;
-        const mainToks = splitCssTokens(slashParts[0].trim());
+        const mainToks = splitCssTokens(slashParts[0]);
         if (mainToks.length !== 3) return false;
-        if (slashParts.length === 2 && splitCssTokens(slashParts[1].trim()).length !== 1) return false;
+        if (slashParts.length === 2 && splitCssTokens(slashParts[1]).length !== 1) return false;
         return true;
       }
       if (fn === "hwb") {
@@ -6835,19 +6845,109 @@
       const aa = Math.max(0, Math.min(1, a));
       return "rgba(" + rr + ", " + gg + ", " + bb + ", " + Number(aa.toFixed(6)) + ")";
     };
+    const splitTopSlash = (str) => {
+      const out = [];
+      let cur = "", d = 0;
+      for (let i = 0; i < str.length; i++) {
+        const ch = str[i];
+        if (ch === "(") d++;
+        else if (ch === ")" && d > 0) d--;
+        if (d === 0 && ch === "/") { out.push(cur.trim()); cur = ""; }
+        else cur += ch;
+      }
+      out.push(cur.trim());
+      return out;
+    };
+    const splitColorCh = (str) => {
+      if (str.includes(",")) {
+        const out = [];
+        let cur = "", d = 0;
+        for (let i = 0; i < str.length; i++) {
+          const ch = str[i];
+          if (ch === "(") d++;
+          else if (ch === ")" && d > 0) d--;
+          if (d === 0 && ch === ",") { if (cur.trim()) out.push(cur.trim()); cur = ""; }
+          else cur += ch;
+        }
+        if (cur.trim()) out.push(cur.trim());
+        return out;
+      }
+      return splitCssTokens(str);
+    };
+    const evalColorExpr = (tok) => {
+      const t = String(tok || "").trim().toLowerCase();
+      if (!/^(?:calc|min|max|clamp)\(/i.test(t)) return t;
+      const body = t.replace(/^(?:calc)\(/i, "(");
+      let pos = 0;
+      const skipWs = () => { while (pos < body.length && /\s/.test(body[pos])) pos++; };
+      const parseExpr = () => {
+        let left = parseTerm();
+        if (left === null) return null;
+        while (true) {
+          skipWs();
+          const op = body[pos];
+          if (op !== "+" && op !== "-") break;
+          pos++;
+          const right = parseTerm();
+          if (right === null) return null;
+          left = { v: op === "+" ? left.v + right.v : left.v - right.v, u: left.u || right.u };
+        }
+        return left;
+      };
+      const parseTerm = () => {
+        let left = parseFactor();
+        if (left === null) return null;
+        while (true) {
+          skipWs();
+          const op = body[pos];
+          if (op !== "*" && op !== "/") break;
+          pos++;
+          const right = parseFactor();
+          if (right === null) return null;
+          if (op === "*") left = { v: left.v * right.v, u: left.u || right.u };
+          else {
+            if (right.v === 0) return null;
+            left = { v: left.v / right.v, u: left.u };
+          }
+        }
+        return left;
+      };
+      const parseFactor = () => {
+        skipWs();
+        if (body[pos] === "(") {
+          pos++;
+          const inner = parseExpr();
+          skipWs();
+          if (body[pos] !== ")") return null;
+          pos++;
+          return inner;
+        }
+        const m = /^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(%|deg|rad|grad|turn)?/i.exec(body.slice(pos));
+        if (!m) return null;
+        pos += m[0].length;
+        return { v: parseFloat(m[1]), u: m[2] || "" };
+      };
+      const res = parseExpr();
+      skipWs();
+      if (!res || pos !== body.length || !isFinite(res.v)) return t;
+      return String(res.v) + res.u;
+    };
     const rgbM = /^rgba?\(\s*(.+)\s*\)$/i.exec(s);
     if (rgbM && !/\bfrom\b/i.test(rgbM[1])) {
-      const slash = rgbM[1].split("/");
-      const chParts = slash[0].trim().split(/[\s,]+/).filter(Boolean);
+      const slash = splitTopSlash(rgbM[1]);
+      const chParts = splitColorCh(slash[0]);
       if (chParts.length === 3 || (chParts.length === 4 && slash.length === 1)) {
-        const parseCh = (t) => t.endsWith("%") ? (parseFloat(t) * 2.55) : parseFloat(t);
+        const parseCh = (raw) => {
+          const t = evalColorExpr(raw);
+          return t.endsWith("%") ? (parseFloat(t) * 2.55) : parseFloat(t);
+        };
         const r = parseCh(chParts[0]), g = parseCh(chParts[1]), b = parseCh(chParts[2]);
         let a = 1;
         if (slash.length === 2) {
-          const at = slash[1].trim();
+          const at = evalColorExpr(slash[1]);
           a = at.endsWith("%") ? (parseFloat(at) / 100) : parseFloat(at);
         } else if (chParts.length === 4) {
-          const at = chParts[3];
+          const at = evalColorExpr(chParts[3]);
           a = at.endsWith("%") ? (parseFloat(at) / 100) : parseFloat(at);
         }
         if (isFinite(r) && isFinite(g) && isFinite(b) && isFinite(a)) return fmtRgb(r, g, b, a);
@@ -6855,22 +6955,23 @@
     }
     const hslM = /^hsla?\(\s*(.+)\s*\)$/i.exec(s);
     if (hslM && !/\bfrom\b/i.test(hslM[1])) {
-      const slash = hslM[1].split("/");
-      const chParts = slash[0].trim().split(/[\s,]+/).filter(Boolean);
+      const slash = splitTopSlash(hslM[1]);
+      const chParts = splitColorCh(slash[0]);
       if (chParts.length === 3 || (chParts.length === 4 && slash.length === 1)) {
-        let h = parseFloat(chParts[0]);
-        if (chParts[0].endsWith("rad")) h = h * 180 / Math.PI;
-        else if (chParts[0].endsWith("grad")) h = h * 0.9;
-        else if (chParts[0].endsWith("turn")) h = h * 360;
+        const hTok = evalColorExpr(chParts[0]);
+        let h = parseFloat(hTok);
+        if (hTok.endsWith("rad")) h = h * 180 / Math.PI;
+        else if (hTok.endsWith("grad")) h = h * 0.9;
+        else if (hTok.endsWith("turn")) h = h * 360;
         h = ((h % 360) + 360) % 360;
-        const sat = Math.max(0, Math.min(1, parseFloat(chParts[1]) / 100));
-        const lit = Math.max(0, Math.min(1, parseFloat(chParts[2]) / 100));
+        const sat = Math.max(0, Math.min(1, parseFloat(evalColorExpr(chParts[1])) / 100));
+        const lit = Math.max(0, Math.min(1, parseFloat(evalColorExpr(chParts[2])) / 100));
         let a = 1;
         if (slash.length === 2) {
-          const at = slash[1].trim();
+          const at = evalColorExpr(slash[1]);
           a = at.endsWith("%") ? (parseFloat(at) / 100) : parseFloat(at);
         } else if (chParts.length === 4) {
-          const at = chParts[3];
+          const at = evalColorExpr(chParts[3]);
           a = at.endsWith("%") ? (parseFloat(at) / 100) : parseFloat(at);
         }
         if (isFinite(h) && isFinite(sat) && isFinite(lit) && isFinite(a)) {

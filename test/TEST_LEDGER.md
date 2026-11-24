@@ -2161,3 +2161,7 @@
 ### Phase 620: `isValidCalcSyntax` 严格校验与 `font-feature-settings` 内联 `calc()` 求值
 - **Filter `calc-numbers` / `calc-letter-spacing` / `calc-invalid-parsing` / `calc-in-font-feature-settings`**: **FAIL->PASS (4/4: 12/12 + 6/6 + 6/6 + 1/1)**（`cssom.js` 新增 `isValidCalcSyntax` 校验 `calc()`/`min()`/`max()`/`clamp()` 未知标识符、相邻缺失运算符及 `+`/`-` 量纲混用，并在 `isValidLenPct` / `tab-size` / `transform` 中接入；`window.js` 补全 `font-feature-settings` 内联 `calc()` 数值化简）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 621: `rgb()`/`rgba()`/`hsl()`/`hsla()` 内联 `calc()` 通道求值全绿
+- **Filter `/css/css-values/calc-in-color-001` & `/css/css-values/calc-rgb-percent-001`**: **FAIL->PASS (2/2)**（`cssom.js` `isValidColor` 与 `normalizeSingleColor` 新增顶层 `/` 分割 `splitTopSlash`、通道分割 `splitColorCh` 与表达式求值 `evalColorExpr`，支持 `rgb()`/`rgba()`/`hsl()`/`hsla()` 内联 `calc()` 数值/百分比/角度求值）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

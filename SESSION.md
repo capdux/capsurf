@@ -7942,3 +7942,6 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Agent]**: 完成 Phase 620（`src/js/shim/cssom.js`, `src/js/shim/window.js`）：
   1. **`cssom.js` & `window.js`**：新增 `isValidCalcSyntax` 拒绝 `calc()` 中未知标识符与 `number + length` 量纲混用，并补全 `font-feature-settings` 内联 `calc()` 求值。
   2. **全绿验证**：`calc-in-font-feature-settings`、`calc-invalid-parsing`、`calc-letter-spacing`、`calc-numbers` **4/4 FAIL->PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+- **[Agent]**: 完成 Phase 621（`src/js/shim/cssom.js`）：
+  1. **`cssom.js`**：在 `isValidColor` 与 `normalizeSingleColor` 中新增顶层 `/` 分割、`splitColorCh` 与 `evalColorExpr` 支持 `rgb()`/`rgba()`/`hsl()`/`hsla()` 内联 `calc()` 通道求值。
+  2. **全绿验证**：`calc-in-color-001.html` **PASS**、`calc-rgb-percent-001.html` **PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。

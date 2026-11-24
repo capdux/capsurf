@@ -2983,3 +2983,7 @@
 ### Phase 620: `isValidCalcSyntax` 严格校验与 `font-feature-settings` 内联 `calc()` 求值
 - **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：`cssom.js` 新增 `isValidCalcSyntax` 校验 `calc()`/`min()`/`max()`/`clamp()` 语法、未知标识符（如 `up`/`error`）及 `+`/`-` 量纲混用，并接入 `isValidLenPct`、`tab-size`、`transform`；`window.js` 为 `font-feature-settings` 内联 `calc()` 补充数值化简。
 - **WPT & Smoke 验收**：`calc-in-font-feature-settings` (1/1)、`calc-invalid-parsing` (6/6)、`calc-letter-spacing` (6/6)、`calc-numbers` (12/12) 全部 PASS，`--smoke` 3/3 suites PASS。
+
+### Phase 621: `rgb()`/`rgba()`/`hsl()`/`hsla()` 内联 `calc()` 通道求值全绿
+- **核心修复 (`src/js/shim/cssom.js`)**：`isValidColor` 与 `normalizeSingleColor` 新增顶层 `/` 分割 `splitTopSlash`、通道分割 `splitColorCh` 与 `evalColorExpr` 递归下降求值器，避免 `calc(360 / 5)` 被误拆并正确计算色彩通道。
+- **WPT & Smoke 验收**：`calc-in-color-001.html` & `calc-rgb-percent-001.html` PASS，`--smoke` 3/3 suites PASS。
