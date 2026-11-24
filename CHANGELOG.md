@@ -4027,3 +4027,6 @@
 - **Phase 727**:
   - `src/js/shim/cssom.js`: 新增 `isValidEnvSyntax`，严格校验 `env()` 变量名与可选整数索引，拒绝 `env()` 空名与非法括号。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 728**:
+  - `test/wpt/wpt-expectations.json`: 收紧 5 项实测通过用例为 `PASS`（`css-text/inheritance`, `layer-counter-style-override`, `list-and-grid-001`, `ol-change-display-type`, `mask-clip-8`）。
+  - `GEMINI.md`: 固化 11.11 节 WPT `;` 串联防早退与 `--tests-file` 跨目录合批规范。

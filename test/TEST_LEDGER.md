@@ -2394,3 +2394,4 @@
 | Phase 725 | WPT `@page` `size` / `page-orientation` 校验与规范序列化闭环 | `src/js/shim/cssom.js`, `test/wpt/wpt-expectations.json` | `page-orientation.tentative.html` (**FAIL->PASS**), `page-rule-declarations-000.html` (**FAIL->PASS**); `--smoke` 3/3 PASS |
 | Phase 726 | WPT `background` 简写 8-longhand 序列化与默认色规范化 | `src/js/shim/element/element.js`, `src/js/shim/cssom.js` | `background-valid.html` 多层序列化 PASS, `background-33*` **5/5 PASS**; `--smoke` 3/3 PASS |
 | Phase 727 | WPT `css-env` `env()` 严格语法校验闭环 | `src/js/shim/cssom.js` | `env-parsing.html` (**8/8 PASS**), `seralization-round-tripping.tentative.html` (**PASS**); `--smoke` 3/3 PASS |
+| Phase 728 | WPT 5 项实测通过基线收紧与 `GEMINI.md` 自进化固化 | `test/wpt/wpt-expectations.json`, `GEMINI.md` | 5 项 (`css-text/inheritance`, `layer-counter-style-override`, `list-and-grid-001`, `ol-change-display-type`, `mask-clip-8`) 实测 PASS 并收紧 |

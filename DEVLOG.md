@@ -3294,3 +3294,5 @@
 - 移除 `element.js` 中仅返回 `background-image` 的陈旧 `background` 分支，在 `cssom.js` `serializeExpandedShorthand` 补齐多层 `background` 简写序列化，打通 `background-valid.html` 多层序列化与 `background-33*` 5/5 全绿。
 ### Phase 727 — `css-env` `env()` 严格语法校验闭环
 - 在 `cssom.js` 新增 `isValidEnvSyntax` 并在 `isValidCssValue` / `isValidCalcSyntax` / `isValidLenPct` 中统一调用，拒绝 `env()` 与 `env(name ())` 非法形式，打通 `env-parsing.html` (8/8 PASS) 与 `seralization-round-tripping.tentative.html` (PASS)。
+### Phase 728 — WPT 5 项基线收紧与 3 小时自进化流程固化
+- 实测确认 5 项历史 `TIMEOUT`/`FAIL` 用例在当前 `bin_dev/main` 下稳定全绿并收紧为 `PASS`；同步在 `GEMINI.md` 固化 `;` 串联防早退与 `--tests-file` 跨目录合批规范。

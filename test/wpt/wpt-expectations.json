@@ -2168,8 +2168,8 @@
     "reason": "PASS since blitz-dom patch 0161 (mark new anonymous boxes as damaged subtrees) landed on main: the appended element now gets its layout style before the class mutation, so the used width no longer jumps. Every later main gate reports FAIL to PASS; reproduced locally, and FAIL again with 0161 removed."
   },
   "/css/css-cascade/layer-counter-style-override.html": {
-    "expected": "FAIL",
-    "reason": "Layered @counter-style does not generate the expected counter content, so the target remains 8px instead of matching the 32px reference."
+    "expected": "PASS",
+    "reason": null
   },
   "/css/css-cascade/layer-cssom-order-reverse.html": {
     "expected": "FAIL",
@@ -4293,8 +4293,8 @@
     "reason": "T18 enrollment (css-masking): measured PASS"
   },
   "/css/css-masking/mask-image/mask-clip-8.html": {
-    "expected": "FAIL",
-    "reason": "Rebaselined 2026-09-16: measures FAIL on main (CI and locally; reftest pixel-diff=1260/480000). Carried as a regression on the wpt-compare ledger; this pin records the current outcome, it does not accept it. Previous pin: T18 enrollment (css-masking): measured PASS"
+    "expected": "PASS",
+    "reason": null
   },
   "/css/css-masking/mask-image/mask-composite-1a.html": {
     "expected": "PASS",
@@ -5574,8 +5574,8 @@
     "reason": null
   },
   "/css/css-text/inheritance.html": {
-    "expected": "TIMEOUT",
-    "reason": "42/42 PASS in 11.9s under --timeout 15000; exceeds 10s hard deadline in debug bin_dev"
+    "expected": "PASS",
+    "reason": null
   },
   "/css/css-text/parsing/hanging-punctuation-invalid.html": {
     "expected": "PASS",
@@ -23871,7 +23871,7 @@
     "reason": "Rebaselined 2026-09-16: measures PASS on main (CI and locally); the FAIL pin had drifted behind work that landed without a rebaseline."
   },
   "/css/css-lists/list-and-grid-001.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-lists/list-item-definition.html": {
@@ -23975,8 +23975,8 @@
     "reason": null
   },
   "/css/css-lists/ol-change-display-type.html": {
-    "expected": "FAIL",
-    "reason": "Records the outcome this produces. The baseline agrees, so this is a long-standing gap rather than a rebaselined regression; reproduced on CI and locally."
+    "expected": "PASS",
+    "reason": null
   },
   "/css/css-lists/outside-marker-covered-by-relpos-block-link.html": {
     "expected": "PASS",

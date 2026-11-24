@@ -336,3 +336,9 @@
 
 - **合并同批 `wpt-batched.mjs` 执行减少引擎冷启动**：单次调用 `wpt-batched.mjs` 的引擎启动与端口释放固定开销约为 **2.0s–2.5s**；验证同属一个子目录或可合并前缀的多个修复点时，优先使用单次公共前缀 `--filter`（如 `--filter /css/css-grid/parsing/grid-template-areas`）或单条聚合命令，避免 3~4 次串行重复启停引擎及输出冗长日志，实测每阶段可节省 **50%+ 引擎冷启动时间与报告输出 Token**。
 - **单行 Python 失败差异提取铁律**：查看 `/tmp/wpt-*.json` 失败详情时，严格禁止 `cat` 或整文件 `read_file`，统一使用 `python3 -c` 仅输出 `status != "PASS"` 的 `subtests` 列表，单次上下文消耗控制在 `< 200` Tokens。
+
+
+### 11.11 WPT 链式验证防早退与跨目录 `--tests-file` 合批规范 (2026-11-25 3小时自进化固化)
+
+- **`wpt-batched.mjs` 串联必须用 `;` 而非 `&&`**：`wpt-batched.mjs` 在出现任何 `unexpected PASS`（`FAIL→PASS`）时也会以退出码 `1` 退出；若用 `&&` 串联多个 `--filter` 与 `--smoke`，首个 `FAIL→PASS` 会直接中断后续验证，必须使用 `;` 串联以确保 `--smoke` 与后续批次完整执行。
+- **跨目录离散用例合并为 `--tests-file` 单批运行**：验证多个不同目录的离散用例（如同时复测 5 个基线收紧候选）时，先用 `python3` 生成临时 JSON 数组写入 `temp/batch.json`，再以单次 `--tests-file temp/batch.json` 运行，可将 5 次引擎冷启动（~12s）压缩为 1 次（~2s）。
