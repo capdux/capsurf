@@ -30777,14 +30777,18 @@
     if (!(whatToShow & bit)) {
       return FILTER_SKIP;
     }
-    if (!filter) return FILTER_ACCEPT;
+    if (filter === null || filter === undefined) return FILTER_ACCEPT;
+    let res;
     if (typeof filter === "function") {
-      return filter(node);
+      res = filter(node);
+    } else {
+      const acceptNode = filter.acceptNode;
+      if (typeof acceptNode !== "function") {
+        throw new TypeError("Failed to execute 'acceptNode' on 'NodeFilter': The provided value is not a function.");
+      }
+      res = acceptNode.call(filter, node);
     }
-    if (typeof filter.acceptNode === "function") {
-      return filter.acceptNode(node);
-    }
-    return FILTER_ACCEPT;
+    return (Number(res) >>> 0) & 0xFFFF;
   }
 
   const _twState = new WeakMap();

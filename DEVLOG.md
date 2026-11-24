@@ -3338,3 +3338,5 @@
 - 解决 `Element.prototype` 原生子节点/兄弟节点 getter 遮蔽 `Node.prototype` JS 树的问题，一举打通 `ChildNode-before` (45/45)、`ChildNode-after` (45/45)、`DocumentType-remove` (4/4)、`CharacterData-remove` (12/12) 与 `Node-textContent` (81/81)。
 ### Phase 749 — `/dom/collections/` 全目录 `11/11 (100% PASS)` 达标
 - 修复 `HTMLCollection` 的 `ArrayIndex` 边界 (`2^32 - 1` 视为命名属性)、`item()` `ToUint32`、`Object.create(collection).length` 抛 `TypeError`、非 HTML 命名空间忽略 `name`、以及 `NamedNodeMap` Proxy 隐藏内部槽位与 `_sync` 长度一致性，实现 `/dom/collections/` 11/11 100% 全绿。
+### Phase 750 — `TreeWalker-acceptNode-filter` (12/12) & `TreeWalker-currentNode` (4/4) 全绿
+- 修复 `filterNode` 重复读取 `acceptNode`、缺失/非可调用未抛 `TypeError` 及布尔返回值 `true !== 1` 未按 WebIDL `unsigned short` 转换的问题，一次性打通 `TreeWalker-acceptNode-filter.html` 与 `TreeWalker-currentNode.html`。

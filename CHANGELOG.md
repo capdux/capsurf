@@ -4118,3 +4118,6 @@
 - **Phase 749**:
   - `src/js/shim/collections.js`: 完善 `HTMLCollection` Proxy 索引/命名/原型/expando/defineProperty/deleteProperty 规范语义及非 HTML 命名空间 `name` 过滤；为 `NamedNodeMap` 返回 Proxy 隐藏内部字段并同步 `length` 与索引/命名属性访问。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 750**:
+  - `src/js/shim/traversal.js`: 修复 `filterNode` 单次 `Get(filter, "acceptNode")`、非函数抛 `TypeError` 与 WebIDL `unsigned short` 返回值转换。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
