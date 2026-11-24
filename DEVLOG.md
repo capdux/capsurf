@@ -3176,3 +3176,6 @@
 ### Phase 671 — `filter`/`backdrop-filter` 与 `offset-*` 语法校验补齐
 - 为 `filter` 与 `backdrop-filter` 补全全部标准滤镜函数参数类型、非负约束与 `drop-shadow` 长度/颜色组合校验。
 - 为 CSS Motion Path 的 `offset-distance`、`offset-rotate`、`offset-position` 与 `offset-anchor` 补全指定值语法校验，并通过 6 项 WPT invalid 测试与 `--smoke` 回归。
+### Phase 672 — `polygon` 顺序约束与 `filter`/`backdrop-filter` 指定值规范化
+- 在 `isValidShape("polygon")` 中拒绝 `round <length>` 出现在 `nonzero`/`evenodd` 之前的非法写法，使 `clip-path-invalid.html`（48/48）与 `polygon-function-round-invalid.html`（9/9）全数通过。
+- 为 `filter` 与 `backdrop-filter` 补齐指定值规范化（仅剩 `drop-shadow` 颜色前置重排待下一阶段收口）。

@@ -1108,7 +1108,7 @@
           if (p0[0] === "nonzero" || p0[0] === "evenodd" || p0[0] === "round") {
             let pi = 0, seenFR = false, seenR = false;
             while (pi < p0.length) {
-              if (!seenFR && (p0[pi] === "nonzero" || p0[pi] === "evenodd")) { seenFR = true; pi++; }
+              if (!seenFR && !seenR && (p0[pi] === "nonzero" || p0[pi] === "evenodd")) { seenFR = true; pi++; }
               else if (!seenR && p0[pi] === "round" && pi + 1 < p0.length && !p0[pi + 1].endsWith("%") && isValidLenPct(p0[pi + 1], false)) { seenR = true; pi += 2; }
               else return false;
             }
@@ -3954,6 +3954,39 @@
         return "\"" + inner + "\"";
       }
       return s;
+    }
+    if (key === "filter" || key === "backdrop-filter") {
+      if (s.toLowerCase() === "none") return "none";
+      return splitCssTokens(s).map((tok) => {
+        const fm = /^([a-z-]+)\((.*)\)$/i.exec(tok);
+        if (!fm) return tok;
+        const fn = fm[1].toLowerCase(), body = fm[2].trim();
+        if (fn === "url") return "url(" + body + ")";
+        const args = body ? splitCssTokens(body) : [];
+        if (fn === "blur") {
+          return "blur(" + args.map((a) => (a === "0" || a === "+0" || a === "-0") ? "0px" : a).join(" ") + ")";
+        }
+        if (fn === "hue-rotate") {
+          return "hue-rotate(" + args.map((a) => (a === "0" || a === "+0" || a === "-0") ? "0deg" : a).join(" ") + ")";
+        }
+        if (fn === "drop-shadow") {
+          return "drop-shadow(" + args.map((a) => {
+            if (a === "0" || a === "+0" || a === "-0") return "0px";
+            if (a.startsWith("#") || /^(?:rgba?|hsla?)\(/i.test(a)) return normalizeSingleColor(a);
+            return a.toLowerCase();
+          }).join(" ") + ")";
+        }
+        if (fn === "grayscale" || fn === "invert" || fn === "opacity" || fn === "sepia") {
+          return fn + "(" + args.map((a) => {
+            const pm = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)(%)?$/i.exec(a);
+            if (!pm) return a;
+            const v = parseFloat(pm[1]);
+            if (pm[2] === "%") return String(Math.min(100, Math.max(0, v))) + "%";
+            return String(Math.min(1, Math.max(0, v)));
+          }).join(" ") + ")";
+        }
+        return fn + "(" + args.join(" ") + ")";
+      }).join(" ");
     }
     if (key === "color-interpolation-filters") {
       return s.trim().toLowerCase();
