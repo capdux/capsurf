@@ -7830,3 +7830,8 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   2. **`window.js`**：`STANDARD_COMPUTED_LONGHANDS`、`INHERITED_CSS_PROPS`、`textDecorDefs` 补全 `clip-rule`, `mask-composite`, `mask-repeat`, `mask-size`, `mask-type`。
   3. **全绿验证**：`mask-repeat-valid.html` **PASS**、`mask-type-computed.html` **PASS**、`mask-composite-computed.html` **PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
   4. **并行摸底汇总**：`/css/css-shapes/parsing/` 7/13 PASS；`/css/css-color/parsing/` 10/43 PASS。
+
+### 2026-11-24 Phase 601 (`clip-rule-computed`, `color-invalid-named-color`, `color-invalid-hwb` 全绿)
+- **[Agent]**: 完成 Phase 601（`src/js/shim/cssom.js`）：
+  1. **`cssom.js`**：`STANDARD_CSS_PROPERTIES` 加入 `"clip-rule"`；`isValidColor` 对命名颜色加纯 ASCII 字母预检，并为 `hwb()` 增加禁止逗号及参数段数校验。
+  2. **全绿验证**：`clip-rule-computed.html` **PASS**、`color-invalid-hwb.html` **PASS**、`color-invalid-named-color.html` **PASS (184/184, --timeout 15000)**、`--smoke` **3/3 suites, 6/6 tests PASS**。

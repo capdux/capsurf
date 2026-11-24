@@ -3666,3 +3666,5 @@
 - **Phase 599** (`src/js/shim/window.js`, `src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 修复 EOF 未闭合 `var()` 截断与括号补全，并令 `mask-size` 复用 `background-size` 序列化规则；`missing-closing-nested-fallback.html` 与 `mask-size-valid.html` 全绿。
 
 - **Phase 600** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 令 `mask-repeat` 复用 `background-repeat` 序列化并补齐 `clip-rule`/`mask-*` computed 属性支持；`mask-repeat-valid.html`、`mask-type-computed.html`、`mask-composite-computed.html` 全绿。
+
+- **Phase 601** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `STANDARD_CSS_PROPERTIES` 补全 `"clip-rule"`，优化 `isValidColor` 命名颜色纯 ASCII 校验并补全 `hwb()` 语法校验；`clip-rule-computed.html`、`color-invalid-named-color.html`、`color-invalid-hwb.html` 全绿。

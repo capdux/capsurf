@@ -2031,3 +2031,9 @@
 - **子智能体只读摸底记录**：
   - `/css/css-shapes/parsing/` (`b503`, 13 files): `7 PASS / 6 FAIL / 0 TIMEOUT`
   - `/css/css-color/parsing/` (`b500`, 43 files): `10 PASS / 25 FAIL / 8 TIMEOUT`
+
+### Phase 601: `clip-rule-computed`, `color-invalid-named-color`, `color-invalid-hwb` 全绿
+- **Filter `/css/css-masking/parsing/clip-rule-computed`**: **PASS**（`cssom.js` `STANDARD_CSS_PROPERTIES` 补全 `"clip-rule"`）。
+- **Filter `/css/css-color/parsing/color-invalid-named-color`**: **PASS (184/184)**（`--timeout 15000` 下 `9907ms` PASS，`isValidColor` 在查表前校验纯 ASCII 字母 `/^[a-zA-Z]+$/`，拒绝 `U+212A` `K` 等非 ASCII 大小写折叠）。
+- **Filter `/css/css-color/parsing/color-invalid-hwb`**: **PASS (6/6)**（`isValidColor` 为 `hwb()` 补全禁止逗号与参数段数校验）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

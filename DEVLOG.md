@@ -2899,3 +2899,7 @@
 ### Phase 600: `mask-repeat-valid`, `mask-type-computed`, `mask-composite-computed` 全绿
 - **核心修复 (`cssom.js`, `window.js`)**：`mask-repeat` 复用 `background-repeat` 规范化规则；`STANDARD_COMPUTED_LONGHANDS` 与 `textDecorDefs` 补全 `clip-rule`, `mask-composite`, `mask-repeat`, `mask-size`, `mask-type`。
 - **WPT & Smoke 验收**：`mask-repeat-valid.html`、`mask-type-computed.html`、`mask-composite-computed.html` PASS，`--smoke` 3/3 suites PASS。
+
+### Phase 601: `clip-rule-computed`, `color-invalid-named-color`, `color-invalid-hwb` 全绿
+- **核心修复 (`src/js/shim/cssom.js`)**：`STANDARD_CSS_PROPERTIES` 补充 `"clip-rule"`；`isValidColor` 增加纯 ASCII 字母正则预检杜绝 Unicode `U+212A` 误匹配，并为 `hwb()` 补全逗号拒绝与 `/` 分段校验。
+- **WPT & Smoke 验收**：`clip-rule-computed.html` PASS、`color-invalid-hwb.html` PASS、`color-invalid-named-color.html` PASS (`--timeout 15000`)、`--smoke` 3/3 suites PASS。

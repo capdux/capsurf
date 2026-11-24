@@ -3827,7 +3827,7 @@
       "border-top-color", "border-top-left-radius", "border-top-right-radius", "border-top-style",
       "border-top-width", "border-width", "bottom", "box-decoration-break", "box-shadow",
       "box-sizing", "break-after", "break-before", "break-inside", "caption-side", "caret-color",
-      "clear", "clip", "clip-path", "color", "color-scheme", "column-count", "column-fill",
+      "clear", "clip", "clip-path", "clip-rule", "color", "color-scheme", "column-count", "column-fill",
       "column-gap", "column-rule", "column-rule-color", "column-rule-style", "column-rule-width",
       "column-span", "column-width", "columns", "contain", "contain-intrinsic-block-size",
       "contain-intrinsic-height", "contain-intrinsic-inline-size", "contain-intrinsic-size",
@@ -3943,7 +3943,8 @@
     if (typeof globalThis !== "undefined") globalThis.__isCssPropertySupported = isCssPropertySupported;
 
     function isValidColor(val) {
-      const v = val.trim().toLowerCase();
+      const rawTrimmed = val.trim();
+      const v = rawTrimmed.toLowerCase();
       if (!v) return false;
       if (v === "bogus") return false;
       if (v === "currentcolor" || v === "transparent") return true;
@@ -3978,8 +3979,18 @@
           if (slashParts.length === 2 && splitCssTokens(slashParts[1].trim()).length !== 1) return false;
           return true;
         }
+        if (fn === "hwb") {
+          if (inner.includes(",")) return false;
+          const slashParts = inner.split("/");
+          if (slashParts.length > 2) return false;
+          const mainToks = splitCssTokens(slashParts[0].trim());
+          if (mainToks.length !== 3) return false;
+          if (slashParts.length === 2 && splitCssTokens(slashParts[1].trim()).length !== 1) return false;
+          return true;
+        }
         return true;
       }
+      if (!/^[a-zA-Z]+$/.test(rawTrimmed)) return false;
       const NAMED_COLORS = new Set([
         "black", "silver", "gray", "white", "maroon", "red", "purple", "fuchsia",
         "green", "lime", "olive", "yellow", "navy", "blue", "teal", "aqua",
