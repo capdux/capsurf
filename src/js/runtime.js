@@ -6651,7 +6651,7 @@
           return slashes.join(" / ").replace(/ \/  \/ /g, " / / ");
         }
       }
-      if (key === "background-repeat") {
+      if (key === "background-repeat" || key === "mask-repeat") {
         const layers = s.toLowerCase().split(",");
         for (let i = 0; i < layers.length; i++) {
           const p = splitCssTokens(layers[i].trim());
@@ -41482,7 +41482,7 @@
       "font-language-override", "font-optical-sizing", "font-variant-emoji", "font-variant-position",
       "hanging-punctuation", "hyphens", "line-break", "overflow-wrap", "tab-size",
       "text-align-all", "text-align-last", "text-fit", "text-indent", "text-justify",
-      "text-transform", "word-break", "word-wrap",
+      "text-transform", "word-break", "word-wrap", "clip-rule",
     ]);
 
     function getDefaultDisplayForElement(element) {
@@ -43805,7 +43805,12 @@
         ["word-break", "normal"],
         ["word-spacing", "0px"],
         ["word-wrap", "normal"],
-        ["direction", "ltr"]
+        ["direction", "ltr"],
+        ["clip-rule", "nonzero"],
+        ["mask-type", "luminance"],
+        ["mask-composite", "add"],
+        ["mask-repeat", "repeat"],
+        ["mask-size", "auto"]
       ];
       const acRaw = (computedMap.get("accent-color") || "").trim();
       if (acRaw) {
@@ -44056,6 +44061,7 @@
       "column-rule-color", "column-rule-style", "column-rule-width", "column-span", "column-width", "contain",
       "contain-intrinsic-block-size", "contain-intrinsic-height", "contain-intrinsic-inline-size", "contain-intrinsic-width",
       "content", "content-visibility", "counter-increment", "counter-reset", "counter-set", "cursor", "direction", "display", "margin-trim",
+      "clip-rule", "mask-composite", "mask-repeat", "mask-size", "mask-type",
       "empty-cells", "field-sizing", "filter", "flex-basis", "flex-direction", "flex-grow", "flex-shrink",
       "flex-wrap", "float", "font-family", "font-feature-settings", "font-kerning", "font-language-override", "font-optical-sizing", "font-palette", "font-size",
       "font-stretch", "font-style", "font-variant", "font-variant-emoji", "font-variant-position", "font-weight", "grid-auto-columns",

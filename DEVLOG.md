@@ -2895,3 +2895,7 @@
 ### Phase 599: `missing-closing-nested-fallback` & `mask-size-valid` 全绿
 - **核心修复 (`window.js`, `cssom.js`)**：`substitute` 遇到 EOF 未闭合 `var(` 时保留完整切片并按括号深度 `d - 1` 补全闭合括号；`cssom.js` 中 `mask-size` 与 `background-size` 共享双值/单值规范化序列化。
 - **WPT & Smoke 验收**：`missing-closing-nested-fallback.html`、`mask-size-valid.html` PASS，`--smoke` 3/3 suites PASS。
+
+### Phase 600: `mask-repeat-valid`, `mask-type-computed`, `mask-composite-computed` 全绿
+- **核心修复 (`cssom.js`, `window.js`)**：`mask-repeat` 复用 `background-repeat` 规范化规则；`STANDARD_COMPUTED_LONGHANDS` 与 `textDecorDefs` 补全 `clip-rule`, `mask-composite`, `mask-repeat`, `mask-size`, `mask-type`。
+- **WPT & Smoke 验收**：`mask-repeat-valid.html`、`mask-type-computed.html`、`mask-composite-computed.html` PASS，`--smoke` 3/3 suites PASS。

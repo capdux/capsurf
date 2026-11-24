@@ -7823,3 +7823,10 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   2. **`cssom.js`**：`mask-size` 复用 `background-size` 单值补 `"auto"` 与 `"auto auto" -> "auto"` 规范化。
   3. **全绿验证**：`missing-closing-nested-fallback.html` **PASS**、`mask-size-valid.html` **PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
   4. **并行摸底汇总**：`/css/css-pseudo/parsing/` 1/5 PASS（5/5 符合预期）。
+
+### 2026-11-24 Phase 600 (`mask-repeat-valid`, `mask-type-computed`, `mask-composite-computed` 全绿)
+- **[Agent]**: 完成 Phase 600 里程碑（`src/js/shim/cssom.js`, `src/js/shim/window.js`）：
+  1. **`cssom.js`**：`mask-repeat` 复用 `background-repeat` 规范化序列化。
+  2. **`window.js`**：`STANDARD_COMPUTED_LONGHANDS`、`INHERITED_CSS_PROPS`、`textDecorDefs` 补全 `clip-rule`, `mask-composite`, `mask-repeat`, `mask-size`, `mask-type`。
+  3. **全绿验证**：`mask-repeat-valid.html` **PASS**、`mask-type-computed.html` **PASS**、`mask-composite-computed.html` **PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+  4. **并行摸底汇总**：`/css/css-shapes/parsing/` 7/13 PASS；`/css/css-color/parsing/` 10/43 PASS。

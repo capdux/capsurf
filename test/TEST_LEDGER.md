@@ -2022,3 +2022,12 @@
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
 - **子智能体只读摸底记录**：
   - `/css/css-pseudo/parsing/` (`b502`, 5 files): `1 PASS / 4 FAIL / 0 TIMEOUT`（`tree-abiding-pseudo-elements` 39/41，`highlight-pseudos-search-text.tentative` 31/39）
+
+### Phase 600: `mask-repeat-valid`, `mask-type-computed`, `mask-composite-computed` 全绿 & Shapes/Color 摸底
+- **Filter `/css/css-masking/parsing/mask-repeat-valid`**: **PASS**（`cssom.js` `mask-repeat` 复用 `background-repeat` 简写序列化规则）。
+- **Filter `/css/css-masking/parsing/mask-type-computed`**: **PASS**（`window.js` `STANDARD_COMPUTED_LONGHANDS` & `textDecorDefs` 补全 `mask-type`）。
+- **Filter `/css/css-masking/parsing/mask-composite-computed`**: **PASS**（`window.js` `STANDARD_COMPUTED_LONGHANDS` & `textDecorDefs` 补全 `mask-composite`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-shapes/parsing/` (`b503`, 13 files): `7 PASS / 6 FAIL / 0 TIMEOUT`
+  - `/css/css-color/parsing/` (`b500`, 43 files): `10 PASS / 25 FAIL / 8 TIMEOUT`

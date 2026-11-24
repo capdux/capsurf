@@ -2861,7 +2861,7 @@
         return slashes.join(" / ").replace(/ \/  \/ /g, " / / ");
       }
     }
-    if (key === "background-repeat") {
+    if (key === "background-repeat" || key === "mask-repeat") {
       const layers = s.toLowerCase().split(",");
       for (let i = 0; i < layers.length; i++) {
         const p = splitCssTokens(layers[i].trim());

@@ -3664,3 +3664,5 @@
 - **Phase 598** (`src/js/shim/window.js`, `src/js/shim/cssom.js`, `src/js/shim/element/element.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 为 CSS 变量展开增加 65536 字符长度熔断防 OOM 并拒绝 `--` 空名称自定义属性；`variable-empty-name-reserved.html` 与 `variable-exponential-blowup.html` 全绿。
 
 - **Phase 599** (`src/js/shim/window.js`, `src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 修复 EOF 未闭合 `var()` 截断与括号补全，并令 `mask-size` 复用 `background-size` 序列化规则；`missing-closing-nested-fallback.html` 与 `mask-size-valid.html` 全绿。
+
+- **Phase 600** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 令 `mask-repeat` 复用 `background-repeat` 序列化并补齐 `clip-rule`/`mask-*` computed 属性支持；`mask-repeat-valid.html`、`mask-type-computed.html`、`mask-composite-computed.html` 全绿。
