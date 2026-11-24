@@ -1,0 +1,2413 @@
+{
+  "date": "2026-11-24",
+  "base": "http://web-platform.test:8000",
+  "ws": "ws://127.0.0.1:19720/devtools/browser",
+  "commit": "be2a62c",
+  "slice": null,
+  "summary": {
+    "total": 18,
+    "expected": 16,
+    "unexpectedFail": 2,
+    "unexpectedPass": 0,
+    "byOutcome": {
+      "PASS": 16,
+      "TIMEOUT": 2
+    }
+  },
+  "results": [
+    {
+      "test": "/css/css-grid/parsing/grid-area-computed.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "Property grid-area value 'auto / auto / auto / auto'",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-row value 'auto / auto'",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-column-end value 'auto'",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\")\nError"
+        },
+        {
+          "name": "Property grid-row value '-zπ'",
+          "status": "PASS",
+          "message": "assert_in_array(\"-zπ\", [\"-zπ\", \"-zπ / -zπ\"])\nError"
+        },
+        {
+          "name": "Property grid-row-start value 'AZ'",
+          "status": "PASS",
+          "message": "assert_equals(\"AZ\", \"AZ\")\nError"
+        },
+        {
+          "name": "Property grid-column-start value '-_π'",
+          "status": "PASS",
+          "message": "assert_equals(\"-_π\", \"-_π\")\nError"
+        },
+        {
+          "name": "Property grid-row-end value '_9'",
+          "status": "PASS",
+          "message": "assert_equals(\"_9\", \"_9\")\nError"
+        },
+        {
+          "name": "Property grid-area value '1 / 90 -a- / auto / auto'",
+          "status": "PASS",
+          "message": "assert_equals(\"1 / 90 -a-\", \"1 / 90 -a-\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-row value '2 az / auto'",
+          "status": "PASS",
+          "message": "assert_equals(\"2 az\", \"2 az\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-column value '9 / -19 zA'",
+          "status": "PASS",
+          "message": "assert_equals(\"9 / -19 zA\", \"9 / -19 zA\")\nError"
+        },
+        {
+          "name": "Property grid-row-start value '-19'",
+          "status": "PASS",
+          "message": "assert_equals(\"-19\", \"-19\")\nError"
+        },
+        {
+          "name": "Property grid-row-start value '9 -Z_'",
+          "status": "PASS",
+          "message": "assert_equals(\"9 -Z_\", \"9 -Z_\")\nError"
+        },
+        {
+          "name": "Property grid-column-start value '-44 Z'",
+          "status": "PASS",
+          "message": "assert_equals(\"-44 Z\", \"-44 Z\")\nError"
+        },
+        {
+          "name": "Property grid-row-end value '1 -πA'",
+          "status": "PASS",
+          "message": "assert_equals(\"1 -πA\", \"1 -πA\")\nError"
+        },
+        {
+          "name": "Property grid-column-end value '5 π_'",
+          "status": "PASS",
+          "message": "assert_equals(\"5 π_\", \"5 π_\")\nError"
+        },
+        {
+          "name": "Property grid-row-start value 'calc(1.1) -a-'",
+          "status": "PASS",
+          "message": "assert_equals(\"1 -a-\", \"1 -a-\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-row-start value 'calc(10) -a-'",
+          "status": "PASS",
+          "message": "assert_equals(\"10 -a-\", \"10 -a-\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-row-start value 'calc(10 + (sign(2cqw - 10px) * 5)) -a-'",
+          "status": "PASS",
+          "message": "assert_equals(\"5 -a-\", \"5 -a-\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-row-start value 'span calc(-1)'",
+          "status": "PASS",
+          "message": "assert_equals(\"span 1\", \"span 1\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-row-start value 'span calc(sibling-index() - 2)'",
+          "status": "PASS",
+          "message": "assert_equals(\"span 1\", \"span 1\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-area value 'span 2 i / auto / auto / auto'",
+          "status": "PASS",
+          "message": "assert_equals(\"span 2 i\", \"span 2 i\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-row value 'span 2 / auto'",
+          "status": "PASS",
+          "message": "assert_equals(\"span 2\", \"span 2\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-column-start value 'span 1 i'",
+          "status": "PASS",
+          "message": "assert_equals(\"span i\", \"span i\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-row-start value 'span 1'",
+          "status": "PASS",
+          "message": "assert_equals(\"span 1\", \"span 1\")\nError"
+        },
+        {
+          "name": "Property grid-row-end value 'span 2 i'",
+          "status": "PASS",
+          "message": "assert_equals(\"span 2 i\", \"span 2 i\")\nError"
+        },
+        {
+          "name": "Property grid-column-end value 'span 2'",
+          "status": "PASS",
+          "message": "assert_equals(\"span 2\", \"span 2\")\nError"
+        },
+        {
+          "name": "Property grid-row-start value 'span i'",
+          "status": "PASS",
+          "message": "assert_equals(\"span i\", \"span i\")\nError"
+        },
+        {
+          "name": "Property grid-row value 'span i / auto'",
+          "status": "PASS",
+          "message": "assert_equals(\"span i\", \"span i\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-area value 'auto / i / auto / i'",
+          "status": "PASS",
+          "message": "assert_equals(\"auto / i\", \"auto / i\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-area value 'auto / i / 2 j'",
+          "status": "PASS",
+          "message": "assert_in_array(\"auto / i / 2 j\", [\"auto / i / 2 j\", \"auto / i / 2 j / i\"])\nError"
+        },
+        {
+          "name": "Property grid-area value 'auto / i / 2 j / span 3 k'",
+          "status": "PASS",
+          "message": "assert_equals(\"auto / i / 2 j / span 3 k\", \"auto / i / 2 j / span 3 k\")\nError"
+        },
+        {
+          "name": "Property grid-row value 'auto / i'",
+          "status": "PASS",
+          "message": "assert_equals(\"auto / i\", \"auto / i\")\nError"
+        },
+        {
+          "name": "Property grid-column value '2 j / span 3 k'",
+          "status": "PASS",
+          "message": "assert_equals(\"2 j / span 3 k\", \"2 j / span 3 k\")\nError"
+        },
+        {
+          "name": "Property grid-column-end value '\\31st'",
+          "status": "PASS",
+          "message": "assert_equals(\"\\\\31 st\", \"\\\\31 st\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-column-end value '\\31 st'",
+          "status": "PASS",
+          "message": "assert_equals(\"\\\\31 st\", \"\\\\31 st\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 3350,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/parsing/grid-area-invalid.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "e.style['grid-area'] = \"'string'\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-row'] = \"1.0\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"1 2\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-row-start'] = \"+-3\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column-start'] = \"0\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-row-end'] = \"span\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column-end'] = \"sPaN\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column-end'] = \"\\\"1st\\\"\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column-end'] = \"1st\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column-start'] = \"auto 1\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-row-start'] = \"1 auto\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"auto / initial\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-row'] = \"auto / inherit\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"auto / unset\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"auto / auto / auto / auto / auto\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-row'] = \"1 / 2 / 3\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"a / b / c\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-row-end'] = \"span 1 / span 2\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"auto 2 auto 4\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-row'] = \"33 -A0 auto\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-row'] = \"auto i 2 j span 3 k\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-row-end'] = \"1 auto\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-row-end'] = \"span 1 auto\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-row-end'] = \"span auto 1\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-row-end'] = \"1 auto span\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 815,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/parsing/grid-area-shorthand.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "e.style['grid-area'] = \"auto\" should set grid-column-end",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"auto\" should set grid-column-start",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"auto\" should set grid-row-end",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"auto\" should set grid-row-start",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"auto\" should not set unrelated longhands",
+          "status": "PASS",
+          "message": "assert_equals(0, 0)\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"--a\" should set grid-column-end",
+          "status": "PASS",
+          "message": "assert_equals(\"--a\", \"--a\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"--a\" should set grid-column-start",
+          "status": "PASS",
+          "message": "assert_equals(\"--a\", \"--a\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"--a\" should set grid-row-end",
+          "status": "PASS",
+          "message": "assert_equals(\"--a\", \"--a\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"--a\" should set grid-row-start",
+          "status": "PASS",
+          "message": "assert_equals(\"--a\", \"--a\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"--a\" should not set unrelated longhands",
+          "status": "PASS",
+          "message": "assert_equals(0, 0)\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"a / b\" should set grid-column-end",
+          "status": "PASS",
+          "message": "assert_equals(\"b\", \"b\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"a / b\" should set grid-column-start",
+          "status": "PASS",
+          "message": "assert_equals(\"b\", \"b\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"a / b\" should set grid-row-end",
+          "status": "PASS",
+          "message": "assert_equals(\"a\", \"a\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"a / b\" should set grid-row-start",
+          "status": "PASS",
+          "message": "assert_equals(\"a\", \"a\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"a / b\" should not set unrelated longhands",
+          "status": "PASS",
+          "message": "assert_equals(0, 0)\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"a / b / c\" should set grid-column-end",
+          "status": "PASS",
+          "message": "assert_equals(\"b\", \"b\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"a / b / c\" should set grid-column-start",
+          "status": "PASS",
+          "message": "assert_equals(\"b\", \"b\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"a / b / c\" should set grid-row-end",
+          "status": "PASS",
+          "message": "assert_equals(\"c\", \"c\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"a / b / c\" should set grid-row-start",
+          "status": "PASS",
+          "message": "assert_equals(\"a\", \"a\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"a / b / c\" should not set unrelated longhands",
+          "status": "PASS",
+          "message": "assert_equals(0, 0)\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"a / b / c / d\" should set grid-column-end",
+          "status": "PASS",
+          "message": "assert_equals(\"d\", \"d\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"a / b / c / d\" should set grid-column-start",
+          "status": "PASS",
+          "message": "assert_equals(\"b\", \"b\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"a / b / c / d\" should set grid-row-end",
+          "status": "PASS",
+          "message": "assert_equals(\"c\", \"c\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"a / b / c / d\" should set grid-row-start",
+          "status": "PASS",
+          "message": "assert_equals(\"a\", \"a\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"a / b / c / d\" should not set unrelated longhands",
+          "status": "PASS",
+          "message": "assert_equals(0, 0)\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"+90 -a- / 2 i span\" should set grid-column-end",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"+90 -a- / 2 i span\" should set grid-column-start",
+          "status": "PASS",
+          "message": "assert_equals(\"span 2 i\", \"span 2 i\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"+90 -a- / 2 i span\" should set grid-row-end",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"+90 -a- / 2 i span\" should set grid-row-start",
+          "status": "PASS",
+          "message": "assert_equals(\"90 -a-\", \"90 -a-\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"+90 -a- / 2 i span\" should not set unrelated longhands",
+          "status": "PASS",
+          "message": "assert_equals(0, 0)\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"1 / 2 / 3 / 4\" should set grid-column-end",
+          "status": "PASS",
+          "message": "assert_equals(\"4\", \"4\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"1 / 2 / 3 / 4\" should set grid-column-start",
+          "status": "PASS",
+          "message": "assert_equals(\"2\", \"2\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"1 / 2 / 3 / 4\" should set grid-row-end",
+          "status": "PASS",
+          "message": "assert_equals(\"3\", \"3\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"1 / 2 / 3 / 4\" should set grid-row-start",
+          "status": "PASS",
+          "message": "assert_equals(\"1\", \"1\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"1 / 2 / 3 / 4\" should not set unrelated longhands",
+          "status": "PASS",
+          "message": "assert_equals(0, 0)\nError"
+        },
+        {
+          "name": "e.style['grid-row'] = \"auto\" should set grid-row-end",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-row'] = \"auto\" should set grid-row-start",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-row'] = \"auto\" should not set unrelated longhands",
+          "status": "PASS",
+          "message": "assert_equals(0, 0)\nError"
+        },
+        {
+          "name": "e.style['grid-row'] = \"one / 2\" should set grid-row-end",
+          "status": "PASS",
+          "message": "assert_equals(\"2\", \"2\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-row'] = \"one / 2\" should set grid-row-start",
+          "status": "PASS",
+          "message": "assert_equals(\"one\", \"one\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-row'] = \"one / 2\" should not set unrelated longhands",
+          "status": "PASS",
+          "message": "assert_equals(0, 0)\nError"
+        },
+        {
+          "name": "e.style['grid-row'] = \"1 two / four 3\" should set grid-row-end",
+          "status": "PASS",
+          "message": "assert_equals(\"3 four\", \"3 four\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-row'] = \"1 two / four 3\" should set grid-row-start",
+          "status": "PASS",
+          "message": "assert_equals(\"1 two\", \"1 two\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-row'] = \"1 two / four 3\" should not set unrelated longhands",
+          "status": "PASS",
+          "message": "assert_equals(0, 0)\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"5 span\" should set grid-column-end",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"5 span\" should set grid-column-start",
+          "status": "PASS",
+          "message": "assert_equals(\"span 5\", \"span 5\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"5 span\" should not set unrelated longhands",
+          "status": "PASS",
+          "message": "assert_equals(0, 0)\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"1 / two\" should set grid-column-end",
+          "status": "PASS",
+          "message": "assert_equals(\"two\", \"two\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"1 / two\" should set grid-column-start",
+          "status": "PASS",
+          "message": "assert_equals(\"1\", \"1\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"1 / two\" should not set unrelated longhands",
+          "status": "PASS",
+          "message": "assert_equals(0, 0)\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"span 1 two / four 3 span\" should set grid-column-end",
+          "status": "PASS",
+          "message": "assert_equals(\"span 3 four\", \"span 3 four\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"span 1 two / four 3 span\" should set grid-column-start",
+          "status": "PASS",
+          "message": "assert_equals(\"span two\", \"span two\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"span 1 two / four 3 span\" should not set unrelated longhands",
+          "status": "PASS",
+          "message": "assert_equals(0, 0)\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 1928,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/parsing/grid-area-valid.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "e.style['grid-area'] = \"auto\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"auto / auto\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"auto / auto / auto\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"auto / auto / auto / auto\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"AuTo\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-row'] = \"auto\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-row'] = \"auto/auto\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column-end'] = \"AuTo\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"--a\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"--a\", \"--a\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-row'] = \"-zπ\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"-zπ\", \"-zπ\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-row'] = \"-zπ/-zπ\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"-zπ\", \"-zπ\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-row'] = \"i / i\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"i\", \"i\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-row-start'] = \"AZ\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"AZ\", \"AZ\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column-start'] = \"-_π\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"-_π\", \"-_π\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-row-end'] = \"_9\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"_9\", \"_9\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"1\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"1\", \"1\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"+90 -a-\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"90 -a-\", \"90 -a-\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-row'] = \"az 2\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"2 az\", \"2 az\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"9\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"9\", \"9\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"-19 zA\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"-19 zA\", \"-19 zA\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"-A0 33\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"33 -A0\", \"33 -A0\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-row-start'] = \"-19\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"-19\", \"-19\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-row-start'] = \"9 -Z_\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"9 -Z_\", \"9 -Z_\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column-start'] = \"+90\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"90\", \"90\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column-start'] = \"Z -44\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"-44 Z\", \"-44 Z\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-row-end'] = \"1 -πA\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"1 -πA\", \"1 -πA\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column-end'] = \"π_ +5\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"5 π_\", \"5 π_\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"span 2 i\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"span 2 i\", \"span 2 i\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"i 2 SpAn\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"span 2 i\", \"span 2 i\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"span 1 i\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"span i\", \"span i\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-row'] = \"span 2\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"span 2\", \"span 2\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"i SpAn\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"span i\", \"span i\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-row-start'] = \"span i\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"span i\", \"span i\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column-start'] = \"SpAn i 2\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"span 2 i\", \"span 2 i\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-row-end'] = \"2 i span\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"span 2 i\", \"span 2 i\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column-end'] = \"2 SpAn\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"span 2\", \"span 2\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column-start'] = \"span calc(-2)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"span calc(-2)\", \"span calc(-2)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column-start'] = \"span min(-1, 6)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"span calc(-1)\", \"span calc(-1)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column-start'] = \"span calc(sibling-index() - 2)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"span calc(-2 + sibling-index())\", \"span calc(-2 + sibling-index())\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"auto / i\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"auto / i\", \"auto / i\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"auto / i / auto / i\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"auto / i\", \"auto / i\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"auto / i / auto / 2 i\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"auto / i / auto / 2 i\", \"auto / i / auto / 2 i\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"1 / i  / auto / i\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"1 / i\", \"1 / i\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"1 / auto / auto / auto\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"1\", \"1\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"1 / auto / i / auto\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"1 / auto / i\", \"1 / auto / i\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"1 / j / i / k\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"1 / j / i / k\", \"1 / j / i / k\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"1 / auto / 2 / auto\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"1 / auto / 2\", \"1 / auto / 2\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"1 / i / 2 / auto\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"1 / i / 2 / auto\", \"1 / i / 2 / auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"i / i / auto / auto\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"i / i / auto / auto\", \"i / i / auto / auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"i / auto / i / auto\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"i / auto\", \"i / auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"auto / i / 2 j\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"auto / i / 2 j\", \"auto / i / 2 j\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-area'] = \"auto / i / 2 j / span 3 k\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"auto / i / 2 j / span 3 k\", \"auto / i / 2 j / span 3 k\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-row'] = \"auto / i\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"auto / i\", \"auto / i\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-row'] = \"i / auto\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"i / auto\", \"i / auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-row'] = \"2 i / auto\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"2 i\", \"2 i\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-row'] = \"1 / auto\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"1\", \"1\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"2 j / span 3 k\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"2 j / span 3 k\", \"2 j / span 3 k\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column-end'] = \"\\\\31st\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\\\\31 st\", \"\\\\31 st\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column-end'] = \"\\\\31 st\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\\\\31 st\", \"\\\\31 st\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"\\\\31st / \\\\31 st\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\\\\31 st\", \"\\\\31 st\", \"serialization should round-trip\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 3832,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/parsing/grid-auto-columns-computed.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "Property grid-auto-columns value '1px'",
+          "status": "PASS",
+          "message": "assert_equals(\"1px\", \"1px\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'calc(10px + 0.5em)'",
+          "status": "PASS",
+          "message": "assert_equals(\"30px\", \"30px\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'calc(10px - 0.5em)'",
+          "status": "PASS",
+          "message": "assert_equals(\"0px\", \"0px\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value '4%'",
+          "status": "PASS",
+          "message": "assert_equals(\"4%\", \"4%\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value '5fr'",
+          "status": "PASS",
+          "message": "assert_equals(\"5fr\", \"5fr\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'min-content'",
+          "status": "PASS",
+          "message": "assert_equals(\"min-content\", \"min-content\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'max-content'",
+          "status": "PASS",
+          "message": "assert_equals(\"max-content\", \"max-content\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'auto'",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'minmax(1px, 5fr)'",
+          "status": "PASS",
+          "message": "assert_equals(\"minmax(1px, 5fr)\", \"minmax(1px, 5fr)\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'minmax(calc(10px + 0.5em), max-content)'",
+          "status": "PASS",
+          "message": "assert_equals(\"minmax(30px, max-content)\", \"minmax(30px, max-content)\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'minmax(calc(10px - 0.5em), max-content)'",
+          "status": "PASS",
+          "message": "assert_equals(\"minmax(0px, max-content)\", \"minmax(0px, max-content)\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'minmax(4%, auto)'",
+          "status": "PASS",
+          "message": "assert_equals(\"minmax(4%, auto)\", \"minmax(4%, auto)\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'minmax(min-content, calc(10px + 0.5em))'",
+          "status": "PASS",
+          "message": "assert_equals(\"minmax(min-content, 30px)\", \"minmax(min-content, 30px)\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'minmax(auto, 4%)'",
+          "status": "PASS",
+          "message": "assert_equals(\"minmax(auto, 4%)\", \"minmax(auto, 4%)\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'fit-content(1px)'",
+          "status": "PASS",
+          "message": "assert_equals(\"fit-content(1px)\", \"fit-content(1px)\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'fit-content(calc(10px + 0.5em))'",
+          "status": "PASS",
+          "message": "assert_equals(\"fit-content(30px)\", \"fit-content(30px)\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'fit-content(calc(10px - 0.5em))'",
+          "status": "PASS",
+          "message": "assert_equals(\"fit-content(0px)\", \"fit-content(0px)\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'fit-content(4%)'",
+          "status": "PASS",
+          "message": "assert_equals(\"fit-content(4%)\", \"fit-content(4%)\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value '0px'",
+          "status": "PASS",
+          "message": "assert_equals(\"0px\", \"0px\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value '0%'",
+          "status": "PASS",
+          "message": "assert_equals(\"0%\", \"0%\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value '0fr'",
+          "status": "PASS",
+          "message": "assert_equals(\"0fr\", \"0fr\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'minmax(auto, 0%)'",
+          "status": "PASS",
+          "message": "assert_equals(\"minmax(auto, 0%)\", \"minmax(auto, 0%)\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'fit-content(0px)'",
+          "status": "PASS",
+          "message": "assert_equals(\"fit-content(0px)\", \"fit-content(0px)\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value '1px 2px 3px 0px'",
+          "status": "PASS",
+          "message": "assert_equals(\"1px 2px 3px 0px\", \"1px 2px 3px 0px\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'fit-content(1px) minmax(2px, 3px) 4px'",
+          "status": "PASS",
+          "message": "assert_equals(\"fit-content(1px) minmax(2px, 3px) 4px\", \"fit-content(1px) minmax(2px, 3px) 4px\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 1831,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/parsing/grid-auto-columns-invalid.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "e.style['grid-auto-columns'] = \"none\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"-1px\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"-4%\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"-1fr\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"minmax(1px)\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"minmax(1px, 2px, 3px)\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"minmax(5fr, 1px)\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"minmax(6px, -7%)\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"minmax(8px, -9fr)\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"fit-content(-1px)\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"fit-content(1px, 2px)\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"fit-content(1px auto)\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"2em / 3em\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"auto, 10%\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"1px [a] 1px\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"[] 1px []\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 636,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/parsing/grid-auto-columns-valid.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "e.style['grid-auto-columns'] = \"1px\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"1px\", \"1px\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"2em\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"2em\", \"2em\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"calc(2em + 3ex)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"calc(2em + 3ex)\", \"calc(2em + 3ex)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"4%\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"4%\", \"4%\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"5fr\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"5fr\", \"5fr\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"min-content\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"min-content\", \"min-content\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"max-content\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"max-content\", \"max-content\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"auto\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"auto /**/\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"minmax(1px, 5fr)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"minmax(1px, 5fr)\", \"minmax(1px, 5fr)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"minmax(2em, min-content)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"minmax(2em, min-content)\", \"minmax(2em, min-content)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"minmax(calc(2em + 3ex), max-content)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"minmax(calc(2em + 3ex), max-content)\", \"minmax(calc(2em + 3ex), max-content)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"minmax(4%, auto)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"minmax(4%, auto)\", \"minmax(4%, auto)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"minmax(5vmin, 1px)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"minmax(5vmin, 1px)\", \"minmax(5vmin, 1px)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"minmax(min-content, 2em)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"minmax(min-content, 2em)\", \"minmax(min-content, 2em)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"minmax(max-content, calc(2em + 3ex))\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"minmax(max-content, calc(2em + 3ex))\", \"minmax(max-content, calc(2em + 3ex))\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"minmax(auto, 4%)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"minmax(auto, 4%)\", \"minmax(auto, 4%)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"fit-content(1px)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"fit-content(1px)\", \"fit-content(1px)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"fit-content(2em)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"fit-content(2em)\", \"fit-content(2em)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"fit-content(calc(2em + 3ex))\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"fit-content(calc(2em + 3ex))\", \"fit-content(calc(2em + 3ex))\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"fit-content(4%)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"fit-content(4%)\", \"fit-content(4%)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"0px\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"0px\", \"0px\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"0%\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"0%\", \"0%\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"0fr\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"0fr\", \"0fr\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"minmax(auto, 0%)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"minmax(auto, 0%)\", \"minmax(auto, 0%)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"fit-content(0px)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"fit-content(0px)\", \"fit-content(0px)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"auto auto\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"auto auto\", \"auto auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"auto 10px\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"auto 10px\", \"auto 10px\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"1px 2px 3px 0px\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"1px 2px 3px 0px\", \"1px 2px 3px 0px\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-columns'] = \"fit-content(1px) minmax(2px, 3px) 4px\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"fit-content(1px) minmax(2px, 3px) 4px\", \"fit-content(1px) minmax(2px, 3px) 4px\", \"serialization should round-trip\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 1205,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/parsing/grid-auto-flow-computed.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "Property grid-auto-flow value 'row'",
+          "status": "PASS",
+          "message": "assert_equals(\"row\", \"row\")\nError"
+        },
+        {
+          "name": "Property grid-auto-flow value 'column'",
+          "status": "PASS",
+          "message": "assert_equals(\"column\", \"column\")\nError"
+        },
+        {
+          "name": "Property grid-auto-flow value 'row dense'",
+          "status": "PASS",
+          "message": "assert_equals(\"dense\", \"dense\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-auto-flow value 'column dense'",
+          "status": "PASS",
+          "message": "assert_equals(\"column dense\", \"column dense\")\nError"
+        },
+        {
+          "name": "Property grid-auto-flow value 'dense row'",
+          "status": "PASS",
+          "message": "assert_equals(\"dense\", \"dense\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-auto-flow value 'dense column'",
+          "status": "PASS",
+          "message": "assert_equals(\"column dense\", \"column dense\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-auto-flow value 'dense'",
+          "status": "PASS",
+          "message": "assert_equals(\"dense\", \"dense\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 944,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/parsing/grid-auto-flow-invalid.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "e.style['grid-auto-flow'] = \"auto\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-flow'] = \"row dense column\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-flow'] = \"dense row dense\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 481,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/parsing/grid-auto-flow-valid.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "e.style['grid-auto-flow'] = \"row\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"row\", \"row\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-flow'] = \"column\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"column\", \"column\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-flow'] = \"row dense\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"dense\", \"dense\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-flow'] = \"dense row\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"dense\", \"dense\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-flow'] = \"dense\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"dense\", \"dense\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-flow'] = \"column dense\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"column dense\", \"column dense\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-flow'] = \"dense column\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"column dense\", \"column dense\", \"serialization should round-trip\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 638,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/parsing/grid-auto-rows-computed.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "Property grid-auto-rows value '1px'",
+          "status": "PASS",
+          "message": "assert_equals(\"1px\", \"1px\")\nError"
+        },
+        {
+          "name": "Property grid-auto-rows value 'calc(10px + 0.5em)'",
+          "status": "PASS",
+          "message": "assert_equals(\"30px\", \"30px\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-auto-rows value 'calc(10px - 0.5em)'",
+          "status": "PASS",
+          "message": "assert_equals(\"0px\", \"0px\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-auto-rows value '4%'",
+          "status": "PASS",
+          "message": "assert_equals(\"4%\", \"4%\")\nError"
+        },
+        {
+          "name": "Property grid-auto-rows value '5fr'",
+          "status": "PASS",
+          "message": "assert_equals(\"5fr\", \"5fr\")\nError"
+        },
+        {
+          "name": "Property grid-auto-rows value 'min-content'",
+          "status": "PASS",
+          "message": "assert_equals(\"min-content\", \"min-content\")\nError"
+        },
+        {
+          "name": "Property grid-auto-rows value 'max-content'",
+          "status": "PASS",
+          "message": "assert_equals(\"max-content\", \"max-content\")\nError"
+        },
+        {
+          "name": "Property grid-auto-rows value 'auto'",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\")\nError"
+        },
+        {
+          "name": "Property grid-auto-rows value 'minmax(1px, 5fr)'",
+          "status": "PASS",
+          "message": "assert_equals(\"minmax(1px, 5fr)\", \"minmax(1px, 5fr)\")\nError"
+        },
+        {
+          "name": "Property grid-auto-rows value 'minmax(calc(10px + 0.5em), max-content)'",
+          "status": "PASS",
+          "message": "assert_equals(\"minmax(30px, max-content)\", \"minmax(30px, max-content)\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-auto-rows value 'minmax(calc(10px - 0.5em), max-content)'",
+          "status": "PASS",
+          "message": "assert_equals(\"minmax(0px, max-content)\", \"minmax(0px, max-content)\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-auto-rows value 'minmax(4%, auto)'",
+          "status": "PASS",
+          "message": "assert_equals(\"minmax(4%, auto)\", \"minmax(4%, auto)\")\nError"
+        },
+        {
+          "name": "Property grid-auto-rows value 'minmax(min-content, calc(10px + 0.5em))'",
+          "status": "PASS",
+          "message": "assert_equals(\"minmax(min-content, 30px)\", \"minmax(min-content, 30px)\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-auto-rows value 'minmax(auto, 4%)'",
+          "status": "PASS",
+          "message": "assert_equals(\"minmax(auto, 4%)\", \"minmax(auto, 4%)\")\nError"
+        },
+        {
+          "name": "Property grid-auto-rows value 'fit-content(1px)'",
+          "status": "PASS",
+          "message": "assert_equals(\"fit-content(1px)\", \"fit-content(1px)\")\nError"
+        },
+        {
+          "name": "Property grid-auto-rows value 'fit-content(calc(10px + 0.5em))'",
+          "status": "PASS",
+          "message": "assert_equals(\"fit-content(30px)\", \"fit-content(30px)\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-auto-rows value 'fit-content(calc(10px - 0.5em))'",
+          "status": "PASS",
+          "message": "assert_equals(\"fit-content(0px)\", \"fit-content(0px)\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-auto-rows value 'fit-content(4%)'",
+          "status": "PASS",
+          "message": "assert_equals(\"fit-content(4%)\", \"fit-content(4%)\")\nError"
+        },
+        {
+          "name": "Property grid-auto-rows value '0px'",
+          "status": "PASS",
+          "message": "assert_equals(\"0px\", \"0px\")\nError"
+        },
+        {
+          "name": "Property grid-auto-rows value '0%'",
+          "status": "PASS",
+          "message": "assert_equals(\"0%\", \"0%\")\nError"
+        },
+        {
+          "name": "Property grid-auto-rows value '0fr'",
+          "status": "PASS",
+          "message": "assert_equals(\"0fr\", \"0fr\")\nError"
+        },
+        {
+          "name": "Property grid-auto-rows value 'minmax(auto, 0%)'",
+          "status": "PASS",
+          "message": "assert_equals(\"minmax(auto, 0%)\", \"minmax(auto, 0%)\")\nError"
+        },
+        {
+          "name": "Property grid-auto-rows value 'fit-content(0px)'",
+          "status": "PASS",
+          "message": "assert_equals(\"fit-content(0px)\", \"fit-content(0px)\")\nError"
+        },
+        {
+          "name": "Property grid-auto-rows value '1px 2px 3px 0px'",
+          "status": "PASS",
+          "message": "assert_equals(\"1px 2px 3px 0px\", \"1px 2px 3px 0px\")\nError"
+        },
+        {
+          "name": "Property grid-auto-rows value 'fit-content(1px) minmax(2px, 3px) 4px'",
+          "status": "PASS",
+          "message": "assert_equals(\"fit-content(1px) minmax(2px, 3px) 4px\", \"fit-content(1px) minmax(2px, 3px) 4px\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 2038,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/parsing/grid-auto-rows-invalid.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "e.style['grid-auto-rows'] = \"none\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"-1px\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"-4%\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"-1fr\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"minmax(1px)\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"minmax(1px, 2px, 3px)\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"minmax(5fr, 1px)\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"minmax(6px, -7%)\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"fit-content(-1px)\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"fit-content(1px, 2px)\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"fit-content(1px auto)\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"2em / 3em\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"auto, 10%\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"1px [a] 1px\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"[] 1px []\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 1177,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/parsing/grid-auto-rows-valid.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "e.style['grid-auto-rows'] = \"1px\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"1px\", \"1px\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"2em\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"2em\", \"2em\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"calc(2em + 3ex)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"calc(2em + 3ex)\", \"calc(2em + 3ex)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"4%\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"4%\", \"4%\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"5fr\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"5fr\", \"5fr\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"min-content\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"min-content\", \"min-content\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"max-content\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"max-content\", \"max-content\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"auto\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"auto /**/\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"minmax(1px, 5fr)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"minmax(1px, 5fr)\", \"minmax(1px, 5fr)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"minmax(2em, min-content)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"minmax(2em, min-content)\", \"minmax(2em, min-content)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"minmax(calc(2em + 3ex), max-content)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"minmax(calc(2em + 3ex), max-content)\", \"minmax(calc(2em + 3ex), max-content)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"minmax(4%, auto)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"minmax(4%, auto)\", \"minmax(4%, auto)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"minmax(5vmin, 1px)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"minmax(5vmin, 1px)\", \"minmax(5vmin, 1px)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"minmax(min-content, 2em)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"minmax(min-content, 2em)\", \"minmax(min-content, 2em)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"minmax(max-content, calc(2em + 3ex))\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"minmax(max-content, calc(2em + 3ex))\", \"minmax(max-content, calc(2em + 3ex))\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"minmax(auto, 4%)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"minmax(auto, 4%)\", \"minmax(auto, 4%)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"fit-content(1px)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"fit-content(1px)\", \"fit-content(1px)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"fit-content(2em)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"fit-content(2em)\", \"fit-content(2em)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"fit-content(calc(2em + 3ex))\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"fit-content(calc(2em + 3ex))\", \"fit-content(calc(2em + 3ex))\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"fit-content(4%)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"fit-content(4%)\", \"fit-content(4%)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"0px\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"0px\", \"0px\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"0%\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"0%\", \"0%\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"0fr\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"0fr\", \"0fr\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"minmax(auto, 0%)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"minmax(auto, 0%)\", \"minmax(auto, 0%)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"fit-content(0px)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"fit-content(0px)\", \"fit-content(0px)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"auto auto\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"auto auto\", \"auto auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"auto 10px\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"auto 10px\", \"auto 10px\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"1px 2px 3px 0px\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"1px 2px 3px 0px\", \"1px 2px 3px 0px\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-rows'] = \"fit-content(1px) minmax(2px, 3px) 4px\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"fit-content(1px) minmax(2px, 3px) 4px\", \"fit-content(1px) minmax(2px, 3px) 4px\", \"serialization should round-trip\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 1550,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/parsing/grid-column-invalid.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "e.style['grid-column'] = \"4 5\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"4 /\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"5 5\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"5 / /\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"0 / 5\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"6 / 0\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"0\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"span\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"span / span\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"span span / span span\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"5 5 / span 2\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"5 first last / span 2\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"5 / first last 2\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"first last / span 2\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"5 / first last\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"5 5 span / 2\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"span 3 5 / 1\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"span last first / 1\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"2 / span last first\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"span 1 last first / 1\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"2 / span last 3 first\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"1 span 2 first / 1\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"2 / 3 span 3 first\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"span -1 / -2\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"-1 / -2 span\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"0 span / 0\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"0 / span 0\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"span -3 'first' / 3 last\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"first span 1 / last\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"3 first / 2 span last\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"3 / 1 span 2\" should not set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\", \"\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 929,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/parsing/grid-column-shortest-serialization.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "Property grid-column value 'auto / auto'",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-column value 'auto'",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\")\nError"
+        },
+        {
+          "name": "Property grid-column value '10 / auto'",
+          "status": "PASS",
+          "message": "assert_equals(\"10\", \"10\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-column value '10'",
+          "status": "PASS",
+          "message": "assert_equals(\"10\", \"10\")\nError"
+        },
+        {
+          "name": "Property grid-column value '-10 / auto'",
+          "status": "PASS",
+          "message": "assert_equals(\"-10\", \"-10\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-column value '-10'",
+          "status": "PASS",
+          "message": "assert_equals(\"-10\", \"-10\")\nError"
+        },
+        {
+          "name": "Property grid-column value 'first / first'",
+          "status": "PASS",
+          "message": "assert_equals(\"first\", \"first\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-column value 'first'",
+          "status": "PASS",
+          "message": "assert_equals(\"first\", \"first\")\nError"
+        },
+        {
+          "name": "Property grid-column value 'span 2 / auto'",
+          "status": "PASS",
+          "message": "assert_equals(\"span 2\", \"span 2\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-column value 'span 2'",
+          "status": "PASS",
+          "message": "assert_equals(\"span 2\", \"span 2\")\nError"
+        },
+        {
+          "name": "Property grid-column value '2 first / auto'",
+          "status": "PASS",
+          "message": "assert_equals(\"2 first\", \"2 first\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-column value '2 first'",
+          "status": "PASS",
+          "message": "assert_equals(\"2 first\", \"2 first\")\nError"
+        },
+        {
+          "name": "Property grid-column value 'span first / auto'",
+          "status": "PASS",
+          "message": "assert_equals(\"span first\", \"span first\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-column value 'span first'",
+          "status": "PASS",
+          "message": "assert_equals(\"span first\", \"span first\")\nError"
+        },
+        {
+          "name": "Property grid-column value 'span 2 first / auto'",
+          "status": "PASS",
+          "message": "assert_equals(\"span 2 first\", \"span 2 first\", \"computed value should round-trip\")\nError"
+        },
+        {
+          "name": "Property grid-column value 'span 2 first'",
+          "status": "PASS",
+          "message": "assert_equals(\"span 2 first\", \"span 2 first\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 2086,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/parsing/grid-column-shorthand.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "e.style['grid-column'] = \"auto / auto\" should set grid-column-end",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"auto / auto\" should set grid-column-start",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"auto / auto\" should not set unrelated longhands",
+          "status": "PASS",
+          "message": "assert_equals(0, 0)\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"auto\" should set grid-column-end",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"auto\" should set grid-column-start",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"auto\" should not set unrelated longhands",
+          "status": "PASS",
+          "message": "assert_equals(0, 0)\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"10 / auto\" should set grid-column-end",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"10 / auto\" should set grid-column-start",
+          "status": "PASS",
+          "message": "assert_equals(\"10\", \"10\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"10 / auto\" should not set unrelated longhands",
+          "status": "PASS",
+          "message": "assert_equals(0, 0)\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"10\" should set grid-column-end",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"10\" should set grid-column-start",
+          "status": "PASS",
+          "message": "assert_equals(\"10\", \"10\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"10\" should not set unrelated longhands",
+          "status": "PASS",
+          "message": "assert_equals(0, 0)\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"-10 / auto\" should set grid-column-end",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"-10 / auto\" should set grid-column-start",
+          "status": "PASS",
+          "message": "assert_equals(\"-10\", \"-10\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"-10 / auto\" should not set unrelated longhands",
+          "status": "PASS",
+          "message": "assert_equals(0, 0)\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"-10\" should set grid-column-end",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"-10\" should set grid-column-start",
+          "status": "PASS",
+          "message": "assert_equals(\"-10\", \"-10\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"-10\" should not set unrelated longhands",
+          "status": "PASS",
+          "message": "assert_equals(0, 0)\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"span 2 / auto\" should set grid-column-end",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"span 2 / auto\" should set grid-column-start",
+          "status": "PASS",
+          "message": "assert_equals(\"span 2\", \"span 2\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"span 2 / auto\" should not set unrelated longhands",
+          "status": "PASS",
+          "message": "assert_equals(0, 0)\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"span 2\" should set grid-column-end",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"span 2\" should set grid-column-start",
+          "status": "PASS",
+          "message": "assert_equals(\"span 2\", \"span 2\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"span 2\" should not set unrelated longhands",
+          "status": "PASS",
+          "message": "assert_equals(0, 0)\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"3 last / auto\" should set grid-column-end",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"3 last / auto\" should set grid-column-start",
+          "status": "PASS",
+          "message": "assert_equals(\"3 last\", \"3 last\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"3 last / auto\" should not set unrelated longhands",
+          "status": "PASS",
+          "message": "assert_equals(0, 0)\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"3 last\" should set grid-column-end",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"3 last\" should set grid-column-start",
+          "status": "PASS",
+          "message": "assert_equals(\"3 last\", \"3 last\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"3 last\" should not set unrelated longhands",
+          "status": "PASS",
+          "message": "assert_equals(0, 0)\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"span first / auto\" should set grid-column-end",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"span first / auto\" should set grid-column-start",
+          "status": "PASS",
+          "message": "assert_equals(\"span first\", \"span first\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"span first / auto\" should not set unrelated longhands",
+          "status": "PASS",
+          "message": "assert_equals(0, 0)\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"span first\" should set grid-column-end",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"span first\" should set grid-column-start",
+          "status": "PASS",
+          "message": "assert_equals(\"span first\", \"span first\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"span first\" should not set unrelated longhands",
+          "status": "PASS",
+          "message": "assert_equals(0, 0)\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"span 2 first / auto\" should set grid-column-end",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"span 2 first / auto\" should set grid-column-start",
+          "status": "PASS",
+          "message": "assert_equals(\"span 2 first\", \"span 2 first\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"span 2 first / auto\" should not set unrelated longhands",
+          "status": "PASS",
+          "message": "assert_equals(0, 0)\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"span 2 first\" should set grid-column-end",
+          "status": "PASS",
+          "message": "assert_equals(\"auto\", \"auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"span 2 first\" should set grid-column-start",
+          "status": "PASS",
+          "message": "assert_equals(\"span 2 first\", \"span 2 first\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"span 2 first\" should not set unrelated longhands",
+          "status": "PASS",
+          "message": "assert_equals(0, 0)\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"last / last\" should set grid-column-end",
+          "status": "PASS",
+          "message": "assert_equals(\"last\", \"last\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"last / last\" should set grid-column-start",
+          "status": "PASS",
+          "message": "assert_equals(\"last\", \"last\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"last / last\" should not set unrelated longhands",
+          "status": "PASS",
+          "message": "assert_equals(0, 0)\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"last\" should set grid-column-end",
+          "status": "PASS",
+          "message": "assert_equals(\"last\", \"last\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"last\" should set grid-column-start",
+          "status": "PASS",
+          "message": "assert_equals(\"last\", \"last\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-column'] = \"last\" should not set unrelated longhands",
+          "status": "PASS",
+          "message": "assert_equals(0, 0)\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 1790,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/parsing/grid-columns-rows-get-set-multiple.html",
+      "expected": "FAIL",
+      "actual": "TIMEOUT",
+      "reason": "hard deadline after 10000ms (likely goto or evaluate hung)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 10005,
+      "unexpected": true,
+      "killedEngine": true
+    },
+    {
+      "test": "/css/css-grid/parsing/grid-content-sized-columns-resolution.html",
+      "expected": "FAIL",
+      "actual": "TIMEOUT",
+      "reason": "hard deadline after 10000ms (likely goto or evaluate hung)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 10005,
+      "unexpected": true,
+      "killedEngine": true
+    }
+  ]
+}

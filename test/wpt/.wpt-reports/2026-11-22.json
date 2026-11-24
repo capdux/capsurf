@@ -1,0 +1,3929 @@
+{
+  "date": "2026-11-22",
+  "base": "http://web-platform.test:8000",
+  "ws": "ws://127.0.0.1:19450/devtools/browser",
+  "commit": "58c9054",
+  "slice": null,
+  "summary": {
+    "total": 177,
+    "expected": 63,
+    "unexpectedFail": 103,
+    "unexpectedPass": 11,
+    "byOutcome": {
+      "FAIL": 125,
+      "PASS": 42,
+      "TIMEOUT": 10
+    }
+  },
+  "results": [
+    {
+      "test": "/css/css-grid/abspos/absolute-positioning-definite-sizes-001.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": null,
+      "subtests": [
+        {
+          "name": ".grid 1",
+          "status": "FAIL",
+          "message": "assert_equals(10, 50, \"\\n<div class=\\\"grid\\\">\\n  <div class=\\\"row1\\\" data-expected-height=\\\"50\\\" data-expected-width=\\\"200\\\">XXX X</div>\\n  <div class=\\\"row2\\\" data-expected-height=\\\"150\\\" data-expected-width=\\\"200\\\">XX XXX XX</div>\\n</div>\\nheight\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 773,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/abspos/descendant-static-position-004.html",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=708/480000 worstDelta=128 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1185,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/abspos/grid-abspos-staticpos-align-items-flex-end-large-border-padding.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1077,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/abspos/grid-abspos-staticpos-align-self-002.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=206/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1541,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/abspos/grid-abspos-staticpos-align-self-flex-end-large-border-padding.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1074,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/abspos/grid-abspos-staticpos-align-self-img-last-baseline-002.html",
+      "expected": "FAIL",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1223,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/abspos/grid-abspos-staticpos-align-self-rtl-003.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=580/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1259,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/abspos/grid-abspos-staticpos-align-self-rtl-last-baseline-004.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=128/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1213,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/abspos/grid-abspos-staticpos-align-self-vertWM-002.html",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=688/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1198,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/abspos/grid-abspos-staticpos-align-self-vertWM-last-baseline-003.html",
+      "expected": "FAIL",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1096,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/abspos/grid-abspos-staticpos-justify-self-img-002.html",
+      "expected": "FAIL",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1226,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/abspos/grid-abspos-staticpos-justify-self-rtl-001.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=672/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1084,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/abspos/grid-abspos-staticpos-justify-self-rtl-last-baseline-002.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=84/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1050,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/abspos/grid-abspos-staticpos-justify-self-vertWM-003.html",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=596/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1140,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/abspos/grid-abspos-staticpos-justify-self-vertWM-last-baseline-004.html",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=128/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1048,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/abspos/grid-positioned-items-and-autofit-tracks-003.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": null,
+      "subtests": [
+        {
+          "name": ".grid 1",
+          "status": "FAIL",
+          "message": "assert_equals(200, 60, \"\\n<div class=\\\"container\\\">\\n    <div class=\\\"grid\\\">\\n        <span style=\\\"grid-column: 1 / 5\\\" class=\\\"abs\\\" data-expected-width=\\\"60\\\" data-expected-height=\\\"10\\\"></span>\\n        <span style=\\\"grid-column: 2 / 4\\\" data-expected-width=\\\"60\\\" data-expected-height=\\\"10\\\"></span>\\n    </div>\\n</div>\\nwidth\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 669,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/abspos/grid-positioned-items-background-rtl-001.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=18375/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1101,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/abspos/orthogonal-positioned-grid-items-001.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=14548/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1142,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/abspos/orthogonal-positioned-grid-items-006.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=28941/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1229,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/abspos/orthogonal-positioned-grid-items-011.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=13668/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1220,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/abspos/orthogonal-positioned-grid-items-016.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=35320/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1218,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/abspos/positioned-grid-descendant-containing-block-004.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1096,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/abspos/positioned-grid-descendant-containing-block-009.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=5240/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1019,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/abspos/positioned-grid-descendant-containing-block-014.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=10000/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1007,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/abspos/positioned-grid-items-002.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=14548/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1148,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/abspos/positioned-grid-items-007.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1194,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/abspos/positioned-grid-items-012.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=16213/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1144,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/abspos/positioned-grid-items-017.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=63920/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1232,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/abspos/positioned-grid-items-022.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1024,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/abspos/positioned-grid-items-negative-indices-001.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=21648/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1110,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/alignment/grid-align-justify-overflow.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": null,
+      "subtests": [
+        {
+          "name": ".grid 1",
+          "status": "FAIL",
+          "message": "assert_equals(784, 300, \"\\n<div class=\\\"grid fit-content alignItemsCenter justifyItemsCenter\\\" data-expected-width=\\\"300\\\" data-expected-height=\\\"360\\\">\\n        <div class=\\\"cellOverflowWidth  firstRowFirstColumn\\\" data-offset-x=\\\"-15\\\" data-offset-y=\\\"40\\\" data-expected-width=\\\"180\\\" data-expected-height=\\\"40\\\"></div>\\n        <div class=\\\"cellWithNoOverflow secondRowFirstColumn\\\" data-offset-x=\\\"50\\\" data-offset-y=\\\"160\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"40\\\"></div>\\n        <div class=\\\"cellWithNoOverflow thirdRowFirstColumn\\\" data-offset-x=\\\"50\\\" data-offset-y=\\\"280\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"40\\\"></div>\\n        <div class=\\\"cellWithNoOverflow firstRowSecondColumn\\\" data-offset-x=\\\"200\\\" data-offset-y=\\\"40\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"40\\\"></div>\\n        <div class=\\\"cellOverflowWidth  secondRowSecondColumn\\\" data-offset-x=\\\"135\\\" data-offset-y=\\\"160\\\" data-expected-width=\\\"180\\\" data-expected-height=\\\"40\\\"></div>\\n        <div class=\\\"cellWithNoOverflow thirdRowSecondColumn\\\" data-offset-x=\\\"200\\\" data-offset-y=\\\"280\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"40\\\"></div>\\n    </div>\\nwidth\")\nError"
+        },
+        {
+          "name": ".grid 2",
+          "status": "FAIL",
+          "message": "assert_equals(784, 300, \"\\n<div class=\\\"grid fit-content alignItemsUnsafeCenter justifyItemsUnsafeCenter\\\" data-expected-width=\\\"300\\\" data-expected-height=\\\"360\\\">\\n        <div class=\\\"cellOverflowHeight firstRowFirstColumn\\\" data-offset-x=\\\"50\\\" data-offset-y=\\\"-15\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"150\\\"></div>\\n        <div class=\\\"cellWithNoOverflow secondRowFirstColumn\\\" data-offset-x=\\\"50\\\" data-offset-y=\\\"160\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"40\\\"></div>\\n        <div class=\\\"cellWithNoOverflow thirdRowFirstColumn\\\" data-offset-x=\\\"50\\\" data-offset-y=\\\"280\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"40\\\"></div>\\n        <div class=\\\"cellWithNoOverflow firstRowSecondColumn\\\" data-offset-x=\\\"200\\\" data-offset-y=\\\"40\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"40\\\"></div>\\n        <div class=\\\"cellOverflowHeight secondRowSecondColumn\\\" data-offset-x=\\\"200\\\" data-offset-y=\\\"105\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"150\\\"></div>\\n        <div class=\\\"cellWithNoOverflow thirdRowSecondColumn\\\" data-offset-x=\\\"200\\\" data-offset-y=\\\"280\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"40\\\"></div>\\n    </div>\\nwidth\")\nError"
+        },
+        {
+          "name": ".grid 3",
+          "status": "FAIL",
+          "message": "assert_equals(784, 300, \"\\n<div class=\\\"grid fit-content alignItemsSafeCenter justifyItemsSafeCenter\\\" data-expected-width=\\\"300\\\" data-expected-height=\\\"360\\\">\\n        <div class=\\\"cellOverflowWidth  firstRowFirstColumn\\\" data-offset-x=\\\"0\\\" data-offset-y=\\\"40\\\" data-expected-width=\\\"180\\\" data-expected-height=\\\"40\\\"></div>\\n        <div class=\\\"cellWithNoOverflow secondRowFirstColumn\\\" data-offset-x=\\\"50\\\" data-offset-y=\\\"160\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"40\\\"></div>\\n        <div class=\\\"cellWithNoOverflow thirdRowFirstColumn\\\" data-offset-x=\\\"50\\\" data-offset-y=\\\"280\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"40\\\"></div>\\n        <div class=\\\"cellWithNoOverflow firstRowSecondColumn\\\" data-offset-x=\\\"200\\\" data-offset-y=\\\"40\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"40\\\"></div>\\n        <div class=\\\"cellOverflowWidth  secondRowSecondColumn\\\" data-offset-x=\\\"150\\\" data-offset-y=\\\"160\\\" data-expected-width=\\\"180\\\" data-expected-height=\\\"40\\\"></div>\\n        <div class=\\\"cellWithNoOverflow thirdRowSecondColumn\\\" data-offset-x=\\\"200\\\" data-offset-y=\\\"280\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"40\\\"></div>\\n    </div>\\nwidth\")\nError"
+        },
+        {
+          "name": ".grid 4",
+          "status": "FAIL",
+          "message": "assert_equals(784, 300, \"\\n<div class=\\\"grid fit-content alignItemsSafeCenter justifyItemsSafeCenter\\\" data-expected-width=\\\"300\\\" data-expected-height=\\\"360\\\">\\n        <div class=\\\"cellOverflowHeight firstRowFirstColumn\\\" data-offset-x=\\\"50\\\" data-offset-y=\\\"0\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"150\\\"></div>\\n        <div class=\\\"cellWithNoOverflow secondRowFirstColumn\\\" data-offset-x=\\\"50\\\" data-offset-y=\\\"160\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"40\\\"></div>\\n        <div class=\\\"cellWithNoOverflow thirdRowFirstColumn\\\" data-offset-x=\\\"50\\\" data-offset-y=\\\"280\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"40\\\"></div>\\n        <div class=\\\"cellWithNoOverflow firstRowSecondColumn\\\" data-offset-x=\\\"200\\\" data-offset-y=\\\"40\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"40\\\"></div>\\n        <div class=\\\"cellOverflowHeight secondRowSecondColumn alignSelfCenterSafe justifySelfCenterSafe\\\" data-offset-x=\\\"200\\\" data-offset-y=\\\"120\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"150\\\"></div>\\n        <div class=\\\"cellWithNoOverflow thirdRowSecondColumn\\\" data-offset-x=\\\"200\\\" data-offset-y=\\\"280\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"40\\\"></div>\\n    </div>\\nwidth\")\nError"
+        },
+        {
+          "name": ".grid 5",
+          "status": "FAIL",
+          "message": "assert_equals(784, 300, \"\\n<div class=\\\"grid fit-content alignItemsEnd justifyItemsEnd\\\" data-expected-width=\\\"300\\\" data-expected-height=\\\"360\\\">\\n        <div class=\\\"cellOverflowWidth  firstRowFirstColumn\\\" data-offset-x=\\\"-30\\\" data-offset-y=\\\"80\\\" data-expected-width=\\\"180\\\" data-expected-height=\\\"40\\\"></div>\\n        <div class=\\\"cellWithNoOverflow secondRowFirstColumn justifySelfCenter\\\" data-offset-x=\\\"50\\\" data-offset-y=\\\"200\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"40\\\"></div>\\n        <div class=\\\"cellWithNoOverflow thirdRowFirstColumn\\\" data-offset-x=\\\"100\\\" data-offset-y=\\\"320\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"40\\\"></div>\\n        <div class=\\\"cellWithNoOverflow firstRowSecondColumn\\\" data-offset-x=\\\"250\\\" data-offset-y=\\\"80\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"40\\\"></div>\\n        <div class=\\\"cellOverflowWidth  secondRowSecondColumn\\\" data-offset-x=\\\"120\\\" data-offset-y=\\\"200\\\" data-expected-width=\\\"180\\\" data-expected-height=\\\"40\\\"></div>\\n        <div class=\\\"cellWithNoOverflow thirdRowSecondColumn\\\" data-offset-x=\\\"250\\\" data-offset-y=\\\"320\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"40\\\"></div>\\n    </div>\\nwidth\")\nError"
+        },
+        {
+          "name": ".grid 6",
+          "status": "FAIL",
+          "message": "assert_equals(784, 300, \"\\n<div class=\\\"grid fit-content alignItemsUnsafeEnd justifyItemsUnsafeEnd\\\" data-expected-width=\\\"300\\\" data-expected-height=\\\"360\\\">\\n        <div class=\\\"cellOverflowHeight firstRowFirstColumn\\\" data-offset-x=\\\"100\\\" data-offset-y=\\\"-30\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"150\\\"></div>\\n        <div class=\\\"cellWithNoOverflow secondRowFirstColumn\\\" data-offset-x=\\\"100\\\" data-offset-y=\\\"200\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"40\\\"></div>\\n        <div class=\\\"cellWithNoOverflow thirdRowFirstColumn\\\" data-offset-x=\\\"100\\\" data-offset-y=\\\"320\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"40\\\"></div>\\n        <div class=\\\"cellWithNoOverflow firstRowSecondColumn alignSelfCenter\\\" data-offset-x=\\\"250\\\" data-offset-y=\\\"40\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"40\\\"></div>\\n        <div class=\\\"cellOverflowHeight secondRowSecondColumn\\\" data-offset-x=\\\"250\\\" data-offset-y=\\\"90\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"150\\\"></div>\\n        <div class=\\\"cellWithNoOverflow thirdRowSecondColumn\\\" data-offset-x=\\\"250\\\" data-offset-y=\\\"320\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"40\\\"></div>\\n    </div>\\nwidth\")\nError"
+        },
+        {
+          "name": ".grid 7",
+          "status": "FAIL",
+          "message": "assert_equals(784, 300, \"\\n<div class=\\\"grid fit-content alignItemsSafeEnd justifyItemsSafeEnd\\\" data-expected-width=\\\"300\\\" data-expected-height=\\\"360\\\">\\n        <div class=\\\"cellOverflowWidth  firstRowFirstColumn\\\" data-offset-x=\\\"0\\\" data-offset-y=\\\"80\\\" data-expected-width=\\\"180\\\" data-expected-height=\\\"40\\\"></div>\\n        <div class=\\\"cellWithNoOverflow secondRowFirstColumn justifySelfUnsafeCenter\\\" data-offset-x=\\\"50\\\" data-offset-y=\\\"200\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"40\\\"></div>\\n        <div class=\\\"cellWithNoOverflow thirdRowFirstColumn\\\" data-offset-x=\\\"100\\\" data-offset-y=\\\"320\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"40\\\"></div>\\n        <div class=\\\"cellWithNoOverflow firstRowSecondColumn\\\" data-offset-x=\\\"250\\\" data-offset-y=\\\"80\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"40\\\"></div>\\n        <div class=\\\"cellOverflowWidth  secondRowSecondColumn\\\" data-offset-x=\\\"150\\\" data-offset-y=\\\"200\\\" data-expected-width=\\\"180\\\" data-expected-height=\\\"40\\\"></div>\\n        <div class=\\\"cellWithNoOverflow thirdRowSecondColumn\\\" data-offset-x=\\\"250\\\" data-offset-y=\\\"320\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"40\\\"></div>\\n    </div>\\nwidth\")\nError"
+        },
+        {
+          "name": ".grid 8",
+          "status": "FAIL",
+          "message": "assert_equals(784, 300, \"\\n<div class=\\\"grid fit-content alignItemsSafeEnd justifyItemsSafeEnd\\\" data-expected-width=\\\"300\\\" data-expected-height=\\\"360\\\">\\n        <div class=\\\"cellOverflowHeight firstRowFirstColumn\\\" data-offset-x=\\\"100\\\" data-offset-y=\\\"0\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"150\\\"></div>\\n        <div class=\\\"cellWithNoOverflow secondRowFirstColumn\\\" data-offset-x=\\\"100\\\" data-offset-y=\\\"200\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"40\\\"></div>\\n        <div class=\\\"cellWithNoOverflow thirdRowFirstColumn\\\" data-offset-x=\\\"100\\\" data-offset-y=\\\"320\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"40\\\"></div>\\n        <div class=\\\"cellWithNoOverflow firstRowSecondColumn alignSelfUnsafeCenter\\\" data-offset-x=\\\"250\\\" data-offset-y=\\\"40\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"40\\\"></div>\\n        <div class=\\\"cellOverflowHeight secondRowSecondColumn\\\" data-offset-x=\\\"250\\\" data-offset-y=\\\"120\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"150\\\"></div>\\n        <div class=\\\"cellWithNoOverflow thirdRowSecondColumn\\\" data-offset-x=\\\"250\\\" data-offset-y=\\\"320\\\" data-expected-width=\\\"50\\\" data-expected-height=\\\"40\\\"></div>\\n    </div>\\nwidth\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 2762,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/alignment/grid-baseline-align-cycles-001.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=72576/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1153,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/alignment/grid-container-auto-margins-scrollbars-001.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=72587/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1104,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/alignment/grid-content-distribution-004.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=20000/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1168,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/alignment/grid-content-distribution-009.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=3750/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1127,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/alignment/grid-content-distribution-014.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=2400/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1045,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/alignment/grid-content-distribution-019.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=2400/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 560,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/alignment/grid-content-distribution-024.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=15000/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 702,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/alignment/grid-content-distribution-029.html",
+      "expected": "FAIL",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 452,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/alignment/grid-content-distribution-with-collapsed-tracks-005.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=800/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 594,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/alignment/grid-content-distribution-with-collapsed-tracks-010.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=800/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 509,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/alignment/grid-content-distribution-with-collapsed-tracks-015.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=1250/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 589,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/alignment/grid-content-distribution-with-collapsed-tracks-020.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=18050/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 648,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/alignment/grid-gutters-005.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=32400/480000 worstDelta=192 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1094,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/alignment/grid-gutters-010.html",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=169020/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1109,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/alignment/grid-gutters-015.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1097,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/alignment/grid-item-aspect-ratio-stretch-4.html",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=369800/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1237,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/alignment/grid-item-content-baseline-002.html",
+      "expected": "FAIL",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1484,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/alignment/grid-item-mixed-baseline-003.html",
+      "expected": "FAIL",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1487,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/alignment/grid-item-no-aspect-ratio-stretch-4.html",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=197038/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1170,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/alignment/grid-justify-content-end-001.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=5000/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1036,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/alignment/grid-self-alignment-baseline-with-grid-004.html",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=6680/480000 worstDelta=192 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1428,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/alignment/replaced-alignment-with-aspect-ratio-002.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=9900/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1132,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/alignment/replaced-alignment-with-aspect-ratio-008.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=7500/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1074,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/alignment/self-baseline/grid-self-baseline-003.html",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=42583/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1302,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/alignment/self-baseline/grid-self-baseline-008.html",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=60000/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1126,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/alignment/self-baseline/grid-self-baseline-changes-grid-area-size-005.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=315/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 639,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/alignment/self-baseline/grid-self-baseline-changes-grid-area-size-010.html",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=336/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 535,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/alignment/self-baseline/grid-self-baseline-horiz-003.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=21050/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1208,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/alignment/self-baseline/grid-self-baseline-vertical-lr-001.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=45206/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1105,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/alignment/self-baseline/grid-self-baseline-vertical-lr-006.html",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=87232/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1169,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/alignment/self-baseline/grid-self-baseline-vertical-rl-004.html",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=19553/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1119,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/anonymous-grid-items-002.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 976,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/dynamic-grid-within-flexbox.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=10000/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 606,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/grid-container-as-flex-item-001.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=11154/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 519,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/grid-container-baseline-synthesized-003.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=348554/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1142,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/grid-definition/fr-unit-with-percentage.html",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=4725/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1006,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/grid-definition/grid-auto-repeat-dynamic-002.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=4000/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 529,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/grid-definition/grid-auto-repeat-multiple-values-002.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=6000/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1081,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/grid-definition/grid-change-auto-repeat-tracks.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": null,
+      "subtests": [
+        {
+          "name": ".grid 1",
+          "status": "FAIL",
+          "message": "assert_equals(50, 25, \"\\n<div id=\\\"grid1\\\" class=\\\"grid fixedWidth\\\" style=\\\"grid-template-rows: none; grid-template-columns: repeat(auto-fill, 25px);\\\">\\n    <div id=\\\"i1-1\\\" data-expected-width=\\\"25\\\" data-expected-height=\\\"25\\\" data-offset-x=\\\"0\\\" data-offset-y=\\\"25\\\"></div>\\n    <div id=\\\"i1-2\\\" data-expected-width=\\\"25\\\" data-expected-height=\\\"25\\\" data-offset-x=\\\"0\\\" data-offset-y=\\\"0\\\"></div>\\n    <div id=\\\"i1-3\\\" data-expected-width=\\\"25\\\" data-expected-height=\\\"25\\\" data-offset-x=\\\"25\\\" data-offset-y=\\\"25\\\"></div>\\n  </div>\\nwidth\")\nError"
+        },
+        {
+          "name": ".grid 2",
+          "status": "FAIL",
+          "message": "assert_equals(100, 25, \"\\n<div id=\\\"grid2\\\" class=\\\"grid fixedHeight\\\" style=\\\"grid-template-rows: repeat(auto-fill, 25px); grid-template-columns: none;\\\">\\n    <div id=\\\"i2-1\\\" data-expected-width=\\\"25\\\" data-expected-height=\\\"25\\\" data-offset-x=\\\"0\\\" data-offset-y=\\\"0\\\"></div>\\n    <div id=\\\"i2-2\\\" data-expected-width=\\\"25\\\" data-expected-height=\\\"25\\\" data-offset-x=\\\"25\\\" data-offset-y=\\\"0\\\"></div>\\n    <div id=\\\"i2-3\\\" data-expected-width=\\\"25\\\" data-expected-height=\\\"25\\\" data-offset-x=\\\"25\\\" data-offset-y=\\\"25\\\"></div>\\n  </div>\\nwidth\")\nError"
+        },
+        {
+          "name": ".grid 3",
+          "status": "FAIL",
+          "message": "assert_equals(50, 25, \"\\n<div id=\\\"grid1\\\" class=\\\"grid fixedWidth\\\" style=\\\"grid-template-rows: none; grid-template-columns: none;\\\">\\n    <div id=\\\"i1-1\\\" data-expected-width=\\\"25\\\" data-expected-height=\\\"25\\\" data-offset-x=\\\"0\\\" data-offset-y=\\\"25\\\"></div>\\n    <div id=\\\"i1-2\\\" data-expected-width=\\\"25\\\" data-expected-height=\\\"25\\\" data-offset-x=\\\"0\\\" data-offset-y=\\\"0\\\"></div>\\n    <div id=\\\"i1-3\\\" data-expected-width=\\\"25\\\" data-expected-height=\\\"25\\\" data-offset-x=\\\"0\\\" data-offset-y=\\\"50\\\"></div>\\n  </div>\\nwidth\")\nError"
+        },
+        {
+          "name": ".grid 4",
+          "status": "FAIL",
+          "message": "assert_equals(100, 25, \"\\n<div id=\\\"grid2\\\" class=\\\"grid fixedHeight\\\" style=\\\"grid-template-rows: none; grid-template-columns: none;\\\">\\n    <div id=\\\"i2-1\\\" data-expected-width=\\\"25\\\" data-expected-height=\\\"25\\\" data-offset-x=\\\"0\\\" data-offset-y=\\\"0\\\"></div>\\n    <div id=\\\"i2-2\\\" data-expected-width=\\\"25\\\" data-expected-height=\\\"25\\\" data-offset-x=\\\"25\\\" data-offset-y=\\\"0\\\"></div>\\n    <div id=\\\"i2-3\\\" data-expected-width=\\\"25\\\" data-expected-height=\\\"25\\\" data-offset-x=\\\"50\\\" data-offset-y=\\\"0\\\"></div>\\n  </div>\\nwidth\")\nError"
+        },
+        {
+          "name": ".grid 5",
+          "status": "FAIL",
+          "message": "assert_equals(50, 5, \"\\n<div id=\\\"grid1\\\" class=\\\"grid fixedWidth\\\" style=\\\"grid-template-rows: none; grid-template-columns: 5px repeat(auto-fill, 20px);\\\">\\n    <div id=\\\"i1-1\\\" data-expected-width=\\\"5\\\" data-expected-height=\\\"25\\\" data-offset-x=\\\"0\\\" data-offset-y=\\\"25\\\"></div>\\n    <div id=\\\"i1-2\\\" data-expected-width=\\\"5\\\" data-expected-height=\\\"25\\\" data-offset-x=\\\"0\\\" data-offset-y=\\\"0\\\"></div>\\n    <div id=\\\"i1-3\\\" data-expected-width=\\\"20\\\" data-expected-height=\\\"25\\\" data-offset-x=\\\"5\\\" data-offset-y=\\\"25\\\"></div>\\n  </div>\\nwidth\")\nError"
+        },
+        {
+          "name": ".grid 6",
+          "status": "FAIL",
+          "message": "assert_equals(100, 25, \"\\n<div id=\\\"grid2\\\" class=\\\"grid fixedHeight\\\" style=\\\"grid-template-rows: repeat(auto-fill, 20px) 3px; grid-template-columns: none;\\\">\\n    <div id=\\\"i2-1\\\" data-expected-width=\\\"25\\\" data-expected-height=\\\"20\\\" data-offset-x=\\\"0\\\" data-offset-y=\\\"0\\\"></div>\\n    <div id=\\\"i2-2\\\" data-expected-width=\\\"25\\\" data-expected-height=\\\"20\\\" data-offset-x=\\\"25\\\" data-offset-y=\\\"0\\\"></div>\\n    <div id=\\\"i2-3\\\" data-expected-width=\\\"25\\\" data-expected-height=\\\"20\\\" data-offset-x=\\\"25\\\" data-offset-y=\\\"20\\\"></div>\\n  </div>\\nwidth\")\nError"
+        },
+        {
+          "name": ".grid 7",
+          "status": "FAIL",
+          "message": "assert_equals(50, 5, \"\\n<div id=\\\"grid1\\\" class=\\\"grid fixedWidth\\\" style=\\\"grid-template-rows: none; grid-template-columns: 5px repeat(auto-fill, 22px);\\\">\\n    <div id=\\\"i1-1\\\" data-expected-width=\\\"5\\\" data-expected-height=\\\"25\\\" data-offset-x=\\\"0\\\" data-offset-y=\\\"25\\\"></div>\\n    <div id=\\\"i1-2\\\" data-expected-width=\\\"5\\\" data-expected-height=\\\"25\\\" data-offset-x=\\\"0\\\" data-offset-y=\\\"0\\\"></div>\\n    <div id=\\\"i1-3\\\" data-expected-width=\\\"22\\\" data-expected-height=\\\"25\\\" data-offset-x=\\\"5\\\" data-offset-y=\\\"25\\\"></div>\\n  </div>\\nwidth\")\nError"
+        },
+        {
+          "name": ".grid 8",
+          "status": "FAIL",
+          "message": "assert_equals(100, 25, \"\\n<div id=\\\"grid2\\\" class=\\\"grid fixedHeight\\\" style=\\\"grid-template-rows: repeat(auto-fill, 18px) 3px; grid-template-columns: none;\\\">\\n    <div id=\\\"i2-1\\\" data-expected-width=\\\"25\\\" data-expected-height=\\\"18\\\" data-offset-x=\\\"0\\\" data-offset-y=\\\"0\\\"></div>\\n    <div id=\\\"i2-2\\\" data-expected-width=\\\"25\\\" data-expected-height=\\\"18\\\" data-offset-x=\\\"25\\\" data-offset-y=\\\"0\\\"></div>\\n    <div id=\\\"i2-3\\\" data-expected-width=\\\"25\\\" data-expected-height=\\\"18\\\" data-offset-x=\\\"25\\\" data-offset-y=\\\"18\\\"></div>\\n  </div>\\nwidth\")\nError"
+        },
+        {
+          "name": ".grid 9",
+          "status": "FAIL",
+          "message": "assert_equals(50, 45, \"\\n<div id=\\\"grid1\\\" class=\\\"grid fixedWidth\\\" style=\\\"grid-template-rows: none; grid-template-columns: repeat(auto-fill, 45px);\\\">\\n    <div id=\\\"i1-1\\\" data-expected-width=\\\"45\\\" data-expected-height=\\\"25\\\" data-offset-x=\\\"0\\\" data-offset-y=\\\"25\\\"></div>\\n    <div id=\\\"i1-2\\\" data-expected-width=\\\"45\\\" data-expected-height=\\\"25\\\" data-offset-x=\\\"0\\\" data-offset-y=\\\"0\\\"></div>\\n    <div id=\\\"i1-3\\\" data-expected-width=\\\"45\\\" data-expected-height=\\\"25\\\" data-offset-x=\\\"0\\\" data-offset-y=\\\"50\\\"></div>\\n  </div>\\nwidth\")\nError"
+        },
+        {
+          "name": ".grid 10",
+          "status": "FAIL",
+          "message": "assert_equals(100, 25, \"\\n<div id=\\\"grid2\\\" class=\\\"grid fixedHeight\\\" style=\\\"grid-template-rows: repeat(auto-fill, 45px); grid-template-columns: none;\\\">\\n    <div id=\\\"i2-1\\\" data-expected-width=\\\"25\\\" data-expected-height=\\\"45\\\" data-offset-x=\\\"0\\\" data-offset-y=\\\"0\\\"></div>\\n    <div id=\\\"i2-2\\\" data-expected-width=\\\"25\\\" data-expected-height=\\\"45\\\" data-offset-x=\\\"25\\\" data-offset-y=\\\"0\\\"></div>\\n    <div id=\\\"i2-3\\\" data-expected-width=\\\"25\\\" data-expected-height=\\\"45\\\" data-offset-x=\\\"50\\\" data-offset-y=\\\"0\\\"></div>\\n  </div>\\nwidth\")\nError"
+        },
+        {
+          "name": ".grid 11",
+          "status": "FAIL",
+          "message": "assert_equals(100, 45, \"\\n<div id=\\\"grid1\\\" class=\\\"grid fixedWidth\\\" style=\\\"grid-template-rows: none; grid-template-columns: repeat(auto-fill, 45px); width: 100px; height: auto;\\\">\\n    <div id=\\\"i1-1\\\" data-expected-width=\\\"45\\\" data-expected-height=\\\"25\\\" data-offset-x=\\\"0\\\" data-offset-y=\\\"25\\\"></div>\\n    <div id=\\\"i1-2\\\" data-expected-width=\\\"45\\\" data-expected-height=\\\"25\\\" data-offset-x=\\\"0\\\" data-offset-y=\\\"0\\\"></div>\\n    <div id=\\\"i1-3\\\" data-expected-width=\\\"45\\\" data-expected-height=\\\"25\\\" data-offset-x=\\\"45\\\" data-offset-y=\\\"25\\\"></div>\\n  </div>\\nwidth\")\nError"
+        },
+        {
+          "name": ".grid 12",
+          "status": "FAIL",
+          "message": "assert_equals(100, 25, \"\\n<div id=\\\"grid2\\\" class=\\\"grid fixedHeight\\\" style=\\\"grid-template-rows: repeat(auto-fill, 45px); grid-template-columns: none; width: 100px; height: 100px;\\\">\\n    <div id=\\\"i2-1\\\" data-expected-width=\\\"25\\\" data-expected-height=\\\"45\\\" data-offset-x=\\\"0\\\" data-offset-y=\\\"0\\\"></div>\\n    <div id=\\\"i2-2\\\" data-expected-width=\\\"25\\\" data-expected-height=\\\"45\\\" data-offset-x=\\\"25\\\" data-offset-y=\\\"0\\\"></div>\\n    <div id=\\\"i2-3\\\" data-expected-width=\\\"25\\\" data-expected-height=\\\"45\\\" data-offset-x=\\\"25\\\" data-offset-y=\\\"45\\\"></div>\\n  </div>\\nwidth\")\nError"
+        },
+        {
+          "name": ".grid 13",
+          "status": "FAIL",
+          "message": "assert_equals(100, 45, \"\\n<div id=\\\"grid1\\\" class=\\\"grid fixedWidth\\\" style=\\\"grid-template-rows: none; grid-template-columns: repeat(auto-fill, 45px); width: 100px; height: auto;\\\">\\n    <div id=\\\"i1-1\\\" data-expected-width=\\\"45\\\" data-expected-height=\\\"25\\\" data-offset-x=\\\"0\\\" data-offset-y=\\\"25\\\"></div>\\n    <div id=\\\"i1-2\\\" data-expected-width=\\\"45\\\" data-expected-height=\\\"25\\\" data-offset-x=\\\"0\\\" data-offset-y=\\\"0\\\"></div>\\n    <div id=\\\"i1-3\\\" data-expected-width=\\\"25\\\" data-expected-height=\\\"25\\\" data-offset-x=\\\"90\\\" data-offset-y=\\\"25\\\" style=\\\"grid-row: auto; grid-column: 3;\\\"></div>\\n  </div>\\nwidth\")\nError"
+        },
+        {
+          "name": ".grid 14",
+          "status": "FAIL",
+          "message": "assert_equals(100, 25, \"\\n<div id=\\\"grid2\\\" class=\\\"grid fixedHeight\\\" style=\\\"grid-template-rows: repeat(auto-fill, 45px); grid-template-columns: none; width: 100px; height: 100px;\\\">\\n    <div id=\\\"i2-1\\\" data-expected-width=\\\"25\\\" data-expected-height=\\\"45\\\" data-offset-x=\\\"0\\\" data-offset-y=\\\"0\\\"></div>\\n    <div id=\\\"i2-2\\\" data-expected-width=\\\"25\\\" data-expected-height=\\\"45\\\" data-offset-x=\\\"25\\\" data-offset-y=\\\"0\\\"></div>\\n    <div id=\\\"i2-3\\\" data-expected-width=\\\"25\\\" data-expected-height=\\\"25\\\" data-offset-x=\\\"25\\\" data-offset-y=\\\"90\\\" style=\\\"grid-row: 3; grid-column: auto;\\\"></div>\\n  </div>\\nwidth\")\nError"
+        },
+        {
+          "name": ".grid 15",
+          "status": "FAIL",
+          "message": "assert_equals(100, 45, \"\\n<div id=\\\"grid1\\\" class=\\\"grid fixedWidth\\\" style=\\\"grid-template-rows: none; grid-template-columns: repeat(auto-fit, 45px); width: 100px; height: auto;\\\">\\n    <div id=\\\"i1-1\\\" data-expected-width=\\\"45\\\" data-expected-height=\\\"25\\\" data-offset-x=\\\"0\\\" data-offset-y=\\\"25\\\"></div>\\n    <div id=\\\"i1-2\\\" data-expected-width=\\\"45\\\" data-expected-height=\\\"25\\\" data-offset-x=\\\"0\\\" data-offset-y=\\\"0\\\"></div>\\n    <div id=\\\"i1-3\\\" data-expected-width=\\\"25\\\" data-expected-height=\\\"25\\\" data-offset-x=\\\"45\\\" data-offset-y=\\\"25\\\" style=\\\"grid-row: auto; grid-column: 3;\\\"></div>\\n  </div>\\nwidth\")\nError"
+        },
+        {
+          "name": ".grid 16",
+          "status": "FAIL",
+          "message": "assert_equals(100, 25, \"\\n<div id=\\\"grid2\\\" class=\\\"grid fixedHeight\\\" style=\\\"grid-template-rows: repeat(auto-fit, 45px); grid-template-columns: none; width: 100px; height: 100px;\\\">\\n    <div id=\\\"i2-1\\\" data-expected-width=\\\"25\\\" data-expected-height=\\\"45\\\" data-offset-x=\\\"0\\\" data-offset-y=\\\"0\\\"></div>\\n    <div id=\\\"i2-2\\\" data-expected-width=\\\"25\\\" data-expected-height=\\\"45\\\" data-offset-x=\\\"25\\\" data-offset-y=\\\"0\\\"></div>\\n    <div id=\\\"i2-3\\\" data-expected-width=\\\"25\\\" data-expected-height=\\\"25\\\" data-offset-x=\\\"25\\\" data-offset-y=\\\"45\\\" style=\\\"grid-row: 3; grid-column: auto;\\\"></div>\\n  </div>\\nwidth\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 4781,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/grid-definition/grid-repeat-max-width-001.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=9000/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 649,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/grid-definition/grid-template-columns-fit-content-001.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1395,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/grid-flexible-track-free-space-distribution.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=10000/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1070,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/grid-item-non-auto-height-stretch-004.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1021,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/grid-items/aspect-ratio-001.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=68400/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 523,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/grid-items/explicitly-sized-grid-item-as-table.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=9000/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 533,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/grid-items/grid-inline-items-003.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=7986/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 558,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/grid-items/grid-inline-order-property-auto-placement-004.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=10144/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1060,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/grid-items/grid-inline-order-property-painting-004.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=10162/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 519,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/grid-items/grid-inline-z-axis-ordering-004.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=10162/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 512,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/grid-items/grid-inline-z-axis-ordering-overlapped-items-004.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=17694/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1080,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/grid-items/grid-item-block-axis-content-contribution-002.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 991,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/grid-items/grid-item-border-padding-004.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1006,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/alignment/grid-content-alignment-overflow-002.html",
+      "expected": "PASS",
+      "actual": "TIMEOUT",
+      "reason": "no testharness results scraped within 5000ms",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 5134,
+      "unexpected": true,
+      "rerun": true,
+      "originalActual": "TIMEOUT",
+      "killedEngine": true
+    },
+    {
+      "test": "/css/css-grid/alignment/grid-align-content-distribution.html",
+      "expected": "PASS",
+      "actual": "TIMEOUT",
+      "reason": "hard deadline after 10000ms (likely goto or evaluate hung)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 10002,
+      "unexpected": true,
+      "rerun": true,
+      "originalActual": "TIMEOUT",
+      "stalledEngine": true
+    },
+    {
+      "test": "/css/css-grid/alignment/grid-fit-content-tracks-dont-stretch-001.html",
+      "expected": "PASS",
+      "actual": "TIMEOUT",
+      "reason": "no testharness results scraped within 5000ms",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 5139,
+      "unexpected": true,
+      "rerun": true,
+      "originalActual": "TIMEOUT",
+      "stalledEngine": true
+    },
+    {
+      "test": "/css/css-grid/alignment/grid-item-aspect-ratio-justify-self-001.html",
+      "expected": "PASS",
+      "actual": "TIMEOUT",
+      "reason": "no testharness results scraped within 5000ms",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 5122,
+      "unexpected": true,
+      "rerun": true,
+      "originalActual": "TIMEOUT"
+    },
+    {
+      "test": "/css/css-grid/grid-definition/flex-content-resolution-rows-001.html",
+      "expected": "PASS",
+      "actual": "TIMEOUT",
+      "reason": "no testharness results scraped within 5000ms",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 5121,
+      "unexpected": true,
+      "rerun": true,
+      "originalActual": "TIMEOUT"
+    },
+    {
+      "test": "/css/css-grid/grid-definition/grid-auto-fit-rows-001.html",
+      "expected": "PASS",
+      "actual": "TIMEOUT",
+      "reason": "no testharness results scraped within 5000ms",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 5124,
+      "unexpected": true,
+      "rerun": true,
+      "originalActual": "TIMEOUT",
+      "stalledEngine": true
+    },
+    {
+      "test": "/css/css-grid/grid-items/grid-item-direction-rtl-001.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1286,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/grid-items/grid-item-inline-contribution-004.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=10000/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1282,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/grid-items/grid-item-minmax-img-001.html",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=10000/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1281,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/grid-items/grid-item-percentage-sizes-003.html",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=11195/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1727,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/grid-items/grid-items-002.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=9116/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1279,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/grid-items/grid-items-percentage-margins-004.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1261,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/grid-items/grid-items-percentage-margins-009.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1244,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/grid-items/grid-items-percentage-margins-014.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 521,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/grid-items/grid-items-percentage-paddings-007.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=2000/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 570,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/grid-items/grid-items-percentage-paddings-012.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 474,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/grid-items/grid-items-relative-positioned-containing-block-003.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=10000/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 520,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/grid-items/grid-layout-grid-in-grid.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=12500/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1348,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/grid-items/grid-minimum-size-grid-items-003.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 569,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/grid-items/grid-minimum-size-grid-items-008.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=10000/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1042,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/grid-items/grid-minimum-size-grid-items-013.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=8753/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 574,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/grid-items/grid-minimum-size-grid-items-018.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=9500/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 572,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/grid-items/grid-order-property-auto-placement-003.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=11209/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1232,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/grid-items/grid-order-property-painting-003.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=10162/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 571,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/grid-items/grid-size-with-orthogonal-child-dynamic.html",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=68400/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1062,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/grid-items/grid-z-axis-ordering-005.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=10162/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 640,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/grid-items/grid-z-axis-ordering-overlapped-items-005.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=17694/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1153,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/grid-items/percentage-size-indefinite-replaced.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=10000/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 679,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/grid-items/replaced-element-001.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 651,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/grid-items/replaced-element-012.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=68400/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 687,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/grid-items/whitespace-in-grid-item-001.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1188,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/grid-lanes/tentative/parsing/grid-lanes-direction-invalid.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "e.style['grid-lanes-direction'] = \"auto\" should not set the property value",
+          "status": "FAIL",
+          "message": "assert_equals(\"auto\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-lanes-direction'] = \"column row-reverse\" should not set the property value",
+          "status": "FAIL",
+          "message": "assert_equals(\"column row-reverse\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-lanes-direction'] = \"normal track-reverse\" should not set the property value",
+          "status": "FAIL",
+          "message": "assert_equals(\"normal track-reverse\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-lanes-direction'] = \"normal fill-reverse\" should not set the property value",
+          "status": "FAIL",
+          "message": "assert_equals(\"normal fill-reverse\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-lanes-direction'] = \"normal fill-reverse track-reverse\" should not set the property value",
+          "status": "FAIL",
+          "message": "assert_equals(\"normal fill-reverse track-reverse\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-lanes-direction'] = \"normal track-reverse fill-reverse\" should not set the property value",
+          "status": "FAIL",
+          "message": "assert_equals(\"normal track-reverse fill-reverse\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-lanes-direction'] = \"column-reverse\" should not set the property value",
+          "status": "FAIL",
+          "message": "assert_equals(\"column-reverse\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-lanes-direction'] = \"row-reverse\" should not set the property value",
+          "status": "FAIL",
+          "message": "assert_equals(\"row-reverse\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-lanes-direction'] = \"column reverse\" should not set the property value",
+          "status": "FAIL",
+          "message": "assert_equals(\"column reverse\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-lanes-direction'] = \"row fill-reverse fill-reverse\" should not set the property value",
+          "status": "FAIL",
+          "message": "assert_equals(\"row fill-reverse fill-reverse\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-lanes-direction'] = \"column track-reverse track-reverse\" should not set the property value",
+          "status": "FAIL",
+          "message": "assert_equals(\"column track-reverse track-reverse\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-lanes-direction'] = \"column !important fill-reverse fill-reverse\" should not set the property value",
+          "status": "FAIL",
+          "message": "assert_equals(\"column !important fill-reverse fill-reverse\", \"\")\nError"
+        },
+        {
+          "name": "e.style['grid-lanes-direction'] = \"row track-reverse !important fill-reverse\" should not set the property value",
+          "status": "FAIL",
+          "message": "assert_equals(\"row track-reverse !important fill-reverse\", \"\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 810,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/grid-lanes/tentative/parsing/grid-lanes-shorthand-computed.html",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "Property grid-lanes value '\"a b\" 1fr 2fr row'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-lanes doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-lanes value '8px column'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-lanes doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-lanes value '8px column track-reverse fill-reverse'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-lanes doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-lanes value '\"a b c\" 10% 20% 30% row track-reverse'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-lanes doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-lanes value '\"a b\" 10px 20px column fill-reverse'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-lanes doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-lanes value 'min-content row fill-reverse track-reverse'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-lanes doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-lanes value 'repeat(5, auto)'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-lanes doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-lanes value 'row track-reverse repeat(3, 1fr) \"a b b\"'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-lanes doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-lanes value '100px 200px'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-lanes doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-lanes value '\"a b c\" row track-reverse 1fr 2fr 3fr'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-lanes doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-lanes value 'row fill-reverse minmax(100px, 1fr)'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-lanes doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-lanes value 'fit-content(200px) \"area\" column'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-lanes doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-lanes value 'column \"a b\" [line1] 1fr [line2] 2fr'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-lanes doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-lanes value 'row repeat(auto-fill, 100px)'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-lanes doesn't seem to be supported in the computed style\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 869,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/grid-model/column-property-should-not-apply-on-grid-container-001.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1020,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/grid-model/grid-areas-overflowing-grid-container-003.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=10000/480000 worstDelta=127 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1073,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/grid-model/grid-areas-overflowing-grid-container-008.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=10000/480000 worstDelta=127 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 999,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/grid-model/grid-container-ignores-first-line-001.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": null,
+      "subtests": [
+        {
+          "name": ".grid,.inline-grid 1",
+          "status": "PASS",
+          "message": "assert_true(true, \"data-expected-height is a valid data attribute\")\nError"
+        },
+        {
+          "name": ".grid,.inline-grid 2",
+          "status": "PASS",
+          "message": "assert_true(true, \"data-expected-height is a valid data attribute\")\nError"
+        },
+        {
+          "name": ".grid,.inline-grid 3",
+          "status": "PASS",
+          "message": "assert_true(true, \"data-expected-height is a valid data attribute\")\nError"
+        },
+        {
+          "name": ".grid,.inline-grid 4",
+          "status": "PASS",
+          "message": "assert_true(true, \"data-expected-height is a valid data attribute\")\nError"
+        },
+        {
+          "name": ".grid,.inline-grid 5",
+          "status": "PASS",
+          "message": "assert_true(true, \"data-expected-height is a valid data attribute\")\nError"
+        },
+        {
+          "name": ".grid,.inline-grid 6",
+          "status": "PASS",
+          "message": "assert_true(true, \"data-expected-height is a valid data attribute\")\nError"
+        },
+        {
+          "name": ".grid,.inline-grid 7",
+          "status": "PASS",
+          "message": "assert_true(true, \"data-expected-height is a valid data attribute\")\nError"
+        },
+        {
+          "name": ".grid,.inline-grid 8",
+          "status": "PASS",
+          "message": "assert_true(true, \"data-expected-height is a valid data attribute\")\nError"
+        },
+        {
+          "name": ".grid,.inline-grid 9",
+          "status": "PASS",
+          "message": "assert_true(true, \"data-expected-height is a valid data attribute\")\nError"
+        },
+        {
+          "name": ".grid,.inline-grid 10",
+          "status": "PASS",
+          "message": "assert_true(true, \"data-expected-height is a valid data attribute\")\nError"
+        },
+        {
+          "name": ".grid,.inline-grid 11",
+          "status": "PASS",
+          "message": "assert_true(true, \"data-expected-height is a valid data attribute\")\nError"
+        },
+        {
+          "name": ".grid,.inline-grid 12",
+          "status": "PASS",
+          "message": "assert_true(true, \"data-expected-height is a valid data attribute\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 2960,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/grid-model/grid-container-scrollbars-sizing-001.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1374,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/grid-model/grid-first-letter-001.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1080,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/grid-model/grid-first-line-003.html",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=3154/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 880,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/grid-model/grid-inline-first-line-002.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 629,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/grid-model/grid-inline-multicol-001.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 526,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/grid-model/grid-min-max-height-001.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": null,
+      "subtests": [
+        {
+          "name": ".grid 1",
+          "status": "FAIL",
+          "message": "assert_equals(784, 10, \"\\n<div class=\\\"grid minHeightGrid\\\" data-expected-height=\\\"100\\\" data-expected-width=\\\"10\\\"></div>\\nwidth\")\nError"
+        },
+        {
+          "name": ".grid 2",
+          "status": "FAIL",
+          "message": "assert_equals(784, 10, \"\\n<div class=\\\"grid maxHeightGrid\\\" data-expected-height=\\\"100\\\" data-expected-width=\\\"10\\\"></div>\\nwidth\")\nError"
+        },
+        {
+          "name": ".grid 3",
+          "status": "FAIL",
+          "message": "assert_equals(784, 10, \"\\n<div class=\\\"grid minHeightAutoGrid\\\" data-expected-height=\\\"100\\\" data-expected-width=\\\"10\\\"></div>\\nwidth\")\nError"
+        },
+        {
+          "name": ".grid 4",
+          "status": "FAIL",
+          "message": "assert_equals(784, 10, \"\\n<div class=\\\"grid maxHeightAutoGrid\\\" data-expected-height=\\\"0\\\" data-expected-width=\\\"10\\\"></div>\\nwidth\")\nError"
+        },
+        {
+          "name": ".grid 5",
+          "status": "FAIL",
+          "message": "assert_equals(784, 10, \"\\n<div class=\\\"grid minHeightAutoGrid\\\" data-expected-height=\\\"150\\\" data-expected-width=\\\"10\\\">\\n        <div style=\\\"height: 150px\\\"></div>\\n    </div>\\nwidth\")\nError"
+        },
+        {
+          "name": ".grid 6",
+          "status": "FAIL",
+          "message": "assert_equals(784, 10, \"\\n<div class=\\\"grid maxHeightAutoGrid\\\" data-expected-height=\\\"100\\\" data-expected-width=\\\"10\\\">\\n        <div style=\\\"height: 300px\\\"></div>\\n    </div>\\nwidth\")\nError"
+        },
+        {
+          "name": ".grid 7",
+          "status": "FAIL",
+          "message": "assert_equals(784, 1000, \"\\n<div class=\\\"grid minHeightGrid\\\" data-expected-height=\\\"100\\\" data-expected-width=\\\"1000\\\"></div>\\nwidth\")\nError"
+        },
+        {
+          "name": ".grid 8",
+          "status": "FAIL",
+          "message": "assert_equals(784, 1000, \"\\n<div class=\\\"grid maxHeightGrid\\\" data-expected-height=\\\"100\\\" data-expected-width=\\\"1000\\\"></div>\\nwidth\")\nError"
+        },
+        {
+          "name": ".grid 9",
+          "status": "FAIL",
+          "message": "assert_equals(784, 1000, \"\\n<div class=\\\"grid minHeightAutoGrid\\\" data-expected-height=\\\"100\\\" data-expected-width=\\\"1000\\\"></div>\\nwidth\")\nError"
+        },
+        {
+          "name": ".grid 10",
+          "status": "FAIL",
+          "message": "assert_equals(784, 1000, \"\\n<div class=\\\"grid maxHeightAutoGrid\\\" data-expected-height=\\\"0\\\" data-expected-width=\\\"1000\\\"></div>\\nwidth\")\nError"
+        },
+        {
+          "name": ".grid 11",
+          "status": "FAIL",
+          "message": "assert_equals(784, 1000, \"\\n<div class=\\\"grid minHeightAutoGrid\\\" data-expected-height=\\\"150\\\" data-expected-width=\\\"1000\\\">\\n        <div style=\\\"height: 150px\\\"></div>\\n    </div>\\nwidth\")\nError"
+        },
+        {
+          "name": ".grid 12",
+          "status": "FAIL",
+          "message": "assert_equals(784, 1000, \"\\n<div class=\\\"grid maxHeightAutoGrid\\\" data-expected-height=\\\"100\\\" data-expected-width=\\\"1000\\\">\\n        <div style=\\\"height: 300px\\\"></div>\\n    </div>\\nwidth\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 2041,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/grid-overflowing-item-below-container-is-painted.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1161,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/grid-with-aspect-ratio-uses-content-box-height-for-track-sizing.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=10000/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 534,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/grid-within-flexbox-definite-change.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=10000/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 580,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/inheritance.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "Property grid-auto-columns has initial value auto",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-auto-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns does not inherit",
+          "status": "FAIL",
+          "message": "assert_true(false)\nError"
+        },
+        {
+          "name": "Property grid-auto-flow has initial value row",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-auto-flow doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-auto-flow does not inherit",
+          "status": "FAIL",
+          "message": "assert_true(false)\nError"
+        },
+        {
+          "name": "Property grid-auto-rows has initial value auto",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-auto-rows doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-auto-rows does not inherit",
+          "status": "FAIL",
+          "message": "assert_true(false)\nError"
+        },
+        {
+          "name": "Property grid-column-end has initial value auto",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-column-end doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-column-end does not inherit",
+          "status": "FAIL",
+          "message": "assert_true(false)\nError"
+        },
+        {
+          "name": "Property grid-column-start has initial value auto",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-column-start doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-column-start does not inherit",
+          "status": "FAIL",
+          "message": "assert_true(false)\nError"
+        },
+        {
+          "name": "Property grid-row-end has initial value auto",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-row-end doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-row-end does not inherit",
+          "status": "FAIL",
+          "message": "assert_true(false)\nError"
+        },
+        {
+          "name": "Property grid-row-start has initial value auto",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-row-start doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-row-start does not inherit",
+          "status": "FAIL",
+          "message": "assert_true(false)\nError"
+        },
+        {
+          "name": "Property grid-template-areas has initial value none",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-template-areas doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-template-areas does not inherit",
+          "status": "FAIL",
+          "message": "assert_true(false)\nError"
+        },
+        {
+          "name": "Property grid-template-columns has initial value none",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-template-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns does not inherit",
+          "status": "FAIL",
+          "message": "assert_true(false)\nError"
+        },
+        {
+          "name": "Property grid-template-rows has initial value none",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-template-rows doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-template-rows does not inherit",
+          "status": "FAIL",
+          "message": "assert_true(false)\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 1186,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/layout-algorithm/flex-sizing-rows-indefinite-height.html",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=313600/480000 worstDelta=255 fuzzy(maxDiff=1, maxPixels=4327) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 586,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/layout-algorithm/grid-as-flex-item-should-not-shrink-to-fit-005.html",
+      "expected": "FAIL",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 477,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/layout-algorithm/grid-inline-grid-intrinsic-width-percent-height-aspect-ratio-001.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=30000/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 534,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/layout-algorithm/grid-min-content-width-percent-height-aspect-ratio-001.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=8000/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 584,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/layout-algorithm/grid-stretch-respects-min-size-001.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=10000/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 560,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/nested-grid-item-block-size-001.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1314,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/parsing/grid-auto-columns-computed.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "Property grid-auto-columns value '1px'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-auto-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'calc(10px + 0.5em)'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-auto-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'calc(10px - 0.5em)'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-auto-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value '4%'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-auto-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value '5fr'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-auto-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'min-content'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-auto-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'max-content'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-auto-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'auto'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-auto-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'minmax(1px, 5fr)'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-auto-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'minmax(calc(10px + 0.5em), max-content)'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-auto-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'minmax(calc(10px - 0.5em), max-content)'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-auto-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'minmax(4%, auto)'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-auto-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'minmax(min-content, calc(10px + 0.5em))'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-auto-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'minmax(auto, 4%)'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-auto-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'fit-content(1px)'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-auto-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'fit-content(calc(10px + 0.5em))'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-auto-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'fit-content(calc(10px - 0.5em))'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-auto-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'fit-content(4%)'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-auto-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value '0px'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-auto-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value '0%'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-auto-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value '0fr'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-auto-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'minmax(auto, 0%)'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-auto-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'fit-content(0px)'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-auto-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value '1px 2px 3px 0px'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-auto-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-auto-columns value 'fit-content(1px) minmax(2px, 3px) 4px'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-auto-columns doesn't seem to be supported in the computed style\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 1010,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/parsing/grid-auto-flow-valid.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "e.style['grid-auto-flow'] = \"row\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"row\", \"row\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-flow'] = \"column\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"column\", \"column\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-flow'] = \"row dense\" should set the property value",
+          "status": "FAIL",
+          "message": "assert_equals(\"row dense\", \"dense\", \"serialization should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-flow'] = \"dense row\" should set the property value",
+          "status": "FAIL",
+          "message": "assert_equals(\"dense row\", \"dense\", \"serialization should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-flow'] = \"dense\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"dense\", \"dense\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-flow'] = \"column dense\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"column dense\", \"column dense\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-auto-flow'] = \"dense column\" should set the property value",
+          "status": "FAIL",
+          "message": "assert_equals(\"dense column\", \"column dense\", \"serialization should be canonical\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 629,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/parsing/grid-column-shortest-serialization.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "Property grid-column value 'auto / auto'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-column doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-column value 'auto'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-column doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-column value '10 / auto'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-column doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-column value '10'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-column doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-column value '-10 / auto'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-column doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-column value '-10'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-column doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-column value 'first / first'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-column doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-column value 'first'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-column doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-column value 'span 2 / auto'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-column doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-column value 'span 2'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-column doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-column value '2 first / auto'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-column doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-column value '2 first'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-column doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-column value 'span first / auto'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-column doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-column value 'span first'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-column doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-column value 'span 2 first / auto'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-column doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-column value 'span 2 first'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-column doesn't seem to be supported in the computed style\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 853,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/parsing/grid-row-shortest-serialization.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "Property grid-row value 'auto / auto'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-row doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-row value 'auto'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-row doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-row value '10 / auto'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-row doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-row value '10'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-row doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-row value '-10 / auto'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-row doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-row value '-10'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-row doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-row value 'span 2 / auto'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-row doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-row value 'span 2'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-row doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-row value '3 last / auto'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-row doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-row value '3 last'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-row doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-row value 'span first / auto'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-row doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-row value 'span first'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-row doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-row value 'span 2 first / auto'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-row doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-row value 'span 2 first'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-row doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-row value 'last / last'",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-row doesn't seem to be supported in the computed style\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 873,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/parsing/grid-shorthand.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "e.style['grid'] = \"none\" should set grid-auto-columns",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"auto\", \"grid-auto-columns should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"none\" should set grid-auto-flow",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"row\", \"grid-auto-flow should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"none\" should set grid-auto-rows",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"auto\", \"grid-auto-rows should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"none\" should set grid-template-areas",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"none\", \"grid-template-areas should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"none\" should set grid-template-columns",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"none\", \"grid-template-columns should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"none\" should set grid-template-rows",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"none\", \"grid-template-rows should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"none\" should not set unrelated longhands",
+          "status": "FAIL",
+          "message": "assert_equals(1, 0)\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"10px / 20%\" should set grid-auto-columns",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"auto\", \"grid-auto-columns should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"10px / 20%\" should set grid-auto-flow",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"row\", \"grid-auto-flow should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"10px / 20%\" should set grid-auto-rows",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"auto\", \"grid-auto-rows should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"10px / 20%\" should set grid-template-areas",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"none\", \"grid-template-areas should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"10px / 20%\" should set grid-template-columns",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"20%\", \"grid-template-columns should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"10px / 20%\" should set grid-template-rows",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"10px\", \"grid-template-rows should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"10px / 20%\" should not set unrelated longhands",
+          "status": "FAIL",
+          "message": "assert_equals(1, 0)\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"none / 10px\" should set grid-auto-columns",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"auto\", \"grid-auto-columns should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"none / 10px\" should set grid-auto-flow",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"row\", \"grid-auto-flow should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"none / 10px\" should set grid-auto-rows",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"auto\", \"grid-auto-rows should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"none / 10px\" should set grid-template-areas",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"none\", \"grid-template-areas should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"none / 10px\" should set grid-template-columns",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"10px\", \"grid-template-columns should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"none / 10px\" should set grid-template-rows",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"none\", \"grid-template-rows should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"none / 10px\" should not set unrelated longhands",
+          "status": "FAIL",
+          "message": "assert_equals(1, 0)\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"fit-content(calc(-0.5em + 10px)) / fit-content(calc(0.5em + 10px))\" should set grid-auto-columns",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"auto\", \"grid-auto-columns should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"fit-content(calc(-0.5em + 10px)) / fit-content(calc(0.5em + 10px))\" should set grid-auto-flow",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"row\", \"grid-auto-flow should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"fit-content(calc(-0.5em + 10px)) / fit-content(calc(0.5em + 10px))\" should set grid-auto-rows",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"auto\", \"grid-auto-rows should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"fit-content(calc(-0.5em + 10px)) / fit-content(calc(0.5em + 10px))\" should set grid-template-areas",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"none\", \"grid-template-areas should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"fit-content(calc(-0.5em + 10px)) / fit-content(calc(0.5em + 10px))\" should set grid-template-columns",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"fit-content(calc(0.5em + 10px))\", \"grid-template-columns should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"fit-content(calc(-0.5em + 10px)) / fit-content(calc(0.5em + 10px))\" should set grid-template-rows",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"fit-content(calc(-0.5em + 10px))\", \"grid-template-rows should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"fit-content(calc(-0.5em + 10px)) / fit-content(calc(0.5em + 10px))\" should not set unrelated longhands",
+          "status": "FAIL",
+          "message": "assert_equals(1, 0)\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"[header-top] \\\"a a a\\\"     [header-bottom]  [main-top] \\\"b b b\\\" 1fr [main-bottom]           / auto 1fr auto\" should set grid-auto-columns",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"auto\", \"grid-auto-columns should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"[header-top] \\\"a a a\\\"     [header-bottom]  [main-top] \\\"b b b\\\" 1fr [main-bottom]           / auto 1fr auto\" should set grid-auto-flow",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"row\", \"grid-auto-flow should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"[header-top] \\\"a a a\\\"     [header-bottom]  [main-top] \\\"b b b\\\" 1fr [main-bottom]           / auto 1fr auto\" should set grid-auto-rows",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"auto\", \"grid-auto-rows should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"[header-top] \\\"a a a\\\"     [header-bottom]  [main-top] \\\"b b b\\\" 1fr [main-bottom]           / auto 1fr auto\" should set grid-template-areas",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"\\\"a a a\\\" \\\"b b b\\\"\", \"grid-template-areas should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"[header-top] \\\"a a a\\\"     [header-bottom]  [main-top] \\\"b b b\\\" 1fr [main-bottom]           / auto 1fr auto\" should set grid-template-columns",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"auto 1fr auto\", \"grid-template-columns should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"[header-top] \\\"a a a\\\"     [header-bottom]  [main-top] \\\"b b b\\\" 1fr [main-bottom]           / auto 1fr auto\" should set grid-template-rows",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"[header-top] auto [header-bottom main-top] 1fr [main-bottom]\", \"grid-template-rows should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"[header-top] \\\"a a a\\\"     [header-bottom]  [main-top] \\\"b b b\\\" 1fr [main-bottom]           / auto 1fr auto\" should not set unrelated longhands",
+          "status": "FAIL",
+          "message": "assert_equals(1, 0)\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"  \\\"a a a\\\"  \\\"b b b\\\" 1fr/ auto 1fr auto\" should set grid-auto-columns",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"auto\", \"grid-auto-columns should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"  \\\"a a a\\\"  \\\"b b b\\\" 1fr/ auto 1fr auto\" should set grid-auto-flow",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"row\", \"grid-auto-flow should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"  \\\"a a a\\\"  \\\"b b b\\\" 1fr/ auto 1fr auto\" should set grid-auto-rows",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"auto\", \"grid-auto-rows should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"  \\\"a a a\\\"  \\\"b b b\\\" 1fr/ auto 1fr auto\" should set grid-template-areas",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"\\\"a a a\\\" \\\"b b b\\\"\", \"grid-template-areas should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"  \\\"a a a\\\"  \\\"b b b\\\" 1fr/ auto 1fr auto\" should set grid-template-columns",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"auto 1fr auto\", \"grid-template-columns should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"  \\\"a a a\\\"  \\\"b b b\\\" 1fr/ auto 1fr auto\" should set grid-template-rows",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"auto 1fr\", \"grid-template-rows should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"  \\\"a a a\\\"  \\\"b b b\\\" 1fr/ auto 1fr auto\" should not set unrelated longhands",
+          "status": "FAIL",
+          "message": "assert_equals(1, 0)\nError"
+        },
+        {
+          "name": "e.style['grid'] = \" [] \\\"a a a\\\"     [] [] \\\"b b b\\\" 1fr []  / [] auto 1fr [] auto []\" should set grid-auto-columns",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"auto\", \"grid-auto-columns should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \" [] \\\"a a a\\\"     [] [] \\\"b b b\\\" 1fr []  / [] auto 1fr [] auto []\" should set grid-auto-flow",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"row\", \"grid-auto-flow should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \" [] \\\"a a a\\\"     [] [] \\\"b b b\\\" 1fr []  / [] auto 1fr [] auto []\" should set grid-auto-rows",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"auto\", \"grid-auto-rows should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \" [] \\\"a a a\\\"     [] [] \\\"b b b\\\" 1fr []  / [] auto 1fr [] auto []\" should set grid-template-areas",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"\\\"a a a\\\" \\\"b b b\\\"\", \"grid-template-areas should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \" [] \\\"a a a\\\"     [] [] \\\"b b b\\\" 1fr []  / [] auto 1fr [] auto []\" should set grid-template-columns",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"auto 1fr auto\", \"grid-template-columns should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \" [] \\\"a a a\\\"     [] [] \\\"b b b\\\" 1fr []  / [] auto 1fr [] auto []\" should set grid-template-rows",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"auto 1fr\", \"grid-template-rows should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \" [] \\\"a a a\\\"     [] [] \\\"b b b\\\" 1fr []  / [] auto 1fr [] auto []\" should not set unrelated longhands",
+          "status": "FAIL",
+          "message": "assert_equals(1, 0)\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"10px / auto-flow dense 20px\" should set grid-auto-columns",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"20px\", \"grid-auto-columns should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"10px / auto-flow dense 20px\" should set grid-auto-flow",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"column dense\", \"grid-auto-flow should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"10px / auto-flow dense 20px\" should set grid-auto-rows",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"auto\", \"grid-auto-rows should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"10px / auto-flow dense 20px\" should set grid-template-areas",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"none\", \"grid-template-areas should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"10px / auto-flow dense 20px\" should set grid-template-columns",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"none\", \"grid-template-columns should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"10px / auto-flow dense 20px\" should set grid-template-rows",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"10px\", \"grid-template-rows should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"10px / auto-flow dense 20px\" should not set unrelated longhands",
+          "status": "FAIL",
+          "message": "assert_equals(1, 0)\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"auto-flow dense 30px / 40px\" should set grid-auto-columns",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"auto\", \"grid-auto-columns should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"auto-flow dense 30px / 40px\" should set grid-auto-flow",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"dense\", \"grid-auto-flow should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"auto-flow dense 30px / 40px\" should set grid-auto-rows",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"30px\", \"grid-auto-rows should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"auto-flow dense 30px / 40px\" should set grid-template-areas",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"none\", \"grid-template-areas should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"auto-flow dense 30px / 40px\" should set grid-template-columns",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"40px\", \"grid-template-columns should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"auto-flow dense 30px / 40px\" should set grid-template-rows",
+          "status": "FAIL",
+          "message": "assert_equals(\"\", \"none\", \"grid-template-rows should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid'] = \"auto-flow dense 30px / 40px\" should not set unrelated longhands",
+          "status": "FAIL",
+          "message": "assert_equals(1, 0)\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 2515,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/parsing/grid-template-columns-computed-implicit-track.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "Property grid-template-columns value 'none' computes to '10px'",
+          "status": "FAIL",
+          "message": "assert_equals(\"none\", \"10px\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '1px' computes to '10px 1px'",
+          "status": "FAIL",
+          "message": "assert_equals(\"1px\", \"10px 1px\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '1px [a]' computes to '10px 1px [a]'",
+          "status": "FAIL",
+          "message": "assert_equals(\"1px [a]\", \"10px 1px [a]\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '1px [a] 2px' computes to '10px 1px [a] 2px'",
+          "status": "FAIL",
+          "message": "assert_equals(\"1px [a] 2px\", \"10px 1px [a] 2px\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '[a] 1px' computes to '10px [a] 1px'",
+          "status": "FAIL",
+          "message": "assert_equals(\"[a] 1px\", \"10px [a] 1px\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '[a] 1px [b]' computes to '10px [a] 1px [b]'",
+          "status": "FAIL",
+          "message": "assert_equals(\"[a] 1px [b]\", \"10px [a] 1px [b]\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '1px repeat(1, 2px) 3px' computes to '10px 1px 2px 3px'",
+          "status": "FAIL",
+          "message": "assert_equals(\"1px repeat(1, 2px) 3px\", \"10px 1px 2px 3px\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '1px repeat(auto-fill, 2px) 3px' computes to '10px 1px 2px 3px'",
+          "status": "FAIL",
+          "message": "assert_equals(\"1px repeat(auto-fill, 2px) 3px\", \"10px 1px 2px 3px\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '1px repeat(auto-fit, 2px) 3px' computes to '10px 1px 0px 3px'",
+          "status": "FAIL",
+          "message": "assert_equals(\"1px repeat(auto-fit, 2px) 3px\", \"10px 1px 0px 3px\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '1px [a] repeat(1, 2px 3px) [b] 4px' computes to '10px 1px [a] 2px 3px [b] 4px'",
+          "status": "FAIL",
+          "message": "assert_equals(\"1px [a] repeat(1, 2px 3px) [b] 4px\", \"10px 1px [a] 2px 3px [b] 4px\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '1px [a] repeat(auto-fill, 2px 3px) [b] 4px' computes to '10px 1px [a] 2px 3px [b] 4px'",
+          "status": "FAIL",
+          "message": "assert_equals(\"1px [a] repeat(auto-fill, 2px 3px) [b] 4px\", \"10px 1px [a] 2px 3px [b] 4px\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '1px [a] repeat(auto-fit, 2px 3px) [b] 4px' computes to '10px 1px [a] 0px 0px [b] 4px'",
+          "status": "FAIL",
+          "message": "assert_equals(\"1px [a] repeat(auto-fit, 2px 3px) [b] 4px\", \"10px 1px [a] 0px 0px [b] 4px\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '1px [a] repeat(1, [b] 2px [c]) [d] 3px' computes to '10px 1px [a b] 2px [c d] 3px'",
+          "status": "FAIL",
+          "message": "assert_equals(\"1px [a] repeat(1, [b] 2px [c]) [d] 3px\", \"10px 1px [a b] 2px [c d] 3px\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '1px [a] repeat(auto-fill, [b] 2px [c]) [d] 3px' computes to '10px 1px [a b] 2px [c d] 3px'",
+          "status": "FAIL",
+          "message": "assert_equals(\"1px [a] repeat(auto-fill, [b] 2px [c]) [d] 3px\", \"10px 1px [a b] 2px [c d] 3px\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '1px [a] repeat(auto-fit, [b] 2px [c]) [d] 3px' computes to '10px 1px [a b] 0px [c d] 3px'",
+          "status": "FAIL",
+          "message": "assert_equals(\"1px [a] repeat(auto-fit, [b] 2px [c]) [d] 3px\", \"10px 1px [a b] 0px [c d] 3px\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '[a] 1px repeat(1, 2px [b] 3px) 4px [d]' computes to '10px [a] 1px 2px [b] 3px 4px [d]'",
+          "status": "FAIL",
+          "message": "assert_equals(\"[a] 1px repeat(1, 2px [b] 3px) 4px [d]\", \"10px [a] 1px 2px [b] 3px 4px [d]\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '[a] 1px repeat(auto-fill, 2px [b] 3px) 4px [d]' computes to '10px [a] 1px 2px [b] 3px 4px [d]'",
+          "status": "FAIL",
+          "message": "assert_equals(\"[a] 1px repeat(auto-fill, 2px [b] 3px) 4px [d]\", \"10px [a] 1px 2px [b] 3px 4px [d]\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '[a] 1px repeat(auto-fit, 2px [b] 3px) 4px [d]' computes to '10px [a] 1px 0px [b] 0px 4px [d]'",
+          "status": "FAIL",
+          "message": "assert_equals(\"[a] 1px repeat(auto-fit, 2px [b] 3px) 4px [d]\", \"10px [a] 1px 0px [b] 0px 4px [d]\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '100% [a] repeat(1, [b] 200% [c]) [d] 300%' computes to '10px 1px [a b] 2px [c d] 3px'",
+          "status": "FAIL",
+          "message": "assert_equals(\"100% [a] repeat(1, [b] 200% [c]) [d] 300%\", \"10px 1px [a b] 2px [c d] 3px\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '100% [a] repeat(auto-fill, [b] 200% [c]) [d] 300%' computes to '10px 1px [a b] 2px [c d] 3px'",
+          "status": "FAIL",
+          "message": "assert_equals(\"100% [a] repeat(auto-fill, [b] 200% [c]) [d] 300%\", \"10px 1px [a b] 2px [c d] 3px\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '100% [a] repeat(auto-fit, [b] 200% [c]) [d] 300%' computes to '10px 1px [a b] 0px [c d] 3px'",
+          "status": "FAIL",
+          "message": "assert_equals(\"100% [a] repeat(auto-fit, [b] 200% [c]) [d] 300%\", \"10px 1px [a b] 0px [c d] 3px\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '[a] 1em repeat(1, 2em [b] 3em) 4em [d]' computes to '10px [a] 1px 2px [b] 3px 4px [d]'",
+          "status": "FAIL",
+          "message": "assert_equals(\"[a] 1em repeat(1, 2em [b] 3em) 4em [d]\", \"10px [a] 1px 2px [b] 3px 4px [d]\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '[a] 1em repeat(auto-fill, 2em [b] 3em) 4em [d]' computes to '10px [a] 1px 2px [b] 3px 4px [d]'",
+          "status": "FAIL",
+          "message": "assert_equals(\"[a] 1em repeat(auto-fill, 2em [b] 3em) 4em [d]\", \"10px [a] 1px 2px [b] 3px 4px [d]\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '[a] 1em repeat(auto-fit, 2em [b] 3em) 4em [d]' computes to '10px [a] 1px 0px [b] 0px 4px [d]'",
+          "status": "FAIL",
+          "message": "assert_equals(\"[a] 1em repeat(auto-fit, 2em [b] 3em) 4em [d]\", \"10px [a] 1px 0px [b] 0px 4px [d]\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 1110,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/parsing/grid-template-columns-intrinsic-auto-repeat-computed-implicit-track.tentative.html",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "Property grid-template-columns value '1px repeat(auto-fill, auto) 3px' computes to '10px 1px 0px 3px'",
+          "status": "FAIL",
+          "message": "assert_equals(\"1px repeat(auto-fill, auto) 3px\", \"10px 1px 0px 3px\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '1px repeat(auto-fit, auto) 3px' computes to '10px 1px 0px 3px'",
+          "status": "FAIL",
+          "message": "assert_equals(\"1px repeat(auto-fit, auto) 3px\", \"10px 1px 0px 3px\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '1px [a] repeat(auto-fill, min-content max-content) [b] 4px' computes to '10px 1px [a] 0px 0px [b] 4px'",
+          "status": "FAIL",
+          "message": "assert_equals(\"1px [a] repeat(auto-fill, min-content max-content) [b] 4px\", \"10px 1px [a] 0px 0px [b] 4px\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '1px [a] repeat(auto-fit, min-content max-content) [b] 4px' computes to '10px 1px [a] 0px 0px [b] 4px'",
+          "status": "FAIL",
+          "message": "assert_equals(\"1px [a] repeat(auto-fit, min-content max-content) [b] 4px\", \"10px 1px [a] 0px 0px [b] 4px\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '1px [a] repeat(auto-fill, [b] fit-content(200px) [c]) [d] 3px' computes to '10px 1px [a b] 0px [c d] 3px'",
+          "status": "FAIL",
+          "message": "assert_equals(\"1px [a] repeat(auto-fill, [b] fit-content(200px) [c]) [d] 3px\", \"10px 1px [a b] 0px [c d] 3px\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '1px [a] repeat(auto-fit, [b] fit-content(200px) [c]) [d] 3px' computes to '10px 1px [a b] 0px [c d] 3px'",
+          "status": "FAIL",
+          "message": "assert_equals(\"1px [a] repeat(auto-fit, [b] fit-content(200px) [c]) [d] 3px\", \"10px 1px [a b] 0px [c d] 3px\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '[a] 1px repeat(auto-fill, auto [b] auto) 4px [d]' computes to '10px [a] 1px 0px [b] 0px 4px [d]'",
+          "status": "FAIL",
+          "message": "assert_equals(\"[a] 1px repeat(auto-fill, auto [b] auto) 4px [d]\", \"10px [a] 1px 0px [b] 0px 4px [d]\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '[a] 1px repeat(auto-fit, auto [b] auto) 4px [d]' computes to '10px [a] 1px 0px [b] 0px 4px [d]'",
+          "status": "FAIL",
+          "message": "assert_equals(\"[a] 1px repeat(auto-fit, auto [b] auto) 4px [d]\", \"10px [a] 1px 0px [b] 0px 4px [d]\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '100% [a] repeat(auto-fill, [b] min-content [c]) [d] 300%' computes to '10px 1px [a b] 0px [c d] 3px'",
+          "status": "FAIL",
+          "message": "assert_equals(\"100% [a] repeat(auto-fill, [b] min-content [c]) [d] 300%\", \"10px 1px [a b] 0px [c d] 3px\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '100% [a] repeat(auto-fit, [b] min-content [c]) [d] 300%' computes to '10px 1px [a b] 0px [c d] 3px'",
+          "status": "FAIL",
+          "message": "assert_equals(\"100% [a] repeat(auto-fit, [b] min-content [c]) [d] 300%\", \"10px 1px [a b] 0px [c d] 3px\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '[a] 1em repeat(auto-fill, max-content [b] auto) 4em [d]' computes to '10px [a] 1px 0px [b] 0px 4px [d]'",
+          "status": "FAIL",
+          "message": "assert_equals(\"[a] 1em repeat(auto-fill, max-content [b] auto) 4em [d]\", \"10px [a] 1px 0px [b] 0px 4px [d]\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '[a] 1em repeat(auto-fit, max-content [b] auto) 4em [d]' computes to '10px [a] 1px 0px [b] 0px 4px [d]'",
+          "status": "FAIL",
+          "message": "assert_equals(\"[a] 1em repeat(auto-fit, max-content [b] auto) 4em [d]\", \"10px [a] 1px 0px [b] 0px 4px [d]\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 791,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/parsing/grid-template-columns-repeat-intrinsic-valid.tentative.html",
+      "expected": "FAIL",
+      "actual": "PASS",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "e.style['grid-template-columns'] = \"repeat(auto-fill, auto)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fill, auto)\", \"repeat(auto-fill, auto)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-columns'] = \"repeat(auto-fit, auto 100px auto)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fit, auto 100px auto)\", \"repeat(auto-fit, auto 100px auto)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-columns'] = \"repeat(auto-fill, minmax(30px, 5fr) [two] auto)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fill, minmax(30px, 5fr) [two] auto)\", \"repeat(auto-fill, minmax(30px, 5fr) [two] auto)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-columns'] = \"repeat(auto-fit, [three] auto [four])\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fit, [three] auto [four])\", \"repeat(auto-fit, [three] auto [four])\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-columns'] = \"repeat(auto-fill, minmax(auto, auto))\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fill, minmax(auto, auto))\", \"repeat(auto-fill, minmax(auto, auto))\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-columns'] = \"repeat(auto-fill, min-content)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fill, min-content)\", \"repeat(auto-fill, min-content)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-columns'] = \"repeat(auto-fit, min-content 100px min-content)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fit, min-content 100px min-content)\", \"repeat(auto-fit, min-content 100px min-content)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-columns'] = \"repeat(auto-fill, minmax(30px, 5fr) [two] min-content)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fill, minmax(30px, 5fr) [two] min-content)\", \"repeat(auto-fill, minmax(30px, 5fr) [two] min-content)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-columns'] = \"repeat(auto-fit, [three] min-content [four])\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fit, [three] min-content [four])\", \"repeat(auto-fit, [three] min-content [four])\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-columns'] = \"repeat(auto-fill, minmax(min-content, min-content))\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fill, minmax(min-content, min-content))\", \"repeat(auto-fill, minmax(min-content, min-content))\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-columns'] = \"repeat(auto-fill, max-content)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fill, max-content)\", \"repeat(auto-fill, max-content)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-columns'] = \"repeat(auto-fit, max-content 100px max-content)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fit, max-content 100px max-content)\", \"repeat(auto-fit, max-content 100px max-content)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-columns'] = \"repeat(auto-fill, minmax(30px, 5fr) [two] max-content)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fill, minmax(30px, 5fr) [two] max-content)\", \"repeat(auto-fill, minmax(30px, 5fr) [two] max-content)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-columns'] = \"repeat(auto-fit, [three] max-content [four])\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fit, [three] max-content [four])\", \"repeat(auto-fit, [three] max-content [four])\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-columns'] = \"repeat(auto-fill, minmax(max-content, max-content))\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fill, minmax(max-content, max-content))\", \"repeat(auto-fill, minmax(max-content, max-content))\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-columns'] = \"repeat(auto-fill, fit-content(200px))\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fill, fit-content(200px))\", \"repeat(auto-fill, fit-content(200px))\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-columns'] = \"repeat(auto-fit, fit-content(200px) 100px fit-content(200px))\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fit, fit-content(200px) 100px fit-content(200px))\", \"repeat(auto-fit, fit-content(200px) 100px fit-content(200px))\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-columns'] = \"repeat(auto-fill, minmax(30px, 5fr) [two] fit-content(200px))\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fill, minmax(30px, 5fr) [two] fit-content(200px))\", \"repeat(auto-fill, minmax(30px, 5fr) [two] fit-content(200px))\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-columns'] = \"repeat(auto-fit, [three] fit-content(200px) [four])\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fit, [three] fit-content(200px) [four])\", \"repeat(auto-fit, [three] fit-content(200px) [four])\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-columns'] = \"repeat(auto-fill, minmax(auto, min-content))\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fill, minmax(auto, min-content))\", \"repeat(auto-fill, minmax(auto, min-content))\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-columns'] = \"repeat(auto-fill, minmax(min-content, max-content))\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fill, minmax(min-content, max-content))\", \"repeat(auto-fill, minmax(min-content, max-content))\", \"serialization should round-trip\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 1129,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/parsing/grid-template-repeat-auto-computed-withcontent-002.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "Property grid-template-rows value '[a] 1px [b] 2px [c d] repeat(auto-fit, [e f] 3px [g] 4px [h] 5px [i j]) [k] 7px [k] 8px [l m]' gridRow = 3",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-template-rows doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-template-rows value '[a] 1px [b] 2px [c d] repeat(auto-fit, [e f] 3px [g] 4px [h] 5px [i j]) [k] 7px [k] 8px [l m]' gridRow = 5",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-template-rows doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-template-rows value '[a] 1px [b] 2px [c d] repeat(auto-fit, [e f] 3px [g] 4px [h] 5px [i j]) [k] 7px [k] 8px [l m]' gridRow = 3 / 8",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-template-rows doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-template-rows value '[a] 1px [b] 2px [c d] repeat(auto-fit, [e f] 3px [g] 4px [h] 5px [i j]) [k] 7px [k] 8px [l m]' gridRow = 4 / span 2",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-template-rows doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-template-rows value '[a] 1px [b] 2px [c d] repeat(auto-fit, [e f] 3px [g] 4px [h] 5px [i j]) [k] 7px [k] 8px [l m]' gridRow = 4 / 5",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-template-rows doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '[a] 1px [b] 2px [c d] repeat(auto-fit, [e f] 3px [g] 4px [h] 5px [i j]) [k] 7px [k] 8px [l m]' gridColumn = 3",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-template-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '[a] 1px [b] 2px [c d] repeat(auto-fit, [e f] 3px [g] 4px [h] 5px [i j]) [k] 7px [k] 8px [l m]' gridColumn = 6",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-template-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '[a] 1px [b] 2px [c d] repeat(auto-fit, [e f] 3px [g] 4px [h] 5px [i j]) [k] 7px [k] 8px [l m]' gridColumn = 3 / 8",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-template-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '[a] 1px [b] 2px [c d] repeat(auto-fit, [e f] 3px [g] 4px [h] 5px [i j]) [k] 7px [k] 8px [l m]' gridColumn = 5 / span 2",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-template-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '[a] 1px [b] 2px [c d] repeat(auto-fit, [e f] 3px [g] 4px [h] 5px [i j]) [k] 7px [k] 8px [l m]' gridColumn = 7 / span 2",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-template-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '[a] 1px [b] 2px [c d] repeat(auto-fit, [e f] 3px [g] 4px [h] 5px [i j]) [k] 7px [k] 8px [l m]' gridColumn = 5 / 8",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-template-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '[a] 1px [b] 2px [c d] repeat(auto-fit, [e f] 3px [g] 4px [h] 5px [i j]) [k] 7px [k] 8px [l m]' gridColumn = 8 / 10",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-template-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '[a] 1px [b] 2px [c d] repeat(auto-fit, [e f] 3px [g] 4px [h]) [i j] 7px [k] 8px [l m]' gridColumn = 3",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-template-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '[a] 1px [b] 2px [c d] repeat(auto-fit, [e f] 3px [g] 4px [h]) [i j] 7px [k] 8px [l m]' gridColumn = 6",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-template-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '[a] 1px [b] 2px [c d] repeat(auto-fit, [e f] 3px [g] 4px [h]) [i j] 7px [k] 8px [l m]' gridColumn = 3 / 8",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-template-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '[a] 1px [b] 2px [c d] repeat(auto-fit, [e f] 3px [g] 4px [h]) [i j] 7px [k] 8px [l m]' gridColumn = 6 / span 2",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-template-columns doesn't seem to be supported in the computed style\")\nError"
+        },
+        {
+          "name": "Property grid-template-columns value '[a] 1px [b] 2px [c d] repeat(auto-fit, [e f] 3px [g] 4px [h]) [i j] 7px [k] 8px [l m]' gridColumn = 5 / 10",
+          "status": "FAIL",
+          "message": "assert_true(false, \"grid-template-columns doesn't seem to be supported in the computed style\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 1285,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/parsing/grid-template-rows-intrinsic-auto-repeat-computed-implicit-track.tentative.html",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "Property grid-template-rows value '1px repeat(auto-fill, auto) 3px' computes to '10px 1px 0px 3px'",
+          "status": "FAIL",
+          "message": "assert_equals(\"1px repeat(auto-fill, auto) 3px\", \"10px 1px 0px 3px\")\nError"
+        },
+        {
+          "name": "Property grid-template-rows value '1px repeat(auto-fit, auto) 3px' computes to '10px 1px 0px 3px'",
+          "status": "FAIL",
+          "message": "assert_equals(\"1px repeat(auto-fit, auto) 3px\", \"10px 1px 0px 3px\")\nError"
+        },
+        {
+          "name": "Property grid-template-rows value '1px [a] repeat(auto-fill, min-content max-content) [b] 4px' computes to '10px 1px [a] 0px 0px [b] 4px'",
+          "status": "FAIL",
+          "message": "assert_equals(\"1px [a] repeat(auto-fill, min-content max-content) [b] 4px\", \"10px 1px [a] 0px 0px [b] 4px\")\nError"
+        },
+        {
+          "name": "Property grid-template-rows value '1px [a] repeat(auto-fit, min-content max-content) [b] 4px' computes to '10px 1px [a] 0px 0px [b] 4px'",
+          "status": "FAIL",
+          "message": "assert_equals(\"1px [a] repeat(auto-fit, min-content max-content) [b] 4px\", \"10px 1px [a] 0px 0px [b] 4px\")\nError"
+        },
+        {
+          "name": "Property grid-template-rows value '1px [a] repeat(auto-fill, [b] fit-content(200px) [c]) [d] 3px' computes to '10px 1px [a b] 0px [c d] 3px'",
+          "status": "FAIL",
+          "message": "assert_equals(\"1px [a] repeat(auto-fill, [b] fit-content(200px) [c]) [d] 3px\", \"10px 1px [a b] 0px [c d] 3px\")\nError"
+        },
+        {
+          "name": "Property grid-template-rows value '1px [a] repeat(auto-fit, [b] fit-content(200px) [c]) [d] 3px' computes to '10px 1px [a b] 0px [c d] 3px'",
+          "status": "FAIL",
+          "message": "assert_equals(\"1px [a] repeat(auto-fit, [b] fit-content(200px) [c]) [d] 3px\", \"10px 1px [a b] 0px [c d] 3px\")\nError"
+        },
+        {
+          "name": "Property grid-template-rows value '[a] 1px repeat(auto-fill, auto [b] auto) 4px [d]' computes to '10px [a] 1px 0px [b] 0px 4px [d]'",
+          "status": "FAIL",
+          "message": "assert_equals(\"[a] 1px repeat(auto-fill, auto [b] auto) 4px [d]\", \"10px [a] 1px 0px [b] 0px 4px [d]\")\nError"
+        },
+        {
+          "name": "Property grid-template-rows value '[a] 1px repeat(auto-fit, auto [b] auto) 4px [d]' computes to '10px [a] 1px 0px [b] 0px 4px [d]'",
+          "status": "FAIL",
+          "message": "assert_equals(\"[a] 1px repeat(auto-fit, auto [b] auto) 4px [d]\", \"10px [a] 1px 0px [b] 0px 4px [d]\")\nError"
+        },
+        {
+          "name": "Property grid-template-rows value '100% [a] repeat(auto-fill, [b] min-content [c]) [d] 300%' computes to '10px 1px [a b] 0px [c d] 3px'",
+          "status": "FAIL",
+          "message": "assert_equals(\"100% [a] repeat(auto-fill, [b] min-content [c]) [d] 300%\", \"10px 1px [a b] 0px [c d] 3px\")\nError"
+        },
+        {
+          "name": "Property grid-template-rows value '100% [a] repeat(auto-fit, [b] min-content [c]) [d] 300%' computes to '10px 1px [a b] 0px [c d] 3px'",
+          "status": "FAIL",
+          "message": "assert_equals(\"100% [a] repeat(auto-fit, [b] min-content [c]) [d] 300%\", \"10px 1px [a b] 0px [c d] 3px\")\nError"
+        },
+        {
+          "name": "Property grid-template-rows value '[a] 1em repeat(auto-fill, max-content [b] auto) 4em [d]' computes to '10px [a] 1px 0px [b] 0px 4px [d]'",
+          "status": "FAIL",
+          "message": "assert_equals(\"[a] 1em repeat(auto-fill, max-content [b] auto) 4em [d]\", \"10px [a] 1px 0px [b] 0px 4px [d]\")\nError"
+        },
+        {
+          "name": "Property grid-template-rows value '[a] 1em repeat(auto-fit, max-content [b] auto) 4em [d]' computes to '10px [a] 1px 0px [b] 0px 4px [d]'",
+          "status": "FAIL",
+          "message": "assert_equals(\"[a] 1em repeat(auto-fit, max-content [b] auto) 4em [d]\", \"10px [a] 1px 0px [b] 0px 4px [d]\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 763,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/parsing/grid-template-rows-repeat-intrinsic-valid.tentative.html",
+      "expected": "FAIL",
+      "actual": "PASS",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "e.style['grid-template-rows'] = \"repeat(auto-fill, auto)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fill, auto)\", \"repeat(auto-fill, auto)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-rows'] = \"repeat(auto-fit, auto 100px auto)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fit, auto 100px auto)\", \"repeat(auto-fit, auto 100px auto)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-rows'] = \"repeat(auto-fill, minmax(30px, 5fr) [two] auto)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fill, minmax(30px, 5fr) [two] auto)\", \"repeat(auto-fill, minmax(30px, 5fr) [two] auto)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-rows'] = \"repeat(auto-fit, [three] auto [four])\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fit, [three] auto [four])\", \"repeat(auto-fit, [three] auto [four])\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-rows'] = \"repeat(auto-fill, minmax(auto, auto))\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fill, minmax(auto, auto))\", \"repeat(auto-fill, minmax(auto, auto))\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-rows'] = \"repeat(auto-fill, min-content)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fill, min-content)\", \"repeat(auto-fill, min-content)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-rows'] = \"repeat(auto-fit, min-content 100px min-content)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fit, min-content 100px min-content)\", \"repeat(auto-fit, min-content 100px min-content)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-rows'] = \"repeat(auto-fill, minmax(30px, 5fr) [two] min-content)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fill, minmax(30px, 5fr) [two] min-content)\", \"repeat(auto-fill, minmax(30px, 5fr) [two] min-content)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-rows'] = \"repeat(auto-fit, [three] min-content [four])\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fit, [three] min-content [four])\", \"repeat(auto-fit, [three] min-content [four])\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-rows'] = \"repeat(auto-fill, minmax(min-content, min-content))\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fill, minmax(min-content, min-content))\", \"repeat(auto-fill, minmax(min-content, min-content))\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-rows'] = \"repeat(auto-fill, max-content)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fill, max-content)\", \"repeat(auto-fill, max-content)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-rows'] = \"repeat(auto-fit, max-content 100px max-content)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fit, max-content 100px max-content)\", \"repeat(auto-fit, max-content 100px max-content)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-rows'] = \"repeat(auto-fill, minmax(30px, 5fr) [two] max-content)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fill, minmax(30px, 5fr) [two] max-content)\", \"repeat(auto-fill, minmax(30px, 5fr) [two] max-content)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-rows'] = \"repeat(auto-fit, [three] max-content [four])\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fit, [three] max-content [four])\", \"repeat(auto-fit, [three] max-content [four])\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-rows'] = \"repeat(auto-fill, minmax(max-content, max-content))\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fill, minmax(max-content, max-content))\", \"repeat(auto-fill, minmax(max-content, max-content))\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-rows'] = \"repeat(auto-fill, fit-content(200px))\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fill, fit-content(200px))\", \"repeat(auto-fill, fit-content(200px))\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-rows'] = \"repeat(auto-fit, fit-content(200px) 100px fit-content(200px))\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fit, fit-content(200px) 100px fit-content(200px))\", \"repeat(auto-fit, fit-content(200px) 100px fit-content(200px))\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-rows'] = \"repeat(auto-fill, minmax(30px, 5fr) [two] fit-content(200px))\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fill, minmax(30px, 5fr) [two] fit-content(200px))\", \"repeat(auto-fill, minmax(30px, 5fr) [two] fit-content(200px))\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-rows'] = \"repeat(auto-fit, [three] fit-content(200px) [four])\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fit, [three] fit-content(200px) [four])\", \"repeat(auto-fit, [three] fit-content(200px) [four])\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-rows'] = \"repeat(auto-fill, minmax(auto, min-content))\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fill, minmax(auto, min-content))\", \"repeat(auto-fill, minmax(auto, min-content))\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template-rows'] = \"repeat(auto-fill, minmax(min-content, max-content))\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"repeat(auto-fill, minmax(min-content, max-content))\", \"repeat(auto-fill, minmax(min-content, max-content))\", \"serialization should round-trip\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 1215,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/parsing/grid-template-shorthand-valid.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "e.style['grid-template'] = \"none\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"none\", \"none\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"none / none\" should set the property value",
+          "status": "FAIL",
+          "message": "assert_equals(\"none / none\", \"none\", \"serialization should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"auto / auto\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"auto / auto\", \"auto / auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"none / [a] 0px\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"none / [a] 0px\", \"none / [a] 0px\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"none / [] 0px\" should set the property value",
+          "status": "FAIL",
+          "message": "assert_equals(\"none / [] 0px\", \"none / 0px\", \"serialization should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"[a] 10px / auto\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"[a] 10px / auto\", \"[a] 10px / auto\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"[a] 10px / none\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"[a] 10px / none\", \"[a] 10px / none\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"[] 10px [] / [] auto []\" should set the property value",
+          "status": "FAIL",
+          "message": "assert_equals(\"[] 10px [] / [] auto []\", \"10px / auto\", \"serialization should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"[a] \\\"a\\\" 10px\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"[a] \\\"a\\\" 10px\", \"[a] \\\"a\\\" 10px\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"[a] \\\"a\\\" 10px []\" should set the property value",
+          "status": "FAIL",
+          "message": "assert_equals(\"[a] \\\"a\\\" 10px []\", \"[a] \\\"a\\\" 10px\", \"serialization should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"\\\"a\\\" 10px\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\\\"a\\\" 10px\", \"\\\"a\\\" 10px\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"[] \\\"a\\\" 10px\" should set the property value",
+          "status": "FAIL",
+          "message": "assert_equals(\"[] \\\"a\\\" 10px\", \"\\\"a\\\" 10px\", \"serialization should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"[a] \\\"a\\\" 10px [a]\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"[a] \\\"a\\\" 10px [a]\", \"[a] \\\"a\\\" 10px [a]\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"\\\"a\\\"\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\\\"a\\\"\", \"\\\"a\\\"\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"\\\"a\\\" auto\" should set the property value",
+          "status": "FAIL",
+          "message": "assert_equals(\"\\\"a\\\" auto\", \"\\\"a\\\"\", \"serialization should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"\\\"a a a\\\"\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\\\"a a a\\\"\", \"\\\"a a a\\\"\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"\\\"a\\\" / 10px\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\\\"a\\\" / 10px\", \"\\\"a\\\" / 10px\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"\\\"a\\\" / 20%\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\\\"a\\\" / 20%\", \"\\\"a\\\" / 20%\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"\\\"a\\\" / 5fr\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\\\"a\\\" / 5fr\", \"\\\"a\\\" / 5fr\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"[a] \\\"a\\\"\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"[a] \\\"a\\\"\", \"[a] \\\"a\\\"\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"[a] \\\"a\\\" [a]\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"[a] \\\"a\\\" [a]\", \"[a] \\\"a\\\" [a]\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"[] \\\"a\\\"\" should set the property value",
+          "status": "FAIL",
+          "message": "assert_equals(\"[] \\\"a\\\"\", \"\\\"a\\\"\", \"serialization should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"\\\"a\\\" [] [] \\\"b\\\"\" should set the property value",
+          "status": "FAIL",
+          "message": "assert_equals(\"\\\"a\\\" [] [] \\\"b\\\"\", \"\\\"a\\\" \\\"b\\\"\", \"serialization should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"\\\"a\\\" [] \\\"b\\\"\" should set the property value",
+          "status": "FAIL",
+          "message": "assert_equals(\"\\\"a\\\" [] \\\"b\\\"\", \"\\\"a\\\" \\\"b\\\"\", \"serialization should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"\\\"a\\\" [a] [b] \\\"b\\\"\" should set the property value",
+          "status": "FAIL",
+          "message": "assert_equals(\"\\\"a\\\" [a] [b] \\\"b\\\"\", \"\\\"a\\\" [a b] \\\"b\\\"\", \"serialization should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"\\\"a\\\" [a] \\\"b\\\"\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\\\"a\\\" [a] \\\"b\\\"\", \"\\\"a\\\" [a] \\\"b\\\"\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"\\\"a\\\" / 0\" should set the property value",
+          "status": "FAIL",
+          "message": "assert_equals(\"\\\"a\\\" / 0\", \"\\\"a\\\" / 0px\", \"serialization should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"\\\"a\\\" 10px / 10px\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\\\"a\\\" 10px / 10px\", \"\\\"a\\\" 10px / 10px\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"\\\"a\\\" calc(100% - 10px) / calc(10px)\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\\\"a\\\" calc(100% - 10px) / calc(10px)\", \"\\\"a\\\" calc(100% - 10px) / calc(10px)\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"\\\"a\\\" [a] \\\"b\\\" 10px\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\\\"a\\\" [a] \\\"b\\\" 10px\", \"\\\"a\\\" [a] \\\"b\\\" 10px\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"\\\"a\\\" [a] \\\"b\\\" 10px [a]\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\\\"a\\\" [a] \\\"b\\\" 10px [a]\", \"\\\"a\\\" [a] \\\"b\\\" 10px [a]\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"\\\"a\\\" [a] [a] \\\"b\\\" 10px\" should set the property value",
+          "status": "FAIL",
+          "message": "assert_equals(\"\\\"a\\\" [a] [a] \\\"b\\\" 10px\", \"\\\"a\\\" [a a] \\\"b\\\" 10px\", \"serialization should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"\\\"a\\\" [a] [] \\\"b\\\" 10px\" should set the property value",
+          "status": "FAIL",
+          "message": "assert_equals(\"\\\"a\\\" [a] [] \\\"b\\\" 10px\", \"\\\"a\\\" [a] \\\"b\\\" 10px\", \"serialization should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"\\\"a\\\" 10px [a] \\\"b\\\" [a]\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\\\"a\\\" 10px [a] \\\"b\\\" [a]\", \"\\\"a\\\" 10px [a] \\\"b\\\" [a]\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"\\\"a\\\" [a] \\\"b\\\" [a]\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\\\"a\\\" [a] \\\"b\\\" [a]\", \"\\\"a\\\" [a] \\\"b\\\" [a]\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"[a] \\\"a\\\" [a] \\\"b\\\" [a]\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"[a] \\\"a\\\" [a] \\\"b\\\" [a]\", \"[a] \\\"a\\\" [a] \\\"b\\\" [a]\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"\\\"a\\\" \\\"a\\\" [a] \\\"b\\\" [a]\" should set the property value",
+          "status": "PASS",
+          "message": "assert_equals(\"\\\"a\\\" \\\"a\\\" [a] \\\"b\\\" [a]\", \"\\\"a\\\" \\\"a\\\" [a] \\\"b\\\" [a]\", \"serialization should round-trip\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"\\\"a\\\" [a] \\\"b\\\" [a] / 0\" should set the property value",
+          "status": "FAIL",
+          "message": "assert_equals(\"\\\"a\\\" [a] \\\"b\\\" [a] / 0\", \"\\\"a\\\" [a] \\\"b\\\" [a] / 0px\", \"serialization should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"\\\"a\\\" \\\"a\\\" [a] [a] \\\"b\\\" / auto\" should set the property value",
+          "status": "FAIL",
+          "message": "assert_equals(\"\\\"a\\\" \\\"a\\\" [a] [a] \\\"b\\\" / auto\", \"\\\"a\\\" \\\"a\\\" [a a] \\\"b\\\" / auto\", \"serialization should be canonical\")\nError"
+        },
+        {
+          "name": "e.style['grid-template'] = \"\\\"a\\\" auto [a] \\\"b\\\" auto [b] / 10px\" should set the property value",
+          "status": "FAIL",
+          "message": "assert_equals(\"\\\"a\\\" auto [a] \\\"b\\\" auto [b] / 10px\", \"\\\"a\\\" [a] \\\"b\\\" [b] / 10px\", \"serialization should be canonical\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 1952,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/placement/grid-layout-lines-shorthands.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=2200/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1091,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/placement/grid-placement-using-named-grid-lines-001.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=10000/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 561,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/relative-grandchild.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=20000/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 571,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/stretch-grid-item-radio-input.html",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=196/480000 worstDelta=137 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1315,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/subgrid/auto-track-sizing-001.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1248,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/subgrid/contribution-size-flex-tracks-001.html",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=41700/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 524,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/subgrid/grid-gap-001.html",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=258663/480000 worstDelta=187 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1523,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/subgrid/grid-gap-006.html",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=844/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1387,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/subgrid/grid-gap-011.html",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=40000/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1323,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/subgrid/grid-gap-smaller-001.html",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=128177/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1503,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/subgrid/item-percentage-height-001.html",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=153930/480000 worstDelta=127 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1242,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/subgrid/line-names-005.html",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=4000/480000 worstDelta=63 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 2415,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/subgrid/line-names-010.html",
+      "expected": "FAIL",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1787,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/subgrid/line-names-015.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 480,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/subgrid/orthogonal-writing-mode-005.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1610,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/subgrid/percentage-track-sizing.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=10000/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 550,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/subgrid/repeat-auto-fill-004.html",
+      "expected": "FAIL",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 2008,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/subgrid/scrollbar-gutter-001.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=41678/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1219,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/subgrid/standalone-axis-size-004.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=10000/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 539,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/subgrid/standalone-axis-size-009.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=10000/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 562,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/subgrid/sticky-subgrid-item.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": "reftest [match] byte-equal",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 3508,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/subgrid/subgrid-baseline-012.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=68400/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 534,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/subgrid/subgrid-no-items-on-edges-002.html",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=14000/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 593,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/subgrid/writing-directions-003.html",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=2856/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 1079,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-grid/whitespace-reattach.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": "reftest [match] pixel-diff=10000/480000 worstDelta=255 fuzzy(maxDiff=0, floor=1, maxPixels=0) exceeds tolerance (ref cached)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 582,
+      "unexpected": true
+    },
+    {
+      "test": "/css/css-grid/placement/grid-placement-using-named-grid-lines-006.html",
+      "expected": "PASS",
+      "actual": "TIMEOUT",
+      "reason": "no testharness results scraped within 5000ms",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 5120,
+      "unexpected": true,
+      "rerun": true,
+      "originalActual": "TIMEOUT",
+      "killedEngine": true
+    },
+    {
+      "test": "/css/css-grid/grid-items/grid-items-minimum-width-001.html",
+      "expected": "PASS",
+      "actual": "TIMEOUT",
+      "reason": "hard deadline after 10000ms (likely goto or evaluate hung)",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 10001,
+      "unexpected": true,
+      "rerun": true,
+      "originalActual": "TIMEOUT",
+      "stalledEngine": true
+    },
+    {
+      "test": "/css/css-grid/grid-model/grid-gutters-as-percentage-001.html",
+      "expected": "PASS",
+      "actual": "TIMEOUT",
+      "reason": "no testharness results scraped within 5000ms",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 5134,
+      "unexpected": true,
+      "rerun": true,
+      "originalActual": "TIMEOUT",
+      "stalledEngine": true
+    },
+    {
+      "test": "/css/css-grid/layout-algorithm/grid-find-fr-size-gutters-001.html",
+      "expected": "PASS",
+      "actual": "TIMEOUT",
+      "reason": "no testharness results scraped within 5000ms",
+      "subtests": [],
+      "counts": null,
+      "harness": null,
+      "durationMs": 5121,
+      "unexpected": true,
+      "rerun": true,
+      "originalActual": "TIMEOUT",
+      "stalledEngine": true
+    }
+  ]
+}

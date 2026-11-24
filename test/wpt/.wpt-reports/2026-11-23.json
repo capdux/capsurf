@@ -1,0 +1,193 @@
+{
+  "date": "2026-11-23",
+  "base": "http://web-platform.test:8000",
+  "ws": "ws://127.0.0.1:19700/devtools/browser",
+  "commit": "eba6fa3",
+  "slice": null,
+  "summary": {
+    "total": 1,
+    "expected": 0,
+    "unexpectedFail": 1,
+    "unexpectedPass": 0,
+    "byOutcome": {
+      "FAIL": 1
+    }
+  },
+  "results": [
+    {
+      "test": "/css/css-scroll-snap/parsing/scroll-padding-block-inline-invalid.html",
+      "expected": "PASS",
+      "actual": "FAIL",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "e.style['scroll-padding-block-start'] = \"none\" should not set the property value",
+          "status": "PASS",
+          "message": null
+        },
+        {
+          "name": "e.style['scroll-padding-block-start'] = \"-10px\" should not set the property value",
+          "status": "PASS",
+          "message": null
+        },
+        {
+          "name": "e.style['scroll-padding-block-start'] = \"10px 20%\" should not set the property value",
+          "status": "PASS",
+          "message": null
+        },
+        {
+          "name": "e.style['scroll-padding-block-start'] = \"fit-content\" should not set the property value",
+          "status": "PASS",
+          "message": null
+        },
+        {
+          "name": "e.style['scroll-padding-block-end'] = \"none\" should not set the property value",
+          "status": "PASS",
+          "message": null
+        },
+        {
+          "name": "e.style['scroll-padding-block-end'] = \"-10px\" should not set the property value",
+          "status": "PASS",
+          "message": null
+        },
+        {
+          "name": "e.style['scroll-padding-block-end'] = \"10px 20%\" should not set the property value",
+          "status": "PASS",
+          "message": null
+        },
+        {
+          "name": "e.style['scroll-padding-block-end'] = \"max-content\" should not set the property value",
+          "status": "PASS",
+          "message": null
+        },
+        {
+          "name": "e.style['scroll-padding-inline-start'] = \"none\" should not set the property value",
+          "status": "PASS",
+          "message": null
+        },
+        {
+          "name": "e.style['scroll-padding-inline-start'] = \"-10px\" should not set the property value",
+          "status": "PASS",
+          "message": null
+        },
+        {
+          "name": "e.style['scroll-padding-inline-start'] = \"10px 20%\" should not set the property value",
+          "status": "PASS",
+          "message": null
+        },
+        {
+          "name": "e.style['scroll-padding-inline-start'] = \"min-content\" should not set the property value",
+          "status": "PASS",
+          "message": null
+        },
+        {
+          "name": "e.style['scroll-padding-inline-end'] = \"none\" should not set the property value",
+          "status": "PASS",
+          "message": null
+        },
+        {
+          "name": "e.style['scroll-padding-inline-end'] = \"-10px\" should not set the property value",
+          "status": "PASS",
+          "message": null
+        },
+        {
+          "name": "e.style['scroll-padding-inline-end'] = \"10px 20%\" should not set the property value",
+          "status": "PASS",
+          "message": null
+        },
+        {
+          "name": "e.style['scroll-padding-inline-end'] = \"max-content\" should not set the property value",
+          "status": "PASS",
+          "message": null
+        },
+        {
+          "name": "e.style['scroll-padding-block'] = \"none\" should not set the property value",
+          "status": "PASS",
+          "message": null
+        },
+        {
+          "name": "e.style['scroll-padding-block'] = \"-10px\" should not set the property value",
+          "status": "PASS",
+          "message": null
+        },
+        {
+          "name": "e.style['scroll-padding-block'] = \"-20%\" should not set the property value",
+          "status": "PASS",
+          "message": null
+        },
+        {
+          "name": "e.style['scroll-padding-block'] = \"calc(auto)\" should not set the property value",
+          "status": "FAIL",
+          "message": "assert_equals: expected \"\" but got \"calc(auto)\""
+        },
+        {
+          "name": "e.style['scroll-padding-block'] = \"10px 20px 30px 40px 50px\" should not set the property value",
+          "status": "PASS",
+          "message": null
+        },
+        {
+          "name": "e.style['scroll-padding-block'] = \"fit-content\" should not set the property value",
+          "status": "PASS",
+          "message": null
+        },
+        {
+          "name": "e.style['scroll-padding-block'] = \"max-content\" should not set the property value",
+          "status": "PASS",
+          "message": null
+        },
+        {
+          "name": "e.style['scroll-padding-block'] = \"min-content\" should not set the property value",
+          "status": "PASS",
+          "message": null
+        },
+        {
+          "name": "e.style['scroll-padding-inline'] = \"none\" should not set the property value",
+          "status": "PASS",
+          "message": null
+        },
+        {
+          "name": "e.style['scroll-padding-inline'] = \"-10px\" should not set the property value",
+          "status": "PASS",
+          "message": null
+        },
+        {
+          "name": "e.style['scroll-padding-inline'] = \"-20%\" should not set the property value",
+          "status": "PASS",
+          "message": null
+        },
+        {
+          "name": "e.style['scroll-padding-inline'] = \"calc(auto)\" should not set the property value",
+          "status": "FAIL",
+          "message": "assert_equals: expected \"\" but got \"calc(auto)\""
+        },
+        {
+          "name": "e.style['scroll-padding-inline'] = \"10px 20px 30px 40px 50px\" should not set the property value",
+          "status": "PASS",
+          "message": null
+        },
+        {
+          "name": "e.style['scroll-padding-inline'] = \"fit-content\" should not set the property value",
+          "status": "PASS",
+          "message": null
+        },
+        {
+          "name": "e.style['scroll-padding-inline'] = \"max-content\" should not set the property value",
+          "status": "PASS",
+          "message": null
+        },
+        {
+          "name": "e.style['scroll-padding-inline'] = \"min-content\" should not set the property value",
+          "status": "PASS",
+          "message": null
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 533,
+      "unexpected": true
+    }
+  ]
+}
