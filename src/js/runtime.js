@@ -4476,6 +4476,122 @@
         if (/^(?:calc|min|max|clamp|var|env)\(/i.test(t)) return true;
         return /^\+?[1-9]\d*$/.test(t);
       }
+      if (prop === "grid-template-columns" || prop === "grid-template-rows") {
+        const splitGridTokens = (str) => {
+          const out = [];
+          let cur = "", pd = 0, bd = 0;
+          for (let i = 0; i < str.length; i++) {
+            const ch = str[i];
+            if (ch === "(") pd++;
+            else if (ch === ")" && pd > 0) pd--;
+            else if (ch === "[" && pd === 0) bd++;
+            else if (ch === "]" && pd === 0 && bd > 0) bd--;
+            if (pd === 0 && bd === 0 && /\s/.test(ch)) {
+              if (cur) { out.push(cur); cur = ""; }
+            } else cur += ch;
+          }
+          if (cur) out.push(cur);
+          return out;
+        };
+        const toks = splitGridTokens(vLower);
+        if (toks.length === 1 && toks[0] === "none") return true;
+        if (toks.length === 0) return false;
+        const isLineNames = (t) => {
+          if (!t.startsWith("[") || !t.endsWith("]")) return false;
+          const inner = t.slice(1, -1).trim();
+          if (!inner) return true;
+          const names = inner.split(/\s+/);
+          for (let i = 0; i < names.length; i++) {
+            const n = names[i];
+            if (n === "auto" || n === "span" || !/^[a-z_-][a-z0-9_-]*$/.test(n)) return false;
+          }
+          return true;
+        };
+        if (toks[0] === "subgrid") {
+          for (let i = 1; i < toks.length; i++) {
+            const t = toks[i];
+            if (isLineNames(t)) continue;
+            if (/^repeat\(/i.test(t)) {
+              const rm = /^repeat\(\s*([^,]+)\s*,\s*(.+)\s*\)$/i.exec(t);
+              if (!rm) return false;
+              const cnt = rm[1].trim();
+              if (cnt !== "auto-fill" && cnt !== "auto-fit" && !/^[1-9]\d*$/.test(cnt)) return false;
+              const sub = splitGridTokens(rm[2].trim());
+              if (sub.length === 0 || !sub.every(isLineNames)) return false;
+              continue;
+            }
+            return false;
+          }
+          return true;
+        }
+        const isFr = (t) => /^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?fr$/i.test(t) && parseFloat(t) >= 0;
+        const isInflex = (t) => t === "auto" || t === "min-content" || t === "max-content" || isValidLenPct(t, false);
+        const isTrackBreadth = (t) => isInflex(t) || isFr(t);
+        const isFixedBreadth = (t) => isValidLenPct(t, false);
+        const isTrackSize = (t) => {
+          if (isTrackBreadth(t)) return true;
+          if (/^fit-content\((.+)\)$/i.test(t)) {
+            const inner = /^fit-content\((.+)\)$/i.exec(t)[1].trim();
+            return isValidLenPct(inner, false);
+          }
+          if (/^minmax\((.+)\)$/i.test(t)) {
+            const inner = /^minmax\((.+)\)$/i.exec(t)[1].trim();
+            const parts = splitTopLevelComma(inner);
+            return parts.length === 2 && isInflex(parts[0]) && isTrackBreadth(parts[1]);
+          }
+          return false;
+        };
+        const isFixedSize = (t) => {
+          if (isFixedBreadth(t)) return true;
+          if (/^minmax\((.+)\)$/i.test(t)) {
+            const parts = splitTopLevelComma(/^minmax\((.+)\)$/i.exec(t)[1].trim());
+            if (parts.length !== 2) return false;
+            return (isFixedBreadth(parts[0]) && isTrackBreadth(parts[1])) || (isInflex(parts[0]) && isFixedBreadth(parts[1]));
+          }
+          return false;
+        };
+        let trackCount = 0, autoRepCount = 0, hasNonFixed = false, prevWasLine = false;
+        for (let i = 0; i < toks.length; i++) {
+          const t = toks[i];
+          if (isLineNames(t)) {
+            if (prevWasLine) return false;
+            prevWasLine = true;
+            continue;
+          }
+          prevWasLine = false;
+          if (/^repeat\(/i.test(t)) {
+            const rm = /^repeat\(\s*([^,]+)\s*,\s*(.+)\s*\)$/i.exec(t);
+            if (!rm) return false;
+            const cnt = rm[1].trim(), repBody = splitGridTokens(rm[2].trim());
+            if (repBody.length === 0) return false;
+            const isAuto = cnt === "auto-fill" || cnt === "auto-fit";
+            if (!isAuto && !/^[1-9]\d*$/.test(cnt)) return false;
+            if (isAuto) {
+              autoRepCount++;
+              if (autoRepCount > 1) return false;
+            }
+            let repTracks = 0, repPrevLine = false;
+            for (let j = 0; j < repBody.length; j++) {
+              const rt = repBody[j];
+              if (isLineNames(rt)) { if (repPrevLine) return false; repPrevLine = true; continue; }
+              repPrevLine = false;
+              if (isAuto ? !isFixedSize(rt) : !isTrackSize(rt)) return false;
+              if (!isFixedSize(rt)) hasNonFixed = true;
+              repTracks++;
+            }
+            if (repTracks === 0 || (isAuto && repTracks !== 1)) return false;
+            trackCount += repTracks;
+            continue;
+          }
+          if (/^(?:var|env)\(/i.test(t)) { trackCount++; continue; }
+          if (!isTrackSize(t)) return false;
+          if (!isFixedSize(t)) hasNonFixed = true;
+          trackCount++;
+        }
+        if (trackCount === 0) return false;
+        if (autoRepCount > 0 && hasNonFixed) return false;
+        return true;
+      }
       if (prop === "transform-origin-z") {
         const toks = splitCssTokens(vLower);
         return toks.length === 1 && !toks[0].includes("%") && isValidLenPct(toks[0], true);

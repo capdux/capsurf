@@ -2225,3 +2225,7 @@
 ### Phase 636: `/css/css-text-decor/text-shadow/parsing/text-shadow-computed` 7/7 全绿
 - **Filter `/css/css-text-decor/text-shadow/parsing/text-shadow-computed`**: **FAIL->PASS (7/7)**（`window.js` `text-shadow` 第 3 个长度负模糊半径规范化归零为 `0px`，并扩展 `evalGradientComputed` / `border-image-source` 支持 `repeating-*-gradient` 与 `currentcolor` 替换）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 637: `grid-template-columns`/`grid-template-rows` 完整语法校验全绿
+- **Filter `grid-template-rows-invalid` / `grid-template-columns-invalid` (+ `-valid` 无回退)**: **FAIL->PASS (2/2 + 2/2 回归全绿)**（`cssom.js` `isValidCssValue` 新增 `splitGridTokens` 与 `grid-template-columns`/`grid-template-rows` 完整校验，覆盖 `<line-names>`、`<track-size>`、`minmax()`、`fit-content()`、`repeat(auto-fill/auto-fit)` 固定轨道限制与 `subgrid`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

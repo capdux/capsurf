@@ -3047,3 +3047,7 @@
 ### Phase 636: `/css/css-text-decor/text-shadow/parsing/text-shadow-computed` 7/7 全绿
 - **核心修复 (`src/js/shim/window.js`)**：`text-shadow` 计算值规范化对第 3 个长度（blur radius）负值 clamp 为 `0px`；`evalGradientComputed` 与 `border-image-source` 补齐 `repeating-*-gradient` 与 `currentcolor` 替换。
 - **WPT & Smoke 验收**：`/css/css-text-decor/text-shadow/parsing/text-shadow-computed.html` (7/7) PASS，`--smoke` 3/3 suites PASS。
+
+### Phase 637: `grid-template-columns`/`grid-template-rows` 完整语法校验全绿
+- **核心修复 (`src/js/shim/cssom.js`)**：`isValidCssValue` 新增 `grid-template-columns`/`grid-template-rows` 校验器，严格校验负长度/负百分比/负 `fr`、`minmax()` 首参不可为 `fr`、相邻空/重复 `[line-names]`、`repeat(auto-fill/auto-fit)` 仅允许单一固定尺寸轨道及 `subgrid` 行线列表。
+- **WPT & Smoke 验收**：`grid-template-{rows,columns}-{invalid,valid}` 全绿，`--smoke` 3/3 suites PASS。

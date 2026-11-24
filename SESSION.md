@@ -7997,3 +7997,7 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Agent]**: 完成 Phase 636（`src/js/shim/window.js`）：
   1. **`window.js`**：补齐 `text-shadow` 负模糊半径归零为 `0px`，并扩展 `evalGradientComputed`/`border-image-source` 支持 `repeating-*-gradient` 与 `currentcolor` 替换。
   2. **全绿验证**：`/css/css-text-decor/text-shadow/parsing/text-shadow-computed.html` **FAIL->PASS (7/7)**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+- **[Agent]**: 完成 Phase 637（`src/js/shim/cssom.js`）：
+  1. **`cssom.js`**：为 `grid-template-columns`/`grid-template-rows` 补全 `<track-list>`、`minmax()`、`fit-content()`、`repeat(auto-fill/auto-fit)` 与 `subgrid` 语法校验。
+  2. **全绿验证**：`grid-template-rows-invalid`、`grid-template-columns-invalid` **2/2 FAIL->PASS**（`-valid` 2/2 无回退）、`--smoke` **3/3 suites, 6/6 tests PASS**。
+  3. **子智能体并发汇报**：`624398e0` 完成 `/css/css-align/` 摸底（35/49 PASS）；`65eba7f3` 完成 `/css/css-masking/` 摸底（28/94 PASS）；`febd8991` 完成 `/css/css-ui/` 摸底（37/47 PASS）；已接力派发 `0d15fac9`（`19720`, `/css/css-tables/`）与 `bc82c8a1`（`19710`, `/css/css-fonts/`）。
