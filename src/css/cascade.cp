@@ -22,7 +22,11 @@ import {
     CssProperty,
     CssRule,
     CssRuleKind,
-    CssStylesheetParser
+    CssStylesheetParser,
+    SupportsTree,
+    MediaQueryList,
+    MediaEnv,
+    MediaType
 } from "cap:css";
 
 pub enum DisplayKeyword {
@@ -4601,64 +4605,35 @@ pub struct StyleSheet {
     font_face_count: usize = 0;
     page_margin: PageMarginRule = PageMarginRule{};
 
+    static fn supportsDeclPredicate(p_name: []const u8, p_val_raw: []const u8): bool {
+        let p_val = std.mem.trim(u8, p_val_raw, " \t\r\n");
+        if (p_val.len >= 10 && std.ascii.endsWithIgnoreCase(p_val, "important")) {
+            if (bang := std.mem.lastIndexOfScalar(u8, p_val, '!')) {
+                const after_bang = std.mem.trim(u8, p_val[bang + 1 ..], " \t\r\n");
+                if (std.ascii.eqlIgnoreCase(after_bang, "important")) {
+                    p_val = std.mem.trim(u8, p_val[0..bang], " \t\r\n");
+                }
+            }
+        }
+        if (std.mem.startsWith(u8, p_name, "--") && p_name.len > 2) {
+            return ComputedStyle.isValidCustomPropValue(p_val);
+        }
+        if (p_val.len == 0) return false;
+        return ComputedStyle.isValidCustomPropValue(p_val);
+    }
+
+    static fn supportsSelPredicate(sel_in: []const u8): bool {
+        return SelectorList.parse(sel_in).count > 0;
+    }
+
     static fn evalSupportsCondition(cond_raw: []const u8): bool {
         let s = std.mem.trim(u8, cond_raw, " \t\r\n");
         if (s.len >= 9 && std.ascii.startsWithIgnoreCase(s, "@supports")) {
             s = std.mem.trim(u8, s[9..], " \t\r\n");
         }
         if (s.len == 0) return false;
-        while (s.len >= 2 && s[0] == '(' && s[s.len - 1] == ')') {
-            let depth: i32 = 0;
-            let wraps = true;
-            let i: usize = 0;
-            while (i < s.len) : (i += 1) {
-                if (s[i] == '(') depth += 1;
-                else if (s[i] == ')') depth -= 1;
-                if (depth == 0 && i + 1 < s.len) {
-                    wraps = false;
-                    break;
-                }
-            }
-            if (!wraps) break;
-            s = std.mem.trim(u8, s[1 .. s.len - 1], " \t\r\n");
-        }
-        if (s.len >= 4 && std.ascii.startsWithIgnoreCase(s, "not") && (s[3] == ' ' || s[3] == '\t' || s[3] == '(')) {
-            return !evalSupportsCondition(s[3..]);
-        }
-        let depth: i32 = 0;
-        let i: usize = 0;
-        while (i < s.len) : (i += 1) {
-            if (s[i] == '(') { depth += 1; continue; }
-            if (s[i] == ')') { if (depth > 0) depth -= 1; continue; }
-            if (depth == 0) {
-                if (i + 4 <= s.len && std.ascii.eqlIgnoreCase(s[i .. i + 4], " or ")) {
-                    return evalSupportsCondition(s[0..i]) || evalSupportsCondition(s[i + 4 ..]);
-                }
-                if (i + 5 <= s.len && std.ascii.eqlIgnoreCase(s[i .. i + 5], " and ")) {
-                    return evalSupportsCondition(s[0..i]) && evalSupportsCondition(s[i + 5 ..]);
-                }
-            }
-        }
-        if (std.ascii.startsWithIgnoreCase(s, "selector(") && s[s.len - 1] == ')') {
-            const sel_in = std.mem.trim(u8, s[9 .. s.len - 1], " \t\r\n");
-            return SelectorList.parse(sel_in).count > 0;
-        }
-        if (colon := std.mem.indexOfScalar(u8, s, ':')) {
-            const p_name = std.mem.trim(u8, s[0..colon], " \t\r\n");
-            let p_val = std.mem.trim(u8, s[colon + 1 ..], " \t\r\n");
-            if (p_val.len >= 10 && std.ascii.endsWithIgnoreCase(p_val, "important")) {
-                if (bang := std.mem.lastIndexOfScalar(u8, p_val, '!')) {
-                    const after_bang = std.mem.trim(u8, p_val[bang + 1 ..], " \t\r\n");
-                    if (std.ascii.eqlIgnoreCase(after_bang, "important")) {
-                        p_val = std.mem.trim(u8, p_val[0..bang], " \t\r\n");
-                    }
-                }
-            }
-            if (std.mem.startsWith(u8, p_name, "--") && p_name.len > 2) {
-                return ComputedStyle.isValidCustomPropValue(p_val);
-            }
-            if (p_val.len == 0) return false;
-            return ComputedStyle.isValidCustomPropValue(p_val);
+        if (tree := SupportsTree.parse(s)) {
+            return tree.eval(StyleSheet.supportsDeclPredicate, StyleSheet.supportsSelPredicate);
         }
         return false;
     }
@@ -4719,7 +4694,19 @@ pub struct StyleSheet {
                     }
                 }
             } else if (r.kind == CssRuleKind.Media) {
-                if (r.media.matches(@as(f64, viewport_w), is_dark)) {
+                let media_matched = false;
+                if (mql := MediaQueryList.parse(r.prelude) catch null) {
+                    const env = MediaEnv {
+                        media_type: MediaType.screen,
+                        width: @as(f64, viewport_w),
+                        height: 720.0,
+                        color_scheme: if (is_dark) .dark else .light,
+                    };
+                    media_matched = mql.evaluate(env);
+                } else {
+                    media_matched = r.media.matches(@as(f64, viewport_w), is_dark);
+                }
+                if (media_matched) {
                     StyleSheet.appendNestedRules(&sheet, r.nested_body);
                 }
             } else if (r.kind == CssRuleKind.Supports) {

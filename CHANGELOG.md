@@ -4187,3 +4187,6 @@
   - `src/js/shim/window.js`: `evaluateMediaQuery` 优先调用 `__capsurf_eval_media_query`（不支持特性回退 JS）。
   - `/data/dev/cp/lib/css/color.cp`: 修复 `CssColor.toRgbString` 将 alpha `u8` 输出为 `rgba(r, g, b, 0..1)` 浮点格式。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 766**:
+  - `/data/dev/cp/lib/css/media.cp`: `MediaType` 新增 `unknown` 变体，使未知媒体类型按规范解析为不匹配（`not unknown` 为真）。
+  - `src/css/cascade.cp`: `@supports` 条件求值切换至 `cap:css` `SupportsTree.parse`+`.eval`，`CssRuleKind.Media` 优先走 `cap:css` `MediaQueryList.parse`+`MediaEnv.evaluate`。

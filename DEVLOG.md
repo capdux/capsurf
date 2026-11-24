@@ -3370,3 +3370,5 @@
 - 补齐 `row-gap`/`column-gap`/`justify-items`/`block-ellipsis`/`continue`/`max-lines` 初始值与继承，以及替换 `content` 祖先下子孙 `getComputedStyle().height` 回退 `auto`，3 项 `FAIL→PASS`（基线达 `7,210`），同步达成 `/css/css-align/`、`/css/css-overflow/`、`/css/css-content/` 三目录全绿。
 ### Phase 765 — 二八分层 CSS 原生下沉 Batch 1：`cap:css` MediaQuery + Color 桥接与 `color.cp` 修复
 - 在 `dom_binding.cp` 中将 `<link media>` 与 `matchMedia`/`@media` 统一接入 `cap:css` `MediaQueryList` + `MediaEnv` 原生求值（跳过不支持的 `device-pixel-ratio`/`resolution`/`aspect-ratio` 时平滑回退 JS），并暴露 `__capsurf_parse_color`；同时发现并修复 `/data/dev/cp/lib/css/color.cp` 中 `CssColor.toRgbString` 把 `u8` alpha 直接当整数打印（如 `rgba(0,0,0,128)`）的 Bug。
+### Phase 766 — 二八分层 CSS 原生下沉 Batch 2：`SupportsTree` 与 `MediaQueryList` 接管 `cascade.cp`
+- 移除 `cascade.cp` 中手写的 `@supports` 递归条件解析，统一切换为 `cap:css` `SupportsTree.parse` + `.eval`；同时将 `CssRuleKind.Media` 接入 `cap:css` `MediaQueryList.parse` + `MediaEnv.evaluate`，并在 `/data/dev/cp/lib/css/media.cp` 补齐 `MediaType.unknown` 变体，使 `@media not unknown`（`at-media-001.html`）通过。

@@ -2432,3 +2432,4 @@
 | Phase 763 | WPT `grid-lanes` / `inline-grid-lanes` 解析与块化闭环 | `src/js/shim/cssom.js`, `src/js/shim/window.js`, `test/wpt/wpt-expectations.json` | `tentative/display-{computed,valid}` **2/2 FAIL→PASS** (`7,207` PASS); `--smoke` 3/3 PASS |
 | Phase 764 | WPT `css-align`/`css-overflow`/`css-content` 三目录 100% PASS 收官 | `src/js/shim/cssom.js`, `src/js/shim/window.js`, `test/wpt/wpt-expectations.json` | `css-align/inheritance`, `css-overflow/inheritance`, `element-replacement-dynamic-002` **3/3 FAIL→PASS** (`7,210` PASS); `--smoke` 3/3 PASS |
 | Phase 765 | 二八分层 CSS 下沉 Batch 1：`cap:css` MediaQuery/Color 桥接与 `color.cp` alpha 修复 | `src/js/dom_binding.cp`, `src/js/shim/window.js`, `/data/dev/cp/lib/css/color.cp` | `cpc brief` PASS; `--smoke` 3/3 PASS |
+| Phase 766 | 二八分层 CSS 下沉 Batch 2：`SupportsTree` 与 `MediaQueryList` 接管 `cascade.cp` | `src/css/cascade.cp`, `/data/dev/cp/lib/css/media.cp` | `at-media-001.html` **PASS**; `cpc brief` PASS; `--smoke` 3/3 PASS |
