@@ -3027,3 +3027,7 @@
 ### Phase 631: `/css/css-values/calc-unit-analysis` 10/10 全绿
 - **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：`isValidCalcSyntax` 拒绝两带单位项相乘；`getComputedStyle` 新增 `ensureLiveComputed()` 检测 `style` 属性变更并按需实时重算 `computedMap`。
 - **WPT & Smoke 验收**：`/css/css-values/calc-unit-analysis.html` (10/10) PASS，`--smoke` 3/3 suites PASS。
+
+### Phase 632: `/css/css-images/image-set/image-set-computed.sub` 36/36 全绿
+- **核心修复 (`src/js/shim/window.js`)**：新增 `normalizeImageSetComputed` 规范化 `image-set()`/`-webkit-image-set()` 计算值（`dppx` 换算、负值归零、缺省 `1dppx`、`url("...")` 引号与 `type()` 顺序），接入 `background-image` 与 `content`。
+- **WPT & Smoke 验收**：`/css/css-images/image-set/image-set-computed.sub.html` (36/36) PASS，`--smoke` 3/3 suites PASS。

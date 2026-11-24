@@ -8861,12 +8861,94 @@ function installWindow(global) {
     if (lsiRaw && /^(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(lsiRaw)) {
       computedMap.set("list-style-image", evalGradientComputed(lsiRaw));
     }
+    const normalizeImageSetComputed = (raw) => {
+      const mSet = /^(?:-webkit-)?image-set\(\s*(.*)\s*\)$/i.exec(raw);
+      if (!mSet) return raw;
+      const evalResTok = (tok) => {
+        const tl = tok.trim().toLowerCase();
+        const toDppx = (v, u) => {
+          if (u === "x" || u === "dppx") return v;
+          if (u === "dpi") return v / 96;
+          if (u === "dpcm") return (v * 2.54) / 96;
+          return null;
+        };
+        const m = /^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(x|dppx|dpi|dpcm)$/i.exec(tl);
+        if (m) {
+          const v = Math.max(0, toDppx(Number(m[1]), m[2].toLowerCase()));
+          return String(Number(v.toFixed(6))) + "dppx";
+        }
+        if (/^calc\(/i.test(tl)) {
+          const inner = tl.slice(5, -1).replace(/([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(x|dppx|dpi|dpcm)\b/gi, (_, n, u) => {
+            return String(toDppx(Number(n), u.toLowerCase()));
+          });
+          if (/^[\d+\-*/().\se]+$/i.test(inner)) {
+            try {
+              const val = Function("return (" + inner + ")")();
+              if (typeof val === "number" && isFinite(val)) {
+                return String(Number(Math.max(0, val).toFixed(6))) + "dppx";
+              }
+            } catch (_) {}
+          }
+        }
+        return null;
+      };
+      const items = [];
+      let cur = "", d = 0, q = "";
+      for (let i = 0; i < mSet[1].length; i++) {
+        const ch = mSet[1][i];
+        if (q) { cur += ch; if (ch === q && mSet[1][i - 1] !== "\\") q = ""; continue; }
+        if (ch === '"' || ch === "'") { q = ch; cur += ch; continue; }
+        if (ch === "(") d++; else if (ch === ")" && d > 0) d--;
+        if (d === 0 && ch === ",") { items.push(cur.trim()); cur = ""; }
+        else cur += ch;
+      }
+      if (cur.trim()) items.push(cur.trim());
+      const normItems = items.map((item) => {
+        const toks = [];
+        let tc = "", td = 0, tq = "";
+        for (let i = 0; i < item.length; i++) {
+          const ch = item[i];
+          if (tq) { tc += ch; if (ch === tq && item[i - 1] !== "\\") tq = ""; continue; }
+          if (ch === '"' || ch === "'") { tq = ch; tc += ch; continue; }
+          if (ch === "(") td++; else if (ch === ")" && td > 0) td--;
+          if (td === 0 && /\s/.test(ch)) { if (tc) { toks.push(tc); tc = ""; } }
+          else tc += ch;
+        }
+        if (tc) toks.push(tc);
+        let img = "", res = "", typ = "";
+        for (let ti = 0; ti < toks.length; ti++) {
+          const tk = toks[ti];
+          if ((tk.startsWith('"') && tk.endsWith('"')) || (tk.startsWith("'") && tk.endsWith("'"))) {
+            img = 'url("' + tk.slice(1, -1) + '")';
+          } else if (/^url\(/i.test(tk)) {
+            const um = /^url\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*?))\s*\)$/i.exec(tk);
+            img = um ? ('url("' + (um[1] ?? um[2] ?? um[3] ?? "").trim() + '")') : tk;
+          } else if (/^(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(tk)) {
+            img = evalGradientComputed(tk);
+          } else if (/^type\(/i.test(tk)) {
+            typ = tk.replace(/^type\(\s*'([^']*)'\s*\)$/i, 'type("$1")');
+          } else {
+            const r = evalResTok(tk);
+            if (r !== null) res = r;
+          }
+        }
+        if (!res) res = "1dppx";
+        return [img, res, typ].filter(Boolean).join(" ");
+      });
+      return "image-set(" + normItems.join(", ") + ")";
+    };
     const bgImgRaw = (computedMap.get("background-image") || "").trim();
     if (bgImgRaw && /^image\(/i.test(bgImgRaw)) {
       const im = /^image\(\s*(.*)\s*\)$/i.exec(bgImgRaw);
       if (im && im[1]) computedMap.set("background-image", "image(" + normCol(im[1].trim()) + ")");
+    } else if (bgImgRaw && /^(?:-webkit-)?image-set\(/i.test(bgImgRaw)) {
+      computedMap.set("background-image", normalizeImageSetComputed(bgImgRaw));
     } else if (bgImgRaw && /^(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(bgImgRaw)) {
       computedMap.set("background-image", evalGradientComputed(bgImgRaw));
+    }
+    const contentRaw = (computedMap.get("content") || "").trim();
+    if (contentRaw && /^(?:-webkit-)?image-set\(/i.test(contentRaw)) {
+      computedMap.set("content", normalizeImageSetComputed(contentRaw));
     }
     for (const bpKey of ["background-position", "background-position-x", "background-position-y"]) {
       const bpRaw = (computedMap.get(bpKey) || "").trim();

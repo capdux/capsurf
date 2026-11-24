@@ -2205,3 +2205,7 @@
 ### Phase 631: `/css/css-values/calc-unit-analysis` 10/10 全绿
 - **Filter `/css/css-values/calc-unit-analysis`**: **FAIL->PASS (10/10)**（`cssom.js` `isValidCalcSyntax` 禁止两带单位项直接相乘如 `2px * 1px`；`window.js` 为 `getComputedStyle` 新增 `ensureLiveComputed()` 按需实时刷新内联 `style` 变更）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 632: `/css/css-images/image-set/image-set-computed.sub` 36/36 全绿
+- **Filter `/css/css-images/image-set/image-set-computed.sub`**: **FAIL->PASS (36/36)**（`window.js` 新增 `normalizeImageSetComputed`，统一将 `-webkit-image-set` 转为 `image-set`、URL 引号标准化、分辨率单位换算为 `dppx`（缺省补 `1dppx`，负值归零）、`type()` 排在分辨率之后，并接入 `background-image` 与 `content`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

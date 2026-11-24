@@ -7979,3 +7979,7 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`cssom.js` & `window.js`**：`isValidCalcSyntax` 拒绝两带单位项相乘（`2px * 1px`），并为 `getComputedStyle` 新增 `ensureLiveComputed()` 实时响应内联 `style` 变更。
   2. **全绿验证**：`/css/css-values/calc-unit-analysis.html` **FAIL->PASS (10/10)**、`--smoke` **3/3 suites, 6/6 tests PASS**。
   3. **子智能体并发汇报**：`52cb663b` 完成 `/css/css-images/` 全量摸底（**22/26 PASS**），已接力派发 `5363e101`（`19720`, `/css/css-multicol/`）。
+- **[Agent]**: 完成 Phase 632（`src/js/shim/window.js`）：
+  1. **`window.js`**：新增 `normalizeImageSetComputed` 统一规范化 `image-set()`/`-webkit-image-set()` 分辨率（`dppx`）、URL 引号与 `type()` 顺序，并接入 `background-image` 与 `content`。
+  2. **全绿验证**：`/css/css-images/image-set/image-set-computed.sub.html` **FAIL->PASS (36/36)**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+  3. **子智能体并发汇报**：`5363e101` 完成 `/css/css-multicol/` 全量摸底（**32/32 PASS**）；`e0a8a939` 完成 `/css/css-will-change/` 全量摸底（**3/3 PASS**）；`28db3db7` 完成 `/css/css-writing-modes/` 全量摸底（**18/20 PASS**）；已接力派发 `624398e0`（`19720`, `/css/css-align/`）。
