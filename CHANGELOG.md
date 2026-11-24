@@ -3790,3 +3790,5 @@
 - **Phase 660** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 新增 `clip-path` 基本图形与几何盒语法校验；`clip-path-invalid` 全绿。
 
 - **Phase 661** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 新增 `clip-path: shape(...)` 语法校验与规范化；`clip-path-shape-parsing` (44/44) 全绿。
+
+- **Phase 662** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `cursor` `isCursorImg` 放行渐变与 `cross-fade()`，`cursor-computed` 提升至 37/39。

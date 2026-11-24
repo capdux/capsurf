@@ -3147,3 +3147,6 @@
 ### Phase 661: `clip-path-shape-parsing` (44/44) 全绿
 - **核心修复 (`src/js/shim/cssom.js`)**：`isValidCssValue` 与 `normalizeCssSpecifiedValue` 支持 `shape()` 各绘制命令校验与默认关键字省略。
 - **WPT & Smoke 验收**：`clip-path-shape-parsing` (44/44)、`clip-path-invalid` 与 `--smoke` 3/3 suites PASS。
+
+### Phase 662: `cursor` 渐变图片函数支持
+- **核心修复 (`src/js/shim/cssom.js`)**：`isCursorImg` 放行渐变函数与 `cross-fade()`，`cursor-computed.html` 提升至 37/39（剩余 2 条为上游测试自身笔误），`--smoke` 3/3 suites PASS。

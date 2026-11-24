@@ -2325,3 +2325,7 @@
 ### Phase 661: `clip-path-shape-parsing` (44/44) 全绿
 - **Filter `/css/css-masking/parsing/clip-path-shape-parsing` & `clip-path-invalid`**: **FAIL->PASS (2/2: 44/44 + PASS)**（`cssom.js` 为 `clip-path: shape(...)` 补全 `from`/`close`/`move`/`line`/`hline`/`vline`/`curve`/`smooth`/`arc` 分段校验与指定值规范化，省略默认 `nonzero`、`small`/`ccw`/`rotate 0deg` 并统一小写化）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 662: `cursor` 渐变图片函数支持
+- **Filter `/css/css-ui/parsing/cursor-computed`**: `isCursorImg` 放行 `(?:repeating-)?(?:linear|radial|conic)-gradient|cross-fade`，`cursor-computed.html` 由 36/39 提升至 **37/39**（`radial-gradient` 转绿，剩余 2 条为上游 WPT 用例预期串缺失右括号及关键字笔误）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

@@ -8089,3 +8089,6 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`cssom.js`**：新增 `clip-path: shape(...)` 分段语法校验与规范化序列化。
   2. **全绿验证**：`clip-path-shape-parsing.html`（44/44）、`clip-path-invalid.html`（PASS）与 `--smoke`（3/3 suites, 6/6 tests）全绿。
   3. **并发汇报**：`f9da26cb` 完成 `/css/css-values/`（88/270 PASS）、`984c43f4` 完成 `/css/css-counter-styles/`（0/11 PASS）；已派发 `766bec49`（`19710`, `/css/css-shapes/`）与 `474039a8`（`19720`, `/css/css-ui/`）。
+- **[Agent]**: 完成 Phase 662（`src/js/shim/cssom.js`）：
+  1. **`cssom.js`**：`cursor` `isCursorImg` 支持渐变与 `cross-fade()`，`cursor-computed.html` 提升至 37/39（剩余 2 条为上游测试自身笔误），`--smoke` **3/3 suites, 6/6 tests PASS**。
+  2. **子智能体并发汇报**：`766bec49` 完成 `/css/css-shapes/`（26/70 PASS）、`2e617092` 完成 `/css/css-overflow/`（25/33 PASS）；已接力派发 `44f94254`（`19710`, `/css/css-view-transitions/`）。

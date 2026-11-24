@@ -5557,7 +5557,7 @@
         if (last.length !== 1 || !KW.has(last[0])) return false;
         const isCoord = (x) => /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(x) || /^(?:calc|min|max|clamp)\(/i.test(x);
         const isCursorImg = (tok) => {
-          if (/^(?:url|image-set)\(/i.test(tok)) return true;
+          if (/^(?:url|image-set|(?:repeating-)?(?:linear|radial|conic)-gradient|cross-fade)\(/i.test(tok)) return true;
           if (/^light-dark\(/i.test(tok)) {
             const inn = tok.slice(11, -1).trim();
             const p = splitTopLevelComma(inn);
