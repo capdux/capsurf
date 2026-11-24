@@ -1646,3 +1646,11 @@
   - `/css/css-syntax/`: `24` files (`7 PASS / 17 FAIL`)
   - `/css/css-borders/tentative/parsing/`: `45` files (`14 PASS / 31 FAIL`)
   - `/css/css-values/` (`1/3`, `2/3`, `3/3`): `23/59`, `18/62`, `19/63` PASS
+
+### WPT-B369 ~ B370 摸底与 Phase 558 `/css/css-ruby/parsing/` 8/8 + `/css/css-rhythm/parsing/` 5/5 全绿闭环 (bin_dev Phase 558, 2026-11-24)
+- **Filter `/css/css-ruby/parsing/`**: `8` files (**8 PASS / 0 FAIL / 0 TIMEOUT**, **100% ALL GREEN**!); 实现 `ruby-align`、`ruby-merge`、`ruby-overhang`（含 `none -> spaces` 归一化）与 `ruby-position` 严格校验；收紧 `ruby-*-valid.html` 4 项基线为 `PASS`。
+- **Filter `/css/css-rhythm/parsing/`**: `5` files (**5 PASS / 0 FAIL / 0 TIMEOUT**, **100% ALL GREEN**!); 实现 `block-step-align`、`block-step-insert`、`block-step-round`、`block-step-size` 及简写 `block-step` 严格文法校验。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-multicol/`: `32` files (`25 PASS / 7 FAIL`)
+  - `/css/css-tables/`: `18` files (`15 PASS / 2 FAIL / 1 TIMEOUT`)

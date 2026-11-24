@@ -5147,32 +5147,32 @@
     "reason": "T18 enrollment (css-ruby): measured PASS"
   },
   "/css/css-ruby/parsing/ruby-align-valid.html": {
-    "expected": "FAIL",
-    "reason": "T18 enrollment (css-ruby): 0/4 subtests pass"
+    "expected": "PASS",
+    "reason": null
   },
   "/css/css-ruby/parsing/ruby-merge-invalid.html": {
     "expected": "PASS",
     "reason": "T18 enrollment (css-ruby): measured PASS"
   },
   "/css/css-ruby/parsing/ruby-merge-valid.html": {
-    "expected": "FAIL",
-    "reason": "T18 enrollment (css-ruby): 0/3 subtests pass"
+    "expected": "PASS",
+    "reason": null
   },
   "/css/css-ruby/parsing/ruby-overhang-invalid.html": {
     "expected": "PASS",
     "reason": "T18 enrollment (css-ruby): measured PASS"
   },
   "/css/css-ruby/parsing/ruby-overhang-valid.html": {
-    "expected": "FAIL",
-    "reason": "T18 enrollment (css-ruby): 0/3 subtests pass"
+    "expected": "PASS",
+    "reason": null
   },
   "/css/css-ruby/parsing/ruby-position-invalid.html": {
     "expected": "PASS",
     "reason": "T18 enrollment (css-ruby): measured PASS"
   },
   "/css/css-ruby/parsing/ruby-position-valid.html": {
-    "expected": "FAIL",
-    "reason": "T18 enrollment (css-ruby): 0/3 subtests pass"
+    "expected": "PASS",
+    "reason": null
   },
   "/css/css-ruby/position-relative.html": {
     "expected": "FAIL",

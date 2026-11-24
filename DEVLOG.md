@@ -2717,3 +2717,8 @@
   - `collectRawComputedMap` 改用 `splitCssTokens` 逐令牌解码/转义字符串，消除 `"hello" / "alt text"` 被整体二次引号包裹的缺陷。
   - 将 `normCol` 与 `evalGradientComputed` 提升至 `applyUsedValuesToComputedMap` 中 `!hasLayoutBox` 提前返回之前，补充 `to top right -> to right top` 方向关键字规范序，确保 `display: none` 元素上的 `content` 渐变函数仍能完成颜色与长度计算值求值。
 - **WPT 验收**：`/css/css-overscroll-behavior/parsing/` **1/1 PASS**、`/css/css-content/parsing/` **4/4 PASS**、`--smoke` **3/3 suites PASS**。
+
+### Phase 558: CSS Ruby 8/8 & CSS Rhythm 5/5 全绿闭环
+- **CSS Ruby (`src/js/shim/cssom.js`)**：实现 `ruby-align`、`ruby-merge`、`ruby-overhang`（`none` 规范序列化为 `spaces`）及 `ruby-position` 严格关键字校验。
+- **CSS Rhythm (`src/js/shim/cssom.js`)**：实现 `block-step-align`、`block-step-insert`、`block-step-round`、`block-step-size`（非负无 `%` 长度）及 `block-step` 简写去重校验。
+- **WPT 验收**：`/css/css-ruby/parsing/` **8/8 PASS**、`/css/css-rhythm/parsing/` **5/5 PASS**、`--smoke` **3/3 suites PASS**。

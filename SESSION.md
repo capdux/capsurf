@@ -7532,3 +7532,12 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   3. **全绿验证与并行摸底**：
      - `/css/css-overscroll-behavior/parsing/`: **1/1 PASS (100% ALL GREEN)**；`/css/css-content/parsing/`: **4/4 PASS (100% ALL GREEN)**；`scripts/e2e_suite.py --smoke`: **3/3 suites, 6/6 tests PASS**。
      - 双子智能体并行完成 `/css/css-values/`（3 个分片）、`/css/css-syntax/`、`/css/css-properties-values-api/`、`/css/css-logical/`、`/css/css-sizing/`、`/css/css-ui/`、`/css/css-transitions/` 与 `/css/css-pseudo/` 摸底。
+
+### 2026-11-24 Phase 558 (`/css/css-ruby/parsing/` 8/8 + `/css/css-rhythm/parsing/` 5/5 全绿闭环)
+- **[Agent]**: 自主推导并完成 Phase 558（`src/js/shim/cssom.js`, `test/wpt/wpt-expectations.json`）：
+  1. **CSS Ruby & CSS Rhythm 严格文法校验 (`src/js/shim/cssom.js`)**：
+     - 新增 `ruby-align`、`ruby-merge`、`ruby-overhang`（`auto | spaces | none` 并在 `normalizeCssSpecifiedValue` 将 `none` 归一化为 `spaces`）、`ruby-position`（`[ alternate || [ over | under ] ] | inter-character`）严格校验。
+     - 新增 `block-step-align`、`block-step-insert`、`block-step-round`、`block-step-size`（非负无 `%` 长度）及简写 `block-step` 校验，拦截重复/非法关键字。
+  2. **全绿验证与并行摸底**：
+     - `/css/css-ruby/parsing/`: **8/8 PASS (100% ALL GREEN)**；`/css/css-rhythm/parsing/`: **5/5 PASS (100% ALL GREEN)**；`scripts/e2e_suite.py --smoke`: **3/3 suites, 6/6 tests PASS**。
+     - 子智能体完成 `/css/css-multicol/`（25/32）与 `/css/css-tables/`（15/18）全目录摸底，并继续并行扫描 `/css/css-overflow/`、`/css/css-display/`、`/css/css-animations/` 与 `/css/css-backgrounds/`。

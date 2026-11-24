@@ -2064,6 +2064,58 @@
       if (noneCnt > 0 && ((sImg && sType) || (noneCnt === 2 && (sImg || sType)))) return false;
       return true;
     }
+    if (prop === "ruby-align") {
+      return vLower === "space-around" || vLower === "start" || vLower === "center" || vLower === "space-between";
+    }
+    if (prop === "ruby-merge") {
+      return vLower === "separate" || vLower === "merge" || vLower === "auto";
+    }
+    if (prop === "ruby-overhang") {
+      return vLower === "auto" || vLower === "spaces" || vLower === "none";
+    }
+    if (prop === "ruby-position") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length === 1) return toks[0] === "over" || toks[0] === "under" || toks[0] === "inter-character" || toks[0] === "alternate";
+      if (toks.length === 2) {
+        return (toks[0] === "alternate" && (toks[1] === "over" || toks[1] === "under")) ||
+               (toks[1] === "alternate" && (toks[0] === "over" || toks[0] === "under"));
+      }
+      return false;
+    }
+    if (prop === "block-step-align") {
+      return vLower === "auto" || vLower === "center" || vLower === "start" || vLower === "end";
+    }
+    if (prop === "block-step-insert") {
+      return vLower === "margin-box" || vLower === "padding-box" || vLower === "content-box";
+    }
+    if (prop === "block-step-round") {
+      return vLower === "up" || vLower === "down" || vLower === "nearest";
+    }
+    if (prop === "block-step-size") {
+      if (vLower === "none") return true;
+      if (vLower.includes("%")) return false;
+      return isValidLenPct(vLower, false);
+    }
+    if (prop === "block-step") {
+      const toks = splitCssTokens(vLower);
+      if (toks.length < 1 || toks.length > 4) return false;
+      let seenSize = false, seenInsert = false, seenAlign = false, seenRound = false;
+      for (let i = 0; i < toks.length; i++) {
+        const t = toks[i];
+        if (t === "margin-box" || t === "padding-box" || t === "content-box") {
+          if (seenInsert) return false; seenInsert = true;
+        } else if (t === "auto" || t === "center" || t === "start" || t === "end") {
+          if (seenAlign) return false; seenAlign = true;
+        } else if (t === "up" || t === "down" || t === "nearest") {
+          if (seenRound) return false; seenRound = true;
+        } else if (t === "none" || (!t.includes("%") && isValidLenPct(t, false))) {
+          if (seenSize) return false; seenSize = true;
+        } else {
+          return false;
+        }
+      }
+      return true;
+    }
     if (prop === "overscroll-behavior") {
       const toks = splitCssTokens(vLower);
       if (toks.length < 1 || toks.length > 2) return false;
@@ -2537,6 +2589,9 @@
         return fill === "filled" ? shape : ("open " + shape);
       }
       return s;
+    }
+    if (key === "ruby-overhang") {
+      return s.toLowerCase() === "none" ? "spaces" : s.toLowerCase();
     }
     if (key === "content") {
       const normCounterTok = (tok) => {
