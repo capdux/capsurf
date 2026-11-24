@@ -41884,6 +41884,7 @@
       }
       if (BLOCK_LEVEL_TAGS.has(tag)) return "block";
       if (tag === "table") return "table";
+      if (tag === "textarea") return "inline-block";
       if (tag === "tr") return "table-row";
       if (tag === "td" || tag === "th") return "table-cell";
       if (tag === "tbody") return "table-row-group";
@@ -42107,7 +42108,8 @@
           if (resolved !== null) computedMap.set(ck, resolved);
           else computedMap.delete(ck);
         } else if (low === "initial" || (low === "unset" && !INHERITED_CSS_PROPS.has(ck))) {
-          computedMap.delete(ck);
+          if (ck === "display") computedMap.set("display", "inline");
+          else computedMap.delete(ck);
         }
       }
 

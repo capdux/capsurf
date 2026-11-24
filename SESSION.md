@@ -7952,3 +7952,6 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Agent]**: 完成 Phase 623（`src/js/shim/cssom.js`, `src/js/shim/window.js`, `test/wpt/wpt-expectations.json`）：
   1. **`cssom.js` & `window.js`**：新增 `reading-flow`/`reading-order` 校验与计算值支持，补全根元素 `display: contents` 块化为 `block`。
   2. **全绿验证与基线收紧**：`display-contents-computed-style`、`reading-flow-invalid`、`reading-order-invalid`、`reading-flow-computed`、`reading-order-computed` **5/5 FAIL->PASS**（已收紧 2 项 `PASS` 基线）、`--smoke` **3/3 suites, 6/6 tests PASS**。
+- **[Agent]**: 完成 Phase 624（`src/js/shim/window.js`, `test/wpt/wpt-expectations.json`）：
+  1. **`window.js`**：`collectRawComputedMap` 中 `display: initial|unset` 归位 `"inline"`，且 `<textarea>` 默认 `display` 设为 `"inline-block"`。
+  2. **全绿验证与基线收紧**：`/css/css-display/inheritance.html` **FAIL->PASS**、`/css/css-display/textarea-display.html` **FAIL->PASS**（已收紧为 `PASS`）、`--smoke` **3/3 suites, 6/6 tests PASS**。

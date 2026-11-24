@@ -2686,8 +2686,8 @@
     "reason": "T18 enrollment (css-display): 0/4 subtests pass"
   },
   "/css/css-display/textarea-display.html": {
-    "expected": "FAIL",
-    "reason": "T18 enrollment (css-display): 0/1 subtests pass"
+    "expected": "PASS",
+    "reason": "Phase 624: textarea default display inline-block"
   },
   "/css/css-flexbox/break-nested-float-in-flex-item-001-print.html": {
     "expected": "PASS",

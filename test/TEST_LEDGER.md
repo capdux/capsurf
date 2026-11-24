@@ -2173,3 +2173,7 @@
 ### Phase 623: `reading-flow`/`reading-order` 全套 + 根元素 `display: contents` 块化全绿
 - **Filter `display-contents-computed-style` / `reading-flow-invalid` / `reading-order-invalid` / `reading-flow-computed` / `reading-order-computed`**: **FAIL->PASS (5/5)**（`cssom.js` 与 `window.js` 新增 `reading-flow`/`reading-order` 校验、初始值与 `calc()` 整数化简；`window.js` 补齐 `display: initial|unset` 归位 `inline` 与根元素 `contents` 块化为 `block`；已收紧 `reading-flow-computed`/`reading-order-computed` 基线为 `PASS`）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 624: `/css/css-display/inheritance` & `textarea-display` 全绿收紧
+- **Filter `/css/css-display/inheritance` & `/css/css-display/textarea-display`**: **FAIL->PASS (2/2)**（`window.js` `collectRawComputedMap` 修复 `display: initial|unset` 归位为 `"inline"` 而非删除后回退标签默认 `"block"`；`getDefaultDisplayForElement` 补齐 `<textarea>` 默认 `"inline-block"`；已收紧 `textarea-display.html` 基线为 `PASS`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

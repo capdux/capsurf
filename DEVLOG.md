@@ -2995,3 +2995,7 @@
 ### Phase 623: `reading-flow`/`reading-order` 全套 + 根元素 `display: contents` 块化全绿
 - **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：新增 `reading-flow`/`reading-order` 语法校验、默认初始值与 `calc()` 整数化简；`window.js` 补全根元素 `display: contents` 块化为 `block` 与 `display: initial|unset` 归位 `inline`。
 - **WPT & Smoke 验收**：`display-contents-computed-style`、`reading-flow-{invalid,computed}`、`reading-order-{invalid,computed}` 5 项全绿（收紧 2 项 `PASS` 基线），`--smoke` 3/3 suites PASS。
+
+### Phase 624: `/css/css-display/inheritance` & `textarea-display` 全绿收紧
+- **核心修复 (`src/js/shim/window.js`)**：`collectRawComputedMap` 中对 `display: initial|unset` 直接设为 `"inline"`（防止删除后回退到标签默认 `"block"`）；`getDefaultDisplayForElement` 补齐 `<textarea>` 默认 `"inline-block"`。
+- **WPT & Smoke 验收**：`/css/css-display/inheritance.html` & `textarea-display.html` PASS（收紧 `textarea-display` 基线为 `PASS`），`--smoke` 3/3 suites PASS。
