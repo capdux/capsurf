@@ -3624,3 +3624,5 @@
 - **Phase 578** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 完善 `background-position-x/y` 计算期逻辑关键字与 `calc(100% - px)` 符号格式化，子测试通过率从 `5/19` 提升至 `18/19`。
 
 - **Phase 579** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补齐 `css-images` 与 `css-shapes` 共 8 项属性继承集、`STANDARD_COMPUTED_LONGHANDS` 与默认初始值；`/css/css-images/inheritance.html` 与 `/css/css-shapes/inheritance.html` 转绿。
+
+- **Phase 580** (`src/js/shim/window.js`, `src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `flex` 简写 `initial`/合法性校验、修复 `flex: 0 1 1` 误放行，并过滤计算期 `align-*/flex-*/order` 非法值及补齐默认初始值；WPT `/css/css-flexbox/getcomputedstyle/` 74/74 全绿通过。

@@ -942,7 +942,7 @@
         return false;
       }
       if (isFlexNum(toks[0]) && isFlexNum(toks[1]) && (toks[2] === "0" || (isFlexBasis(toks[2]) && !isFlexNum(toks[2])))) return true;
-      if ((toks[0] === "0" || (isFlexBasis(toks[0]) && !isFlexNum(toks[0]))) && isFlexNum(toks[1]) && isFlexNum(toks[2])) return true;
+      if ((isFlexBasis(toks[0]) && !isFlexNum(toks[0])) && isFlexNum(toks[1]) && isFlexNum(toks[2])) return true;
       return false;
     }
     if (prop === "rotate") {

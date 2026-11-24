@@ -2815,3 +2815,7 @@
 ### Phase 579: `css-images/inheritance` 与 `css-shapes/inheritance` 全绿
 - **核心修复 (`src/js/shim/window.js`)**：补全 `image-{orientation,rendering,resolution}` 继承与 `object-{fit,position}`/`shape-{outside,margin,image-threshold}` 默认初始值。
 - **WPT & Smoke 验收**：`css-images/inheritance.html` PASS、`css-shapes/inheritance.html` PASS、`--smoke` 3/3 suites PASS。
+
+### Phase 580: `/css/css-flexbox/getcomputedstyle/` 74/74 全绿闭环
+- **核心修复 (`src/js/shim/window.js`, `src/js/shim/cssom.js`)**：`flex` 简写补齐 `initial` 与合法性校验并拒绝 `flex: 0 1 1`；计算期过滤 `align-items`/`align-self`/`flex-*`/`order` 非法声明并补全默认初始值。
+- **WPT & Smoke 验收**：`/css/css-flexbox/getcomputedstyle/` **74/74 PASS**、`/css/css-flexbox/parsing/` **27/27 PASS**、`--smoke` **3/3 suites PASS**。

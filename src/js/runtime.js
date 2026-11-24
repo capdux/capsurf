@@ -4732,7 +4732,7 @@
           return false;
         }
         if (isFlexNum(toks[0]) && isFlexNum(toks[1]) && (toks[2] === "0" || (isFlexBasis(toks[2]) && !isFlexNum(toks[2])))) return true;
-        if ((toks[0] === "0" || (isFlexBasis(toks[0]) && !isFlexNum(toks[0]))) && isFlexNum(toks[1]) && isFlexNum(toks[2])) return true;
+        if ((isFlexBasis(toks[0]) && !isFlexNum(toks[0])) && isFlexNum(toks[1]) && isFlexNum(toks[2])) return true;
         return false;
       }
       if (prop === "rotate") {
@@ -41131,6 +41131,14 @@
             else if (WRP.has(pt)) setDecl("flex-wrap", pt, isImp);
           }
         } else if (key === "flex") {
+          const vLow = val.trim().toLowerCase();
+          if (vLow === "inherit" || vLow === "initial" || vLow === "unset" || vLow === "revert" || vLow === "revert-layer") {
+            setDecl("flex-grow", vLow, isImp);
+            setDecl("flex-shrink", vLow, isImp);
+            setDecl("flex-basis", vLow, isImp);
+          } else if (typeof globalThis.__capsurf_isValidCssValue === "function" && !globalThis.__capsurf_isValidCssValue("flex", val)) {
+            // ignore invalid flex shorthand
+          } else {
           const parts = splitCssTopLevelWhitespace(val);
           const isNum = (s) => /^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(s);
           if (parts.length === 1 && parts[0].toLowerCase() === "none") {
@@ -41156,6 +41164,7 @@
             setDecl("flex-grow", grow, isImp);
             setDecl("flex-shrink", shrink, isImp);
             setDecl("flex-basis", basis, isImp);
+          }
           }
         } else if (key === "overflow") {
           const parts = splitCssTopLevelWhitespace(val);
@@ -41580,7 +41589,7 @@
         }
       }
       collectElementOwnDeclarations(element, styleNodes, normalizedPseudo, computedMap);
-      for (const vp of ["text-combine-upright", "text-orientation"]) {
+      for (const vp of ["text-combine-upright", "text-orientation", "align-items", "align-self", "flex-direction", "flex-grow", "flex-shrink", "flex-basis", "flex-wrap", "order"]) {
         if (computedMap.has(vp)) {
           const vv = String(computedMap.get(vp) || "").trim();
           const vl = vv.toLowerCase();
@@ -43594,6 +43603,9 @@
         ["overscroll-behavior-inline", "auto"],
         ["overscroll-behavior-x", "auto"],
         ["overscroll-behavior-y", "auto"],
+        ["align-items", "normal"],
+        ["align-self", "auto"],
+        ["order", "0"],
         ["image-orientation", "from-image"],
         ["image-rendering", "auto"],
         ["image-resolution", "1dppx"],

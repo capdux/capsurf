@@ -1857,3 +1857,14 @@
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
 - **子智能体只读摸底记录**：
   - `/css/css-flexbox/` (`b446`, partial 120 recorded): `85 PASS / 25 FAIL / 10 TIMEOUT`
+
+### Phase 580 `/css/css-flexbox/getcomputedstyle/` 74/74 全绿闭环 & WPT-B449~B454 摸底 (bin_dev Phase 580, 2026-11-24)
+- **Filter `/css/css-flexbox/getcomputedstyle/`**: **74/74 PASS (100% ALL GREEN)**（从 `64/74` 推进至全绿）：
+  - `window.js`：`collectElementOwnDeclarations` 对 `flex` 简写增加 `initial`/CSS-wide 关键字与 `__capsurf_isValidCssValue("flex", val)` 校验；计算期将 `align-items`/`align-self`/`flex-direction`/`flex-grow`/`flex-shrink`/`flex-basis`/`flex-wrap`/`order` 纳入合法性过滤并补全 `align-items: normal`, `align-self: auto`, `order: 0` 默认初始值。
+  - `cssom.js`：修复 `flex` 三值文法误将首参 `"0"` 当作 `flex-basis` 放行 `flex: 0 1 1` 的缺陷。
+- **Filter `/css/css-flexbox/parsing/`**: **27/27 PASS** 回归全绿。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-highlight-api/` (`b449`): `119` files (`24 PASS / 88 FAIL / 4 TIMEOUT / 3 ERROR`)
+  - `/css/css-fonts/parsing/` (`b452`): `82` files (`34 PASS / 47 FAIL / 1 TIMEOUT`)
+  - `/css/css-env/` (`b454`): `9` files (`1 PASS / 8 FAIL`)
