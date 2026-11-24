@@ -41455,6 +41455,7 @@
       "text-emphasis-color", "text-emphasis-position", "text-emphasis-style", "text-shadow", "text-underline-position", "text-decoration-skip-ink",
       "border-collapse", "border-spacing", "caption-side", "empty-cells",
       "image-orientation", "image-rendering", "image-resolution", "accent-color",
+      "ruby-align", "ruby-position", "ruby-merge", "ruby-overhang",
     ]);
 
     function getDefaultDisplayForElement(element) {
@@ -43703,7 +43704,11 @@
         ["max-height", "none"],
         ["max-width", "none"],
         ["min-height", "auto"],
-        ["min-width", "auto"]
+        ["min-width", "auto"],
+        ["ruby-align", "space-around"],
+        ["ruby-position", "alternate"],
+        ["ruby-merge", "separate"],
+        ["ruby-overhang", "auto"]
       ];
       const acRaw = (computedMap.get("accent-color") || "").trim();
       if (acRaw) {
@@ -43971,7 +43976,8 @@
       "overflow-anchor", "overflow-block", "overflow-inline", "overflow-wrap", "overflow-x", "overflow-y",
       "padding-block-end", "padding-block-start", "padding-bottom", "padding-inline-end", "padding-inline-start",
       "padding-left", "padding-right", "padding-top", "perspective", "perspective-origin", "pointer-events",
-      "position", "position-try-order", "position-visibility", "quotes", "resize", "right", "rotate", "row-gap", "scale", "scroll-behavior",
+      "position", "position-try-order", "position-visibility", "quotes", "resize", "right", "rotate", "row-gap",
+      "ruby-align", "ruby-merge", "ruby-overhang", "ruby-position", "scale", "scroll-behavior",
       "scroll-margin-block-end", "scroll-margin-block-start", "scroll-margin-bottom",
       "scroll-margin-inline-end", "scroll-margin-inline-start", "scroll-margin-left",
       "scroll-margin-right", "scroll-margin-top",

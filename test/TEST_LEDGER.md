@@ -1922,3 +1922,8 @@
   - `/css/css-align/` (`b468`, partial 35 recorded): `24 PASS / 3 FAIL / 8 TIMEOUT` -> Phase 585 修复 2 项 FAIL 后 `26/35 PASS`
   - `/css/css-display/` (`b472`): `52` files (`15 PASS / 33 FAIL / 4 TIMEOUT`)
   - `/css/css-syntax/anb-` (`b474`): `2` files (`0 PASS / 2 FAIL`)
+
+### Phase 586 `/css/css-ruby/inheritance` 全绿收紧 (bin_dev Phase 586, 2026-11-24)
+- **Filter `/css/css-ruby/inheritance`**: **PASS (FAIL -> PASS)**（`ruby-align`, `ruby-position`, `ruby-merge`, `ruby-overhang` 纳入 `INHERITED_CSS_PROPS` 与 `STANDARD_COMPUTED_LONGHANDS`，补全 `"space-around"` / `"alternate"` / `"separate"` / `"auto"` 默认初始值，已收紧基线为 `PASS`）。
+- **Filter `/css/css-ruby/parsing/`**: **8/8 PASS** 回归全绿。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

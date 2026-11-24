@@ -2839,3 +2839,7 @@
 ### Phase 585: `css-align` `parse-justify-self-002` 与 `place-self-shorthand-001` 全绿
 - **核心修复 (`src/js/shim/element/element.js`, `src/js/shim/window.js`)**：内联 `place-*` 简写接入 `setEntryWithShorthand`，补全 `justify-self`/`justify-items`/`align-content`/`justify-content` 默认初始值。
 - **WPT & Smoke 验收**：`parse-justify-self-002` PASS、`place-self-shorthand-001` PASS、`--smoke` 3/3 suites PASS。
+
+### Phase 586: `/css/css-ruby/inheritance` 全绿收紧
+- **核心修复 (`src/js/shim/window.js`)**：补全 `ruby-{align,position,merge,overhang}` 继承与默认初始值（`"space-around"` / `"alternate"` / `"separate"` / `"auto"`）。
+- **WPT & Smoke 验收**：`/css/css-ruby/inheritance.html` FAIL->PASS（已收紧）、`css-ruby/parsing/` 8/8 PASS、`--smoke` 3/3 suites PASS。

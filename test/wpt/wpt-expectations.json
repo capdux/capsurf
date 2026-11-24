@@ -5131,8 +5131,8 @@
     "reason": "T18 enrollment (css-ruby): 0/1 subtests pass"
   },
   "/css/css-ruby/inheritance.html": {
-    "expected": "FAIL",
-    "reason": "T18 enrollment (css-ruby): 0/8 subtests pass"
+    "expected": "PASS",
+    "reason": null
   },
   "/css/css-ruby/line-break-around-ruby-001.html": {
     "expected": "PASS",
