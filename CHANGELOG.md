@@ -3696,3 +3696,5 @@
 - **Phase 614** (`src/js/shim/window.js`, `src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `container` / `container-name` / `container-type` computed 支持与 `/ normal` 规范化序列化；`container-type-computed.html` 5/5 全绿。
 
 - **Phase 615** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `container` 简写展开及非继承属性 `unset` 计算值还原；`container-computed.html` 14/14 全绿。
+
+- **Test Stats** (`test/stats.md`): 按 Unit / E2E / WPT / Playwright / Puppeteer 类别汇总完整测试资产规模、基线分布、Phase 588–615 全绿与摸底统计及后续修复计划。

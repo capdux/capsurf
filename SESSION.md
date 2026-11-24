@@ -7919,3 +7919,7 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Agent]**: 完成 Phase 615（`src/js/shim/cssom.js`, `src/js/shim/window.js`）：
   1. **`cssom.js` / `window.js`**：实现 `container` 简写展开（`container-name` / `container-type`）及非继承属性 `unset` 计算值还原。
   2. **全绿验证**：`container-computed.html` **14/14 PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+
+### 2026-11-24 测试计划与结果汇总归档 (`test/stats.md`)
+- **[User]**: 将所有测试计划与测试结果按类别保存到 `test/stats.md` 中做好记录。
+- **[Agent]**: 汇总本地真实基线统计（Unit 138、E2E 392、WPT 9725、PW 619、PPTR 79）及 Phase 588–615 全量 WPT 摸底/修复结果，按类别创建并提交 [test/stats.md](file:///data/dev/capsurf/test/stats.md)。
