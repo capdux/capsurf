@@ -3098,6 +3098,37 @@
       if (toks.length === 2) return (toks[0] === "before" || toks[0] === "after") && (toks[1] === "tabs" || toks[1] === "links");
       return false;
     }
+    if (prop === "grid-auto-columns" || prop === "grid-auto-rows") {
+      const toks = splitCssTokens(trimmed.replace(/\/\*[\s\S]*?\*\//g, " ").trim());
+      if (toks.length === 0) return false;
+      const isInflex = (t) => {
+        const tl = t.toLowerCase();
+        return tl === "auto" || tl === "min-content" || tl === "max-content" || isValidLenPct(t, false);
+      };
+      const isFlex = (t) => {
+        const m = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)fr$/i.exec(t);
+        return !!(m && parseFloat(m[1]) >= 0);
+      };
+      const isBreadth = (t) => isInflex(t) || isFlex(t);
+      for (let i = 0; i < toks.length; i++) {
+        const t = toks[i], tl = t.toLowerCase();
+        if (isBreadth(t)) continue;
+        if (tl.startsWith("minmax(") && tl.endsWith(")")) {
+          const args = splitTopLevelComma(t.slice(7, -1));
+          if (args.length !== 2) return false;
+          const a0 = splitCssTokens(args[0]), a1 = splitCssTokens(args[1]);
+          if (a0.length !== 1 || a1.length !== 1 || !isInflex(a0[0]) || !isBreadth(a1[0])) return false;
+          continue;
+        }
+        if (tl.startsWith("fit-content(") && tl.endsWith(")")) {
+          const a = splitCssTokens(t.slice(12, -1));
+          if (a.length !== 1 || !isValidLenPct(a[0], false)) return false;
+          continue;
+        }
+        return false;
+      }
+      return true;
+    }
     if (prop === "color-interpolation-filters") {
       return vLower === "auto" || vLower === "srgb" || vLower === "linearrgb";
     }
@@ -4480,6 +4511,9 @@
     }
     if (key === "word-space-transform") {
       return splitCssTokens(s.toLowerCase()).join(" ");
+    }
+    if (key === "grid-auto-columns" || key === "grid-auto-rows") {
+      return splitCssTokens(s.replace(/\/\*[\s\S]*?\*\//g, " ").trim()).join(" ");
     }
     if (key === "text-autospace") {
       const p = splitCssTokens(s.toLowerCase());

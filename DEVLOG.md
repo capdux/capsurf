@@ -3228,3 +3228,5 @@
 - 为 `<custom-ident>` 校验补齐 CSS Syntax 3 非 ASCII ident 码点集合，并在选择器规范化 `.trim()` 前拦截不可打印控制字符（含 `U+000B`），`non-ascii-codepoints.html` 与 `inclusive-ranges.html` 全数 PASS。
 ### Phase 694 — `css-syntax` 顶层 EOF 未闭合构造自动收口
 - 在 `selector.js` 中允许顶层选择器列表在 EOF 自动闭合未闭合的属性选择器和函数伪类，打通 `/css/css-syntax/unclosed-constructs.html` 全部 4/4 用例并保持 `/css/selectors/parsing/` 16/16 全绿。
+### Phase 695 — `grid-auto-columns` / `grid-auto-rows` `<track-size>+` 校验与规范化闭环
+- 在 `cssom.js` 中补全 `grid-auto-columns` 与 `grid-auto-rows` 的 `<track-size>+` 语法校验及内联注释剥离，`grid-auto-{columns,rows}-{valid,invalid}` 4 项测试全部 PASS。

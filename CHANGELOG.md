@@ -3902,3 +3902,6 @@
 - **Phase 694**:
   - `src/js/shim/selector.js`: 顶层选择器列表允许在 EOF 自动闭合未闭合的 `[` 与 `(`（如 `[foo`、`:nth-child(1`）。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 695**:
+  - `src/js/shim/cssom.js`: `isValidCssValue` 与 `normalizeCssSpecifiedValue` 新增 `grid-auto-columns`/`grid-auto-rows` 的 `<track-size>+` 严格校验（含 `minmax()`/`fit-content()`/`fr`）及 CSS 注释剥离。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
