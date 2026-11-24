@@ -3799,3 +3799,6 @@
   - `src/js/shim/cssom.js`: `isValidCssValue("color-scheme")` 校验 `normal` / `[<custom-ident>]+ && only?`（拒绝逗号、`default`、CSS 全局关键字混用与中置/重复 `only`）；`normalizeCssSpecifiedValue("color-scheme")` 将前置 `only` 规范化至末尾。
   - `src/js/shim/window.js`: 将 `color-scheme` 加入 `INHERITED_CSS_PROPS`，并在计算样式与 `getPropertyValue` 兜底中默认/回退为 `"normal"`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 665**:
+  - `src/js/shim/cssom.js`: `isValidShape` 增加 `shape()` `arc` 关键字重复校验（`cw`/`ccw`、`small`/`large`、`rotate`）、`move`/`line`/`smooth`/`curve` 位置关键字支持，以及 `path()` SVG 路径首字符 `M/m` 与合法指令校验；`normalizeCssSpecifiedValue` 对 `shape-outside` / `clip-path` 的 `path()` 执行双引号、命令空格与省略 `nonzero` 规范化。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

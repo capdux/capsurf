@@ -4799,11 +4799,13 @@
                 continue;
               }
               if (cmd === "move" || cmd === "line") {
-                if (st.length !== 4 || (st[1] !== "to" && st[1] !== "by") || !isValidLenPct(st[2], true) || !isValidLenPct(st[3], true)) return false;
+                const isShapeCoord = (t) => isValidLenPct(t, true) || t === "left" || t === "center" || t === "right" || t === "top" || t === "bottom";
+                if (st.length !== 4 || (st[1] !== "to" && st[1] !== "by") || !isShapeCoord(st[2]) || !isShapeCoord(st[3])) return false;
                 continue;
               }
               if (cmd === "curve" || cmd === "smooth") {
-                if (st.length < 4 || (st[1] !== "to" && st[1] !== "by") || !isValidLenPct(st[2], true) || !isValidLenPct(st[3], true)) return false;
+                const isShapeCoord = (t) => isValidLenPct(t, true) || t === "left" || t === "center" || t === "right" || t === "top" || t === "bottom";
+                if (st.length < 4 || (st[1] !== "to" && st[1] !== "by") || !isShapeCoord(st[2]) || !isShapeCoord(st[3])) return false;
                 if (cmd === "curve" && st[4] !== "with") return false;
                 if (st.length > 4) {
                   if (st[4] !== "with") return false;
@@ -4827,9 +4829,11 @@
                 let ai = 5, rCnt = 0;
                 while (ai < st.length && rCnt < 2 && isValidLenPct(st[ai], true)) { ai++; rCnt++; }
                 if (rCnt === 0) return false;
+                let seenSweep = false, seenSize = false, seenRot = false;
                 while (ai < st.length) {
-                  if (st[ai] === "cw" || st[ai] === "ccw" || st[ai] === "large" || st[ai] === "small") { ai++; }
-                  else if (st[ai] === "rotate" && ai + 1 < st.length) { ai += 2; }
+                  if (st[ai] === "cw" || st[ai] === "ccw") { if (seenSweep) return false; seenSweep = true; ai++; }
+                  else if (st[ai] === "large" || st[ai] === "small") { if (seenSize) return false; seenSize = true; ai++; }
+                  else if (st[ai] === "rotate" && ai + 1 < st.length) { if (seenRot) return false; seenRot = true; ai += 2; }
                   else return false;
                 }
                 continue;
@@ -4898,7 +4902,6 @@
             return true;
           }
           if (fn === "path") {
-            if (prop === "shape-outside") return false;
             const parts = splitTopLevelComma(body);
             if (parts.length < 1 || parts.length > 2) return false;
             let strTok = parts[0].trim();
@@ -4908,7 +4911,8 @@
               strTok = parts[1].trim();
             }
             if (!((strTok.startsWith('"') && strTok.endsWith('"')) || (strTok.startsWith("'") && strTok.endsWith("'")))) return false;
-            return strTok.slice(1, -1).trim().length > 0;
+            const pathStr = strTok.slice(1, -1).trim();
+            return pathStr.length > 0 && /^[Mm][0-9.,+\-eE\sMmZzLlHhVvCcSsQqTtAa]*$/.test(pathStr);
           }
           if (fn === "xywh" || fn === "rect") {
             if (splitTopLevelComma(body).length > 1) return false;
@@ -7377,8 +7381,8 @@
       if (key === "perspective-origin" || key === "transform-origin" || key === "object-position") {
         return normalizePositionLayer(s, key === "transform-origin");
       }
-      if (key === "shape-outside") {
-        const fnM = /^(circle|ellipse|shape)\(/i.exec(s);
+      if (key === "shape-outside" || key === "clip-path") {
+        const fnM = /^(circle|ellipse|shape|path)\(/i.exec(s);
         if (fnM) {
           const fnName = fnM[1].toLowerCase();
           let depth = 1, i = fnM[0].length, q = "";
@@ -7400,6 +7404,17 @@
                 const pos = normalizePositionLayer(toks.slice(atIdx + 1).join(" "), false);
                 return fnName + "(" + (pre ? pre + " " : "") + pos + ")" + tail;
               }
+            } else if (fnName === "path") {
+              const parts = splitTopLevelComma(inner);
+              let fr = "", strTok = parts[0].trim();
+              if (parts.length === 2) {
+                fr = parts[0].trim().toLowerCase();
+                strTok = parts[1].trim();
+              }
+              const rawPath = strTok.slice(1, -1).trim();
+              const pToks = rawPath.match(/[MmLlHhVvCcSsQqTtAa]|[Zz]|[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?/g) || [];
+              const normPath = pToks.map((t) => (t === "z" ? "Z" : t)).join(" ");
+              return "path(" + (fr === "evenodd" ? "evenodd, " : "") + '"' + normPath + '")' + tail;
             } else {
               const segs = splitTopLevelComma(inner).map((seg) => {
                 const toks = splitCssTokens(seg);
