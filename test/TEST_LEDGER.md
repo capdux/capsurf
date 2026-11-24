@@ -2066,3 +2066,12 @@
 - **Filter `/css/css-masking/parsing/mask-position-invalid`**: **PASS (13/13)**（`cssom.js` `isValidCssValue` 补全 `mask-position` 逗号分层 `<position>` 校验）。
 - **Filter `/css/css-masking/parsing/mask-position-valid`**: **PASS (23/23)**（`cssom.js` `normalizeCssSpecifiedValue` 抽取 `normalizePositionLayer` 共享辅助函数支持 `mask-position` 规范化序列化）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 606: `shape-outside-valid-position` (20/20) & `shape-outside-shape-valid` (12/12) 全绿 & `fetch.cp` E0219 适配
+- **Filter `/css/css-shapes/parsing/shape-outside-valid-position`**: **PASS (20/20)**（`cssom.js` `normalizeCssSpecifiedValue` 对 `shape-outside` 的 `circle()`/`ellipse()` 改用引号感知的括号平衡扫描，并将 `at <position>` 接入 `normalizePositionLayer`）。
+- **Filter `/css/css-shapes/parsing/shape-outside-shape-valid`**: **FAIL->PASS (12/12)**（`shape()` 坐标无单位 `0` 序列化为 `0px`，已收紧 `wpt-expectations.json` 基线为 `PASS`）。
+- **编译器适配 (`src/cdp/fetch.cp`)**：`FetchState.patternMatches` 补充 `static fn` 声明（通过 `cpc fix` + `cpc brief` 4 门禁）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/selectors/` (`b509`, 67 files): `41 PASS / 17 FAIL / 7 TIMEOUT / 2 ERROR`（`dir-pseudo-in-has`, `dir-selector-auto-direction-change-001`, `dir-selector-change-004`, `dir-pseudo-class-in-has` 4 项 unexpected PASS；6 项 `has-*` invalidation 集中于 `"grey"` vs `"rgb(128, 128, 128)"`）
+  - `/css/css-flexbox/` (`b508`, 120 recorded of 261): `95 PASS / 15 FAIL / 10 TIMEOUT`

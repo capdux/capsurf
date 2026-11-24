@@ -50,7 +50,7 @@ pub struct FetchState {
         }
     }
 
-    fn patternMatches(pat: []const u8, url: []const u8): bool {
+    static fn patternMatches(pat: []const u8, url: []const u8): bool {
         if (pat.len == 0 || std.mem.eql(u8, pat, "*")) return true;
         if (pat.len >= 2 && pat[0] == '*' && pat[pat.len - 1] == '*') {
             const core = pat[1 .. pat.len - 1];

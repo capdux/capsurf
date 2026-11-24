@@ -2919,3 +2919,7 @@
 ### Phase 605: `mask-composite-invalid` & `mask-position-{invalid,valid}` 三连全绿
 - **核心修复 (`src/js/shim/cssom.js`)**：`isValidCssValue` 新增 `mask-composite` 与 `mask-position` 逗号分层校验，`normalizeCssSpecifiedValue` 抽取 `normalizePositionLayer` 统一 `mask-position`、`object-position`、`perspective-origin`、`transform-origin` 序列化。
 - **WPT & Smoke 验收**：`mask-composite-invalid.html`、`mask-position-invalid.html`、`mask-position-valid.html` PASS，`--smoke` 3/3 suites PASS。
+
+### Phase 606: `shape-outside-{valid-position,shape-valid}` 全绿 & `fetch.cp` 适配
+- **核心修复 (`cssom.js`, `fetch.cp`)**：`shape-outside` `circle`/`ellipse`/`shape` 改用引号感知的括号平衡扫描，`at <position>` 复用 `normalizePositionLayer`，`shape()` 坐标无单位 `0` 转 `0px`；`FetchState.patternMatches` 补充 `static fn` 通过 `cpc` 4 门禁。
+- **WPT & Smoke 验收**：`shape-outside-valid-position.html` 20/20 PASS、`shape-outside-shape-valid.html` FAIL->PASS (收紧基线)、`--smoke` 3/3 suites PASS。

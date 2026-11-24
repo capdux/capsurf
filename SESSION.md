@@ -7858,3 +7858,10 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Agent]**: 完成 Phase 605（`src/js/shim/cssom.js`）：
   1. **`cssom.js`**：为 `mask-composite` 与 `mask-position` 补全分层校验，并抽取 `normalizePositionLayer` 共享辅助函数实现 `mask-position` 规范化序列化。
   2. **三连全绿验证**：`mask-composite-invalid.html`、`mask-position-invalid.html`、`mask-position-valid.html` 全部 **PASS**，`--smoke` **3/3 suites, 6/6 tests PASS**。
+
+### 2026-11-24 Phase 606 (`shape-outside-{valid-position,shape-valid}` 全绿 & `fetch.cp` 适配)
+- **[Agent]**: 完成 Phase 606（`src/js/shim/cssom.js`, `src/cdp/fetch.cp`, `test/wpt/wpt-expectations.json`）：
+  1. **`cssom.js`**：为 `shape-outside` 的 `circle`/`ellipse`/`shape` 实现括号深度平衡扫描，支持 `at <position>` 规范化与 `shape()` `0 -> 0px`。
+  2. **`fetch.cp`**：`FetchState.patternMatches` 补充 `static` 适配新版 `cpc` `E0219`。
+  3. **全绿验证与基线收紧**：`shape-outside-valid-position.html` **20/20 PASS**、`shape-outside-shape-valid.html` **FAIL->PASS (12/12)**（已收紧为 `PASS`）、`--smoke` **3/3 suites, 6/6 tests PASS**。
+  4. **并行摸底汇总**：`/css/selectors/` 41/67 PASS（4 项 unexpected PASS）；`/css/css-flexbox/` 95/120 PASS。

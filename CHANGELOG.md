@@ -3676,3 +3676,5 @@
 - **Phase 604** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `clip-rule`、`mask-type`、`mask-size` 与 `clip` 的 `isValidCssValue` 校验；4 项 `css-masking/parsing/*-invalid.html` 全绿。
 
 - **Phase 605** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `mask-composite` / `mask-position` 校验并抽取 `normalizePositionLayer` 规范化 `mask-position` 序列化；3 项 `css-masking/parsing/*` 全绿。
+
+- **Phase 606** (`src/js/shim/cssom.js`, `src/cdp/fetch.cp`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 为 `shape-outside` 实现括号平衡扫描与 `<position>`/`0px` 规范化，并适配 `fetch.cp` `static fn`；`shape-outside-valid-position.html` (20/20) 与 `shape-outside-shape-valid.html` (12/12) 全绿。

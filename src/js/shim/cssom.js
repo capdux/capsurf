@@ -2878,6 +2878,42 @@
     if (key === "perspective-origin" || key === "transform-origin" || key === "object-position") {
       return normalizePositionLayer(s, key === "transform-origin");
     }
+    if (key === "shape-outside") {
+      const fnM = /^(circle|ellipse|shape)\(/i.exec(s);
+      if (fnM) {
+        const fnName = fnM[1].toLowerCase();
+        let depth = 1, i = fnM[0].length, q = "";
+        for (; i < s.length && depth > 0; i++) {
+          const ch = s[i];
+          if (q) { if (ch === "\\" && i + 1 < s.length) i++; else if (ch === q) q = ""; continue; }
+          if (ch === '"' || ch === "'") { q = ch; continue; }
+          if (ch === "(") depth++;
+          else if (ch === ")") depth--;
+        }
+        if (depth === 0) {
+          const inner = s.slice(fnM[0].length, i - 1).trim();
+          const tail = s.slice(i);
+          if (fnName === "circle" || fnName === "ellipse") {
+            const toks = splitCssTokens(inner);
+            const atIdx = toks.findIndex((t) => t.toLowerCase() === "at");
+            if (atIdx !== -1 && atIdx + 1 < toks.length) {
+              const pre = toks.slice(0, atIdx + 1).join(" ");
+              const pos = normalizePositionLayer(toks.slice(atIdx + 1).join(" "), false);
+              return fnName + "(" + (pre ? pre + " " : "") + pos + ")" + tail;
+            }
+          } else {
+            const segs = splitTopLevelComma(inner).map((seg) => {
+              const toks = splitCssTokens(seg);
+              for (let j = 0; j < toks.length; j++) {
+                if (toks[j] === "0" || toks[j] === "+0" || toks[j] === "-0") toks[j] = "0px";
+              }
+              return toks.join(" ");
+            });
+            return "shape(" + segs.join(", ") + ")" + tail;
+          }
+        }
+      }
+    }
     if (key === "border-spacing") {
       const parts = splitCssTokens(s);
       for (let i = 0; i < parts.length; i++) {
