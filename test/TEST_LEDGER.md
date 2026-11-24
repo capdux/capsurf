@@ -2285,3 +2285,7 @@
 ### Phase 651: `attribute-or-elemental-selectors-in-has` (31/31) & `dir-selector-querySelector` (4/4) 全绿
 - **Filter `/css/selectors/invalidation/attribute-or-elemental-selectors-in-has` & `/css/selectors/dir-selector-querySelector`**: **FAIL->PASS (2/2: 31/31 + 4/4)**（`window.js` 将非空计算值 `color` 接入 `__capsurf_normalizeSingleColor`；`cssom.js` `NAMED_COLORS_MAP` 补全 `yellowgreen: "rgb(154, 205, 50)"`；`element.js` 与 `index.js` 在 `matches`/`querySelector`/`querySelectorAll` 拦截非法 `:dir(...)` 多参数并抛出 `SyntaxError`）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 652: `not-complex` (20/20) 全绿
+- **Filter `/css/selectors/not-complex`**: **FAIL->PASS (1/1: 20/20)**（`src/css/matcher.cp` 在 `PseudoKind` 枚举新增 `Link` 与 `Visited`，使 `:link`/`any-link` 与 `:visited` 不再默认回落至首个枚举值 `PseudoKind.Root`，彻底修复 `:not(:link div)` 与 `:not(:visited div)` 误匹配；通过 `cpc fix` + `cpc brief` 4 门禁）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

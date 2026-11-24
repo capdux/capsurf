@@ -8052,3 +8052,6 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`window.js` & `cssom.js`**：计算值 `color` 接入 `__capsurf_normalizeSingleColor`，`NAMED_COLORS_MAP` 补全 `yellowgreen`。
   2. **`element.js` & `index.js`**：`matches`/`querySelector`/`querySelectorAll` 拦截非法 `:dir(...)` 参数并抛出 `SyntaxError`。
   3. **全绿验证**：`attribute-or-elemental-selectors-in-has.html`（31/31）、`dir-selector-querySelector.html`（4/4）、`color-valid.html`（17/17）与 `--smoke`（3/3 suites, 6/6 tests）全绿。
+- **[Agent]**: 完成 Phase 652（`src/css/matcher.cp`）：
+  1. **`src/css/matcher.cp`**：`PseudoKind` 枚举新增 `Link` 与 `Visited`，消除 `:link`/`:visited` 默认回落为 `PseudoKind.Root` 导致的 `:not(:link div)` 误匹配；通过 `cpc fix` + `cpc brief` 4 门禁。
+  2. **全绿验证**：`not-complex.html`（20/20）与 `--smoke`（3/3 suites, 6/6 tests）全绿。

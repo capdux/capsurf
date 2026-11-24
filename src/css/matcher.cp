@@ -141,6 +141,8 @@ pub enum PseudoKind {
     Hover,
     Dir,
     Lang,
+    Link,
+    Visited,
 }
 
 pub enum ComponentKind {
@@ -683,6 +685,12 @@ pub struct SelectorParser {
                 } else if (std.ascii.eqlIgnoreCase(p_name, "lang")) {
                     p_comp.pseudo_kind = PseudoKind.Lang;
                     spec.class_like_selectors += 1;
+                } else if (std.ascii.eqlIgnoreCase(p_name, "link") || std.ascii.eqlIgnoreCase(p_name, "any-link")) {
+                    p_comp.pseudo_kind = PseudoKind.Link;
+                    spec.class_like_selectors += 1;
+                } else if (std.ascii.eqlIgnoreCase(p_name, "visited")) {
+                    p_comp.pseudo_kind = PseudoKind.Visited;
+                    spec.class_like_selectors += 1;
                 } else {
                     spec.class_like_selectors += 1;
                 }
@@ -970,6 +978,8 @@ pub struct Matcher {
             .Hover => Matcher.isHovered(doc, node_id),
             .Dir => doc.matchesDir(node_id, comp.sub_selector_raw),
             .Lang => doc.matchesLang(node_id, comp.sub_selector_raw),
+            .Link => (std.ascii.eqlIgnoreCase(node.tag_name, "a") || std.ascii.eqlIgnoreCase(node.tag_name, "area") || std.ascii.eqlIgnoreCase(node.tag_name, "link")) && node.getAttribute("href") != null,
+            .Visited => false,
         };
     }
 

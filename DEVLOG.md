@@ -3107,3 +3107,7 @@
 ### Phase 651: `attribute-or-elemental-selectors-in-has` & `dir-selector-querySelector` 全绿
 - **核心修复 (`src/js/shim/window.js`, `src/js/shim/cssom.js`, `src/js/shim/element/element.js`, `src/js/shim/index.js`)**：`applyUsedValuesToComputedMap` 对非空 `color` 调用 `__capsurf_normalizeSingleColor` 并补全 `yellowgreen`；`matches`/`querySelector`/`querySelectorAll` 校验 `:dir(<ident>)` 单标识符语法。
 - **WPT & Smoke 验收**：`attribute-or-elemental-selectors-in-has` (31/31) 与 `dir-selector-querySelector` (4/4) 全绿，`--smoke` 3/3 suites PASS。
+
+### Phase 652: `not-complex` (20/20) 全绿
+- **核心修复 (`src/css/matcher.cp`)**：`PseudoKind` 新增 `Link`（`a`/`area`/`link` 且含 `href`）与 `Visited`（`false`），避免未知伪类默认为枚举首项 `Root` 引发 `:not(:link div)` 误匹配。
+- **WPT & Smoke 验收**：`cpc brief` 4 门禁全绿，`not-complex.html` (20/20) 与 `--smoke` 3/3 suites PASS。
