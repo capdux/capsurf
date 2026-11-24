@@ -3854,3 +3854,6 @@
 - **Phase 680**:
   - `src/js/shim/cssom.js`: `normalizeSingleColor` 与 `normalizeCssSpecifiedValue` 新增 `hwb()` 转 `rgb()`/`rgba()` 及 `lab`/`lch`/`oklab`/`oklch` 省略 `/ 1`、规范 `/` 空格与 `%` alpha 转小数。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 681**:
+  - `src/js/shim/cssom.js`: `normalizeSingleColor("hwb")` 使用 `toFixed(10)` 修正 `0.5 * 255` 浮点舍入，并支持含 `none` 通道的 `hwb()` 规范化序列化。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

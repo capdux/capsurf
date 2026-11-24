@@ -3200,3 +3200,5 @@
 - 在 `window.js` 中为 `shape-outside` 与 `clip-path` 接入 `evalLinLenPctTok` 计算值求值、负半径/圆角归零及 `at` 位置百分比解析，一次性打通 `shape-outside-{inset-008,inset-009,circle-009,ellipse-009}` 与 `inset-function-computed.html` 全部 5 项 WPT 测试。
 ### Phase 680 — `hwb()` 与 `lab()`/`lch()`/`oklab()`/`oklch()` 颜色规范化推进
 - 在 `normalizeSingleColor` 中实现 `hwb()` 至 `rgb()`/`rgba()` 转换及 `lab`/`lch`/`oklab`/`oklch` 透明度规范化，`color-computed-hwb` 由 7/56 跃升至 45/56。
+### Phase 681 — `hwb()` 舍入精度与 `none` 通道收口
+- 修正 `hwb()` 转 `rgb()` 时 `1 - w - b` 浮点误差导致的 `127` vs `128` 舍入偏差，并补全 `none` 通道规范化，使 `color-valid-hwb` 提升至 28/38、`color-computed-hwb` 提升至 46/56。

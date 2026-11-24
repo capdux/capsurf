@@ -11778,10 +11778,24 @@
         }
       }
       const hwbM = /^hwb\(\s*(.+)\s*\)$/i.exec(s);
-      if (hwbM && !/\bfrom\b/i.test(hwbM[1]) && !/\bnone\b/i.test(hwbM[1])) {
+      if (hwbM && !/\bfrom\b/i.test(hwbM[1])) {
         const slash = splitTopSlash(hwbM[1]);
         const chParts = splitColorCh(slash[0]);
         if (chParts.length === 3 && slash.length <= 2) {
+          if (/\bnone\b/i.test(hwbM[1])) {
+            const stripPct = (t) => t.toLowerCase() === "none" ? "none" : (t.endsWith("%") ? String(Number(parseFloat(t).toFixed(6))) : t);
+            const hOut = chParts[0].toLowerCase() === "none" ? "none" : chParts[0];
+            let aOut = "";
+            if (slash.length === 2) {
+              const at = evalColorExpr(slash[1]);
+              if (at === "none") aOut = " / none";
+              else {
+                const av = Math.max(0, Math.min(1, at.endsWith("%") ? (parseFloat(at) / 100) : parseFloat(at)));
+                if (isFinite(av) && av < 1) aOut = " / " + String(Number(av.toFixed(6)));
+              }
+            }
+            return "hwb(" + hOut + " " + stripPct(chParts[1]) + " " + stripPct(chParts[2]) + aOut + ")";
+          }
           const hTok = evalColorExpr(chParts[0]);
           let h = parseFloat(hTok);
           if (hTok.endsWith("rad")) h = h * 180 / Math.PI;
@@ -11797,7 +11811,7 @@
           }
           if (isFinite(h) && isFinite(w) && isFinite(bk) && isFinite(a)) {
             if (w + bk >= 1) {
-              const g = (w / (w + bk)) * 255;
+              const g = Number((w / (w + bk)).toFixed(10)) * 255;
               return fmtRgb(g, g, g, a);
             }
             const x = 1 - Math.abs(((h / 60) % 2) - 1);
@@ -11809,7 +11823,7 @@
             else if (h < 300) { r1 = x; b1 = 1; }
             else { r1 = 1; b1 = x; }
             const f = 1 - w - bk;
-            return fmtRgb((r1 * f + w) * 255, (g1 * f + w) * 255, (b1 * f + w) * 255, a);
+            return fmtRgb(Number((r1 * f + w).toFixed(10)) * 255, Number((g1 * f + w).toFixed(10)) * 255, Number((b1 * f + w).toFixed(10)) * 255, a);
           }
         }
       }
