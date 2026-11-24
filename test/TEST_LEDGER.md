@@ -2213,3 +2213,7 @@
 ### Phase 633: `/css/css-writing-modes/text-orientation-parsing-001` 8/8 全绿
 - **Filter `/css/css-writing-modes/text-orientation-parsing-001`**: **FAIL->PASS (8/8)**（`window.js` `collectRawComputedMap` 在覆盖自身声明前保存 `preOwn` 继承值，当自身声明如 `text-orientation: foo` 无效被剔除时自动回退继承值而非直接删除）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 634: `scale` 校验与 `evalCssLengthExpr` 支持 `sign()`/`abs()` 全绿
+- **Filter `/css/css-transforms/parsing/scale-parsing-valid` & `/css/css-transforms/parsing/scale-parsing-computed`**: **FAIL->PASS (2/2: 32/32 + 38/38)**（`cssom.js` `prop === "scale"` 剥离 `sign(...)`/`progress(...)` 后再校验量纲单位；`window.js` `evalCssLengthExpr` 新增 `sign()`/`abs()` 函数求值并在 `evalScaleNum` 自动补全未闭合括号）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

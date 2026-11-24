@@ -1120,7 +1120,8 @@
         const t = toks[i];
         if (/^(?:var|env)\(/i.test(t)) continue;
         if (/^(?:calc|min|max|clamp)\(/i.test(t)) {
-          if (/(?:\d|\.)(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|deg|rad|grad|turn|ms|s|hz|khz|dpi|dpcm|dppx)\b/i.test(t)) return false;
+          const stripped = t.replace(/\b(?:sign|progress)\([^()]+\)/gi, "");
+          if (/(?:\d|\.)(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|deg|rad|grad|turn|ms|s|hz|khz|dpi|dpcm|dppx)\b/i.test(stripped)) return false;
           continue;
         }
         if (!/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?%?$/i.test(t)) return false;

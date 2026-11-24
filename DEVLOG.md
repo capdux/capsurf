@@ -3035,3 +3035,7 @@
 ### Phase 633: `/css/css-writing-modes/text-orientation-parsing-001` 8/8 全绿
 - **核心修复 (`src/js/shim/window.js`)**：`collectRawComputedMap` 在执行 `collectElementOwnDeclarations` 前保存 `preOwn` 继承值，确保无效自身声明（如 `text-orientation: foo`）被剔除时正确回退祖先继承值。
 - **WPT & Smoke 验收**：`/css/css-writing-modes/text-orientation-parsing-001.html` (8/8) PASS，`--smoke` 3/3 suites PASS。
+
+### Phase 634: `scale` 校验与 `evalCssLengthExpr` 支持 `sign()`/`abs()` 全绿
+- **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：`cssom.js` `prop === "scale"` 在检查量纲前剥离 `sign(...)`/`progress(...)`；`window.js` `evalCssLengthExpr` 新增 `sign()`/`abs()` 数学函数求值，且 `evalScaleNum` 自动补全 EOF 未闭合括号。
+- **WPT & Smoke 验收**：`scale-parsing-valid.html` (32/32) & `scale-parsing-computed.html` (38/38) PASS，`--smoke` 3/3 suites PASS。

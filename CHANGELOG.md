@@ -3734,3 +3734,5 @@
 - **Phase 632** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 新增 `normalizeImageSetComputed` 统一 `image-set()`/`-webkit-image-set()` 计算值序列化并接入 `background-image` 与 `content`；`image-set-computed.sub` 实现 36/36 全绿。
 
 - **Phase 633** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `collectRawComputedMap` 无效自身声明回退继承值；`text-orientation-parsing-001` 实现 8/8 全绿。
+
+- **Phase 634** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `scale` 校验剥离 `sign()`/`progress()` 并在 `evalCssLengthExpr` 支持 `sign()`/`abs()`；`scale-parsing-valid` (32/32) 与 `scale-parsing-computed` (38/38) 全绿。

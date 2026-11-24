@@ -7986,3 +7986,7 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Agent]**: 完成 Phase 633（`src/js/shim/window.js`）：
   1. **`window.js`**：`collectRawComputedMap` 在自身无效声明被剔除时恢复 `preOwn` 继承值。
   2. **全绿验证**：`/css/css-writing-modes/text-orientation-parsing-001.html` **FAIL->PASS (8/8)**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+- **[Agent]**: 完成 Phase 634（`src/js/shim/cssom.js`, `src/js/shim/window.js`）：
+  1. **`cssom.js` & `window.js`**：`prop === "scale"` 剥离 `sign()`/`progress()` 后校验量纲，`evalCssLengthExpr` 支持 `sign()`/`abs()` 且 `evalScaleNum` 自动补全未闭合括号。
+  2. **全绿验证**：`scale-parsing-valid.html` **FAIL->PASS (32/32)**、`scale-parsing-computed.html` **FAIL->PASS (38/38)**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+  3. **子智能体并发汇报**：`dd837439` 完成 `/css/css-grid/` 全量摸底（**206/872 PASS**，含 39 项意外 PASS），已接力派发 `3681428a`（`19710`, `/css/css-backgrounds/parsing/`）。

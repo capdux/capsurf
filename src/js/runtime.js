@@ -4910,7 +4910,8 @@
           const t = toks[i];
           if (/^(?:var|env)\(/i.test(t)) continue;
           if (/^(?:calc|min|max|clamp)\(/i.test(t)) {
-            if (/(?:\d|\.)(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|deg|rad|grad|turn|ms|s|hz|khz|dpi|dpcm|dppx)\b/i.test(t)) return false;
+            const stripped = t.replace(/\b(?:sign|progress)\([^()]+\)/gi, "");
+            if (/(?:\d|\.)(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|deg|rad|grad|turn|ms|s|hz|khz|dpi|dpcm|dppx)\b/i.test(stripped)) return false;
             continue;
           }
           if (!/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?%?$/i.test(t)) return false;
@@ -42354,8 +42355,8 @@
           if (s[pos] === ")") pos++;
           return v;
         }
-        // Function call: calc, min, max, clamp
-        const fnMatch = s.slice(pos).match(/^(calc|min|max|clamp)\s*\(/i);
+        // Function call: calc, min, max, clamp, sign, abs
+        const fnMatch = s.slice(pos).match(/^(calc|min|max|clamp|sign|abs)\s*\(/i);
         if (fnMatch) {
           const fnName = fnMatch[1].toLowerCase();
           pos += fnMatch[0].length;
@@ -42376,6 +42377,8 @@
             return null;
           }
           if (fnName === "calc") return args.length === 1 ? args[0] : null;
+          if (fnName === "sign") return args.length === 1 ? Math.sign(args[0]) : null;
+          if (fnName === "abs") return args.length === 1 ? Math.abs(args[0]) : null;
           if (fnName === "min") return args.length > 0 ? Math.min.apply(null, args) : null;
           if (fnName === "max") return args.length > 0 ? Math.max.apply(null, args) : null;
           if (fnName === "clamp") {
@@ -43736,7 +43739,13 @@
           const pm = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)%$/i.exec(tok);
           if (pm) return Number(pm[1]) / 100;
           if (/^calc\(/i.test(tok)) {
-            const norm = tok.replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))%/g, (_, n) => String(Number(n) / 100));
+            let norm = tok.replace(/;+$/, "").replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))%/g, (_, n) => String(Number(n) / 100));
+            let open = 0;
+            for (let k = 0; k < norm.length; k++) {
+              if (norm[k] === "(") open++;
+              else if (norm[k] === ")" && open > 0) open--;
+            }
+            while (open > 0) { norm += ")"; open--; }
             const v = evalCssLengthExpr(norm, 0, fontSize);
             if (v !== null) return v;
           }
