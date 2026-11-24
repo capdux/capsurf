@@ -3354,3 +3354,5 @@
 - 批量修复 `font-weight` `sign(20cqw - 10px)` 校验、`CSSStyleRule#selectorText` 注释与 `[attr="val"i]` 规范化，以及 highlight 伪元素继承与 `currentcolor` 解析，实现 5/5 全部 PASS（基线增至 `7,203/9,725`）。
 ### Phase 757 — `/css/css-overflow/parsing/` 全目录 `32/32 (100% PASS)` 达标
 - 在 `canonicalizeDisplayValue` 补全 `-webkit-box` / `-webkit-inline-box` / `-webkit-flex` / `-webkit-inline-flex` 支持，打通 `webkit-box-computed.html`（`FAIL→PASS`，26/26 subtests 全绿），实现 `/css/css-overflow/parsing/` 32/32 100% PASS（基线达 `7,204/9,725`）。
+### Phase 758 — `@font-face src` 3 项全绿、`Webkit*` 属性修复与 `CSSCounterStyleRule` WebIDL 补全
+- 实现 `@font-face` `src` 描述符（`local()`/`url()`/`format()`/`tech()`）严格分项解析与容错回退，打通 `font-face-src-{local,format,list}` 全绿；同时修复 `cssPropCamelToKebab` `Webkit*` 前缀与 `CSSCounterStyleRule` 14 项 WebIDL 断言，并固化 3 小时自进化规则至 `GEMINI.md` §11.13。

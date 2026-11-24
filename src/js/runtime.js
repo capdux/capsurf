@@ -4020,7 +4020,7 @@
       if (str.startsWith("-")) return str.toLowerCase();
       let body = str;
       let prefix = "";
-      if (str.startsWith("webkit")) {
+      if (str.startsWith("webkit") || str.startsWith("Webkit")) {
         prefix = "-webkit-";
         body = str.slice(6);
       } else if (str.startsWith("Moz")) {
@@ -11149,6 +11149,71 @@
           const lowerName = rawName.toLowerCase();
           if (context === "keyframe" && (priority === "important" || lowerName === "animation" || (lowerName.startsWith("animation-") && lowerName !== "animation-timing-function"))) continue;
           if (context === "page" && lowerName === "transform") continue;
+          if (context === "font-face" && lowerName === "src") {
+            const VALID_FONT_FORMATS = new Set([
+              "collection", "opentype", "truetype", "woff", "woff2", "embedded-opentype", "svg"
+            ]);
+            const VALID_FONT_TECHS = new Set([
+              "features-opentype", "features-aat", "features-graphite",
+              "color-colrv0", "color-colrv1", "color-svg", "color-sbix", "color-cbdt",
+              "variations", "palettes", "incremental"
+            ]);
+            const comps = splitTopLevelComma(val);
+            const kept = [];
+            for (let ci = 0; ci < comps.length; ci++) {
+              const comp = comps[ci].trim();
+              if (!comp) continue;
+              const toks = splitCssTokens(comp);
+              if (toks.length === 0) continue;
+              if (/^local\(/i.test(toks[0]) && toks[0].endsWith(")")) {
+                if (toks.length !== 1) continue;
+                const inner = toks[0].slice(6, -1).trim();
+                if (!inner) continue;
+                if ((inner.startsWith('"') && inner.endsWith('"')) || (inner.startsWith("'") && inner.endsWith("'"))) {
+                  kept.push(comp);
+                } else {
+                  const nameToks = splitCssTokens(inner);
+                  if (nameToks.length === 0) continue;
+                  if (nameToks.length === 1 && /^(?:default|inherit|revert|revert-layer|unset|initial)$/i.test(nameToks[0])) continue;
+                  if (nameToks.every((nt) => /^[a-zA-Z_-][a-zA-Z0-9_-]*$/.test(nt))) {
+                    kept.push("local(" + nameToks.join(" ") + ")");
+                  }
+                }
+                continue;
+              }
+              if (!/^(?:url|src)\(/i.test(toks[0]) || !toks[0].endsWith(")")) continue;
+              const uInner = toks[0].slice(toks[0].indexOf("(") + 1, -1).trim();
+              if (!uInner) continue;
+              if (!((uInner.startsWith('"') && uInner.endsWith('"')) || (uInner.startsWith("'") && uInner.endsWith("'")))) {
+                if (/[\s"'()]/.test(uInner)) continue;
+              }
+              let ok = true, seenFmt = false, seenTech = false;
+              for (let ti = 1; ti < toks.length; ti++) {
+                const tk = toks[ti];
+                if (/^format\(/i.test(tk) && tk.endsWith(")") && !seenFmt && !seenTech) {
+                  seenFmt = true;
+                  const fArg = tk.slice(7, -1).trim();
+                  if (!fArg) { ok = false; break; }
+                  if ((fArg.startsWith('"') && fArg.endsWith('"') && fArg.indexOf('"', 1) === fArg.length - 1) ||
+                      (fArg.startsWith("'") && fArg.endsWith("'") && fArg.indexOf("'", 1) === fArg.length - 1)) {
+                    continue;
+                  }
+                  if (!VALID_FONT_FORMATS.has(fArg.toLowerCase())) { ok = false; break; }
+                } else if (/^tech\(/i.test(tk) && tk.endsWith(")") && !seenTech) {
+                  seenTech = true;
+                  const tItems = splitTopLevelComma(tk.slice(5, -1));
+                  if (tItems.length === 0 || !tItems.every((x) => VALID_FONT_TECHS.has(x.trim().toLowerCase()))) {
+                    ok = false; break;
+                  }
+                } else {
+                  ok = false; break;
+                }
+              }
+              if (ok) kept.push(comp);
+            }
+            if (kept.length === 0) continue;
+            val = kept.join(", ");
+          }
           if (context === "font-face" && rawName === "font-display") {
             if (!["auto", "block", "swap", "fallback", "optional"].includes(val.toLowerCase())) continue;
           }
@@ -12210,12 +12275,27 @@
       this._name = "";
       this._descriptors = new Map();
     }
+    Object.setPrototypeOf(CSSCounterStyleRule, CSSRule);
     CSSCounterStyleRule.prototype = Object.create(CSSRule.prototype);
-    CSSCounterStyleRule.prototype.constructor = CSSCounterStyleRule;
+    Object.defineProperty(CSSCounterStyleRule.prototype, "constructor", {
+      value: CSSCounterStyleRule,
+      enumerable: false,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(CSSCounterStyleRule.prototype, Symbol.toStringTag, {
+      value: "CSSCounterStyleRule",
+      configurable: true,
+    });
+    Object.defineProperty(CSSCounterStyleRule, "prototype", { writable: false });
 
     Object.defineProperty(CSSCounterStyleRule.prototype, "name", {
-      get: function () { return this._name || ""; },
+      get: function () {
+        if (!(this instanceof CSSCounterStyleRule)) throw new TypeError("Illegal invocation");
+        return this._name || "";
+      },
       set: function (v) {
+        if (!(this instanceof CSSCounterStyleRule)) throw new TypeError("Illegal invocation");
         const s = String(v);
         if (s === "\\") {
           this._name = "\ufffd";
@@ -12228,12 +12308,17 @@
         this._name = trimmed;
         if (this._onMutate) this._onMutate();
       },
+      enumerable: true,
       configurable: true,
     });
 
     Object.defineProperty(CSSCounterStyleRule.prototype, "system", {
-      get: function () { return this._descriptors.get("system") || ""; },
+      get: function () {
+        if (!(this instanceof CSSCounterStyleRule)) throw new TypeError("Illegal invocation");
+        return this._descriptors.get("system") || "";
+      },
       set: function (v) {
+        if (!(this instanceof CSSCounterStyleRule)) throw new TypeError("Illegal invocation");
         const val = String(v).trim();
         if (!val) return;
         const newFamily = val.split(/\s+/)[0]?.toLowerCase();
@@ -12244,48 +12329,73 @@
         this._descriptors.set("system", val);
         if (this._onMutate) this._onMutate();
       },
+      enumerable: true,
       configurable: true,
     });
 
     Object.defineProperty(CSSCounterStyleRule.prototype, "symbols", {
-      get: function () { return this._descriptors.get("symbols") || ""; },
+      get: function () {
+        if (!(this instanceof CSSCounterStyleRule)) throw new TypeError("Illegal invocation");
+        return this._descriptors.get("symbols") || "";
+      },
       set: function (v) {
+        if (!(this instanceof CSSCounterStyleRule)) throw new TypeError("Illegal invocation");
         this._descriptors.set("symbols", String(v).trim());
         if (this._onMutate) this._onMutate();
       },
+      enumerable: true,
       configurable: true,
     });
 
     Object.defineProperty(CSSCounterStyleRule.prototype, "additiveSymbols", {
-      get: function () { return this._descriptors.get("additive-symbols") || ""; },
+      get: function () {
+        if (!(this instanceof CSSCounterStyleRule)) throw new TypeError("Illegal invocation");
+        return this._descriptors.get("additive-symbols") || "";
+      },
       set: function (v) {
+        if (!(this instanceof CSSCounterStyleRule)) throw new TypeError("Illegal invocation");
         this._descriptors.set("additive-symbols", canonicalizeAdditiveSymbols(String(v)));
         if (this._onMutate) this._onMutate();
       },
+      enumerable: true,
       configurable: true,
     });
 
     Object.defineProperty(CSSCounterStyleRule.prototype, "negative", {
-      get: function () { return this._descriptors.get("negative") || ""; },
+      get: function () {
+        if (!(this instanceof CSSCounterStyleRule)) throw new TypeError("Illegal invocation");
+        return this._descriptors.get("negative") || "";
+      },
       set: function (v) {
+        if (!(this instanceof CSSCounterStyleRule)) throw new TypeError("Illegal invocation");
         this._descriptors.set("negative", String(v).trim());
         if (this._onMutate) this._onMutate();
       },
+      enumerable: true,
       configurable: true,
     });
 
     Object.defineProperty(CSSCounterStyleRule.prototype, "prefix", {
-      get: function () { return this._descriptors.get("prefix") || ""; },
+      get: function () {
+        if (!(this instanceof CSSCounterStyleRule)) throw new TypeError("Illegal invocation");
+        return this._descriptors.get("prefix") || "";
+      },
       set: function (v) {
+        if (!(this instanceof CSSCounterStyleRule)) throw new TypeError("Illegal invocation");
         this._descriptors.set("prefix", String(v).trim());
         if (this._onMutate) this._onMutate();
       },
+      enumerable: true,
       configurable: true,
     });
 
     Object.defineProperty(CSSCounterStyleRule.prototype, "suffix", {
-      get: function () { return this._descriptors.get("suffix") || ""; },
+      get: function () {
+        if (!(this instanceof CSSCounterStyleRule)) throw new TypeError("Illegal invocation");
+        return this._descriptors.get("suffix") || "";
+      },
       set: function (v) {
+        if (!(this instanceof CSSCounterStyleRule)) throw new TypeError("Illegal invocation");
         if (v === "") return;
         const s = String(v);
         if (s === "\\") {
@@ -12296,49 +12406,70 @@
         this._descriptors.set("suffix", s.trim());
         if (this._onMutate) this._onMutate();
       },
+      enumerable: true,
       configurable: true,
     });
 
     Object.defineProperty(CSSCounterStyleRule.prototype, "range", {
-      get: function () { return this._descriptors.get("range") || ""; },
+      get: function () {
+        if (!(this instanceof CSSCounterStyleRule)) throw new TypeError("Illegal invocation");
+        return this._descriptors.get("range") || "";
+      },
       set: function (v) {
+        if (!(this instanceof CSSCounterStyleRule)) throw new TypeError("Illegal invocation");
         this._descriptors.set("range", String(v).trim());
         if (this._onMutate) this._onMutate();
       },
+      enumerable: true,
       configurable: true,
     });
 
     Object.defineProperty(CSSCounterStyleRule.prototype, "pad", {
-      get: function () { return this._descriptors.get("pad") || ""; },
+      get: function () {
+        if (!(this instanceof CSSCounterStyleRule)) throw new TypeError("Illegal invocation");
+        return this._descriptors.get("pad") || "";
+      },
       set: function (v) {
+        if (!(this instanceof CSSCounterStyleRule)) throw new TypeError("Illegal invocation");
         this._descriptors.set("pad", canonicalizePad(String(v)));
         if (this._onMutate) this._onMutate();
       },
+      enumerable: true,
       configurable: true,
     });
 
     Object.defineProperty(CSSCounterStyleRule.prototype, "speakAs", {
-      get: function () { return this._descriptors.get("speak-as") || ""; },
+      get: function () {
+        if (!(this instanceof CSSCounterStyleRule)) throw new TypeError("Illegal invocation");
+        return this._descriptors.get("speak-as") || "";
+      },
       set: function (v) {
+        if (!(this instanceof CSSCounterStyleRule)) throw new TypeError("Illegal invocation");
         this._descriptors.set("speak-as", String(v).trim());
         if (this._onMutate) this._onMutate();
       },
+      enumerable: true,
       configurable: true,
     });
 
     Object.defineProperty(CSSCounterStyleRule.prototype, "fallback", {
-      get: function () { return this._descriptors.get("fallback") || ""; },
+      get: function () {
+        if (!(this instanceof CSSCounterStyleRule)) throw new TypeError("Illegal invocation");
+        return this._descriptors.get("fallback") || "";
+      },
       set: function (v) {
+        if (!(this instanceof CSSCounterStyleRule)) throw new TypeError("Illegal invocation");
         this._descriptors.set("fallback", String(v).trim());
         if (this._onMutate) this._onMutate();
       },
+      enumerable: true,
       configurable: true,
     });
 
     markNative(CSSCounterStyleRule, "CSSCounterStyleRule");
-    global.CSSCounterStyleRule = CSSCounterStyleRule;
-    if (typeof globalThis !== "undefined") globalThis.CSSCounterStyleRule = CSSCounterStyleRule;
-    if (typeof window !== "undefined") window.CSSCounterStyleRule = CSSCounterStyleRule;
+    Object.defineProperty(global, "CSSCounterStyleRule", { value: CSSCounterStyleRule, writable: true, enumerable: false, configurable: true });
+    if (typeof globalThis !== "undefined") Object.defineProperty(globalThis, "CSSCounterStyleRule", { value: CSSCounterStyleRule, writable: true, enumerable: false, configurable: true });
+    if (typeof window !== "undefined") Object.defineProperty(window, "CSSCounterStyleRule", { value: CSSCounterStyleRule, writable: true, enumerable: false, configurable: true });
 
     // 5.14 CSSFontFeatureValuesRule
     function CSSFontFeatureValuesRule() {

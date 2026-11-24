@@ -4153,3 +4153,7 @@
   - `src/js/shim/cssom.js`: `canonicalizeDisplayValue` 补齐 `-webkit-box`/`-webkit-inline-box` 与 `-webkit-flex`/`-webkit-inline-flex` 别名映射。
   - `test/wpt/wpt-expectations.json`: 收紧 `/css/css-overflow/parsing/webkit-box-computed.html` 为 `PASS`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 758**:
+  - `GEMINI.md`: 新增 §11.13（`--tests-file` 过滤 `*-ref.*`、`wpt-batched.mjs` 精确参数、`edit_file` 多行唯一 Target 规范）。
+  - `src/js/shim/cssom.js`: `cssPropCamelToKebab` 支持 `Webkit*`；`parseInitial` 补全 `@font-face src` 语法校验；完善 `CSSCounterStyleRule` WebIDL 属性描述符与 `@@toStringTag`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
