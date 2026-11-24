@@ -6792,6 +6792,52 @@
           return GEN.has(tr.toLowerCase()) ? tr.toLowerCase() : tr;
         }).join(", ");
       }
+      if (key === "font-feature-settings") {
+        if (s.toLowerCase() === "normal") return "normal";
+        const items = splitTopLevelComma(s);
+        const out = [];
+        for (let i = 0; i < items.length; i++) {
+          const toks = splitCssTokens(items[i].trim());
+          if (toks.length === 0 || toks.length > 2) return s;
+          let tag = toks[0];
+          if ((tag.startsWith('"') && tag.endsWith('"')) || (tag.startsWith("'") && tag.endsWith("'"))) {
+            let inner = tag.slice(1, -1);
+            inner = inner.replace(/\\([0-9a-fA-F]{1,6})\s?/g, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+                         .replace(/\\(.)/g, "$1");
+            tag = '"' + inner.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
+          }
+          if (toks.length === 1) {
+            out.push(tag);
+          } else {
+            const val = toks[1].toLowerCase();
+            if (val === "1" || val === "on") out.push(tag);
+            else if (val === "off") out.push(tag + " 0");
+            else out.push(tag + " " + toks[1]);
+          }
+        }
+        return out.join(", ");
+      }
+      if (key === "font-variation-settings") {
+        if (s.toLowerCase() === "normal") return "normal";
+        const items = splitTopLevelComma(s);
+        const out = [];
+        for (let i = 0; i < items.length; i++) {
+          const toks = splitCssTokens(items[i].trim());
+          if (toks.length !== 2) return s;
+          let tag = toks[0];
+          if ((tag.startsWith('"') && tag.endsWith('"')) || (tag.startsWith("'") && tag.endsWith("'"))) {
+            const inner = tag.slice(1, -1);
+            tag = '"' + inner.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
+          }
+          let num = toks[1];
+          if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(num)) {
+            const n = Number(num);
+            if (Number.isFinite(n)) num = String(n === 0 ? 0 : n);
+          }
+          out.push(tag + " " + num);
+        }
+        return out.join(", ");
+      }
       if (key === "font-variant-alternates") {
         return splitCssTokens(s).map((tk) => (/^[a-z-]+$/i.test(tk) ? tk.toLowerCase() : tk)).join(" ");
       }
@@ -44742,6 +44788,38 @@
           const v = evalCssLengthExpr(m, 0, fontSize);
           return (v !== null && isFinite(v)) ? String(Math.round(v)) : m;
         }));
+      }
+      const ffRaw = (computedMap.get("font-family") || "").trim();
+      if (ffRaw) {
+        const KW_SET = new Set(["inherit", "initial", "unset", "revert", "revert-layer", "default", "serif", "sans-serif", "cursive", "fantasy", "monospace", "system-ui", "ui-serif", "ui-sans-serif", "ui-monospace", "ui-rounded", "emoji", "math", "fangsong"]);
+        const parts = [];
+        let cur = "", inQ = "";
+        for (let i = 0; i < ffRaw.length; i++) {
+          const ch = ffRaw[i];
+          if (inQ) {
+            cur += ch;
+            if (ch === "\\" && i + 1 < ffRaw.length) { cur += ffRaw[++i]; continue; }
+            if (ch === inQ) inQ = "";
+          } else {
+            if (ch === '"' || ch === "'") { inQ = ch; cur += ch; }
+            else if (ch === ",") { parts.push(cur.trim()); cur = ""; }
+            else cur += ch;
+          }
+        }
+        if (cur.trim()) parts.push(cur.trim());
+        const normParts = parts.map((p) => {
+          if ((p.startsWith('"') && p.endsWith('"')) || (p.startsWith("'") && p.endsWith("'"))) {
+            const inner = p.slice(1, -1).trim();
+            const words = inner ? inner.split(/\s+/) : [];
+            if (words.length > 0 && !(words.length === 1 && KW_SET.has(words[0].toLowerCase())) &&
+                words.every((w) => /^[a-z_-][a-z0-9_-]*$/i.test(w))) {
+              return words.join(" ");
+            }
+            return '"' + p.slice(1, -1).replace(/\\"/g, '"').replace(/"/g, '\\"') + '"';
+          }
+          return p;
+        });
+        computedMap.set("font-family", normParts.join(", "));
       }
       for (let i = 0; i < textDecorDefs.length; i++) {
         const [dk, dv] = textDecorDefs[i];

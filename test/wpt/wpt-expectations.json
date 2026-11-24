@@ -2850,7 +2850,7 @@
     "reason": null
   },
   "/css/css-fonts/parsing/font-family-computed.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-fonts/parsing/font-family-invalid.html": {

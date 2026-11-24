@@ -2257,3 +2257,7 @@
 ### Phase 644: `opacity-valid` / `opacity-computed` / `color-invalid` 全绿
 - **Filter `/css/css-color/parsing/opacity-` & `/css/css-color/parsing/color-invalid.html`**: **FAIL->PASS (4/4: `opacity-invalid`, `opacity-valid`, `opacity-computed`, `color-invalid`)**（`cssom.js` 在 `isValidCssValue` 入口提前绑定 `_isValidCalcSyntax` 使 `isValidColor` 拒绝 `angle * angle` 等非法 `calc()`，`opacity` 接入 `isValidCalcSyntax` 与百分比/极值函数 `min`/`max`/`clamp` 指定值化简；`window.js` 将 `opacity` 计算值求值扩展至 `min`/`max`/`clamp`/`sign`/`abs`）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 645: `font-feature-settings-valid` / `font-variation-settings-valid` / `font-family-computed` 全绿
+- **Filter `/css/css-fonts/parsing/{font-feature-settings-valid,font-variation-settings-valid,font-family-computed}`**: **FAIL->PASS (3/3)**（`cssom.js` `normalizeCssSpecifiedValue` 新增 `font-feature-settings` 的 `1`/`on` 省略、`off`->`0` 及引号/十六进制转义规范化，以及 `font-variation-settings` 引号/科学计数法规范化；`window.js` 新增 `font-family` 计算值合法 `<custom-ident>` 去引号规范化，并收紧 `font-family-computed.html` 基线为 `PASS`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

@@ -3756,3 +3756,5 @@
 - **Phase 643** (`src/js/shim/window.js`, `src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `evalCssLengthExpr` 接入容器查询单位并补全 `border-image-outset`/`border-image-slice` 计算值求值；`border-image-outset-computed` (7/7) 与 `border-image-slice-computed` (7/7) 全绿。
 
 - **Phase 644** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `opacity` 百分比/极值函数指定值与计算值求值，及 `isValidColor` 内联 `calc()` 语法校验；`opacity-valid`、`opacity-computed` 与 `color-invalid` 全绿。
+
+- **Phase 645** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 补全 `font-feature-settings`/`font-variation-settings` 序列化及 `font-family` 计算值去引号；3 个 `css-fonts` 解析/计算值用例全绿，收紧 `font-family-computed` 基线为 `PASS`。

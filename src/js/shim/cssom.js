@@ -3002,6 +3002,52 @@
         return GEN.has(tr.toLowerCase()) ? tr.toLowerCase() : tr;
       }).join(", ");
     }
+    if (key === "font-feature-settings") {
+      if (s.toLowerCase() === "normal") return "normal";
+      const items = splitTopLevelComma(s);
+      const out = [];
+      for (let i = 0; i < items.length; i++) {
+        const toks = splitCssTokens(items[i].trim());
+        if (toks.length === 0 || toks.length > 2) return s;
+        let tag = toks[0];
+        if ((tag.startsWith('"') && tag.endsWith('"')) || (tag.startsWith("'") && tag.endsWith("'"))) {
+          let inner = tag.slice(1, -1);
+          inner = inner.replace(/\\([0-9a-fA-F]{1,6})\s?/g, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+                       .replace(/\\(.)/g, "$1");
+          tag = '"' + inner.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
+        }
+        if (toks.length === 1) {
+          out.push(tag);
+        } else {
+          const val = toks[1].toLowerCase();
+          if (val === "1" || val === "on") out.push(tag);
+          else if (val === "off") out.push(tag + " 0");
+          else out.push(tag + " " + toks[1]);
+        }
+      }
+      return out.join(", ");
+    }
+    if (key === "font-variation-settings") {
+      if (s.toLowerCase() === "normal") return "normal";
+      const items = splitTopLevelComma(s);
+      const out = [];
+      for (let i = 0; i < items.length; i++) {
+        const toks = splitCssTokens(items[i].trim());
+        if (toks.length !== 2) return s;
+        let tag = toks[0];
+        if ((tag.startsWith('"') && tag.endsWith('"')) || (tag.startsWith("'") && tag.endsWith("'"))) {
+          const inner = tag.slice(1, -1);
+          tag = '"' + inner.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
+        }
+        let num = toks[1];
+        if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(num)) {
+          const n = Number(num);
+          if (Number.isFinite(n)) num = String(n === 0 ? 0 : n);
+        }
+        out.push(tag + " " + num);
+      }
+      return out.join(", ");
+    }
     if (key === "font-variant-alternates") {
       return splitCssTokens(s).map((tk) => (/^[a-z-]+$/i.test(tk) ? tk.toLowerCase() : tk)).join(" ");
     }

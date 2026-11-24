@@ -3079,3 +3079,7 @@
 ### Phase 644: `opacity-valid` / `opacity-computed` / `color-invalid` 全绿
 - **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：`_isValidCalcSyntax` 在 `isValidCssValue` 入口绑定，消除 `isValidColor` 首次调用时未初始化导致的 `angle * angle` 漏放；`opacity` 支持 `%` 转小数及 `min`/`max`/`clamp` 指定值与计算值求值。
 - **WPT & Smoke 验收**：`opacity-invalid`、`opacity-valid`、`opacity-computed`、`color-invalid` 全绿，`--smoke` 3/3 suites PASS。
+
+### Phase 645: `font-feature-settings-valid` / `font-variation-settings-valid` / `font-family-computed` 全绿
+- **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：`font-feature-settings` 支持 `1`/`on` 省略、`off`->`0` 与 CSS 转义还原；`font-variation-settings` 统一双引号与数字格式；`font-family` 计算值对非关键字合法 `<custom-ident>` 去除外层引号。
+- **WPT & Smoke 验收**：`font-feature-settings-valid`、`font-variation-settings-valid`、`font-family-computed`（基线收紧为 `PASS`）全绿，`--smoke` 3/3 suites PASS。

@@ -8029,3 +8029,6 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`cssom.js` & `window.js`**：提前绑定 `_isValidCalcSyntax` 使 `isValidColor` 拒绝 `angle * angle`；`opacity` 接入 `isValidCalcSyntax`、指定值 `%`->数字与 `min`/`max`/`clamp` 化简、计算值全数学函数求值。
   2. **全绿验证**：`opacity-valid.html`、`opacity-computed.html`、`color-invalid.html` 均 **FAIL->PASS**，`--smoke` **3/3 suites, 6/6 tests PASS**。
   3. **子智能体并发汇报**：`3afd78cf` 完成 `/css/css-contain/`（50/55 PASS）、`32c54d07` 完成 `/css/css-shadow/`（1/2 PASS）、`60c2bba6` 完成 `/css/css-scrollbars/`（1/2 PASS）、`e3e2fda2` 完成 `/css/css-scroll-snap/`（8/8 PASS）；已接力派发 `852ff469`（`19710`, `/css/css-grid/`）与 `9294fa46`（`19720`, `/css/css-flexbox/`）。
+- **[Agent]**: 完成 Phase 645（`src/js/shim/cssom.js`, `src/js/shim/window.js`, `test/wpt/wpt-expectations.json`）：
+  1. **`cssom.js` & `window.js`**：补全 `font-feature-settings`、`font-variation-settings` 指定值序列化与 `font-family` 计算值 `<custom-ident>` 去引号规范化。
+  2. **全绿验证**：`font-feature-settings-valid.html`、`font-variation-settings-valid.html`、`font-family-computed.html`（收紧为 `PASS`）全绿，`--smoke` **3/3 suites, 6/6 tests PASS**。
