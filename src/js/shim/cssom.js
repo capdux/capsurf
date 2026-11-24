@@ -5684,7 +5684,13 @@
   }
 
   function serializeCssValue(val) {
-    return String(val).replace(/url\(\s*(?!"|')([^)]+?)\s*\)/g, 'url("$1")');
+    const out = String(val).replace(/url\(\s*(?:(['"])(.*?)\1|([^)]+?))\s*\)/gi, (_, q, qs, uq) => 'url("' + (q ? qs : uq.trim()) + '")');
+    const nm = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))([a-z%]*)$/i.exec(out.trim());
+    if (nm) {
+      const n = Number(nm[1]);
+      if (isFinite(n)) return (n === 0 ? (nm[1].startsWith("-") ? "-0" : "0") : String(n)) + nm[2].toLowerCase();
+    }
+    return out;
   }
 
   function splitCssDeclarations(block) {

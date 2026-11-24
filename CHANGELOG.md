@@ -3886,3 +3886,6 @@
   - `src/js/shim/window.js`: `scroll-marker-group` 计算值 `"before"`/`"after"` 补全 `" links"`；`caret-color` 默认/`initial` 计算为 `elColor`。
   - `test/wpt/wpt-expectations.json`: 将 `/css/css-overflow/parsing/scroll-markers-computed.html` 从 `FAIL` 收紧为 `PASS`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 690**:
+  - `src/js/shim/cssom.js`: `serializeCssValue` 修复 `url( "..." )` 空白未吸收导致的嵌套双引号问题，并规范化独立数字/维度字面量（如 `1.0px` -> `1px`、`.1px` -> `0.1px`）。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

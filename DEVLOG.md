@@ -3218,3 +3218,5 @@
 - 在 `cssom.js` 与 `window.js` 中补全 `scroll-marker-group` 校验/默认值及 `overflow-clip-margin` 计算属性暴露，一次性打通 `overflow-clip-margin-computed`、`scroll-markers-computed.tentative`、`scroll-markers-invalid`、`scroll-markers-invalid.tentative` 4 项测试并全部收紧为 `PASS`。
 ### Phase 689 — `scroll-markers-computed` 与 `caret-color-013` 闭环
 - 在 `window.js` 中补全 `scroll-marker-group` 单关键字计算值补全 ` links` 与 `caret-color` 默认/initial 值回落 `elColor`，`scroll-markers-computed.html`（收紧为 `PASS`）与 `caret-color-013.html` 均全数 PASS。
+### Phase 690 — `css-syntax` `url(...)` 空白与维度小数规范化修复
+- 修复 `cssom.js` `serializeCssValue` 对 `url( "foo")` 误包外层引号的正则缺陷，并规范独立数字/维度字面量序列化，打通 `decimal-points-in-numbers.html` 与 `url-whitespace-consumption.html`。

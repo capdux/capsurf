@@ -8119,3 +8119,4 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - [Phase 687] `cssom.js` (补齐 `row-rule`/`rule`、`row-rule-width`/`rule-width`、`row-rule-style`/`rule-style` 及 15 个 `*-rule-inset*` 属性校验): `/css/css-gaps/` 全目录 32/32 PASS，`--smoke` 3/3 PASS。
 - [Phase 688] `cssom.js` & `window.js` (接入 `scroll-marker-group` 校验/默认值/计算列表与 `overflow-clip-margin` 默认值/计算列表) & `wpt-expectations.json` (4 项收紧为 `PASS`): `/css/css-overflow/parsing/` 32/32 匹配基线，`--smoke` 3/3 PASS。
 - [Phase 689] `window.js` (`scroll-marker-group` 单关键字 `before`/`after` 补全 ` links`，`caret-color` 默认/`initial` 计算为 `elColor`) & `wpt-expectations.json` (`scroll-markers-computed` 收紧为 `PASS`): `scroll-markers-computed` 9/9 PASS、`caret-color-013` 11/11 PASS、`--smoke` 3/3 PASS。
+- [Phase 690] `cssom.js` (`serializeCssValue` 修复 `url( "foo")` 空白包裹引号与 `1.0px`/`.1px` 规范数值序列化): `decimal-points-in-numbers.html` 与 `url-whitespace-consumption.html` PASS，`--smoke` 3/3 PASS。
