@@ -14152,7 +14152,8 @@
       "-webkit-flex-shrink": "flex-shrink",
       "-webkit-flex-wrap": "flex-wrap",
       "-webkit-justify-content": "justify-content",
-      "-webkit-order": "order"
+      "-webkit-order": "order",
+      "font-stretch": "font-width"
     };
 
     function setEntryWithShorthand(map, key, rawName, normV, pri) {
@@ -41631,7 +41632,7 @@
       "image-orientation", "image-rendering", "image-resolution", "accent-color",
       "ruby-align", "ruby-position", "ruby-merge", "ruby-overhang",
       "list-style-image", "list-style-position", "list-style-type",
-      "font-feature-settings", "font-kerning", "font-stretch", "font-variant",
+      "font-feature-settings", "font-kerning", "font-stretch", "font-width", "font-variant",
       "font-language-override", "font-optical-sizing", "font-variant-emoji", "font-variant-position",
       "hanging-punctuation", "hyphens", "line-break", "overflow-wrap", "tab-size",
       "text-align-all", "text-align-last", "text-fit", "text-indent", "text-justify",
@@ -43966,7 +43967,7 @@
         ["list-style-type", "disc"],
         ["font-feature-settings", "normal"],
         ["font-kerning", "auto"],
-        ["font-stretch", "100%"],
+        ["font-width", "100%"],
         ["font-style", "normal"],
         ["font-variant", "normal"],
         ["font-weight", "400"],
@@ -44247,7 +44248,7 @@
       "clip-rule", "mask-composite", "mask-repeat", "mask-size", "mask-type",
       "empty-cells", "field-sizing", "filter", "flex-basis", "flex-direction", "flex-grow", "flex-shrink",
       "flex-wrap", "float", "font-family", "font-feature-settings", "font-kerning", "font-language-override", "font-optical-sizing", "font-palette", "font-size",
-      "font-stretch", "font-style", "font-variant", "font-variant-emoji", "font-variant-position", "font-weight", "grid-auto-columns",
+      "font-width", "font-style", "font-variant", "font-variant-emoji", "font-variant-position", "font-weight", "grid-auto-columns",
       "grid-auto-flow", "grid-auto-rows", "grid-column-end", "grid-column-start",
       "grid-row-end", "grid-row-start", "grid-template-areas", "grid-template-columns",
       "grid-template-rows", "hanging-punctuation", "height", "hyphenate-character", "hyphenate-limit-chars", "hyphens", "image-orientation", "image-rendering", "image-resolution", "interactivity",
@@ -44566,6 +44567,9 @@
         if (pLow === "-webkit-transform" || pLow === "-moz-transform") {
           return computedMap.get("transform") || "none";
         }
+        if (pLow === "font-stretch") {
+          return computedMap.get("font-width") || computedMap.get("font-stretch") || "100%";
+        }
         const sh = getShorthandComputed(p);
         if (sh !== null) return sh;
         if (computedMap.has(p)) return computedMap.get(p);
@@ -44641,6 +44645,9 @@
           if (typeof prop === "string") {
             if (prop === "-webkit-transform" || prop === "-moz-transform" || prop === "webkitTransform" || prop === "MozTransform") {
               return computedMap.get("transform") || "none";
+            }
+            if (prop === "font-stretch" || prop === "fontStretch") {
+              return computedMap.get("font-width") || computedMap.get("font-stretch") || "100%";
             }
             const shDirect = getShorthandComputed(prop);
             if (shDirect !== null) return shDirect;

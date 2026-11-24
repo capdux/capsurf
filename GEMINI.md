@@ -330,3 +330,9 @@
 
 - **纯 JS Shim 0.1s `node -e` 预检免返工**：修改 `src/js/shim/selector.js`、`cssom.js`（正则/校验/序列化）或 `xpath.js` 等纯 JS 逻辑后，先用 `node -e` 直接加载并跑通关键用例（耗时 **< 0.1s**），确认无误后再执行 `bundle_runtime.py` + `cap build` + `wpt-batched.mjs`，避免每次因正则或循环边界小错浪费 25s+ 重编与 WPT 启动开销。
 - **万行大文件 `edit_file` 多行唯一上下文铁律**：在 `window.js`（16,000+ 行）或 `cssom.js`（6,600+ 行）等大文件中调用 `edit_file` 时，`Target` **严禁**使用通用短结尾（如 `return null;\n}` 或 `return;\n}`），必须包含至少 2~3 行独一无二的函数名/注释/分支上下文，杜绝全文件多点误替换引发的清理返工与 Token 浪费。
+
+
+### 11.10 单批合并验证与多测试聚合提速 (2026-11-24 3小时自进化固化)
+
+- **合并同批 `wpt-batched.mjs` 执行减少引擎冷启动**：单次调用 `wpt-batched.mjs` 的引擎启动与端口释放固定开销约为 **2.0s–2.5s**；验证同属一个子目录或可合并前缀的多个修复点时，优先使用单次公共前缀 `--filter`（如 `--filter /css/css-grid/parsing/grid-template-areas`）或单条聚合命令，避免 3~4 次串行重复启停引擎及输出冗长日志，实测每阶段可节省 **50%+ 引擎冷启动时间与报告输出 Token**。
+- **单行 Python 失败差异提取铁律**：查看 `/tmp/wpt-*.json` 失败详情时，严格禁止 `cat` 或整文件 `read_file`，统一使用 `python3 -c` 仅输出 `status != "PASS"` 的 `subtests` 列表，单次上下文消耗控制在 `< 200` Tokens。

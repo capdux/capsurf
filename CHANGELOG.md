@@ -3686,3 +3686,5 @@
 - **Phase 609** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 补全 `scroll-axis-lock` 与 `scroll-target-group` 枚举校验与 computed 支持；3 项 `css-overflow/parsing/*` 全绿并收紧基线为 `PASS`。
 
 - **Phase 610** (`src/js/shim/cssom.js`, `src/js/shim/element/element.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 修正 `animation` 默认 `0s` 省略返回 `"none"` 与 `@font-face size-adjust` 负百分比拒绝；`animation-computed.html` 与 `font-face-size-adjust.html` 全绿。
+
+- **Phase 611** (`src/js/shim/element/element.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `GEMINI.md`, `test/TEST_LEDGER.md`): 完善 `font-stretch` -> `font-width` 传统别名映射与 `STANDARD_COMPUTED_LONGHANDS` 替换，并固化 `GEMINI.md` 第 11.10 节自进化规范；`font-stretch-alias.html` 全绿。

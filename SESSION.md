@@ -7889,3 +7889,10 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   2. **`element.js`**：补全 `font-stretch` <-> `font-width` 别名读取。
   3. **全绿验证**：`animation-computed.html` **15/15 PASS**、`font-face-size-adjust.html` **6/6 PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
   4. **并行摸底汇总**：`/css/css-animations/` 50/58 PASS；`/css/css-transitions/` 15/20 PASS。
+
+### 2026-11-24 Phase 611 (`font-stretch-alias` 全绿 & `/css/css-color/` 摸底 & 3小时自进化固化)
+- **[Agent]**: 完成 Phase 611（`src/js/shim/element/element.js`, `src/js/shim/window.js`, `GEMINI.md`）：
+  1. **`element.js` / `window.js`**：`LEGACY_CSS_ALIASES` 补全 `"font-stretch": "font-width"`，`STANDARD_COMPUTED_LONGHANDS` 将 `font-stretch` 替换为 `font-width` 并完善 `getComputedStyle` 别名读取。
+  2. **全绿验证**：`font-stretch-alias.html` **PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+  3. **并行摸底汇总**：`/css/css-color/` 14/56 PASS。
+  4. **3小时自进化固化 (`GEMINI.md` 11.10)**：固化「合并同批 `wpt-batched.mjs` 减少冷启动 + 单行 Python 失败差异提取」。

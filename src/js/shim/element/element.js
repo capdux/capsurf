@@ -413,7 +413,8 @@ function createStyleProxy(element) {
     "-webkit-flex-shrink": "flex-shrink",
     "-webkit-flex-wrap": "flex-wrap",
     "-webkit-justify-content": "justify-content",
-    "-webkit-order": "order"
+    "-webkit-order": "order",
+    "font-stretch": "font-width"
   };
 
   function setEntryWithShorthand(map, key, rawName, normV, pri) {

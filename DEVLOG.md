@@ -2939,3 +2939,8 @@
 ### Phase 610: `animation-computed` (15/15) & `font-face-size-adjust` (6/6) 全绿
 - **核心修复 (`cssom.js`, `element.js`)**：`serializeExpandedShorthand("animation")` 省略 `"0s"` duration，`@font-face` `size-adjust` 拒绝负百分比，`element.js` 补充 `font-stretch` <-> `font-width` 别名读取。
 - **WPT & Smoke 验收**：`animation-computed.html` 15/15 PASS、`font-face-size-adjust.html` 6/6 PASS、`--smoke` 3/3 suites PASS。
+
+### Phase 611: `font-stretch-alias` 全绿 & 3小时自进化固化
+- **核心修复 (`element.js`, `window.js`)**：`LEGACY_CSS_ALIASES` 加入 `"font-stretch": "font-width"`，`STANDARD_COMPUTED_LONGHANDS` 替换 `font-stretch` 为 `font-width`，`textDecorDefs` 移除 `font-stretch` 并保留 `getPropertyValue` / Proxy `get` 别名读取。
+- **自进化固化 (`GEMINI.md` 11.10)**：固化合并同批 `wpt-batched.mjs` 与单行 Python 失败摘要提取规范。
+- **WPT & Smoke 验收**：`font-stretch-alias.html` PASS、`--smoke` 3/3 suites PASS。

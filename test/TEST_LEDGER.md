@@ -2108,3 +2108,10 @@
 - **子智能体只读摸底记录**：
   - `/css/css-animations/` (`b515`, 58 files): `49 PASS / 8 FAIL / 1 TIMEOUT` -> Phase 610 修复 `animation-computed.html` 后 `50/58 PASS`
   - `/css/css-transitions/` (`b516`, 20 files): `15 PASS / 5 FAIL / 0 TIMEOUT`
+
+### Phase 611: `font-stretch-alias` 全绿 & `/css/css-color/` 56 文件摸底 & 3小时自进化固化
+- **Filter `/css/css-fonts/parsing/font-stretch-alias`**: **PASS**（`element.js` `LEGACY_CSS_ALIASES` 加入 `"font-stretch": "font-width"`；`window.js` `STANDARD_COMPUTED_LONGHANDS` 将 `"font-stretch"` 替换为 `"font-width"`，并保留 `getComputedStyle` 别名映射）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-color/` (`b514`, 56 files): `14 PASS / 35 FAIL / 7 TIMEOUT`（定位 `color-initial-canvastext`, `light-dark-currentcolor-in-color`, `color-computed` 等快速修复点）
+- **自进化固化**：响应 `task-17699` 3 小时定时触发，将「合并同批 `wpt-batched.mjs` 减少引擎冷启动 + 单行 Python 失败差异提取」固化至 `GEMINI.md` 第 11.10 节。
