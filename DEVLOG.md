@@ -3304,3 +3304,5 @@
 - 在 `window.js` 中为 `font-size-adjust` 计算值补齐 `from-font` 字体度量（`ex-height`/`cap-height` -> `0.5`，`ch-width`/`ic-width`/`ic-height` -> `1`）及 `calc`/`sign` 负值钳位，`/css/css-fonts/parsing/font-size-adjust-computed.html` 20/20 全数通过并收紧为 `PASS`。
 ### Phase 732 — `/css/css-shapes/parsing/` 13/13 全绿闭环
 - 在 `window.js` `shape-outside`/`clip-path` 计算值正则中补入 `path` 并于 `evalTok` 内展开 `sibling-index()`，打通 `shape-outside-computed.html` (32/32 PASS) 并实现 `/css/css-shapes/parsing/` **13/13 (100% PASS)**。
+### Phase 733 — `::scroll-button` 与 `::search-text:current(*)` 选择器校验闭环
+- 在 `selector.js` 中补全 `::scroll-button` 必须带括号校验与 `:current(...)` 非法函数参数拒绝，打通 `scroll-buttons-invalid.html` (8/8 PASS) 与 `highlight-pseudos-search-text.tentative.html` (39/39 **FAIL→PASS**)。

@@ -15748,7 +15748,7 @@
   const REQUIRED_FUNC_PSEUDOS = new Set([
     ":not", ":is", ":where", ":has", ":state", ":lang", ":dir",
     ":nth-child", ":nth-last-child", ":nth-of-type", ":nth-last-of-type",
-    "::slotted", "::part"
+    "::slotted", "::part", "::scroll-button"
   ]);
   const NON_EMPTY_FUNC_PSEUDOS = new Set([":not", ":has", ":state", "::slotted", "::part", ":lang", ":dir"]);
   const KNOWN_PSEUDO_CLASSES = new Set([
@@ -15919,7 +15919,7 @@
           if (!KNOWN_PSEUDO_CLASSES.has(pName)) return null;
         }
         if (j < s.length && s[j] === "(") {
-          if (pName === "::view-transition") return null;
+          if (pName === "::view-transition" || pName === ":current") return null;
           let k = j + 1, dp = 1, q = "";
           while (k < s.length && dp > 0) {
             if (q) {

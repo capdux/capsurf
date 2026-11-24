@@ -4048,3 +4048,7 @@
   - `src/js/shim/window.js`: 在 `shape-outside`/`clip-path` 函数正则补全 `path` 匹配，并在 `evalTok` 展开 `sibling-index()`。
   - `test/wpt/wpt-expectations.json`: 将 `/css/css-shapes/parsing/shape-outside-computed.html` 收紧为 `PASS`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 733**:
+  - `src/js/shim/selector.js`: 将 `::scroll-button` 加入 `REQUIRED_FUNC_PSEUDOS` 拒绝无括号形式，并拒绝 `:current(...)` 非法函数式伪类。
+  - `test/wpt/wpt-expectations.json`: 将 `highlight-pseudos-search-text.tentative.html` 收紧为 `PASS`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
