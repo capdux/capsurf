@@ -4232,7 +4232,7 @@
         const du = splitVals[0][i], tf = splitVals[1][i], dl = splitVals[2][i], it = splitVals[3][i],
               dr = splitVals[4][i], fl = splitVals[5][i], pl = splitVals[6][i], nm = splitVals[7][i];
         const parts = [];
-        if (du !== "auto" || dl !== "0s") parts.push(du === "auto" ? "0s" : du);
+        if ((du !== "auto" && du !== "0s") || dl !== "0s") parts.push(du === "auto" ? "0s" : du);
         if (tf !== "ease") parts.push(tf);
         if (dl !== "0s") parts.push(dl);
         if (it !== "1") parts.push(it);
@@ -4642,6 +4642,10 @@
         if (context === "keyframe" && priority === "important") continue;
         if (context === "font-face" && rawName === "font-display") {
           if (!["auto", "block", "swap", "fallback", "optional"].includes(val.toLowerCase())) continue;
+        }
+        if (context === "font-face" && rawName.toLowerCase() === "size-adjust") {
+          const num = parseFloat(val);
+          if (!/^[+]?(?:\d+(?:\.\d+)?|\.\d+)%$/.test(val.trim()) || isNaN(num) || num < 0) continue;
         }
         if (context === "page" && rawName.toLowerCase() === "size") {
           val = val.toLowerCase();

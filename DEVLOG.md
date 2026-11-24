@@ -2935,3 +2935,7 @@
 ### Phase 609: `scroll-axis-lock-invalid` & `scroll-target-group-{invalid,computed}` 三连全绿收紧
 - **核心修复 (`cssom.js`, `window.js`)**：`STANDARD_CSS_PROPERTIES`、`ENUM_PROPS`、`STANDARD_COMPUTED_LONGHANDS` 与 `textDecorDefs` 补全 `scroll-axis-lock`（`auto | none`）和 `scroll-target-group`（`none | auto`）。
 - **WPT & Smoke 验收**：3 项测试全部 FAIL->PASS（已收紧基线），`--smoke` 3/3 suites PASS。
+
+### Phase 610: `animation-computed` (15/15) & `font-face-size-adjust` (6/6) 全绿
+- **核心修复 (`cssom.js`, `element.js`)**：`serializeExpandedShorthand("animation")` 省略 `"0s"` duration，`@font-face` `size-adjust` 拒绝负百分比，`element.js` 补充 `font-stretch` <-> `font-width` 别名读取。
+- **WPT & Smoke 验收**：`animation-computed.html` 15/15 PASS、`font-face-size-adjust.html` 6/6 PASS、`--smoke` 3/3 suites PASS。

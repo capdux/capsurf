@@ -2100,3 +2100,11 @@
 - **Filter `/css/css-overflow/parsing/scroll-target-group-invalid`**: **FAIL->PASS (5/5)**（`cssom.js` `STANDARD_CSS_PROPERTIES` & `ENUM_PROPS` 补全 `scroll-target-group: none | auto`；已收紧基线为 `PASS`）。
 - **Filter `/css/css-overflow/parsing/scroll-target-group-computed`**: **FAIL->PASS (8/8)**（`window.js` `STANDARD_COMPUTED_LONGHANDS` & `textDecorDefs` 补全 `scroll-target-group: "none"`；已收紧基线为 `PASS`）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 610: `animation-computed` (15/15) & `font-face-size-adjust` (6/6) 全绿 & Animations/Transitions 摸底
+- **Filter `/css/css-animations/parsing/animation-computed`**: **PASS (15/15)**（`cssom.js` `serializeExpandedShorthand("animation")` 省略默认 `0s` duration，恢复默认 `"none"`）。
+- **Filter `/css/css-fonts/parsing/font-face-size-adjust`**: **PASS (6/6)**（`cssom.js` `makeRuleStyleDeclaration.parseInitial` 中 `@font-face` `size-adjust` 拒绝负百分比）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+- **子智能体只读摸底记录**：
+  - `/css/css-animations/` (`b515`, 58 files): `49 PASS / 8 FAIL / 1 TIMEOUT` -> Phase 610 修复 `animation-computed.html` 后 `50/58 PASS`
+  - `/css/css-transitions/` (`b516`, 20 files): `15 PASS / 5 FAIL / 0 TIMEOUT`

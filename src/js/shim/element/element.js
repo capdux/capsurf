@@ -378,6 +378,12 @@ function createStyleProxy(element) {
     } else if (key === "transform") {
       const e = map.get("-webkit-transform");
       if (e) return e.value;
+    } else if (key === "font-stretch") {
+      const e = map.get("font-width");
+      if (e) return e.value;
+    } else if (key === "font-width") {
+      const e = map.get("font-stretch");
+      if (e) return e.value;
     } else if (key === "-webkit-align-content") {
       const e = map.get("align-content");
       if (e) return e.value;

@@ -3684,3 +3684,5 @@
 - **Phase 608** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 规范化 `grid-auto-flow`、`grid-template-areas`（含 cell 校验）与 `grid-template-{columns,rows}` 空线名 `[]`；9 项 `css-grid/parsing/*` 全绿。
 
 - **Phase 609** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 补全 `scroll-axis-lock` 与 `scroll-target-group` 枚举校验与 computed 支持；3 项 `css-overflow/parsing/*` 全绿并收紧基线为 `PASS`。
+
+- **Phase 610** (`src/js/shim/cssom.js`, `src/js/shim/element/element.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 修正 `animation` 默认 `0s` 省略返回 `"none"` 与 `@font-face size-adjust` 负百分比拒绝；`animation-computed.html` 与 `font-face-size-adjust.html` 全绿。

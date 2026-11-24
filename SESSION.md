@@ -7882,3 +7882,10 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Agent]**: 完成 Phase 609（`src/js/shim/cssom.js`, `src/js/shim/window.js`, `test/wpt/wpt-expectations.json`）：
   1. **`cssom.js` / `window.js`**：新增 `scroll-axis-lock` 与 `scroll-target-group` 枚举校验与 computed 支持，并调整 `outline-color` 缺省分支。
   2. **三连全绿验证与基线收紧**：`scroll-axis-lock-invalid.html`、`scroll-target-group-invalid.html`、`scroll-target-group-computed.html` 均 **FAIL->PASS**（已收紧为 `PASS`），`--smoke` **3/3 suites, 6/6 tests PASS**。
+
+### 2026-11-24 Phase 610 (`animation-computed` & `font-face-size-adjust` 全绿)
+- **[Agent]**: 完成 Phase 610（`src/js/shim/cssom.js`, `src/js/shim/element/element.js`）：
+  1. **`cssom.js`**：`animation` 简写序列化省略默认 `0s` duration；`@font-face` `size-adjust` 拒绝负百分比。
+  2. **`element.js`**：补全 `font-stretch` <-> `font-width` 别名读取。
+  3. **全绿验证**：`animation-computed.html` **15/15 PASS**、`font-face-size-adjust.html` **6/6 PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+  4. **并行摸底汇总**：`/css/css-animations/` 50/58 PASS；`/css/css-transitions/` 15/20 PASS。
