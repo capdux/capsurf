@@ -2671,6 +2671,16 @@
   - 补全 `computeElementUsedHeightPx` 子元素高度汇总、`inline-size` `min-content/max-content` 子元素宽度计算、绝对定位包含块查找以及 `border-block/inline-*-width` 随 `style: none|hidden` 归零规则。
 - **WPT 验收**：`/css/css-logical/parsing/` **54/54 PASS**、`/css/css-tables/parsing/` **15/15 PASS**，均 100% 全绿。
 
+### Phase 553: CSS Selectors 解析、规范序列化与 `CSS.supports("selector(...)")` 16/16 全绿闭环
+- **统一选择器解析与序列化器 (`canonicalizeSelectorList` in `src/js/shim/selector.js`)**：
+  - 属性选择器归一化为 `[attr="val"]` 并剥离空命名空间前缀 `[|att] -> [att]`；组合子统一输出 ` > ` / ` + ` / ` ~ `；`*|*` 在前缀位置省略并归一化。
+  - 引入 `KNOWN_PSEUDO_CLASSES` 与 `KNOWN_PSEUDO_ELEMENTS` 白名单，拦截未标准化的 `:-internal-*`/`:-khtml-*`/`:-webkit-*`、`:unknownpseudo` 及数字开头标签（`:has(123)`）。
+  - 跟踪 `seenTerminalPseudoEl` 终止态伪元素（`::before`/`::after`/`::slotted()` 等），禁止其后追加伪类或组合子，仅保留 `::part()` 后可跟 `:state()` 或伪元素的标准组合。
+  - `:has()` 禁止直接嵌套 `:has()`，同时在 `:has()` 内部对 `:is()`/`:where()` 执行规范容错丢弃，并在 `Element.prototype.matches` 中透传规范化后的选择器。
+  - `CSS.supports("selector(...)")`（`selectorSupported`）与 `CSSStyleRule.selectorText` 统一接入 `canonicalizeSelectorList`。
+- **WPT 验收**：`/css/selectors/parsing/` **16/16 PASS (100% ALL GREEN)**。
+
+
 
 
 

@@ -3562,6 +3562,9 @@
 
 - **Phase 552** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `GEMINI.md`, `test/TEST_LEDGER.md`): 新增 `canonicalizeCalcToken`、`isValidColor` 严格校验、`inset`/`margin-block/inline`/`padding-block/inline`/`border-block/inline` 全系逻辑属性展开与计算值解析、以及 `border-spacing` `calc()` 求值；WPT `/css/css-logical/parsing/` 54/54 与 `/css/css-tables/parsing/` 15/15 均 100% 全绿通过；并在 `GEMINI.md` 固化 11.8 节省 Token 与提效规范。
 
+- **Phase 553** (`src/js/shim/selector.js`, `src/js/shim/cssom.js`, `src/js/shim/element/element.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 实现完整选择器语法校验与规范化序列化（`::slotted()`、`:state()`、`:has()` 嵌套禁止与 `:is()`/`:where()` 容错丢弃、终止态伪元素约束、伪类白名单与 `CSS.supports("selector(...)")` 联动）；WPT `/css/selectors/parsing/` 16/16 用例 100% 全绿通过。
+
+
 
 
 

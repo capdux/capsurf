@@ -1936,7 +1936,7 @@ function installElementExtensions(proto) {
       throw new TypeError("Failed to execute 'matches' on 'Element': 1 argument required, but only 0 present.");
     }
     if (typeof validateSelector === "function") {
-      validateSelector(selector);
+      selector = validateSelector(selector);
     }
     const s = String(selector).trim();
     const dirMatch = s.match(/^:dir\(\s*([a-zA-Z0-9_-]+)\s*\)$/i);

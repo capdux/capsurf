@@ -7246,13 +7246,10 @@
 
     function selectorSupported(selector) {
       if (typeof selector !== "string") return false;
-      const s = selector.trim();
-      if (!s || s === "!!" || /^[!@#$%^&;]+$/.test(s) || /^[+>~]$/.test(s)) return false;
-      if (s.includes("::")) {
-        const m = s.match(/::([a-zA-Z-]+)(.*)$/);
-        if (m && m[2].trim().length > 0) return false;
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_canonicalizeSelector === "function") {
+        return globalThis.__capsurf_canonicalizeSelector(selector, false) !== null;
       }
-      return true;
+      return selector.trim().length > 0;
     }
 
     function matchParen(text, openParenIndex) {
@@ -8698,17 +8695,18 @@
 
     function validateSelectorOrThrow(sel) {
       if (typeof sel !== "string") sel = String(sel);
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_canonicalizeSelector === "function") {
+        const canon = globalThis.__capsurf_canonicalizeSelector(sel, false);
+        if (canon === null) {
+          throw new DOMException("The provided selector is invalid.", "SyntaxError");
+        }
+        return canon;
+      }
       const s = sel.trim();
       if (!s || s === "!!" || /^[!@#$%^&;]+$/.test(s) || /^[+>~]$/.test(s)) {
         throw new DOMException("The provided selector is invalid.", "SyntaxError");
       }
-      if (s.includes("::")) {
-        const pseudoPattern = /::([a-zA-Z-]+)(.*)$/;
-        const m = s.match(pseudoPattern);
-        if (m && m[2].trim().length > 0) {
-          throw new DOMException("The provided selector is invalid.", "SyntaxError");
-        }
-      }
+      return s;
     }
 
     function parseSingleRuleOrThrow(text) {
@@ -8751,7 +8749,10 @@
         rule.parentRule = parentRule || null;
         rule.parentStyleSheet = parentSheet || null;
         rule._onMutate = onMutate || null;
-        rule.selectorText = sel;
+        const canonSel = (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_canonicalizeSelector === "function")
+          ? (globalThis.__capsurf_canonicalizeSelector(sel, false) || sel)
+          : sel;
+        rule.selectorText = canonSel;
         const style = makeRuleStyleDeclaration(parsed.declText || "", "style", null, onMutate);
         style._parentRule = rule;
         rule.style = style;
@@ -12020,24 +12021,269 @@
   // src/js/shim/selector.js
   // CSS Selector validation and QuerySelector wrappers
 
-  function validateSelector(selector) {
-    if (typeof selector !== "string") {
-      selector = String(selector);
-    }
-    const s = selector.trim();
-    if (s.length === 0 || s === "!!" || /^[!@#$%^&;]+$/.test(s) || /^[+>~]$/.test(s)) {
-      throw new DOMException("The provided selector is invalid.", "SyntaxError");
-    }
-    if (s.includes("::")) {
-      const pseudoPattern = /::([a-zA-Z-]+)(.*)$/;
-      const m = s.match(pseudoPattern);
-      if (m) {
-        const rest = m[2].trim();
-        if (rest.length > 0) {
-          throw new DOMException("The provided selector is invalid.", "SyntaxError");
-        }
+  const FUNC_SELECTOR_PSEUDOS = new Set([":not", ":is", ":where", ":has", "::slotted"]);
+  const REQUIRED_FUNC_PSEUDOS = new Set([
+    ":not", ":is", ":where", ":has", ":state", ":lang", ":dir",
+    ":nth-child", ":nth-last-child", ":nth-of-type", ":nth-last-of-type",
+    "::slotted", "::part"
+  ]);
+  const NON_EMPTY_FUNC_PSEUDOS = new Set([":not", ":has", ":state", "::slotted", "::part", ":lang", ":dir"]);
+  const KNOWN_PSEUDO_CLASSES = new Set([
+    ":hover", ":active", ":focus", ":focus-visible", ":focus-within", ":target",
+    ":visited", ":link", ":any-link", ":local-link", ":enabled", ":disabled",
+    ":read-only", ":read-write", ":placeholder-shown", ":default", ":checked",
+    ":indeterminate", ":valid", ":invalid", ":in-range", ":out-of-range",
+    ":required", ":optional", ":user-valid", ":user-invalid", ":root", ":empty",
+    ":first-child", ":last-child", ":only-child", ":first-of-type", ":last-of-type",
+    ":only-of-type", ":nth-child", ":nth-last-child", ":nth-of-type", ":nth-last-of-type",
+    ":not", ":is", ":where", ":has", ":lang", ":dir", ":scope", ":defined", ":state",
+    ":host", ":host-context", ":fullscreen", ":modal", ":picture-in-picture",
+    ":popover-open", ":autofill", ":playing", ":paused", ":muted", ":seeking",
+    ":stalled", ":buffering", ":volume-locked", ":open", ":closed", ":target-within",
+    ":past", ":current", ":future", ":blank", ":heading", ":before", ":after",
+    ":first-line", ":first-letter"
+  ]);
+  const KNOWN_PSEUDO_ELEMENTS = new Set([
+    "::before", "::after", "::first-line", "::first-letter", "::selection",
+    "::marker", "::placeholder", "::backdrop", "::slotted", "::part",
+    "::file-selector-button", "::target-text", "::spelling-error", "::grammar-error",
+    "::highlight", "::search-text", "::view-transition", "::details-content"
+  ]);
+
+  function splitTopLevelSelectorList(str) {
+    const out = [];
+    let cur = "", depthP = 0, depthB = 0, quote = "";
+    for (let i = 0; i < str.length; i++) {
+      const ch = str[i];
+      if (quote) {
+        cur += ch;
+        if (ch === "\\" && i + 1 < str.length) { cur += str[++i]; continue; }
+        if (ch === quote) quote = "";
+        continue;
+      }
+      if (ch === '"' || ch === "'") { quote = ch; cur += ch; continue; }
+      if (ch === "(") depthP++;
+      else if (ch === ")") { if (depthP === 0) return null; depthP--; }
+      else if (ch === "[") depthB++;
+      else if (ch === "]") { if (depthB === 0) return null; depthB--; }
+      if (depthP === 0 && depthB === 0 && ch === ",") {
+        out.push(cur);
+        cur = "";
+      } else {
+        cur += ch;
       }
     }
+    if (quote || depthP !== 0 || depthB !== 0) return null;
+    out.push(cur);
+    return out;
+  }
+
+  function canonicalizeComplexSelector(raw, inHas, inFunc) {
+    const s = raw.trim();
+    if (!s) return null;
+    let i = 0;
+    let out = "";
+    let prevWasCombinator = false;
+    let atStart = true;
+    let seenTerminalPseudoEl = false;
+
+    while (i < s.length) {
+      // Whitespace -> descendant combinator (unless adjacent to > + ~ or start)
+      if (/\s/.test(s[i])) {
+        while (i < s.length && /\s/.test(s[i])) i++;
+        if (i < s.length && s[i] !== ">" && s[i] !== "+" && s[i] !== "~" && !prevWasCombinator && !atStart) {
+          if (seenTerminalPseudoEl) return null;
+          out += " ";
+          prevWasCombinator = true;
+        }
+        continue;
+      }
+      // Combinator > + ~
+      if (s[i] === ">" || s[i] === "+" || s[i] === "~") {
+        if (seenTerminalPseudoEl) return null;
+        const comb = s[i++];
+        while (i < s.length && /\s/.test(s[i])) i++;
+        if (i >= s.length || s[i] === ">" || s[i] === "+" || s[i] === "~") return null;
+        if (atStart) {
+          if (!inHas) return null;
+          out += comb + " ";
+        } else {
+          out = out.trimEnd() + " " + comb + " ";
+        }
+        prevWasCombinator = true;
+        atStart = false;
+        continue;
+      }
+      if (seenTerminalPseudoEl) return null;
+      const atSimpleStart = (atStart || prevWasCombinator);
+      atStart = false;
+      prevWasCombinator = false;
+      if (atSimpleStart && /[0-9]/.test(s[i])) return null;
+
+      // Attribute selector [...]
+      if (s[i] === "[") {
+        let j = i + 1, q = "";
+        while (j < s.length) {
+          if (q) {
+            if (s[j] === "\\" && j + 1 < s.length) { j += 2; continue; }
+            if (s[j] === q) q = "";
+          } else {
+            if (s[j] === '"' || s[j] === "'") q = s[j];
+            else if (s[j] === "]") break;
+          }
+          j++;
+        }
+        if (j >= s.length || s[j] !== "]") return null;
+        const inner = s.slice(i + 1, j).trim();
+        if (!inner) return null;
+        const am = /^([a-zA-Z_*|-][a-zA-Z0-9_*|-]*)\s*(?:([~|^$*]?=)\s*([\s\S]*?))?$/.exec(inner);
+        if (!am) return null;
+        let attrName = am[1];
+        if (attrName.startsWith("|")) attrName = attrName.slice(1);
+        if (!attrName) return null;
+        if (am[2]) {
+          let attrVal = am[3].trim();
+          let mod = "";
+          const modMatch = /^(.*)\s+([iIsS])$/.exec(attrVal);
+          if (modMatch && (attrVal.startsWith('"') || attrVal.startsWith("'"))) {
+            attrVal = modMatch[1].trim();
+            mod = " " + modMatch[2].toLowerCase();
+          }
+          if ((attrVal.startsWith('"') && attrVal.endsWith('"')) || (attrVal.startsWith("'") && attrVal.endsWith("'"))) {
+            const innerV = attrVal.slice(1, -1).replace(/\\'/g, "'").replace(/(?<!\\)"/g, '\\"');
+            attrVal = '"' + innerV + '"';
+          } else {
+            if (!attrVal || /\s/.test(attrVal)) return null;
+            attrVal = '"' + attrVal.replace(/"/g, '\\"') + '"';
+          }
+          out += "[" + attrName + am[2] + attrVal + mod + "]";
+        } else {
+          out += "[" + attrName + "]";
+        }
+        i = j + 1;
+        continue;
+      }
+
+      // Pseudo-element ::name or pseudo-class :name
+      if (s[i] === ":") {
+        const isDouble = (i + 1 < s.length && s[i + 1] === ":");
+        let j = i + (isDouble ? 2 : 1);
+        if (j >= s.length || !/[a-zA-Z_-]/.test(s[j])) return null;
+        while (j < s.length && /[a-zA-Z0-9_-]/.test(s[j])) j++;
+        const pName = s.slice(i, j).toLowerCase();
+        if (isDouble) {
+          if (inFunc || !KNOWN_PSEUDO_ELEMENTS.has(pName)) return null;
+        } else {
+          if (!KNOWN_PSEUDO_CLASSES.has(pName)) return null;
+        }
+        if (j < s.length && s[j] === "(") {
+          let k = j + 1, dp = 1, q = "";
+          while (k < s.length && dp > 0) {
+            if (q) {
+              if (s[k] === "\\" && k + 1 < s.length) { k += 2; continue; }
+              if (s[k] === q) q = "";
+            } else {
+              if (s[k] === '"' || s[k] === "'") q = s[k];
+              else if (s[k] === "(") dp++;
+              else if (s[k] === ")") dp--;
+            }
+            k++;
+          }
+          if (dp !== 0) return null;
+          const inner = s.slice(j + 1, k - 1).trim();
+          if (NON_EMPTY_FUNC_PSEUDOS.has(pName) && !inner) return null;
+          if (pName === ":has" && inHas) return null;
+          if (pName === "::slotted") {
+            const sub = canonicalizeComplexSelector(inner, false, true);
+            if (sub === null || /[\s>+~]/.test(sub.replace(/\[[^\]]*\]/g, "").replace(/\([^)]*\)/g, ""))) return null;
+            out += "::slotted(" + sub + ")";
+            seenTerminalPseudoEl = true;
+          } else if (pName === ":host" || pName === ":host-context") {
+            const sub = canonicalizeComplexSelector(inner, false, true);
+            if (sub === null || /[\s>+~]/.test(sub.replace(/\[[^\]]*\]/g, ""))) return null;
+            out += pName + "(" + sub + ")";
+          } else if (pName === ":is" || pName === ":where") {
+            if (!inner) {
+              out += pName + "()";
+            } else {
+              const items = splitTopLevelSelectorList(inner);
+              if (!items) return null;
+              const kept = [];
+              for (let ii = 0; ii < items.length; ii++) {
+                const c = canonicalizeComplexSelector(items[ii], inHas, true);
+                if (c !== null) kept.push(c);
+              }
+              out += pName + "(" + kept.join(", ") + ")";
+            }
+          } else if (FUNC_SELECTOR_PSEUDOS.has(pName)) {
+            if (!inner) {
+              out += pName + "()";
+            } else {
+              const sub = canonicalizeSelectorList(inner, pName === ":has", true);
+              if (sub === null) return null;
+              out += pName + "(" + sub + ")";
+            }
+          } else if (pName === ":state") {
+            if (!/^--?[a-zA-Z0-9_-]+$|^[a-zA-Z_-][a-zA-Z0-9_-]*$/.test(inner)) return null;
+            out += ":state(" + inner + ")";
+          } else {
+            out += pName + "(" + inner + ")";
+            if (isDouble && pName !== "::part") seenTerminalPseudoEl = true;
+          }
+          i = k;
+          continue;
+        } else {
+          if (REQUIRED_FUNC_PSEUDOS.has(pName)) return null;
+          out += pName;
+          if (isDouble && pName !== "::part") seenTerminalPseudoEl = true;
+          i = j;
+          continue;
+        }
+      }
+
+      // Universal *|* or *
+      if (s.slice(i, i + 3) === "*|*") {
+        const nextCh = s[i + 3] || "";
+        if (nextCh === ":" || nextCh === "." || nextCh === "#" || nextCh === "[") {
+          // *|*:has(*) -> :has(*)
+        } else {
+          out += "*";
+        }
+        i += 3;
+        continue;
+      }
+
+      // Invalid stray characters
+      if (/[!@$%^&;{}()\]/]/.test(s[i])) return null;
+      out += s[i++];
+    }
+
+    return prevWasCombinator ? null : out.trim();
+  }
+
+  function canonicalizeSelectorList(selector, inHas, inFunc) {
+    if (typeof selector !== "string") selector = String(selector);
+    const parts = splitTopLevelSelectorList(selector.trim());
+    if (!parts || parts.length === 0) return null;
+    const out = [];
+    for (let i = 0; i < parts.length; i++) {
+      const c = canonicalizeComplexSelector(parts[i], !!inHas, !!inFunc);
+      if (c === null) return null;
+      out.push(c);
+    }
+    return out.join(", ");
+  }
+
+  if (typeof globalThis !== "undefined") {
+    globalThis.__capsurf_canonicalizeSelector = canonicalizeSelectorList;
+  }
+
+  function validateSelector(selector) {
+    const res = canonicalizeSelectorList(selector, false);
+    if (res === null) {
+      throw new DOMException("The provided selector is invalid.", "SyntaxError");
+    }
+    return res;
   }
 
   function isPurePseudoElementSelector(s) {
@@ -14442,7 +14688,7 @@
         throw new TypeError("Failed to execute 'matches' on 'Element': 1 argument required, but only 0 present.");
       }
       if (typeof validateSelector === "function") {
-        validateSelector(selector);
+        selector = validateSelector(selector);
       }
       const s = String(selector).trim();
       const dirMatch = s.match(/^:dir\(\s*([a-zA-Z0-9_-]+)\s*\)$/i);

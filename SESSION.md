@@ -7470,6 +7470,18 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
      - `/css/css-tables/parsing/`: **15/15 PASS (100% ALL GREEN)**
      - `scripts/e2e_suite.py --smoke`: **3/3 suites, 6/6 tests PASS**
 
+### 2026-11-24 Phase 553 (`/css/selectors/parsing/` 16/16 全绿闭环)
+- **[Agent]**: 自主推导并完成 Phase 553（`src/js/shim/selector.js`, `src/js/shim/cssom.js`, `src/js/shim/element/element.js`）：
+  1. **完整选择器语法校验与规范化序列化 (`canonicalizeSelectorList`)**：
+     - 实现完整选择器 AST/Token 级校验与规范序列化：属性选择器统一双引号及去空白（`[att=val]` -> `[att="val"]`、`[|att]` -> `[att]`）、组合子空格规范（`div ol>li` -> `div ol > li`）、`*|*` 归一化及列表逗号空格规范（`:is(ul,ol)` -> `:is(ul, ol)`）。
+     - 严格伪类/伪元素校验：维护 `KNOWN_PSEUDO_CLASSES` 与 `KNOWN_PSEUDO_ELEMENTS` 白名单，拦截 `:-internal-*`、`:-khtml-*`、`:-webkit-*`、`:unknownpseudo`、数字开头标签（`:has(123)`）、终止态伪元素后续附加伪类（`::slotted(foo):hover` / `::after:state(foo)`）及 `:host()` 复合选择器约束（`:host(:not(.a .b))`）。
+     - 全面支持 `::slotted()`、`::part()`、`:state()`，实现 `:has()` 禁止直接嵌套且对 `:is()`/`:where()` 实施规范容错丢弃（`:has(:is(:has(*), script))` -> `:has(:is(script))`）。
+     - 在 `cssom.js` 的 `CSSStyleRule.selectorText`、`validateSelectorOrThrow` 与 `CSS.supports("selector(...)")`（`selectorSupported`）以及 `element.js` 的 `Element.prototype.matches` 统一接入 `canonicalizeSelectorList`。
+  2. **并行摸底与全绿验证**：
+     - 双子智能体并行完成 `/css/css-variables/`、`/css/css-pseudo/parsing/`、`/wasm/` (`1/3`)、`/domparsing/` 与 `/domxpath/`（20/28 PASS）摸底。
+     - `/css/selectors/parsing/`: **16/16 PASS (100% ALL GREEN)**；`scripts/e2e_suite.py --smoke`: **3/3 suites, 6/6 tests PASS**。
+
+
 
 
 

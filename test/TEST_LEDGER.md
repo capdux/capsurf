@@ -1566,6 +1566,16 @@
   - `/css/css-gaps/parsing/`: `15` files (`3 PASS / 12 FAIL / 0 TIMEOUT`)
   - `/intersection-observer/`: `117/149` ran (`45 PASS / 61 FAIL / 11 TIMEOUT`, batch 2 因 `3d-transform-occlusion` 重启上限截断)
 
+### WPT-B315 ~ B318 摸底与 Phase 553 选择器解析 16/16 全绿闭环 (bin_dev Phase 553, 2026-11-24)
+- **Filter `/css/selectors/parsing/`**: `16` files (**16 PASS / 0 FAIL / 0 TIMEOUT / 0 ERROR**, **100% ALL GREEN**!); 从摸底 `6/16` 跃升至 `16/16` 全绿（`invalid-pseudos`, `parse-attribute`, `parse-has`, `parse-has-disallow-nesting-has-inside-has`, `parse-is`, `parse-not`, `parse-slotted`, `parse-state`, `parse-where` 等全面通过）。
+- **子智能体只读摸底记录（待后续 Phase 攻坚）**：
+  - `/css/css-variables/`: `192/224` ran (`60 PASS / 126 FAIL / 5 TIMEOUT / 1 ERROR`)
+  - `/css/css-pseudo/parsing/`: `5` files (`0 PASS / 5 FAIL / 0 TIMEOUT`, `5/5` matched expectations)
+  - `/wasm/` (`--shard 1/3`): `32/119` ran (`0 PASS / 27 FAIL / 3 TIMEOUT / 2 ERROR`)
+  - `/domparsing/`: `33` files (`6 PASS / 24 FAIL / 2 TIMEOUT / 1 SKIP`)
+  - `/domxpath/`: `28` files (`20 PASS / 7 FAIL / 1 ERROR / 0 TIMEOUT`)
+
+
 
 
 

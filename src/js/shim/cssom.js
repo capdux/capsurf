@@ -3456,13 +3456,10 @@
 
   function selectorSupported(selector) {
     if (typeof selector !== "string") return false;
-    const s = selector.trim();
-    if (!s || s === "!!" || /^[!@#$%^&;]+$/.test(s) || /^[+>~]$/.test(s)) return false;
-    if (s.includes("::")) {
-      const m = s.match(/::([a-zA-Z-]+)(.*)$/);
-      if (m && m[2].trim().length > 0) return false;
+    if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_canonicalizeSelector === "function") {
+      return globalThis.__capsurf_canonicalizeSelector(selector, false) !== null;
     }
-    return true;
+    return selector.trim().length > 0;
   }
 
   function matchParen(text, openParenIndex) {
@@ -4908,17 +4905,18 @@
 
   function validateSelectorOrThrow(sel) {
     if (typeof sel !== "string") sel = String(sel);
+    if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_canonicalizeSelector === "function") {
+      const canon = globalThis.__capsurf_canonicalizeSelector(sel, false);
+      if (canon === null) {
+        throw new DOMException("The provided selector is invalid.", "SyntaxError");
+      }
+      return canon;
+    }
     const s = sel.trim();
     if (!s || s === "!!" || /^[!@#$%^&;]+$/.test(s) || /^[+>~]$/.test(s)) {
       throw new DOMException("The provided selector is invalid.", "SyntaxError");
     }
-    if (s.includes("::")) {
-      const pseudoPattern = /::([a-zA-Z-]+)(.*)$/;
-      const m = s.match(pseudoPattern);
-      if (m && m[2].trim().length > 0) {
-        throw new DOMException("The provided selector is invalid.", "SyntaxError");
-      }
-    }
+    return s;
   }
 
   function parseSingleRuleOrThrow(text) {
@@ -4961,7 +4959,10 @@
       rule.parentRule = parentRule || null;
       rule.parentStyleSheet = parentSheet || null;
       rule._onMutate = onMutate || null;
-      rule.selectorText = sel;
+      const canonSel = (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_canonicalizeSelector === "function")
+        ? (globalThis.__capsurf_canonicalizeSelector(sel, false) || sel)
+        : sel;
+      rule.selectorText = canonSel;
       const style = makeRuleStyleDeclaration(parsed.declText || "", "style", null, onMutate);
       style._parentRule = rule;
       rule.style = style;
