@@ -7969,3 +7969,6 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`cssom.js`**：升级 `canonicalizeCalcToken` 为递归线性组合化简器，并接入 `background-position*`。
   2. **全绿验证**：`calc-background-position-003.html` **FAIL->PASS (6/6)**、`--smoke` **3/3 suites, 6/6 tests PASS**。
   3. **子智能体并发汇报**：`bf393f0e` 完成 `/css/css-position/` 摸底（50/117 PASS，81/117 符合预期），已接力派发 `52cb663b`（`19720`, `/css/css-images/`）。
+- **[Agent]**: 完成 Phase 629（`src/js/shim/cssom.js`）：
+  1. **`cssom.js`**：`canonicalizeCalcToken` 保留 `0%` 项，并在 `outline`/`border`/`column-rule` 接入 `canonicalizeCalcToken`。
+  2. **全绿验证**：`/css/css-values/calc-nesting.html` **FAIL->PASS (8/8)**、`--smoke` **3/3 suites, 6/6 tests PASS**。

@@ -3724,3 +3724,5 @@
 - **Phase 627** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `position: absolute|fixed` `width: auto` shrink-to-fit 与 `block` `height: auto` 解析；`/css/css-sizing/inheritance-002` 全绿。
 
 - **Phase 628** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 升级 `canonicalizeCalcToken` 为递归线性组合化简器并接入 `background-position*`；`calc-background-position-003` 全绿。
+
+- **Phase 629** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `canonicalizeCalcToken` 保留 `0%` 项并接入 `outline`/`border`/`column-rule`；`/css/css-values/calc-nesting.html` 全绿。

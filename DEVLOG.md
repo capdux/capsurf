@@ -3015,3 +3015,7 @@
 ### Phase 628: `canonicalizeCalcToken` 递归线性组合化简 + `calc-background-position-003` 全绿
 - **核心修复 (`src/js/shim/cssom.js`)**：`canonicalizeCalcToken` 升级为递归线性组合化简器（支持嵌套 `calc()`、乘除系数、同量纲合并及物理单位转 `px`），并接入 `background-position*`。
 - **WPT & Smoke 验收**：`calc-background-position-003.html` (6/6) PASS，`--smoke` 3/3 suites PASS。
+
+### Phase 629: `/css/css-values/calc-nesting` 8/8 全绿
+- **核心修复 (`src/js/shim/cssom.js`)**：`canonicalizeCalcToken` 保留 `0%` 项，并在 `outline`/`border`/`column-rule` 中接入 `canonicalizeCalcToken`。
+- **WPT & Smoke 验收**：`/css/css-values/calc-nesting.html` (8/8) PASS，`--smoke` 3/3 suites PASS。

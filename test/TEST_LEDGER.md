@@ -2193,3 +2193,7 @@
 ### Phase 628: `canonicalizeCalcToken` 递归线性组合化简 + `calc-background-position-003` 全绿
 - **Filter `/css/css-values/calc-background-position-003`**: **FAIL->PASS (6/6)**（`cssom.js` 将 `canonicalizeCalcToken` 升级为递归线性组合化简器，支持嵌套 `calc()`、同量纲合并及绝对物理长度转 `px`，并接入 `background-position*`）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 629: `/css/css-values/calc-nesting` 8/8 全绿
+- **Filter `/css/css-values/calc-nesting.html`**: **FAIL->PASS (8/8)**（`cssom.js` `canonicalizeCalcToken` 保留 `0%` 项，并在 `outline`/`border`/`column-rule` 中接入 `canonicalizeCalcToken` 化简嵌套 `calc()`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

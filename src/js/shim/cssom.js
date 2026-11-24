@@ -2782,7 +2782,7 @@
     const entries = [];
     for (const [u, v] of combined.entries()) {
       const r = Number(v.toFixed(6));
-      if (r !== 0 || combined.size === 1) entries.push({ unit: u, val: r });
+      if (r !== 0 || combined.size === 1 || u === "%") entries.push({ unit: u, val: r });
     }
     if (entries.length === 0) entries.push({ unit: combined.has("px") ? "px" : "", val: 0 });
     entries.sort((a, b) => {
@@ -2970,7 +2970,7 @@
         const t = parts[i], tl = t.toLowerCase();
         if (STY.has(tl)) st = tl;
         else if (tl === "thin" || tl === "medium" || tl === "thick" || /^[+-]?(?:\d|\.)/.test(tl) || /^(?:calc|min|max|clamp)\(/i.test(tl)) {
-          w = (tl === "0" || tl === "+0" || tl === "-0") ? "0px" : t;
+          w = (tl === "0" || tl === "+0" || tl === "-0") ? "0px" : (/^calc\(/i.test(t) ? canonicalizeCalcToken(t) : t);
         } else c = t;
       }
       if (key === "outline") {
@@ -4230,7 +4230,7 @@
         const t = p[i], tl = t.toLowerCase();
         if (STY.has(tl)) st = tl;
         else if (tl === "thin" || tl === "medium" || tl === "thick" || /^[+-]?(?:\d|\.)/.test(tl) || /^(?:calc|min|max|clamp)\(/i.test(tl)) {
-          w = (tl === "0" || tl === "+0" || tl === "-0") ? "0px" : t;
+          w = (tl === "0" || tl === "+0" || tl === "-0") ? "0px" : (/^calc\(/i.test(t) ? canonicalizeCalcToken(t) : t);
         } else c = t;
       }
       return key === "outline"
@@ -4294,7 +4294,7 @@
         const t = p[i], tl = t.toLowerCase();
         if (STY.has(tl)) st = tl;
         else if (tl === "thin" || tl === "medium" || tl === "thick" || /^[+-]?(?:\d|\.)/.test(tl) || /^(?:calc|min|max|clamp)\(/i.test(tl)) {
-          w = (tl === "0" || tl === "+0" || tl === "-0") ? "0px" : t;
+          w = (tl === "0" || tl === "+0" || tl === "-0") ? "0px" : (/^calc\(/i.test(t) ? canonicalizeCalcToken(t) : t);
         } else c = t;
       }
       if (key === "border-block" || key === "border-inline") {
