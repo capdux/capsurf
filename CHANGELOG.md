@@ -3586,3 +3586,5 @@
 - **Phase 559** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 为 `ZERO_PX_PROPS` 接入 `canonicalizeCalcToken`、拦截未注册 `margin-*`/`padding-*` 属性名，并实现 `margin-trim` 文法校验与 `block` 折叠序列化及计算值默认值；WPT `/css/css-box/parsing/` 29/29 用例 100% 全绿通过。
 
 - **Phase 560** (`src/js/shim/selector.js`, `src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 支持 `::column`/`::scroll-marker` 合法链式伪元素、伪元素 `inherit` 宿主回溯与 `scrollSnapMargin*` 别名映射，完善 `columns`（含 `0` 宽度与 `/ <column-height>`）及 `column-rule` 简写与计算值序列化；WPT `/css/css-multicol/parsing/` 31/31 用例 100% 全绿通过。
+
+- **Phase 561** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 实现 `scroll-initial-target`（`none | nearest`）严格校验，将 `text-combine-upright`/`text-orientation`/`writing-mode` 纳入继承属性并补全 `getComputedStyle` 默认值与计算期非法声明过滤；WPT `/css/css-scroll-snap/` 8/8 100% 全绿通过，`text-combine-upright-parsing-invalid-001/002.html` 转绿。

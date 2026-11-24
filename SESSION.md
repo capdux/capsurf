@@ -7570,3 +7570,12 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
      - 支持 `columns` 的 `0` 宽度（`0px`）与 `/ <column-height>` 语法及计算期 `em -> px`；修复 `column-rule` 默认序列与计算期省略 `none`。
   3. **全绿验证**：
      - `/css/css-multicol/parsing/`: **31/31 PASS (100% ALL GREEN)**；`scripts/e2e_suite.py --smoke`: **3/3 suites, 6/6 tests PASS**。
+
+### 2026-11-24 Phase 561 (`/css/css-scroll-snap/` 8/8 全绿闭环 & Writing Modes 校验增强)
+- **[Agent]**: 自主推导并完成 Phase 561（`src/js/shim/cssom.js`, `src/js/shim/window.js`）：
+  1. **`scroll-initial-target` 严格校验 (`src/js/shim/cssom.js`)**：
+     - 注册 `scroll-initial-target` 至 `STANDARD_CSS_PROPERTIES` 并限定仅接受 `none | nearest`，使 `/css/css-scroll-snap/` 全目录 **8/8 PASS (100% ALL GREEN)**。
+  2. **Writing Modes 继承/计算期校验与 `content` 默认值 (`src/js/shim/window.js`)**：
+     - 将 `text-combine-upright`、`text-orientation`、`writing-mode` 纳入 `INHERITED_CSS_PROPS`，补充 `getComputedStyle` 默认值 `"none"` / `"mixed"` / `"normal"`，并在 `collectRawComputedMap` 中丢弃非法 `text-combine-upright`/`text-orientation` 声明，使 `text-combine-upright-parsing-invalid-001/002.html` 全绿。
+  3. **全绿验证**：
+     - `/css/css-scroll-snap/`: **8/8 PASS (100% ALL GREEN)**；`scripts/e2e_suite.py --smoke`: **3/3 suites, 6/6 tests PASS**。

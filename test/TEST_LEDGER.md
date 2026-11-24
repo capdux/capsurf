@@ -1686,3 +1686,8 @@
   - `/css/css-display/`: `52` files (`15 PASS / 31 FAIL / 6 TIMEOUT`)
   - `/css/css-shapes/`: `70` files (`20 PASS / 47 FAIL / 3 TIMEOUT`)
   - `/css/css-masking/`: `94` files (`15 PASS / 75 FAIL / 4 TIMEOUT`)
+
+### Phase 561 `/css/css-scroll-snap/` 8/8 全绿闭环 & Writing Modes 校验增强 (bin_dev Phase 561, 2026-11-24)
+- **Filter `/css/css-scroll-snap/`**: `8` files (**8 PASS / 0 FAIL / 0 TIMEOUT**, **100% ALL GREEN**!); 新增 `scroll-initial-target`（`none | nearest`）严格校验并加入 `STANDARD_CSS_PROPERTIES`。
+- **Writing Modes (`text-combine-upright`, `text-orientation`) & `content`**: 将 `text-combine-upright`、`text-orientation`、`writing-mode` 加入 `INHERITED_CSS_PROPS`，补全 `getComputedStyle` 默认值（`"none"` / `"mixed"` / `"normal"`），并在 `collectRawComputedMap` 过滤非法内联声明使 `text-combine-upright-parsing-invalid-001/002.html` 转绿（`/css/css-writing-modes/` 17/20 PASS）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

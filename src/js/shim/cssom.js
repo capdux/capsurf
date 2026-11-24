@@ -84,7 +84,7 @@
     "scroll-padding-block", "scroll-padding-block-end", "scroll-padding-block-start",
     "scroll-padding-bottom", "scroll-padding-inline", "scroll-padding-inline-end",
     "scroll-padding-inline-start", "scroll-padding-left", "scroll-padding-right",
-    "scroll-padding-top", "scroll-snap-align", "scroll-snap-stop", "scroll-snap-type",
+    "scroll-initial-target", "scroll-padding-top", "scroll-snap-align", "scroll-snap-stop", "scroll-snap-type",
     "scrollbar-color", "scrollbar-gutter", "scrollbar-width", "shape-image-threshold",
     "shape-margin", "shape-outside", "size", "src", "tab-size", "table-layout",
     "text-align", "text-align-last", "text-autospace", "text-combine-upright", "text-decoration",
@@ -2124,6 +2124,9 @@
         }
       }
       return true;
+    }
+    if (prop === "scroll-initial-target") {
+      return vLower === "none" || vLower === "nearest";
     }
     if (prop === "overscroll-behavior") {
       const toks = splitCssTokens(vLower);

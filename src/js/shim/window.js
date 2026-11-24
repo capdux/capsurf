@@ -6283,6 +6283,7 @@ function installWindow(global) {
     "line-height", "text-align", "visibility", "direction", "white-space",
     "white-space-collapse", "text-wrap-mode", "text-wrap-style", "text-wrap",
     "letter-spacing", "word-spacing", "cursor", "hyphenate-character", "hyphenate-limit-chars", "interactivity", "caret-color",
+    "text-combine-upright", "text-orientation", "writing-mode",
   ]);
 
   function getDefaultDisplayForElement(element) {
@@ -6477,6 +6478,16 @@ function installWindow(global) {
       }
     }
     collectElementOwnDeclarations(element, styleNodes, normalizedPseudo, computedMap);
+    for (const vp of ["text-combine-upright", "text-orientation"]) {
+      if (computedMap.has(vp)) {
+        const vv = String(computedMap.get(vp) || "").trim();
+        const vl = vv.toLowerCase();
+        if (vl !== "inherit" && vl !== "initial" && vl !== "unset" && vl !== "revert" && vl !== "revert-layer" &&
+            typeof globalThis.__capsurf_isValidCssValue === "function" && !globalThis.__capsurf_isValidCssValue(vp, vv)) {
+          computedMap.delete(vp);
+        }
+      }
+    }
 
     // Resolve CSS-wide keywords ("inherit", "initial", "unset") across all properties
     for (const [ck, cv] of Array.from(computedMap.entries())) {
@@ -8711,6 +8722,9 @@ function installWindow(global) {
         if (lower === "contain-intrinsic-size") return getShorthandComputed("contain-intrinsic-size") || "none";
         return "none";
       }
+      if (lower === "text-combine-upright") return "none";
+      if (lower === "text-orientation") return "mixed";
+      if (lower === "content") return "normal";
       if (lower === "overflow-anchor") return "auto";
       if (lower === "scroll-snap-stop") return "normal";
       if (lower === "scroll-snap-type") return "none";
@@ -8781,6 +8795,9 @@ function installWindow(global) {
           }
           const lower = prop.toLowerCase();
           if (computedMap.has(lower)) return computedMap.get(lower);
+          if (kebab === "text-combine-upright") return "none";
+          if (kebab === "text-orientation") return "mixed";
+          if (kebab === "content") return "normal";
           return "";
         }
         return undefined;
