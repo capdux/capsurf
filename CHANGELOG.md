@@ -3720,3 +3720,5 @@
 - **Phase 625** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/wpt/wpt-expectations.json`, `test/TEST_LEDGER.md`): 非 MathML 元素 `display: math` 系列降级为 `inline`/`block`；`display-math-on-non-mathml-elements` 实现 10/10 全绿并收紧基线。
 
 - **Phase 626** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `expandCssShorthand("flex")` 前置有效性校验并补全 `transform-origin-z` 校验；`flexbox_computedstyle_flex-shorthand-invalid` 与 `calc-mix-invalid.tentative` 全绿。
+
+- **Phase 627** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `position: absolute|fixed` `width: auto` shrink-to-fit 与 `block` `height: auto` 解析；`/css/css-sizing/inheritance-002` 全绿。

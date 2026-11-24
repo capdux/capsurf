@@ -7962,3 +7962,6 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Agent]**: 完成 Phase 626（`src/js/shim/cssom.js`）：
   1. **`cssom.js`**：`expandCssShorthand("flex")` 前置 `isValidCssValue("flex", normV)` 校验，`isValidCssValue` 补全 `transform-origin-z` 校验。
   2. **全绿验证**：`flexbox_computedstyle_flex-shorthand-invalid.html` **FAIL->PASS (1/1)**、`calc-mix-invalid.tentative.html` **FAIL->PASS (18/18)**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+- **[Agent]**: 完成 Phase 627（`src/js/shim/window.js`）：
+  1. **`window.js`**：`computeElementUsedWidthPx` 补齐 `position: absolute|fixed` `width: auto` shrink-to-fit 计算，`applyUsedValuesToComputedMap` 补齐 `block` `height: auto` 解析。
+  2. **全绿验证**：`/css/css-sizing/inheritance-002.html` **FAIL->PASS (4/4)**、`--smoke` **3/3 suites, 6/6 tests PASS**。

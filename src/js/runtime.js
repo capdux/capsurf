@@ -42331,11 +42331,13 @@
         const cbW = (parentEl && parentEl.nodeType === 1) ? computeElementUsedWidthPx(parentEl, depth + 1, visited) : 800;
         const wRaw = (rawMap.get("width") || "auto").trim().toLowerCase();
         let w = null;
-        if (wRaw === "auto") {
+        const posRaw = (rawMap.get("position") || "static").trim().toLowerCase();
+        const isAbsAuto = (posRaw === "absolute" || posRaw === "fixed") && (!rawMap.has("left") || !rawMap.has("right"));
+        if (wRaw === "auto" && !isAbsAuto) {
           const ml = evalCssLengthExpr(rawMap.get("margin-left") || "0px", cbW, fontSize) || 0;
           const mr = evalCssLengthExpr(rawMap.get("margin-right") || "0px", cbW, fontSize) || 0;
           w = Math.max(0, cbW - ml - mr);
-        } else if (wRaw === "min-content" || wRaw === "max-content") {
+        } else if (wRaw === "auto" || wRaw === "min-content" || wRaw === "max-content") {
           let maxChildW = 0;
           let ch = element.firstChild;
           while (ch) {
@@ -43029,6 +43031,10 @@
         } else if (wRaw !== "") {
           const usedW = computeElementUsedWidthPx(element, 0);
           computedMap.set("width", formatCssPx(usedW));
+        }
+        const hRaw = (computedMap.get("height") || "").trim().toLowerCase();
+        if (hRaw === "" && disp === "block") {
+          computedMap.set("height", formatCssPx(computeElementUsedHeightPx(element, 0)));
         }
 
         // Resolve padding-* percentages / calc / relative units against cbW

@@ -3007,3 +3007,7 @@
 ### Phase 626: `flex` 展开前置校验与 `transform-origin-z` 校验全绿
 - **核心修复 (`src/js/shim/cssom.js`)**：`expandCssShorthand("flex")` 前置 `isValidCssValue("flex", normV)` 校验，拦截 CSSOM 规则解析阶段对非法 `flex: 0 1 1` 的误展开；`isValidCssValue` 补全 `transform-origin-z` `<length>` 校验（拒绝 `calc-mix()`）。
 - **WPT & Smoke 验收**：`flexbox_computedstyle_flex-shorthand-invalid.html` (1/1) & `calc-mix-invalid.tentative.html` (18/18) PASS，`--smoke` 3/3 suites PASS。
+
+### Phase 627: `position: absolute` `width: auto` shrink-to-fit 与 `block` `height: auto` 解析全绿
+- **核心修复 (`src/js/shim/window.js`)**：`computeElementUsedWidthPx` 识别 `position: absolute|fixed` 且未同时指定 `left`/`right` 时的 `width: auto` shrink-to-fit；`applyUsedValuesToComputedMap` 补齐 `block` 元素 `height: auto` 使用值。
+- **WPT & Smoke 验收**：`/css/css-sizing/inheritance-002.html` (4/4) PASS，`--smoke` 3/3 suites PASS。
