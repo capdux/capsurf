@@ -514,9 +514,104 @@
       return true;
     }
 
+    const CALC_FUNCS = new Set(["calc", "min", "max", "clamp", "round", "mod", "rem", "sin", "cos", "tan", "asin", "acos", "atan", "atan2", "pow", "sqrt", "hypot", "log", "exp", "abs", "sign", "sibling-index", "sibling-count", "progress", "media-progress", "container-progress"]);
+    const CALC_CONSTS = new Set(["e", "pi", "infinity", "-infinity", "nan", "nearest", "up", "down", "to-zero"]);
+    function isValidCalcSyntax(tok) {
+      if (/^(?:var|env|attr|anchor|anchor-size)\(/i.test(tok)) return true;
+      const m = /^(calc|min|max|clamp)\((.*)\)$/i.exec(tok);
+      if (!m) return true;
+      const fn = m[1].toLowerCase();
+      const body = m[2].trim();
+      if (!body) return false;
+      if (/\/\*|\*\//.test(body)) return false;
+      if (/\b(?:var|env|attr)\(/i.test(body)) return true;
+      // Reject unknown bare identifiers (e.g., calc(7px * up), calc((0.25turn error)))
+      let i = 0, expectVal = true;
+      const topAddTerms = [""];
+      let depth = 0;
+      while (i < body.length) {
+        const ch = body[i];
+        if (/\s/.test(ch)) { i++; continue; }
+        if (ch === "(") {
+          if (!expectVal) return false;
+          depth++;
+          topAddTerms[topAddTerms.length - 1] += ch;
+          i++;
+          continue;
+        }
+        if (ch === ")") {
+          if (expectVal || depth === 0) return false;
+          depth--;
+          topAddTerms[topAddTerms.length - 1] += ch;
+          i++;
+          continue;
+        }
+        if (ch === ",") {
+          if (expectVal || (fn === "calc" && depth === 0)) return false;
+          topAddTerms[topAddTerms.length - 1] += ch;
+          expectVal = true;
+          i++;
+          continue;
+        }
+        if ((ch === "+" || ch === "-") && !expectVal) {
+          if (depth === 0) topAddTerms.push("");
+          else topAddTerms[topAddTerms.length - 1] += ch;
+          expectVal = true;
+          i++;
+          continue;
+        }
+        if ((ch === "*" || ch === "/") && !expectVal) {
+          topAddTerms[topAddTerms.length - 1] += ch;
+          expectVal = true;
+          i++;
+          continue;
+        }
+        if (!expectVal) return false;
+        const rest = body.slice(i);
+        const numM = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?([a-z%]+)?/i.exec(rest);
+        if (numM) {
+          topAddTerms[topAddTerms.length - 1] += numM[0];
+          i += numM[0].length;
+          expectVal = false;
+          continue;
+        }
+        const idM = /^[a-z_-][a-z0-9_-]*/i.exec(rest);
+        if (idM) {
+          const idLow = idM[0].toLowerCase();
+          const after = body[i + idM[0].length];
+          if (after === "(") {
+            if (!CALC_FUNCS.has(idLow)) return false;
+            topAddTerms[topAddTerms.length - 1] += idM[0] + "(";
+            depth++;
+            i += idM[0].length + 1;
+            expectVal = true;
+            continue;
+          }
+          if (!CALC_CONSTS.has(idLow) || idLow === "up") return false;
+          topAddTerms[topAddTerms.length - 1] += idM[0];
+          i += idM[0].length;
+          expectVal = false;
+          continue;
+        }
+        return false;
+      }
+      if (depth !== 0 || expectVal) return false;
+      if (fn === "calc" && topAddTerms.length > 1) {
+        let hasNumOnly = false, hasUnit = false;
+        for (let k = 0; k < topAddTerms.length; k++) {
+          const t = topAddTerms[k].trim();
+          if (/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(t)) hasNumOnly = true;
+          else if (/(?:\d|\.)(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|%|deg|rad|grad|turn|s|ms)$/i.test(t)) hasUnit = true;
+        }
+        if (hasNumOnly && hasUnit) return false;
+      }
+      return true;
+    }
+
     function isValidLenPct(tok, allowNegative) {
       if (/^(?:var|env|attr|anchor|anchor-size)\(/i.test(tok)) return true;
       if (/^(?:calc|min|max|clamp)\(/i.test(tok)) {
+        if (!isValidCalcSyntax(tok)) return false;
         if (/^calc\(\s*[+-]?(?:\d+\.?\d*|\.\d+)\s*\/\s*(?:max|min)?\(?[+-]?(?:\d+\.?\d*|\.\d+)(?:px|em|rem|ex|ch|vw|vh|vmin|vmax|cm|mm|in|pt|pc)\b/i.test(tok)) {
           return false;
         }
@@ -585,7 +680,7 @@
       if (toks.length !== 1) return false;
       const t = toks[0];
       if (/^(?:var|env)\(/i.test(t)) return true;
-      if (/^(?:calc|min|max|clamp)\(/i.test(t)) return !t.includes("%");
+      if (/^(?:calc|min|max|clamp)\(/i.test(t)) return !t.includes("%") && isValidCalcSyntax(t);
       if (/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(t)) {
         return Number(t) >= 0 && !t.startsWith("-");
       }
@@ -852,6 +947,9 @@
         if (d !== 0) return false;
         args.push(cur.trim());
         if (args.some(a => !a) || args.length < range[0] || args.length > range[1]) return false;
+        for (let ai = 0; ai < args.length; ai++) {
+          if (/^(?:calc|min|max|clamp)\(/i.test(args[ai]) && !isValidCalcSyntax(args[ai])) return false;
+        }
         if (fn === "perspective" && args[0] !== "none" && !/^(?:calc|min|max|clamp|var|env)\(/i.test(args[0])) {
           if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(args[0]) && args[0] !== "0") return false;
         }

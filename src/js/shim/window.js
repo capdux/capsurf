@@ -8746,6 +8746,13 @@ function installWindow(global) {
     if (bsftRaw && !/^(?:sub|super|top|center|bottom)$/i.test(bsftRaw)) {
       computedMap.set("baseline-shift", evalLinLenPctTok(bsftRaw));
     }
+    const ffsRaw = (computedMap.get("font-feature-settings") || "").trim();
+    if (ffsRaw && /\b(?:calc|min|max|clamp)\(/i.test(ffsRaw)) {
+      computedMap.set("font-feature-settings", ffsRaw.replace(/\b(?:calc|min|max|clamp)\([^)]*\)/gi, (m) => {
+        const v = evalCssLengthExpr(m, 0, fontSize);
+        return (v !== null && isFinite(v)) ? String(Math.round(v)) : m;
+      }));
+    }
     for (let i = 0; i < textDecorDefs.length; i++) {
       const [dk, dv] = textDecorDefs[i];
       const cur = (computedMap.get(dk) || "").trim().toLowerCase();

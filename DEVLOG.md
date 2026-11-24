@@ -2979,3 +2979,7 @@
 ### Phase 619: `/css/css-transforms/inheritance` 20/20 全绿
 - **核心修复 (`src/js/shim/window.js`)**：`textDecorDefs` 补全 `backface-visibility`/`perspective`/`rotate`/`scale`/`transform`/`transform-box`/`transform-style`/`translate` 初始值；在 `getComputedStyle` 中新增 `getDefaultOriginComputed()` 按需惰性解析 `perspective-origin`/`transform-origin` 默认 `50% 50%` 像素值，避免全量急切计算导致的祖先盒模型遍历开销。
 - **WPT & Smoke 验收**：`/css/css-transforms/inheritance.html` FAIL->PASS (20/20, `--timeout 20000` 10.78s)、`--smoke` 3/3 suites PASS。
+
+### Phase 620: `isValidCalcSyntax` 严格校验与 `font-feature-settings` 内联 `calc()` 求值
+- **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：`cssom.js` 新增 `isValidCalcSyntax` 校验 `calc()`/`min()`/`max()`/`clamp()` 语法、未知标识符（如 `up`/`error`）及 `+`/`-` 量纲混用，并接入 `isValidLenPct`、`tab-size`、`transform`；`window.js` 为 `font-feature-settings` 内联 `calc()` 补充数值化简。
+- **WPT & Smoke 验收**：`calc-in-font-feature-settings` (1/1)、`calc-invalid-parsing` (6/6)、`calc-letter-spacing` (6/6)、`calc-numbers` (12/12) 全部 PASS，`--smoke` 3/3 suites PASS。

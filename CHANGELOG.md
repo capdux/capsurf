@@ -3706,3 +3706,5 @@
 - **Phase 618** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `getComputedStyle` Proxy 补齐 `ownKeys` trap 枚举标准/逻辑属性，并补全 `background-*` 初始值；`/css/css-logical/getComputedStyle-listing.html` 实现 30/30 全绿。
 
 - **Phase 619** (`src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `backface-visibility`/`perspective`/`rotate`/`scale`/`transform*`/`translate` 初始默认值与 `perspective-origin`/`transform-origin` 惰性求值；`/css/css-transforms/inheritance.html` 实现 20/20 全绿。
+
+- **Phase 620** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 新增 `isValidCalcSyntax` 严格校验与 `font-feature-settings` 内联 `calc()` 求值；`calc-{numbers,letter-spacing,invalid-parsing,in-font-feature-settings}` 4 项全绿。

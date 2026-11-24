@@ -7939,3 +7939,6 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`window.js`**：`textDecorDefs` 补全 8 项 `css-transforms` 初始默认值，并为 `perspective-origin`/`transform-origin` 实现按需惰性求值 `getDefaultOriginComputed()`。
   2. **全绿验证**：`/css/css-transforms/inheritance.html` **FAIL->PASS (20/20)**（`--timeout 20000` 下 10.78s 通过）、`--smoke` **3/3 suites, 6/6 tests PASS**。
   3. **子智能体并发汇报**：`363a0b3a` 完成 `/css/css-transforms/` 摸底（**26/31 PASS**）；`3acc1627` 完成 `/css/css-sizing/` 摸底（**29/32 PASS**）；已接力派发 `dd837439`（`19710`, `/css/css-grid/`）。
+- **[Agent]**: 完成 Phase 620（`src/js/shim/cssom.js`, `src/js/shim/window.js`）：
+  1. **`cssom.js` & `window.js`**：新增 `isValidCalcSyntax` 拒绝 `calc()` 中未知标识符与 `number + length` 量纲混用，并补全 `font-feature-settings` 内联 `calc()` 求值。
+  2. **全绿验证**：`calc-in-font-feature-settings`、`calc-invalid-parsing`、`calc-letter-spacing`、`calc-numbers` **4/4 FAIL->PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
