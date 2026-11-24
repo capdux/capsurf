@@ -4592,6 +4592,31 @@
         if (autoRepCount > 0 && hasNonFixed) return false;
         return true;
       }
+      const GENERIC_FAMILIES = new Set(["serif", "sans-serif", "cursive", "fantasy", "monospace", "system-ui", "ui-serif", "ui-sans-serif", "ui-monospace", "ui-rounded", "emoji", "math", "fangsong", "-webkit-body", "-webkit-standard", "-webkit-serif", "-webkit-sans-serif", "-webkit-monospace"]);
+      if (prop === "font-family") {
+        const items = splitTopLevelComma(vLower);
+        if (items.length === 0) return false;
+        for (let i = 0; i < items.length; i++) {
+          const it = items[i].trim();
+          if (!it) return false;
+          if ((it.startsWith('"') && it.endsWith('"') && it.length >= 2) ||
+              (it.startsWith("'") && it.endsWith("'") && it.length >= 2)) {
+            continue;
+          }
+          const toks = splitCssTokens(it);
+          if (toks.length === 0) return false;
+          for (let j = 0; j < toks.length; j++) {
+            const tk = toks[j], tl = tk.toLowerCase();
+            if (tk.startsWith('"') || tk.startsWith("'") || !/^(?:[a-z_\\-]|[^\x00-\x7f])(?:[a-z0-9_\\-]|[^\x00-\x7f])*$/i.test(tk)) {
+              return false;
+            }
+            if (toks.length > 1 && (GENERIC_FAMILIES.has(tl) || tl === "inherit" || tl === "initial" || tl === "unset" || tl === "default")) {
+              return false;
+            }
+          }
+        }
+        return true;
+      }
       if (prop === "transform-origin-z") {
         const toks = splitCssTokens(vLower);
         return toks.length === 1 && !toks[0].includes("%") && isValidLenPct(toks[0], true);
@@ -6725,6 +6750,13 @@
       if (key === "background-position" || key === "background-position-x" || key === "background-position-y") {
         return splitTopLevelComma(s).map((layer) => splitCssTokens(layer).map((tok) => (/^calc\(/i.test(tok) ? canonicalizeCalcToken(tok) : tok)).join(" ")).join(", ");
       }
+      if (key === "font-family") {
+        const GEN = new Set(["serif", "sans-serif", "cursive", "fantasy", "monospace", "system-ui", "ui-serif", "ui-sans-serif", "ui-monospace", "ui-rounded", "emoji", "math", "fangsong"]);
+        return splitTopLevelComma(s).map((it) => {
+          const tr = it.trim();
+          return GEN.has(tr.toLowerCase()) ? tr.toLowerCase() : tr;
+        }).join(", ");
+      }
       if (key === "font-variant-alternates") {
         return splitCssTokens(s).map((tk) => (/^[a-z-]+$/i.test(tk) ? tk.toLowerCase() : tk)).join(" ");
       }
@@ -7637,6 +7669,7 @@
       if (key === "shape-margin") {
         const tl = s.trim();
         if (tl === "0" || tl === "+0") return "0px";
+        if (/^calc\(/i.test(tl)) return canonicalizeCalcToken(tl);
         return s;
       }
       if (key === "scroll-snap-type") {
@@ -44616,6 +44649,11 @@
         const acl = acRaw.toLowerCase();
         if (acl === "initial" || acl === "revert" || acl === "revert-layer") computedMap.set("accent-color", "auto");
         else if (acl !== "auto") computedMap.set("accent-color", acl === "currentcolor" ? elColor : normCol(acRaw));
+      }
+      const smRaw = (computedMap.get("shape-margin") || "").trim();
+      if (smRaw) {
+        const ev = evalLinLenPctTok(smRaw);
+        computedMap.set("shape-margin", /^-[\d.]+px$/.test(ev) ? "0px" : ev);
       }
       const bsftRaw = (computedMap.get("baseline-shift") || "").trim();
       if (bsftRaw && !/^(?:sub|super|top|center|bottom)$/i.test(bsftRaw)) {

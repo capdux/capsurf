@@ -2245,3 +2245,7 @@
 ### Phase 641: `font-size` `calc()`/`sign()` 求值与负值归零全绿
 - **Filter `/css/css-fonts/font-size-sign-function` & `/css/css-fonts/font-size-relative-across-calc-ff-bug-001`**: **FAIL->PASS (2/2)**（`window.js` `applyUsedValuesToComputedMap` 为 `font-size` 补全基于父元素字号的 `calc()`/`min()`/`max()`/`clamp()`/`sign()` 求值并夹紧负值为 `0px`）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 642: `font-family-invalid` (7/7) & `shape-margin-003` (14/14) 全绿
+- **Filter `/css/css-fonts/parsing/font-family-invalid` & `/css/css-shapes/shape-outside/values/shape-margin-003`**: **FAIL->PASS (2/2: 7/7 + 14/14)**（`cssom.js` 新增 `font-family` 语法校验、通用字体族关键字小写化与 `shape-margin` `canonicalizeCalcToken` 接入；`window.js` 将 `shape-margin` 接入 `evalLinLenPctTok`）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

@@ -3067,3 +3067,7 @@
 ### Phase 641: `font-size` `calc()`/`sign()` 求值与负值归零全绿
 - **核心修复 (`src/js/shim/window.js`)**：`applyUsedValuesToComputedMap` 对 `font-size` 中的 `calc()`/`min()`/`max()`/`clamp()`/`sign()` 解析父元素字号作为参考基准并夹紧负值为 `0px`。
 - **WPT & Smoke 验收**：`font-size-sign-function.html` (1/1) & `font-size-relative-across-calc-ff-bug-001.html` (1/1) PASS，`--smoke` 3/3 suites PASS。
+
+### Phase 642: `font-family-invalid` (7/7) & `shape-margin-003` (14/14) 全绿
+- **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：`isValidCssValue` 新增 `font-family` `<custom-ident>` 与通用字体族混用校验；`shape-margin` 接入 `canonicalizeCalcToken` 与 `evalLinLenPctTok`。
+- **WPT & Smoke 验收**：`font-family-invalid.html` (7/7) & `shape-margin-003.html` (14/14) PASS，`--smoke` 3/3 suites PASS。

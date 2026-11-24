@@ -8833,6 +8833,11 @@ function installWindow(global) {
       if (acl === "initial" || acl === "revert" || acl === "revert-layer") computedMap.set("accent-color", "auto");
       else if (acl !== "auto") computedMap.set("accent-color", acl === "currentcolor" ? elColor : normCol(acRaw));
     }
+    const smRaw = (computedMap.get("shape-margin") || "").trim();
+    if (smRaw) {
+      const ev = evalLinLenPctTok(smRaw);
+      computedMap.set("shape-margin", /^-[\d.]+px$/.test(ev) ? "0px" : ev);
+    }
     const bsftRaw = (computedMap.get("baseline-shift") || "").trim();
     if (bsftRaw && !/^(?:sub|super|top|center|bottom)$/i.test(bsftRaw)) {
       computedMap.set("baseline-shift", evalLinLenPctTok(bsftRaw));

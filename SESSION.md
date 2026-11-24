@@ -8017,3 +8017,7 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   1. **`window.js`**：为 `font-size` 补全基于父元素字号的 `calc()`/`sign()` 求值与负值归零（`0px`）。
   2. **全绿验证**：`font-size-sign-function.html` **FAIL->PASS (1/1)**、`font-size-relative-across-calc-ff-bug-001.html` **FAIL->PASS (1/1)**、`--smoke` **3/3 suites, 6/6 tests PASS**。
   3. **子智能体并发汇报**：`3c500030` 完成 `/css/css-box/` 全量摸底（**31/33 PASS**，0 FAIL），已接力派发 `d3de51a9`（`19710`, `/css/css-syntax/`）。
+- **[Agent]**: 完成 Phase 642（`src/js/shim/cssom.js`, `src/js/shim/window.js`）：
+  1. **`cssom.js` & `window.js`**：新增 `font-family` 语法校验与通用字体族小写化，`shape-margin` 接入 `canonicalizeCalcToken` 与 `evalLinLenPctTok`。
+  2. **全绿验证**：`font-family-invalid.html` **FAIL->PASS (7/7)**、`shape-margin-003.html` **FAIL->PASS (14/14)**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+  3. **子智能体并发汇报**：`d3de51a9` 完成 `/css/css-syntax/` 全量摸底（9/24 PASS），已接力派发 `b07eed50`（`19710`, `/css/css-variables/`）。
