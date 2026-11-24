@@ -7945,3 +7945,7 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
 - **[Agent]**: 完成 Phase 621（`src/js/shim/cssom.js`）：
   1. **`cssom.js`**：在 `isValidColor` 与 `normalizeSingleColor` 中新增顶层 `/` 分割、`splitColorCh` 与 `evalColorExpr` 支持 `rgb()`/`rgba()`/`hsl()`/`hsla()` 内联 `calc()` 通道求值。
   2. **全绿验证**：`calc-in-color-001.html` **PASS**、`calc-rgb-percent-001.html` **PASS**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+- **[Agent]**: 完成 Phase 622（`src/js/shim/cssom.js`, `src/js/shim/window.js`）：
+  1. **`cssom.js` & `window.js`**：补全 `border-{top,right,bottom,left}` 展开/序列化与 `border` 全局关键字派生查询，并将 `background-position` 纳入 `evalLinLenPctTok` 归一化。
+  2. **全绿验证**：`unset-value-storage.html` **FAIL->PASS (1/1)**、`calc-background-position-002.html` **FAIL->PASS (6/6)**、`--smoke` **3/3 suites, 6/6 tests PASS**。
+  3. **子智能体并发汇报**：`f1605206` 完成 `/css/css-display/` 摸底（**16/52 PASS**），已接力派发 `0302000f`（`19720`, `/css/css-flexbox/`）。

@@ -8002,6 +8002,10 @@
       "border-color": ["border-top-color", "border-right-color", "border-bottom-color", "border-left-color"],
       "border-style": ["border-top-style", "border-right-style", "border-bottom-style", "border-left-style"],
       "border-width": ["border-top-width", "border-right-width", "border-bottom-width", "border-left-width"],
+      "border-top": ["border-top-width", "border-top-style", "border-top-color"],
+      "border-right": ["border-right-width", "border-right-style", "border-right-color"],
+      "border-bottom": ["border-bottom-width", "border-bottom-style", "border-bottom-color"],
+      "border-left": ["border-left-width", "border-left-style", "border-left-color"],
       "text-decoration": ["text-decoration-line", "text-decoration-style", "text-decoration-thickness", "text-decoration-color"],
       "list-style": ["list-style-position", "list-style-image", "list-style-type"],
       "place-content": ["align-content", "justify-content"],
@@ -8108,7 +8112,9 @@
         return vals[0] === vals[1] ? vals[0] : (vals[0] + " " + vals[1]);
       }
       if (key === "border-block-start" || key === "border-block-end" ||
-          key === "border-inline-start" || key === "border-inline-end") {
+          key === "border-inline-start" || key === "border-inline-end" ||
+          key === "border-top" || key === "border-right" ||
+          key === "border-bottom" || key === "border-left") {
         const cw = vals[0] === "medium" && (vals[1] !== "none" || vals[2] !== "currentcolor") ? "" : vals[0];
         const cst = vals[1] === "none" && (cw || vals[2] !== "currentcolor") ? "" : vals[1];
         const cc = vals[2].toLowerCase() === "currentcolor" ? "" : vals[2];
@@ -8661,6 +8667,10 @@
               if (key === "padding-left") return serializeCssValue(parts[3]);
             }
           }
+        }
+        if (data.has("border") && /^border-(?:top|right|bottom|left|color|style|width)(?:-(?:width|style|color))?$/.test(key)) {
+          const bv = data.get("border").value.trim().toLowerCase();
+          if (/^(?:initial|inherit|unset|revert|revert-layer)$/.test(bv)) return bv;
         }
         if (SHORTHAND_LONGHANDS[key]) {
           const longhands = SHORTHAND_LONGHANDS[key];
@@ -44387,7 +44397,7 @@
       } else if (bgImgRaw && /^(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(bgImgRaw)) {
         computedMap.set("background-image", evalGradientComputed(bgImgRaw));
       }
-      for (const bpKey of ["background-position-x", "background-position-y"]) {
+      for (const bpKey of ["background-position", "background-position-x", "background-position-y"]) {
         const bpRaw = (computedMap.get(bpKey) || "").trim();
         if (!bpRaw) continue;
         const bpLayers = [];
@@ -44419,6 +44429,9 @@
           };
           if (toks.length === 1) return norm1(toks[0]);
           if (toks.length === 2) {
+            if (bpKey === "background-position") {
+              return norm1(toks[0]) + " " + norm1(toks[1]);
+            }
             const edge = toks[0].toLowerCase();
             const off = evalLinLenPctTok(toks[1]);
             if (edge === "x-start" || edge === "x-end" || edge === "y-start" || edge === "y-end") return edge + " " + off;

@@ -2987,3 +2987,7 @@
 ### Phase 621: `rgb()`/`rgba()`/`hsl()`/`hsla()` 内联 `calc()` 通道求值全绿
 - **核心修复 (`src/js/shim/cssom.js`)**：`isValidColor` 与 `normalizeSingleColor` 新增顶层 `/` 分割 `splitTopSlash`、通道分割 `splitColorCh` 与 `evalColorExpr` 递归下降求值器，避免 `calc(360 / 5)` 被误拆并正确计算色彩通道。
 - **WPT & Smoke 验收**：`calc-in-color-001.html` & `calc-rgb-percent-001.html` PASS，`--smoke` 3/3 suites PASS。
+
+### Phase 622: `border` 全局关键字派生查询与 `background-position` `calc()` 归一化
+- **核心修复 (`src/js/shim/cssom.js`, `src/js/shim/window.js`)**：`SHORTHAND_EXPAND_LONGHANDS`/`serializeExpandedShorthand` 补全 `border-{top,right,bottom,left}`，`makeRuleStyleDeclaration.getPropertyValue` 支持 `border` 全局关键字向下派生；`window.js` 将 `background-position` 纳入 `evalLinLenPctTok`。
+- **WPT & Smoke 验收**：`unset-value-storage.html` (1/1) & `calc-background-position-002.html` (6/6) PASS，`--smoke` 3/3 suites PASS。

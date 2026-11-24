@@ -2165,3 +2165,7 @@
 ### Phase 621: `rgb()`/`rgba()`/`hsl()`/`hsla()` 内联 `calc()` 通道求值全绿
 - **Filter `/css/css-values/calc-in-color-001` & `/css/css-values/calc-rgb-percent-001`**: **FAIL->PASS (2/2)**（`cssom.js` `isValidColor` 与 `normalizeSingleColor` 新增顶层 `/` 分割 `splitTopSlash`、通道分割 `splitColorCh` 与表达式求值 `evalColorExpr`，支持 `rgb()`/`rgba()`/`hsl()`/`hsla()` 内联 `calc()` 数值/百分比/角度求值）。
 - **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。
+
+### Phase 622: `border` 全局关键字派生查询与 `background-position` `calc()` 归一化
+- **Filter `/css/css-cascade/unset-value-storage` & `/css/css-values/calc-background-position-002`**: **FAIL->PASS (2/2: 1/1 + 6/6)**（`cssom.js` `SHORTHAND_EXPAND_LONGHANDS`/`serializeExpandedShorthand` 补全 `border-{top,right,bottom,left}` 展开/序列化，并在 `makeRuleStyleDeclaration.getPropertyValue` 支持 `border` 全局关键字向下派生查询；`window.js` 将 `background-position` 纳入 `evalLinLenPctTok` 归一化）。
+- **E2E Smoke**: `CAPSURF_BIN=./bin_dev/main python3 scripts/e2e_suite.py --smoke` **3/3 suites, 6/6 tests PASS**。

@@ -3710,3 +3710,5 @@
 - **Phase 620** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 新增 `isValidCalcSyntax` 严格校验与 `font-feature-settings` 内联 `calc()` 求值；`calc-{numbers,letter-spacing,invalid-parsing,in-font-feature-settings}` 4 项全绿。
 
 - **Phase 621** (`src/js/shim/cssom.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): `isValidColor` 与 `normalizeSingleColor` 支持 `rgb()`/`rgba()`/`hsl()`/`hsla()` 内联 `calc()` 通道求值；`calc-in-color-001` 与 `calc-rgb-percent-001` 全绿。
+
+- **Phase 622** (`src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/runtime.js`, `src/js/runtime_source.cp`, `test/TEST_LEDGER.md`): 补全 `border-{top,right,bottom,left}` 展开与 `border` 全局关键字派生查询，并将 `background-position` 纳入 `evalLinLenPctTok`；`unset-value-storage` 与 `calc-background-position-002` 全绿。

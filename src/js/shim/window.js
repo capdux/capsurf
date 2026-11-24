@@ -8842,7 +8842,7 @@ function installWindow(global) {
     } else if (bgImgRaw && /^(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(bgImgRaw)) {
       computedMap.set("background-image", evalGradientComputed(bgImgRaw));
     }
-    for (const bpKey of ["background-position-x", "background-position-y"]) {
+    for (const bpKey of ["background-position", "background-position-x", "background-position-y"]) {
       const bpRaw = (computedMap.get(bpKey) || "").trim();
       if (!bpRaw) continue;
       const bpLayers = [];
@@ -8874,6 +8874,9 @@ function installWindow(global) {
         };
         if (toks.length === 1) return norm1(toks[0]);
         if (toks.length === 2) {
+          if (bpKey === "background-position") {
+            return norm1(toks[0]) + " " + norm1(toks[1]);
+          }
           const edge = toks[0].toLowerCase();
           const off = evalLinLenPctTok(toks[1]);
           if (edge === "x-start" || edge === "x-end" || edge === "y-start" || edge === "y-end") return edge + " " + off;
