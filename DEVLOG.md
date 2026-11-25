@@ -3629,3 +3629,5 @@
 - 在 `layoutFlexAbsChild` 补充 `FlexWrap.WrapReverse` 交叉轴镜像逻辑后，一次性打通 `flex-abspos-staticpos-justify-content-001..008.html` 全部 8 个文件（192 个子测试全绿）。
 ### Phase 894 — `AlignSelf` 静态位置对齐实现
 - 在 `cascade.cp` 与 `layout.cp` 补全 `align-self` 解析与 `layoutFlexAbsChild` 覆盖计算，区分 `start`/`self-start` 与受 `wrap-reverse` 翻转的 `flex-start`，`align-self-{001,003,005,007}.html` 全部 96 项子测试通过。
+### Phase 895 — `baseline` 逻辑对齐语义与 `align-self-001..008` 全绿
+- 修正 `AlignSelf.parse` 将 `baseline`/`last baseline` 归入 `FlexStart`/`FlexEnd` 导致在 `wrap-reverse` 容器中被镜像翻转的缺陷，改归 `Start`/`End` 后 `align-self-001..008.html` 全部 8 个文件 192 项子测试全绿。

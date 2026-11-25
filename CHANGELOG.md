@@ -4626,3 +4626,5 @@
 ### Phase 894 — `AlignSelf` 完整枚举与 Flexbox `abspos` `align-self` 静态对齐
 - `src/css/cascade.cp`: 新增 `AlignSelf` 枚举与 `PROP_ALIGN_SELF` 槽位（`TOTAL_PROP_SLOTS = 108`），支持 `self-start`/`self-end`/`baseline`/`last baseline` 等全部关键字。
 - `src/layout/layout.cp`: `layoutFlexAbsChild` 接入 `astyle.align_self` 覆盖 `pstyle.align_items`；通过 `cpc fix` + `cpc brief` 门禁，`flex-abspos-staticpos-align-self-{001,003,005,007}.html` **4/4 (96/96) PASS**，`--smoke` 3/3 **PASS**。
+### Phase 895 — `align-self` `baseline`/`last baseline` 在 `wrap-reverse` 下的精确对齐
+- `src/css/cascade.cp`: `AlignSelf.parse` 将 `baseline`/`first baseline` 归入 `Start`、`last baseline` 归入 `End`；通过 `cpc fix` + `cpc brief` 门禁，`flex-abspos-staticpos-align-self-001..008.html` **8/8 (192/192) PASS**，`--smoke` 3/3 **PASS**。

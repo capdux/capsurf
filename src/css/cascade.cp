@@ -781,10 +781,10 @@ pub enum AlignSelf {
         const s = std.mem.trim(u8, raw, " \t\r\n");
         if (std.ascii.eqlIgnoreCase(s, "auto")) return AlignSelf.Auto;
         if (std.ascii.eqlIgnoreCase(s, "stretch") || std.ascii.eqlIgnoreCase(s, "normal")) return AlignSelf.Stretch;
-        if (std.ascii.eqlIgnoreCase(s, "flex-start") || std.ascii.eqlIgnoreCase(s, "baseline") || std.ascii.eqlIgnoreCase(s, "first baseline")) return AlignSelf.FlexStart;
-        if (std.ascii.eqlIgnoreCase(s, "flex-end") || std.ascii.eqlIgnoreCase(s, "last baseline")) return AlignSelf.FlexEnd;
-        if (std.ascii.eqlIgnoreCase(s, "start") || std.ascii.eqlIgnoreCase(s, "self-start")) return AlignSelf.Start;
-        if (std.ascii.eqlIgnoreCase(s, "end") || std.ascii.eqlIgnoreCase(s, "self-end")) return AlignSelf.End;
+        if (std.ascii.eqlIgnoreCase(s, "flex-start")) return AlignSelf.FlexStart;
+        if (std.ascii.eqlIgnoreCase(s, "flex-end")) return AlignSelf.FlexEnd;
+        if (std.ascii.eqlIgnoreCase(s, "start") || std.ascii.eqlIgnoreCase(s, "self-start") || std.ascii.eqlIgnoreCase(s, "baseline") || std.ascii.eqlIgnoreCase(s, "first baseline")) return AlignSelf.Start;
+        if (std.ascii.eqlIgnoreCase(s, "end") || std.ascii.eqlIgnoreCase(s, "self-end") || std.ascii.eqlIgnoreCase(s, "last baseline")) return AlignSelf.End;
         if (std.ascii.eqlIgnoreCase(s, "center")) return AlignSelf.Center;
         return null;
     }
