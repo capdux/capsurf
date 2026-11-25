@@ -3468,3 +3468,5 @@
 - 在 `cssom.js` 补全 `overscroll-behavior` 重复值折叠与 `x`/`y` 展开/重组，并在 `window.js` `applyUsedValuesToComputedMap` 允许 `overscroll-behavior-block`/`inline` 覆盖默认 `"auto"` 物理长属性，`overscroll-behavior-valid` 与 `overscroll-behavior-logical` 全绿 **PASS**。
 ### Phase 814 — `-webkit-*` flexbox 传统别名、`cross-fade()`、`view-transition-group` 与 `scrollbar-*`/`will-change` 计算值
 - 修复 `element.js` `formatStyleMap` 未重组 `pendingVar`/`pendingOwner` 及 `STYLE_LEGACY_ALIASES` 缺失导致 `-webkit-flex`/`-webkit-flex-flow: var(--v)` 丢失的问题，`cssom.js` `cross-fade()` 拒绝含长度单位的 `calc()` 及 `view-transition-group` 支持 `none`，`window.js` 补全 `scrollbar-color`（继承+双色规范化）、`scrollbar-width` 与 `will-change: auto` 初始值，6 项目标 WPT 全部 **PASS**。
+### Phase 815 — `env()` `@supports` 校验前置与 `env()` 回退替换引擎
+- 将 `cssom.js` `isValidCssValue` 中 `env()`/`var()` 校验前置到 `*-color` 分支前修复 `@supports (background-color: env(test))`，在 `window.js` 补齐 `evaluateSupportsCondition` 并在 `substituteStr`/`resolveCustomProp` 统一实现 `env()` 回退替换、注释/前导空白剥离与无回退无效传播，`css-env` 2 项及 `scale-parsing-computed` 全绿 **PASS**。

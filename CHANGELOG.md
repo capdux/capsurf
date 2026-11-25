@@ -4378,3 +4378,7 @@
   - `src/js/shim/cssom.js`: 提取 `LEGACY_NAME_ALIASES` 统一规范化声明名；`view-transition-group` 允许 `none`；`cross-fade()` 拒绝 `calc(1% + 1px)` 混合长度单位。
   - `src/js/shim/window.js`: `INHERITED_CSS_PROPS`、`STANDARD_COMPUTED_LONGHANDS` 与初始值表补全 `scrollbar-color`/`scrollbar-width`/`will-change` 及其颜色规范化。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 815**:
+  - `src/js/shim/cssom.js`: `isValidCssValue` 将 `env(` 与 `var(` 校验前置到 `*-color` 分支之前。
+  - `src/js/shim/window.js`: 新增 `evaluateSupportsCondition` 委托 `CSS.supports`；`substituteStr`/`resolveCustomProp` 支持 `env()` 回退替换与无回退无效传播。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

@@ -5572,6 +5572,13 @@ function installWindow(global) {
     return false;
   }
 
+  function evaluateSupportsCondition(cond) {
+    if (typeof CSS !== "undefined" && typeof CSS.supports === "function") {
+      return CSS.supports(String(cond || "").trim());
+    }
+    return true;
+  }
+
   function evaluateMediaQuery(query) {
     if (!query || !String(query).trim()) return true;
     const raw = String(query).toLowerCase().trim();
@@ -6759,11 +6766,19 @@ function installWindow(global) {
     const cycledCustom = new Set();
 
     function substituteStr(val, depth) {
-      if (typeof val !== "string" || val.indexOf("var(") === -1 || depth > 32) return val;
+      if (typeof val !== "string" || depth > 32) return val;
+      if (!/(?:^|[^a-z0-9_-])(?:var|env)\(/i.test(val)) return val;
       let out = "";
       let i = 0;
       while (i < val.length) {
-        const idx = val.indexOf("var(", i);
+        let idx = -1;
+        let isEnv = false;
+        const rest = val.slice(i);
+        const mFn = /(?:^|[^a-z0-9_-])(var|env)\(/i.exec(rest);
+        if (mFn) {
+          idx = i + mFn.index + (mFn[0].length - mFn[1].length - 1);
+          isEnv = mFn[1].toLowerCase() === "env";
+        }
         if (idx === -1) {
           out += val.slice(i);
           if (out.length > MAX_VAR_LEN) return INVALID;
@@ -6791,16 +6806,16 @@ function installWindow(global) {
         }
         const varName = (commaIdx === -1 ? inside : inside.slice(0, commaIdx)).trim();
         const hasFallback = commaIdx !== -1;
-        let fallback = hasFallback ? inside.slice(commaIdx + 1).trim() : "";
+        let fallback = hasFallback ? inside.slice(commaIdx + 1).replace(/^(?:\s|\/\*[\s\S]*?\*\/)+/, "").trim() : "";
         if (d > 1 && fallback) fallback += ")".repeat(d - 1);
 
         let rep = INVALID;
-        if (varName.startsWith("--") && computedMap.has(varName)) {
+        if (!isEnv && varName.startsWith("--") && computedMap.has(varName)) {
           rep = resolveCustomProp(varName, depth + 1);
         }
-        if (rep === INVALID || rep === "") {
+        if (rep === INVALID || (!isEnv && rep === "")) {
           if (hasFallback) {
-            rep = fallback.indexOf("var(") !== -1 ? substituteStr(fallback, depth + 1) : fallback;
+            rep = /(?:^|[^a-z0-9_-])(?:var|env)\(/i.test(fallback) ? substituteStr(fallback, depth + 1) : fallback;
             if (rep === INVALID) return INVALID;
           } else {
             return INVALID;
@@ -6827,7 +6842,7 @@ function installWindow(global) {
       if (resolvedCustom.has(name)) return resolvedCustom.get(name);
       const raw = computedMap.get(name);
       if (typeof raw !== "string") return INVALID;
-      if (raw.indexOf("var(") === -1) {
+      if (!/(?:^|[^a-z0-9_-])(?:var|env)\(/i.test(raw)) {
         resolvedCustom.set(name, raw);
         return raw;
       }
@@ -6852,7 +6867,7 @@ function installWindow(global) {
       }
     }
     for (const [k, v] of Array.from(computedMap.entries())) {
-      if (!k.startsWith("--") && typeof v === "string" && v.indexOf("var(") !== -1) {
+      if (!k.startsWith("--") && typeof v === "string" && /(?:^|[^a-z0-9_-])(?:var|env)\(/i.test(v)) {
         const res = substituteStr(v, 0);
         if (res === INVALID) computedMap.delete(k);
         else computedMap.set(k, res);

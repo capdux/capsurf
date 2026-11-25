@@ -938,6 +938,13 @@
       return true;
     }
 
+    if (/^env\(/i.test(trimmed) && splitCssTokens(trimmed).length === 1) {
+      return isValidEnvSyntax(trimmed);
+    }
+    if (/(?:^|[^a-z0-9_-])var\(/i.test(trimmed)) {
+      return isValidCustomDeclValue(trimmed, false);
+    }
+
     if (prop === "color" || prop === "background-color" || (prop.endsWith("-color") && prop !== "outline-color" && prop !== "caret-color" && prop !== "accent-color" && prop !== "scrollbar-color")) {
       return isValidColor(trimmed);
     }
@@ -1036,13 +1043,6 @@
         }
       }
       return !inSq && !inDq && stack.length === 0;
-    }
-
-    if (/^env\(/i.test(trimmed) && splitCssTokens(trimmed).length === 1) {
-      return isValidEnvSyntax(trimmed);
-    }
-    if (/(?:^|[^a-z0-9_-])var\(/i.test(trimmed)) {
-      return isValidCustomDeclValue(trimmed, false);
     }
 
     const KEYWORD_CSS_PROPS = {
