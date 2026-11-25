@@ -3396,3 +3396,5 @@
 - 在 `cssom.js` `KNOWN_PROPS` 补全 `ruby-*` 属性，恢复 `/css/css-ruby/inheritance.html` 8/8 **PASS**；同时在 `window.js` `collectRawComputedMap` 将多样式表合并后单次级联以共享 `@layer` 顺序。
 ### Phase 778 — `/css/css-display/` 伪元素 `display` 规范化与 4 项 `FAIL→PASS` 收紧
 - 在 `window.js` 补全 `::first-letter`/`::first-line` 与 `::before`/`::after` `math` 伪元素 `display` 规范化，`display-first-line-001`、`display-math-on-pseudo-elements-001` 及 `reading-flow` 2 项共计 4 项 **FAIL→PASS**（基线增至 `7,217`）。
+### Phase 779 — `::first-letter` / `::first-line` 伪元素选择器识别与 `display-first-letter-001` 通过
+- 在 `window.js` `matchesSelector` 补全 `::first-letter` 与 `::first-line` 伪元素识别，使浮动/绝对定位首字块化正确匹配，`/css/css-display/display-first-letter-001.html` 恢复 **PASS**。

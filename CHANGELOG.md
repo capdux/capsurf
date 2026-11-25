@@ -4237,3 +4237,6 @@
   - `src/js/shim/window.js`: `applyUsedValuesToComputedMap` 补全 `::first-letter`/`::first-line` 与 `::before`/`::after` `math` 伪元素 `display` 规范化。
   - `test/wpt/wpt-expectations.json`: 收紧 `display-first-line-001`、`display-math-on-pseudo-elements-001`、`reading-flow/tentative/{reading-flow-valid,reading-order-valid}` 4 项为 `PASS`（`7,217` PASS）。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 779**:
+  - `src/js/shim/window.js`: `matchesSelector` 新增 `::first-letter` 与 `::first-line` 伪元素选择器识别。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

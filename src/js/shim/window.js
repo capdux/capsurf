@@ -6318,7 +6318,7 @@ function installWindow(global) {
       if (pseudoMatch) {
         let p = pseudoMatch[1].toLowerCase();
         if (p.startsWith(":") && !p.startsWith("::")) p = ":" + p;
-        if (p === "::before" || p === "::after" || p === "::marker" || p === "::selection" || p === "::target-text" || p === "::search-text" || p === "::spelling-error" || p === "::grammar-error" || p.startsWith("::highlight(") || p === "::column") {
+        if (p === "::before" || p === "::after" || p === "::first-letter" || p === "::first-line" || p === "::marker" || p === "::selection" || p === "::target-text" || p === "::search-text" || p === "::spelling-error" || p === "::grammar-error" || p.startsWith("::highlight(") || p === "::column") {
           selPseudo = p;
           baseSel = raw.slice(0, -pseudoMatch[1].length).trim();
         }
