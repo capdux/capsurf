@@ -3688,3 +3688,6 @@
 ### Phase 923 — `overflow-block`/`overflow-inline` 映射与嵌套溢出/变换 `scrollWidth` 修正
 - `overflow-shorthand-002` 与 `logical-overflow-001` 失败源于 `overflow-block`/`overflow-inline` 仅硬编码默认 `"visible"` 且未与 `overflow-x`/`overflow-y` 依 `writing-mode` 双向联算；在 `parseDeclarationsBlockInto` 记录 `_ovSeq` 并在 `collectRawComputedMap` 先逻辑转物理再做 `visible -> auto` 归一最后回写逻辑属性后即全绿。
 - `overflow-clip-scroll-size` 与 `scrollable-overflow-transform-005.tentative` 失败源于非根 `scrollWidth`/`scrollHeight` 仅遍历直接子元素且未考虑 `overflow: clip` + `overflow-clip-margin` 裁剪边缘；提取 `computeElementScrollExtents` 递归穿透未裁剪子孙并按 `padding-box`/`border-box`/`content-box` + `overflow-clip-margin` 夹紧后一次全绿。
+### Phase 924 — 绝对定位负 `margin: auto` 与 `image-orientation` 计算值对齐
+- `position-absolute-margin-auto-001` 失败源于 `applyUsedValuesToComputedMap` 未对 `position: absolute/fixed` 且双侧 `inset` 非 `auto` 的 `margin: auto` 进行使用值求解（水平负余量按 `ltr`/`rtl` 夹紧起始侧为 `0px`、垂直方向均分负余量）。
+- `image-orientation-{from-image,none}-computed-style` 失败源于 `<img>` 在 `display: inline` 且未设 `width`/`height` 时未触发 `_lazyWidth`/`_lazyHeight`，且 `getKnownFixtureImageInfo` 缺少 `exif-orientation-*.jpg` (`100x50` 及 5–8 号旋转交换) 尺寸与 `image-orientation` 联动；补齐后两项一次通过。

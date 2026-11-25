@@ -7861,8 +7861,11 @@ function installWindow(global) {
       if (wRaw === "initial" || wRaw === "unset" || wRaw === "revert" || wRaw === "revert-layer") wRaw = "auto";
       let w = null;
       const posRaw = (rawMap.get("position") || "static").trim().toLowerCase();
+      const elTagUsed = String(element.tagName || element.localName || "").toLowerCase();
       const isAbsAuto = (posRaw === "absolute" || posRaw === "fixed") && (!rawMap.has("left") || !rawMap.has("right"));
-      if (wRaw === "auto" && !isAbsAuto) {
+      if (elTagUsed === "img" && (wRaw === "auto" || wRaw === "")) {
+        w = Number(element.naturalWidth) || 0;
+      } else if (wRaw === "auto" && !isAbsAuto) {
         const ml = evalCssLengthExpr(rawMap.get("margin-left") || "0px", cbW, fontSize) || 0;
         const mr = evalCssLengthExpr(rawMap.get("margin-right") || "0px", cbW, fontSize) || 0;
         w = Math.max(0, cbW - ml - mr);
@@ -7911,6 +7914,9 @@ function installWindow(global) {
       const cbH = (parentEl && parentEl.nodeType === 1) ? computeElementUsedHeightPx(parentEl, depth + 1) : 600;
       const h = evalCssLengthExpr(hRaw, cbH, fontSize);
       if (h !== null) return Math.max(0, h);
+    }
+    if (String(element.tagName || element.localName || "").toLowerCase() === "img") {
+      return Number(element.naturalHeight) || 0;
     }
     const ch = element.children || [];
     let sum = 0;
@@ -8850,12 +8856,13 @@ function installWindow(global) {
 
     // Resolve width for elements with a box (except non-replaced inline)
     if (!isNonReplacedInline && !isInsideReplacedContent) {
+      const isReplacedImg = String(element.tagName || element.localName || "").toLowerCase() === "img";
       const wRaw = (computedMap.get("width") || "").trim().toLowerCase();
-      if ((wRaw === "" && disp === "block") || wRaw !== "") {
+      if ((wRaw === "" && (disp === "block" || isReplacedImg)) || wRaw !== "") {
         computedMap._lazyWidth = true;
       }
       const hRaw = (computedMap.get("height") || "").trim().toLowerCase();
-      if ((hRaw === "" && disp === "block") || hRaw !== "") {
+      if ((hRaw === "" && (disp === "block" || isReplacedImg)) || hRaw !== "") {
         computedMap._lazyHeight = true;
       }
 
@@ -8927,6 +8934,73 @@ function installWindow(global) {
           if (mv && !/^[+-]?(?:\d+\.?\d*|\.\d+)px$/i.test(mv.trim())) {
             const px = evalCssLengthExpr(mv, getCbW(), fontSize);
             if (px !== null) computedMap.set(mk, formatCssPx(px));
+          }
+        }
+        if (pos === "absolute" || pos === "fixed") {
+          const mTop = (computedMap.get("margin-top") || "0px").trim().toLowerCase();
+          const mBot = (computedMap.get("margin-bottom") || "0px").trim().toLowerCase();
+          const mLeft = (computedMap.get("margin-left") || "0px").trim().toLowerCase();
+          const mRight = (computedMap.get("margin-right") || "0px").trim().toLowerCase();
+          const topRaw = (computedMap.get("top") || "auto").trim().toLowerCase();
+          const botRaw = (computedMap.get("bottom") || "auto").trim().toLowerCase();
+          const leftRaw = (computedMap.get("left") || "auto").trim().toLowerCase();
+          const rightRaw = (computedMap.get("right") || "auto").trim().toLowerCase();
+          const hRawA = (computedMap.get("height") || "auto").trim().toLowerCase();
+          const wRawA = (computedMap.get("width") || "auto").trim().toLowerCase();
+          if ((mTop === "auto" || mBot === "auto") && topRaw !== "auto" && botRaw !== "auto" && hRawA !== "auto") {
+            const cbH = (cbEl && cbEl.nodeType === 1) ? computeElementUsedHeightPx(cbEl, 0) : 600;
+            const topPx = evalCssLengthExpr(topRaw, cbH, fontSize);
+            const botPx = evalCssLengthExpr(botRaw, cbH, fontSize);
+            const hPx = evalCssLengthExpr(hRawA, cbH, fontSize);
+            if (topPx !== null && botPx !== null && hPx !== null) {
+              const pT = evalCssLengthExpr(computedMap.get("padding-top") || "0px", getCbW(), fontSize) || 0;
+              const pB = evalCssLengthExpr(computedMap.get("padding-bottom") || "0px", getCbW(), fontSize) || 0;
+              const bT = evalCssLengthExpr(computedMap.get("border-top-width") || "0px", getCbW(), fontSize) || 0;
+              const bB = evalCssLengthExpr(computedMap.get("border-bottom-width") || "0px", getCbW(), fontSize) || 0;
+              const remY = cbH - topPx - botPx - hPx - pT - pB - bT - bB;
+              if (mTop === "auto" && mBot === "auto") {
+                computedMap.set("margin-top", formatCssPx(remY * 0.5));
+                computedMap.set("margin-bottom", formatCssPx(remY * 0.5));
+              } else if (mTop === "auto") {
+                const mbPx = evalCssLengthExpr(mBot, getCbW(), fontSize) || 0;
+                computedMap.set("margin-top", formatCssPx(remY - mbPx));
+              } else {
+                const mtPx = evalCssLengthExpr(mTop, getCbW(), fontSize) || 0;
+                computedMap.set("margin-bottom", formatCssPx(remY - mtPx));
+              }
+            }
+          }
+          if ((mLeft === "auto" || mRight === "auto") && leftRaw !== "auto" && rightRaw !== "auto" && wRawA !== "auto") {
+            const cbW = getCbW();
+            const leftPx = evalCssLengthExpr(leftRaw, cbW, fontSize);
+            const rightPx = evalCssLengthExpr(rightRaw, cbW, fontSize);
+            const wPx = evalCssLengthExpr(wRawA, cbW, fontSize);
+            if (leftPx !== null && rightPx !== null && wPx !== null) {
+              const pL = evalCssLengthExpr(computedMap.get("padding-left") || "0px", cbW, fontSize) || 0;
+              const pR = evalCssLengthExpr(computedMap.get("padding-right") || "0px", cbW, fontSize) || 0;
+              const bL = evalCssLengthExpr(computedMap.get("border-left-width") || "0px", cbW, fontSize) || 0;
+              const bR = evalCssLengthExpr(computedMap.get("border-right-width") || "0px", cbW, fontSize) || 0;
+              const remX = cbW - leftPx - rightPx - wPx - pL - pR - bL - bR;
+              const dirA = (computedMap.get("direction") || "ltr").trim().toLowerCase();
+              if (mLeft === "auto" && mRight === "auto") {
+                if (remX >= 0) {
+                  computedMap.set("margin-left", formatCssPx(remX * 0.5));
+                  computedMap.set("margin-right", formatCssPx(remX * 0.5));
+                } else if (dirA === "rtl") {
+                  computedMap.set("margin-right", "0px");
+                  computedMap.set("margin-left", formatCssPx(remX));
+                } else {
+                  computedMap.set("margin-left", "0px");
+                  computedMap.set("margin-right", formatCssPx(remX));
+                }
+              } else if (mLeft === "auto") {
+                const mrPx = evalCssLengthExpr(mRight, cbW, fontSize) || 0;
+                computedMap.set("margin-left", formatCssPx(remX - mrPx));
+              } else {
+                const mlPx = evalCssLengthExpr(mLeft, cbW, fontSize) || 0;
+                computedMap.set("margin-right", formatCssPx(remX - mlPx));
+              }
+            }
           }
         }
       }

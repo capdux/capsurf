@@ -1289,7 +1289,27 @@ function installHtmlClasses(global) {
     if (cleanPath.endsWith("/svg-document.svg") || cleanPath === "svg-document.svg") {
       return { width: 100, height: 100, solidRgba: null };
     }
+    const exifM = cleanPath.match(/\/exif-orientation-([1-9])-[^/]*\.jpg$/);
+    if (exifM) {
+      const idx = Number(exifM[1]);
+      return { width: 100, height: 50, solidRgba: null, exifSwap: idx >= 5 && idx <= 8 };
+    }
     return null;
+  }
+
+  function applyImageOrientationDims(img, dims) {
+    if (!dims || !dims.exifSwap) return dims;
+    let orient = "from-image";
+    if (typeof window !== "undefined" && typeof window.getComputedStyle === "function" && !img._checkingOrientation) {
+      img._checkingOrientation = true;
+      try {
+        const cs = window.getComputedStyle(img);
+        if (cs && cs.imageOrientation) orient = String(cs.imageOrientation).trim().toLowerCase();
+      } catch (e) {}
+      img._checkingOrientation = false;
+    }
+    if (orient === "none") return { width: dims.width, height: dims.height };
+    return { width: dims.height, height: dims.width };
   }
 
   function getImageResolvedDimensions(img) {
@@ -1298,13 +1318,14 @@ function installHtmlClasses(global) {
       return { width: 0, height: 0, candidate: "" };
     }
     if (img._lastCandidate === candidate && img._lastDims) {
-      return { width: img._lastDims.width, height: img._lastDims.height, candidate: candidate };
+      const d = applyImageOrientationDims(img, img._lastDims);
+      return { width: d.width, height: d.height, candidate: candidate };
     }
     let dims = sniffImageDimensionsFromDataUrl(candidate);
     if (!dims) {
       const fixtureInfo = getKnownFixtureImageInfo(candidate);
       if (fixtureInfo) {
-        dims = { width: fixtureInfo.width, height: fixtureInfo.height };
+        dims = { width: fixtureInfo.width, height: fixtureInfo.height, exifSwap: Boolean(fixtureInfo.exifSwap) };
         if (fixtureInfo.solidRgba) {
           img._solidRgba = fixtureInfo.solidRgba;
         }
@@ -1327,7 +1348,8 @@ function installHtmlClasses(global) {
     const resolved = dims ? dims : { width: 0, height: 0 };
     img._lastCandidate = candidate;
     img._lastDims = resolved;
-    return { width: resolved.width, height: resolved.height, candidate: candidate };
+    const out = applyImageOrientationDims(img, resolved);
+    return { width: out.width, height: out.height, candidate: candidate };
   }
 
   global.__capsurf_selectImageSource = selectImageSource;

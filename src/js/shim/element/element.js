@@ -2957,6 +2957,26 @@ function installElementExtensions(proto) {
       ? window.getComputedStyle
       : null;
 
+    let elIsScrollContainer = false;
+    let startXIsRight = false;
+    let startYIsBottom = false;
+    if (gcsFn) {
+      try {
+        const elCs = gcsFn(el);
+        if (elCs) {
+          const elOx = String(elCs.overflowX || elCs.overflow || "visible").trim().toLowerCase();
+          const elOy = String(elCs.overflowY || elCs.overflow || "visible").trim().toLowerCase();
+          elIsScrollContainer = (elOx === "hidden" || elOx === "scroll" || elOx === "auto" || elOx === "clip" ||
+            elOy === "hidden" || elOy === "scroll" || elOy === "auto" || elOy === "clip");
+          const elWm = String(elCs.writingMode || "horizontal-tb").trim().toLowerCase();
+          const elDir = String(elCs.direction || "ltr").trim().toLowerCase();
+          const isVert = elWm.startsWith("vertical") || elWm.startsWith("sideways");
+          startXIsRight = (elDir === "rtl" && !isVert) || elWm === "vertical-rl" || elWm === "sideways-rl";
+          startYIsBottom = (elDir === "rtl" && isVert);
+        }
+      } catch (e) {}
+    }
+
     function walk(parent) {
       const kids = parent.children || [];
       for (let i = 0; i < kids.length; i++) {
@@ -3017,6 +3037,26 @@ function installElementExtensions(proto) {
       ? window.getComputedStyle
       : null;
 
+    let elIsScrollContainer = false;
+    let startXIsRight = false;
+    let startYIsBottom = false;
+    if (gcsFn) {
+      try {
+        const elCs = gcsFn(el);
+        if (elCs) {
+          const elOx = String(elCs.overflowX || elCs.overflow || "visible").trim().toLowerCase();
+          const elOy = String(elCs.overflowY || elCs.overflow || "visible").trim().toLowerCase();
+          elIsScrollContainer = (elOx === "hidden" || elOx === "scroll" || elOx === "auto" || elOx === "clip" ||
+            elOy === "hidden" || elOy === "scroll" || elOy === "auto" || elOy === "clip");
+          const elWm = String(elCs.writingMode || "horizontal-tb").trim().toLowerCase();
+          const elDir = String(elCs.direction || "ltr").trim().toLowerCase();
+          const isVert = elWm.startsWith("vertical") || elWm.startsWith("sideways");
+          startXIsRight = (elDir === "rtl" && !isVert) || elWm === "vertical-rl" || elWm === "sideways-rl";
+          startYIsBottom = (elDir === "rtl" && isVert);
+        }
+      } catch (e) {}
+    }
+
     function parseClipMargin(raw) {
       const s = String(raw || "0px").trim().toLowerCase();
       let box = "padding-box";
@@ -3059,10 +3099,16 @@ function installElementExtensions(proto) {
         accumY += childH;
         let r = relX + childW;
         let b = relY + childH;
-        if (limitRight !== null && r > limitRight) r = limitRight;
-        if (limitBottom !== null && b > limitBottom) b = limitBottom;
-        if (r > maxRight) maxRight = r;
-        if (b > maxBottom) maxBottom = b;
+        const outsideStart = elIsScrollContainer && (
+          (startXIsRight ? (relX >= maxRightBase) : (r <= 0)) ||
+          (startYIsBottom ? (relY >= maxBottomBase) : (b <= 0))
+        );
+        if (!outsideStart) {
+          if (limitRight !== null && r > limitRight) r = limitRight;
+          if (limitBottom !== null && b > limitBottom) b = limitBottom;
+          if (r > maxRight) maxRight = r;
+          if (b > maxBottom) maxBottom = b;
+        }
 
         let nextLimitRight = limitRight;
         let nextLimitBottom = limitBottom;

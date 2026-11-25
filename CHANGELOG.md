@@ -4686,3 +4686,7 @@
 ## Phase 923: 逻辑溢出映射、`overflow-clip-margin` 与后代变换 `scrollWidth`/`scrollHeight`
 - `src/js/shim/window.js`: 在 `collectRawComputedMap` 中按 `writing-mode` 与级联序双向解析 `overflow-block`/`overflow-inline` 与 `overflow-x`/`overflow-y`。
 - `src/js/shim/element/element.js`: 新增 `computeElementScrollExtents` 递归计算非裁剪后代变换边界与 `overflow: clip` + `overflow-clip-margin` 裁剪尺寸；4 项 `/css/css-overflow/` WPT **4/4 PASS**，`--smoke` 3/3 **PASS**。
+
+## Phase 924: 绝对定位负 `margin: auto` 解析与 `image-orientation` 替换尺寸计算值
+- `src/js/shim/window.js`: 在 `applyUsedValuesToComputedMap` 中为 `position: absolute/fixed` 补齐双侧非 `auto` `inset` 下的 `margin: auto`（含负余量）计算值解析，并为 `<img>` 启用 `_lazyWidth`/`_lazyHeight` 回退 `naturalWidth`/`naturalHeight`。
+- `src/js/shim/element/html-classes.js`, `src/js/shim/element/element.js`: 补齐 `exif-orientation-*.jpg` 尺寸与 `from-image`/`none` 方向宽高交换，并在 `computeElementScrollExtents` 排除起始边外侧盒；3 项 WPT **3/3 PASS**，`--smoke` 3/3 **PASS**。
