@@ -1963,7 +1963,11 @@ pub struct LayoutTree {
             const w = st.width.resolvePx(avail_w, fs, _.root_font_px, _.viewport_width, _.viewport_height);
             content_w = if (st.box_sizing == BoxSizing.BorderBox) (if (w > h_decor) (w - h_decor) else 0.0) else w;
         } else if (st.contain_size || st.contain_inline_size) {
-            content_w = 0.0;
+            if (st.column_count > 1 && st.column_gap > 0.0) {
+                content_w = @as(f32, @floatFromInt(st.column_count - 1)) * st.column_gap;
+            } else {
+                content_w = 0.0;
+            }
         } else if (rep := rep_opt) {
             content_w = if (rep.is_ratio_only) 0.0 else rep.width;
         } else if (st.display.isFlex() || st.display.isWebkitBox()) {
@@ -2141,7 +2145,11 @@ pub struct LayoutTree {
             const w = st.width.resolvePx(avail_w, fs, _.root_font_px, _.viewport_width, _.viewport_height);
             content_w = if (st.box_sizing == BoxSizing.BorderBox) (if (w > h_decor) (w - h_decor) else 0.0) else w;
         } else if (st.contain_size || st.contain_inline_size) {
-            content_w = 0.0;
+            if (st.column_count > 1 && st.column_gap > 0.0) {
+                content_w = @as(f32, @floatFromInt(st.column_count - 1)) * st.column_gap;
+            } else {
+                content_w = 0.0;
+            }
         } else if (rep := rep_opt) {
             content_w = if (rep.is_ratio_only) 0.0 else rep.width;
         } else if (st.display.isFlex() || st.display.isWebkitBox()) {
@@ -4305,6 +4313,8 @@ pub struct LayoutTree {
                             base_m = cstyle.flex_basis.resolvePx(container_w, cstyle.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
                         } else if (!cstyle.width.is_auto && cstyle.flex_basis.intrinsic != IntrinsicSizeKeyword.Content) {
                             base_m = cbox.borderBoxWidth();
+                        } else if (cstyle.contain_size || cstyle.contain_inline_size) {
+                            base_m = _.measureIntrinsicWidth(doc, styles, child, container_w);
                         } else {
                             base_m = if (cbox.borderBoxWidth() > 0.0) cbox.borderBoxWidth() else 0.0;
                         }

@@ -24266,12 +24266,28 @@
       return "inline";
     }
 
+    function isContentVisibilitySkipped(el, cs) {
+      const c = cs || getElComputedStyleSafe(el);
+      const cv = c ? String(c.contentVisibility || "").trim().toLowerCase() : "";
+      if (cv === "hidden") return true;
+      if (cv === "auto" && el && typeof el.getBoundingClientRect === "function") {
+        try {
+          const r = el.getBoundingClientRect();
+          const vw = (typeof window !== "undefined" && window.innerWidth) || 1280;
+          const vh = (typeof window !== "undefined" && window.innerHeight) || 720;
+          if (r && (r.bottom <= 0 || r.top >= vh || r.right <= 0 || r.left >= vw)) return true;
+        } catch (e) {}
+      }
+      return false;
+    }
+
     function isElementBeingRendered(el) {
       if (!el || el.nodeType !== 1) return false;
       if (el.isConnected === false) return false;
       let cur = el;
       while (cur && cur.nodeType === 1) {
         if (getElDisplayForInnerText(cur) === "none") return false;
+        if (isContentVisibilitySkipped(cur, null)) return false;
         cur = cur.parentElement || cur.parentNode;
       }
       return true;
@@ -24352,6 +24368,7 @@
         const cs = getElComputedStyleSafe(node);
         const disp = getElDisplayForInnerText(node);
         if (!isRoot && disp === "none") return;
+        if (!isRoot && isContentVisibilitySkipped(node, cs)) return;
 
         let vis = inheritedVis;
         const ownVis = cs ? String(cs.visibility || "").trim().toLowerCase() : (node.style && node.style.visibility ? String(node.style.visibility).trim().toLowerCase() : "");

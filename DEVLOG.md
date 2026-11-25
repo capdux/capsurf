@@ -3700,3 +3700,5 @@
 - `wm-propagation-body-computed-root` 失败源于 `element.className = ""` 未递增 `__capsurf_domMutationEpoch` 导致 `getComputedStyle` 命中旧规则缓存；`writing-mode-parsing-svg1-001` 与 `text-combine-upright-parsing-digits-001/002` 通过扩展 `cssom.js` 校验及 `window.js` 计算值规范化一次修复（`digits-002` 仅剩上游测试自身重复 `#valid_digits_calc_4_dividedby_2` 选择器）。
 ### Phase 928 — 正交缩紧适应 (`orthogonal-parent-shrink-to-fit`) 16 项全绿
 - `cascade.cp` 原未解析 `writing-mode`，且 `layout.cp` 对垂直书写模式按水平文本度量宽度、同时 `flushInlineLine` 未将同行 `float: left` 宽度计入后续行内元素偏移。接入 `WritingMode` 继承、`isVertical()` 原子行内化与列宽估算、以及左浮动预遍历后，16 项 `orthogonal-parent-shrink-to-fit-001{c..x}` 一次全绿。
+### Phase 929 — `contain: size` 多列弹性子项与 `content-visibility` `innerText`
+- `contain-size-multicol-as-flex-item` 失败源于 `cascade.cp` 未解析 `column-count`/`columns` 且 `layoutFlexContainer` 对 `contain: size` 子项误用 `resolveBoxMetrics` 撑满宽度 (`784`)；接入 `PROP_COLUMN_COUNT` 并在 `measureIntrinsicWidth` 返回 `(column_count - 1) * column_gap` (`100`) 后一次通过。

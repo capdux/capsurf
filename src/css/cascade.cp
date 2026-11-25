@@ -1274,7 +1274,8 @@ pub enum WritingMode {
 
 pub const PROP_ASPECT_RATIO: usize = 108;
 pub const PROP_WRITING_MODE: usize = 109;
-pub const TOTAL_PROP_SLOTS: usize = 110;
+pub const PROP_COLUMN_COUNT: usize = 110;
+pub const TOTAL_PROP_SLOTS: usize = 111;
 
 pub enum ObjectViewBoxKind {
     None,
@@ -2552,6 +2553,7 @@ pub struct ComputedStyle {
     transform_ty: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
     aspect_ratio: f32 = 0.0;
     writing_mode: WritingMode = WritingMode.HorizontalTb;
+    column_count: u32 = 0;
 
     // Table & float properties
     color_scheme: ColorScheme = ColorScheme.Normal;
@@ -4256,6 +4258,30 @@ pub struct ComputedStyle {
         if (std.ascii.eqlIgnoreCase(name, "align-self")) {
             if (aself := AlignSelf.parse(val)) {
                 if (_.tryClaimSlot(PROP_ALIGN_SELF, weight)) _.align_self = aself;
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "column-count")) {
+            const tr_cc = std.mem.trim(u8, val, " \t\r\n");
+            if (std.ascii.eqlIgnoreCase(tr_cc, "auto")) {
+                if (_.tryClaimSlot(PROP_COLUMN_COUNT, weight)) _.column_count = 0;
+            } else {
+                const cc = std.fmt.parseInt(u32, tr_cc, 10) catch 0;
+                if (cc > 0) {
+                    if (_.tryClaimSlot(PROP_COLUMN_COUNT, weight)) _.column_count = cc;
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "columns")) {
+            let it_cols = std.mem.tokenizeAny(u8, val, " \t\r\n");
+            while (tok_c := it_cols.next()) {
+                if (!std.ascii.eqlIgnoreCase(tok_c, "auto")) {
+                    const cc = std.fmt.parseInt(u32, tok_c, 10) catch 0;
+                    if (cc > 0) {
+                        if (_.tryClaimSlot(PROP_COLUMN_COUNT, weight)) _.column_count = cc;
+                    }
+                }
             }
             return;
         }

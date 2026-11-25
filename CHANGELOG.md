@@ -4705,3 +4705,7 @@
 
 ## Phase 928: 原生 `WritingMode` 级联、正交行内缩紧度量与同行左浮动偏移
 - `src/css/cascade.cp`, `src/layout/layout.cp`: 新增 `PROP_WRITING_MODE` 继承解析、垂直书写模式正交缩紧宽度估算、以及 `flushInlineLine` 左浮动行内偏移推进；16 项 `orthogonal-parent-shrink-to-fit-001*.html` **16/16 PASS**，`--smoke` 3/3 **PASS**。
+
+## Phase 929: `contain: size` 多列弹性项固有尺寸与 `content-visibility` 渲染文本过滤
+- `src/css/cascade.cp`, `src/layout/layout.cp`: 新增 `PROP_COLUMN_COUNT`，在 `contain: size` 与 `layoutFlexContainer` 中按 `(column_count - 1) * column_gap` 计算主轴固有宽。
+- `src/js/shim/element/html-classes.js`: `collectRenderedText` 跳过 `content-visibility: hidden` 及视口外 `auto`；`orthogonal-parent-shrink-to-fit-002` 与 `contain-size-multicol-as-flex-item` **2/2 PASS**，`--smoke` 3/3 **PASS**。
