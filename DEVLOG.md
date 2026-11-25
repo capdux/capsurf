@@ -3522,3 +3522,5 @@
 - 在 `cssom.js` 为 `@font-palette-values` 实现 `<dashed-ident>` 前导校验、CSS 转义还原、`font-family`/`base-palette`/`override-colors` 描述符校验（禁用泛型族、负数索引及 `currentcolor`/`light-dark()`/系统色）与只读 `CSSFontPaletteValuesRule` 属性，`font-palette-values-valid.html` (36/36) 与 `font-palette-values-invalid.html` (27/27) 双双 **`FAIL→PASS`**，`--smoke` 3/3 **PASS**。
 ### Phase 841 — `@scope` (`CSSScopeRule`) 规则解析、CSSOM 与邻近度 (`prox`) 级联求值
 - 在 `cssom.js` 新增 `CSSScopeRule` 与 `parseScopePrelude`，并在 `window.js` 实现 `@scope (<start>) to (<end>)` 作用域根/下限匹配、`:scope` 传递与 `prox` 邻近度排序，`scope-cssom`、`scope-featureless`、`scope-overlapping-has`、`scope-supports` 等 **9/36 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 842 — `isValidCalcSyntax` 单位白名单与 `clamp()`/`min()`/`max()` 语法校验收紧
+- 在 `cssom.js` 为 `isValidCalcSyntax` 补全 `VALID_CALC_UNITS`、`clamp()` 3 参数精确校验与括号闭合校验，并收紧 `opacity` 与 `transition-delay`/`duration` 的 `calc`/`min`/`max`/`clamp` 单位校验，`/css/css-values/minmax-time-invalid.html` **52/52 全绿 PASS**，`--smoke` 3/3 **PASS**。

@@ -1158,9 +1158,10 @@
       if (/\b(?:var|env|attr)\(/i.test(body)) return true;
       if (/(?:\d|\.)(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|%|deg|rad|grad|turn|s|ms)\s*\*\s*[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|%|deg|rad|grad|turn|s|ms)\b/i.test(body)) return false;
       // Reject unknown bare identifiers (e.g., calc(7px * up), calc((0.25turn error)))
+      const VALID_CALC_UNITS = new Set(["px","em","rem","ex","rex","cap","rcap","ch","rch","ic","ric","lh","rlh","vw","vh","vi","vb","vmin","vmax","svw","svh","lvw","lvh","dvw","dvh","cqw","cqh","cqi","cqb","cqmin","cqmax","cm","mm","q","in","pt","pc","%","deg","rad","grad","turn","s","ms","hz","khz","dpi","dpcm","dppx"]);
       let i = 0, expectVal = true;
       const topAddTerms = [""];
-      let depth = 0;
+      let depth = 0, topCommas = 0;
       while (i < body.length) {
         const ch = body[i];
         if (/\s/.test(ch)) { i++; continue; }
@@ -1180,6 +1181,7 @@
         }
         if (ch === ",") {
           if (expectVal || (fn === "calc" && depth === 0)) return false;
+          if (depth === 0) topCommas++;
           topAddTerms[topAddTerms.length - 1] += ch;
           expectVal = true;
           i++;
@@ -1202,6 +1204,7 @@
         const rest = body.slice(i);
         const numM = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?([a-z%]+)?/i.exec(rest);
         if (numM) {
+          if (numM[1] && !VALID_CALC_UNITS.has(numM[1].toLowerCase())) return false;
           topAddTerms[topAddTerms.length - 1] += numM[0];
           i += numM[0].length;
           expectVal = false;
@@ -1236,7 +1239,8 @@
         }
         return false;
       }
-      if (depth < 0 || expectVal) return false;
+      if (depth !== 0 || expectVal) return false;
+      if (fn === "clamp" && topCommas !== 2) return false;
       if (fn === "calc" && topAddTerms.length > 1) {
         let hasNumOnly = false, hasUnit = false;
         for (let k = 0; k < topAddTerms.length; k++) {
@@ -1500,7 +1504,10 @@
       if (toks.length !== 1) return false;
       const t = toks[0];
       if (/^(?:var|env)\(/i.test(t)) return true;
-      if (/^(?:calc|min|max|clamp)\(/i.test(t)) return isValidCalcSyntax(t);
+      if (/^(?:calc|min|max|clamp)\(/i.test(t)) {
+        if (!isValidCalcSyntax(t)) return false;
+        return !/(?:\d|\.)(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|deg|rad|grad|turn|s|ms|hz|khz|dpi|dpcm|dppx)\b/i.test(t);
+      }
       return /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?%?$/i.test(t);
     }
     if (prop === "font-feature-settings") {
@@ -2114,7 +2121,14 @@
         const toks = splitCssTokens(layers[i].trim());
         if (toks.length !== 1) return false;
         const t = toks[0];
-        if ((allowAuto && t === "auto") || /^(?:calc|min|max|clamp|var|env)\(/i.test(t)) continue;
+        if (allowAuto && t === "auto") continue;
+        if (/^(?:var|env)\(/i.test(t)) continue;
+        if (/^(?:calc|min|max|clamp)\(/i.test(t)) {
+          if (!isValidCalcSyntax(t)) return false;
+          if (/(?:\d|\.)(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|%|deg|rad|grad|turn|hz|khz|dpi|dpcm|dppx)\b/i.test(t)) return false;
+          if (!/(?:\d|\.)(?:ms|s)\b/i.test(t) && !/\b(?:var|env)\(/i.test(t)) return false;
+          continue;
+        }
         const m = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)(ms|s)$/i.exec(t);
         if (!m) return false;
         if (!allowNeg && (Number(m[1]) < 0 || t.startsWith("-"))) return false;

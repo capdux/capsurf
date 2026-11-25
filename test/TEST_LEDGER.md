@@ -2508,3 +2508,4 @@
 | Phase 839 | `sibling-index()`/`sibling-count()` 全局求值与 `simplifySibCalc` | `src/js/shim/window.js`, `src/js/shim/cssom.js` | `css-values/tree-counting/` **10x `FAIL→PASS`**; `--smoke` 3/3 PASS |
 | Phase 840 | `@font-palette-values` 规则前导与描述符校验 | `src/js/shim/cssom.js` | `font-palette-values-{valid,invalid}` 2/2 **`FAIL→PASS`** (63/63); `--smoke` 3/3 PASS |
 | Phase 841 | `@scope` (`CSSScopeRule`) CSSOM 与邻近度级联求值 | `src/js/shim/cssom.js`, `src/js/shim/window.js` | `scope-{cssom,featureless,overlapping-has,supports,...}` **9/36 PASS**; `--smoke` 3/3 PASS |
+| Phase 842 | `isValidCalcSyntax` 单位白名单与 `clamp()`/`min()`/`max()` 校验 | `src/js/shim/cssom.js` | `minmax-time-invalid` **52/52 PASS**; `--smoke` 3/3 PASS |

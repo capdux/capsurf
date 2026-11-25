@@ -4471,3 +4471,6 @@
   - `src/js/shim/cssom.js`: 新增 `CSSScopeRule`、`parseScopePrelude` 与 `@scope` 规则解析/序列化。
   - `src/js/shim/window.js`: `collectFromText` 与 `matchesSingleSelector` 实现 `@scope` 根/下限匹配、`:scope` 上下文与 `prox` 邻近度级联排序。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 842**:
+  - `src/js/shim/cssom.js`: `isValidCalcSyntax` 新增 `VALID_CALC_UNITS`、`clamp()` 三参数校验与括号闭合校验，`opacity` 与 `transition-delay`/`duration` 补全单位校验。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
