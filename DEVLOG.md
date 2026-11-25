@@ -3712,3 +3712,5 @@
 - `aspect-ratio-1` 仅差 `height: stretch; aspect-ratio: 2 / 1` 未反推 `content_width`；在 `resolveBoxMetrics` 增加 `else if (style.aspect_ratio > 0.0 && box.content_height > 0.0)` 后 4/4 全绿。
 ### Phase 933 — CSS Math 单位类型分析 (`hasInvalidCalcUnitMix`)
 - `isValidLenPct` 原在 `calc()` 前置校验前直接透传 `__capsurf_is_valid_css_len_pct`，导致 `clamp(0, 10rem, 100%)`、`min(1%, 0)`、`calc(2px * 1px)` 及 `progress(10, 0px, 10)` 未被拦截。提取 `hasInvalidCalcUnitMix` 并同时接入 `isValidCalcSyntax` 与 `isValidLenPct` 后，4 项共 116 个 subtest 一次全绿。
+### Phase 934 — `sign`/`abs` 单位混用拦截与整数动画向正无穷半舍入
+- `signs-abs-invalid` 剩余 2 项 (`sign(10px + 5rad)` 与 `font-weight: sign(10%)`) 在 `hasInvalidCalcUnitMix` 与 `font-weight` 校验补齐后 53/53 全绿；`interpolateAnimValue` 对 `<integer>` 属性使用 `Math.round(v)` 后 `integer_interpolation_round_half_001/002` 一次通过。

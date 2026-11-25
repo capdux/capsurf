@@ -2601,3 +2601,4 @@
 | Phase 931 | `min-width: stretch`、高亮伪元素 `text-shadow` & `--*` 隔离 | `layout.cp`, `animations.js`, `window.js` | `highlight-cascade-parent-style-change`, `highlight-cascade-011`, `auto-margins-1` **3/3 PASS**; `--smoke` 3/3 PASS |
 | Phase 932 | `KeyframeEffect.pseudoElement` & `stretch` + `aspect-ratio` 反推宽 | `animations.js`, `layout.cp` | `backdrop-animate`, `aspect-ratio-1` (4/4) **2/2 PASS**; `--smoke` 3/3 PASS |
 | Phase 933 | `hasInvalidCalcUnitMix` 拦截 `min`/`max`/`clamp`/`progress`/`dim*dim` | `src/js/shim/cssom.js` | `progress-invalid` (35/35), `clamp-length-invalid` (23/23), `minmax-percentage-invalid` (48/48), `calc-unit-analysis` (10/10) **4/4 PASS**; `--smoke` 3/3 PASS |
+| Phase 934 | `sign`/`abs` 单位校验 & 整数插值半舍入 | `cssom.js`, `animations.js`, `window.js` | `signs-abs-invalid` (53/53), `integer_interpolation_round_half_001`, `integer_interpolation_round_half_002` **3/3 PASS**; `--smoke` 3/3 PASS |

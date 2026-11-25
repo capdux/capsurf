@@ -11354,6 +11354,7 @@ function installWindow(global) {
       }
       if (ic.trim()) imgLayers.push(ic.trim());
       const normLayers = imgLayers.map((layer) => {
+        if (/^url\(\s*\)$/i.test(layer)) return 'url("")';
         if (/^light-dark\(/i.test(layer)) {
           const inn = layer.slice(layer.indexOf("(") + 1, -1);
           let ld = 0, split = -1;
@@ -11621,11 +11622,15 @@ function installWindow(global) {
       computedMap.set(gKey, splitCssTopLevelWhitespace(gRaw).map(evalTrackTok).join(" "));
     }
     const curRaw = (computedMap.get("cursor") || "").trim();
-    if (curRaw && /(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(curRaw)) {
+    if (curRaw && /url\(\s*\)/i.test(curRaw)) {
+      computedMap.set("cursor", curRaw.replace(/url\(\s*\)/gi, 'url("")'));
+    }
+    const curAfterUrl = (computedMap.get("cursor") || "").trim();
+    if (curAfterUrl && /(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(curAfterUrl)) {
       const cParts = [];
       let cCur = "", cD = 0;
-      for (let i = 0; i < curRaw.length; i++) {
-        const ch = curRaw[i];
+      for (let i = 0; i < curAfterUrl.length; i++) {
+        const ch = curAfterUrl[i];
         if (ch === "(") cD++; else if (ch === ")" && cD > 0) cD--;
         if (cD === 0 && ch === ",") { cParts.push(cCur.trim()); cCur = ""; }
         else cCur += ch;

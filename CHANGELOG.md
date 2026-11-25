@@ -4724,3 +4724,7 @@
 
 ## Phase 933: CSS Math 单位类型分析与 `min`/`max`/`clamp`/`progress` 非法混用拦截
 - `src/js/shim/cssom.js`: 新增 `hasInvalidCalcUnitMix` 前置校验，拦截 `min`/`max`/`clamp` 裸 `0` 混用、`progress()` 单位不一致与 `dim * dim`；4 项 `/css/css-values/` WPT 共 116 个 subtest **4/4 PASS**，`--smoke` 3/3 **PASS**。
+
+## Phase 934: `sign`/`abs` 单位混用拦截与整数动画半舍入
+- `src/js/shim/cssom.js`: 拦截 `sign`/`abs` 混用不兼容单位及 `font-weight` 中的 `sign(%)/abs(%)`。
+- `src/js/shim/animations.js`, `src/js/shim/window.js`: 整数插值向正无穷半舍入并规范化内联空 `url()`；`signs-abs-invalid`、`integer_interpolation_round_half_001/002` **3/3 PASS**，`--smoke` 3/3 **PASS**。

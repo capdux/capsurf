@@ -5261,6 +5261,13 @@
           }
           if (hasBareNum && hasUnit) return true;
         }
+        const sm = /\b(?:sign|abs)\(([^()]+)\)/i.exec(tok);
+        if (sm) {
+          const sBody = sm[1];
+          const hasLen = /(?:\d|\.)(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc)\b/i.test(sBody);
+          const hasAngTime = /(?:\d|\.)(?:deg|rad|grad|turn|s|ms|hz|khz)\b/i.test(sBody);
+          if (hasLen && hasAngTime) return true;
+        }
         return false;
       }
 
@@ -6102,6 +6109,7 @@
         return hasShape || hasBox;
       }
       if (prop === "font-weight") {
+        if (hasInvalidCalcUnitMix(vLower) || /\b(?:sign|abs)\([^)]*%/i.test(vLower)) return false;
         if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_font_weight === "function") {
           return globalThis.__capsurf_is_valid_css_font_weight(vLower);
         }
@@ -40872,6 +40880,10 @@
     if (n1 && n2 && (n1[2] === n2[2] || (parseFloat(n1[1]) === 0 && n1[2] === "") || (parseFloat(n2[1]) === 0 && n2[2] === ""))) {
       const unit = n1[2] || n2[2];
       const v = parseFloat(n1[1]) + (parseFloat(n2[1]) - parseFloat(n1[1])) * p;
+      if (unit === "" && (prop === "order" || prop === "z-index" || prop === "column-count" || prop === "orphans" || prop === "widows")) {
+        const r = Math.round(v);
+        return String(r === 0 ? 0 : r);
+      }
       const formatted = Math.abs(v - Math.round(v)) < 1e-6 ? String(Math.round(v)) : String(Number(v.toFixed(6)));
       return formatted + unit;
     }
@@ -53492,6 +53504,7 @@
         }
         if (ic.trim()) imgLayers.push(ic.trim());
         const normLayers = imgLayers.map((layer) => {
+          if (/^url\(\s*\)$/i.test(layer)) return 'url("")';
           if (/^light-dark\(/i.test(layer)) {
             const inn = layer.slice(layer.indexOf("(") + 1, -1);
             let ld = 0, split = -1;
@@ -53759,11 +53772,15 @@
         computedMap.set(gKey, splitCssTopLevelWhitespace(gRaw).map(evalTrackTok).join(" "));
       }
       const curRaw = (computedMap.get("cursor") || "").trim();
-      if (curRaw && /(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(curRaw)) {
+      if (curRaw && /url\(\s*\)/i.test(curRaw)) {
+        computedMap.set("cursor", curRaw.replace(/url\(\s*\)/gi, 'url("")'));
+      }
+      const curAfterUrl = (computedMap.get("cursor") || "").trim();
+      if (curAfterUrl && /(?:linear-gradient|radial-gradient|conic-gradient)\(/i.test(curAfterUrl)) {
         const cParts = [];
         let cCur = "", cD = 0;
-        for (let i = 0; i < curRaw.length; i++) {
-          const ch = curRaw[i];
+        for (let i = 0; i < curAfterUrl.length; i++) {
+          const ch = curAfterUrl[i];
           if (ch === "(") cD++; else if (ch === ")" && cD > 0) cD--;
           if (cD === 0 && ch === ",") { cParts.push(cCur.trim()); cCur = ""; }
           else cCur += ch;

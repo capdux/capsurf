@@ -427,6 +427,10 @@ function interpolateAnimValue(prop, fromVal, toVal, p) {
   if (n1 && n2 && (n1[2] === n2[2] || (parseFloat(n1[1]) === 0 && n1[2] === "") || (parseFloat(n2[1]) === 0 && n2[2] === ""))) {
     const unit = n1[2] || n2[2];
     const v = parseFloat(n1[1]) + (parseFloat(n2[1]) - parseFloat(n1[1])) * p;
+    if (unit === "" && (prop === "order" || prop === "z-index" || prop === "column-count" || prop === "orphans" || prop === "widows")) {
+      const r = Math.round(v);
+      return String(r === 0 ? 0 : r);
+    }
     const formatted = Math.abs(v - Math.round(v)) < 1e-6 ? String(Math.round(v)) : String(Number(v.toFixed(6)));
     return formatted + unit;
   }

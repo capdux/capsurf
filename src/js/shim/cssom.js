@@ -1308,6 +1308,13 @@
         }
         if (hasBareNum && hasUnit) return true;
       }
+      const sm = /\b(?:sign|abs)\(([^()]+)\)/i.exec(tok);
+      if (sm) {
+        const sBody = sm[1];
+        const hasLen = /(?:\d|\.)(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc)\b/i.test(sBody);
+        const hasAngTime = /(?:\d|\.)(?:deg|rad|grad|turn|s|ms|hz|khz)\b/i.test(sBody);
+        if (hasLen && hasAngTime) return true;
+      }
       return false;
     }
 
@@ -2149,6 +2156,7 @@
       return hasShape || hasBox;
     }
     if (prop === "font-weight") {
+      if (hasInvalidCalcUnitMix(vLower) || /\b(?:sign|abs)\([^)]*%/i.test(vLower)) return false;
       if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_font_weight === "function") {
         return globalThis.__capsurf_is_valid_css_font_weight(vLower);
       }
