@@ -3518,3 +3518,5 @@
 - 在 `cascade.cp` 与 `painter.cp` 中实现 `BgRepeatMode`（`repeat`/`no-repeat`/`space`/`round`）双值解析及共享 `computeBgAxisTiling` 平铺计算，一次性打通 `background-repeat-space-{1a..1c,2,4..9}`（10/12 **PASS**，整组 **12/23 PASS**），`--smoke` 3/3 **PASS**。
 ### Phase 839 — `sibling-index()` / `sibling-count()` 全属性计算值求值与化简 (`10x FAIL→PASS`)
 - 在 `window.js` `applyUsedValuesToComputedMap` 统一解析 `sibling-index()`/`sibling-count()`（兼容 Shadow DOM `assignedSlot` 扁平树）并经 `simplifySibCalc` 执行乘除加减化简与单值解包，同时在 `cssom.js` 规范空白/参数校验，`/css/css-values/tree-counting/` 一次性收获 **10 项 `FAIL→PASS`**，`--smoke` 3/3 **PASS**。
+### Phase 840 — `@font-palette-values` 规则与描述符全量合规 (`2/2 FAIL→PASS`)
+- 在 `cssom.js` 为 `@font-palette-values` 实现 `<dashed-ident>` 前导校验、CSS 转义还原、`font-family`/`base-palette`/`override-colors` 描述符校验（禁用泛型族、负数索引及 `currentcolor`/`light-dark()`/系统色）与只读 `CSSFontPaletteValuesRule` 属性，`font-palette-values-valid.html` (36/36) 与 `font-palette-values-invalid.html` (27/27) 双双 **`FAIL→PASS`**，`--smoke` 3/3 **PASS**。

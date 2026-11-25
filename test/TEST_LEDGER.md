@@ -2506,3 +2506,4 @@
 | Phase 837 | 调色板 PNG (`PLTE`+`tRNS`, `1/2/4/8-bit`) 解码与 `paintPngBg` | `src/render/painter.cp` | `background-size-005..020` 全绿 (**35/79 PASS**); `--smoke` 3/3 PASS |
 | Phase 838 | `background-repeat: space \| round` (`computeBgAxisTiling`) | `src/css/cascade.cp`, `src/render/painter.cp` | `background-repeat-space-*` **10/12 PASS** (**12/23 PASS**); `--smoke` 3/3 PASS |
 | Phase 839 | `sibling-index()`/`sibling-count()` 全局求值与 `simplifySibCalc` | `src/js/shim/window.js`, `src/js/shim/cssom.js` | `css-values/tree-counting/` **10x `FAIL→PASS`**; `--smoke` 3/3 PASS |
+| Phase 840 | `@font-palette-values` 规则前导与描述符校验 | `src/js/shim/cssom.js` | `font-palette-values-{valid,invalid}` 2/2 **`FAIL→PASS`** (63/63); `--smoke` 3/3 PASS |

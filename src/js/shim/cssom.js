@@ -9830,19 +9830,98 @@
     }
 
     if (kind === "font-palette-values") {
+      const rawName = sel.replace(/^@font-palette-values/i, "").trim();
+      if (!rawName || !rawName.startsWith("--")) return null;
+      // Reject multiple tokens / unescaped whitespace in dashed-ident
+      for (let ci = 0; ci < rawName.length; ci++) {
+        if (rawName[ci] === "\\") { ci++; continue; }
+        if (/\s/.test(rawName[ci])) return null;
+      }
+      const unescapedName = rawName.replace(/\\([0-9a-fA-F]{1,6}\s?|.)/g, (_, esc) => {
+        if (/^[0-9a-fA-F]/.test(esc)) {
+          const cp = parseInt(esc.trim(), 16);
+          return (cp > 0 && cp <= 0x10FFFF) ? String.fromCodePoint(cp) : "\uFFFD";
+        }
+        return esc;
+      });
       const rule = new CSSFontPaletteValuesRule();
       rule.parentRule = parentRule || null;
       rule.parentStyleSheet = parentSheet || null;
       rule._onMutate = onMutate || null;
-      rule.name = sel.replace(/^@font-palette-values/i, "").trim();
-      const style = makeRuleStyleDeclaration(parsed.declText || "", "style", null, onMutate);
-      rule.fontFamily = style.getPropertyValue("font-family") || "";
-      rule.basePalette = style.getPropertyValue("base-palette") || "";
-      rule.overrideColors = style.getPropertyValue("override-colors") || "";
+      rule.name = unescapedName;
+
+      const GENERIC_FAMILIES = new Set(["serif", "sans-serif", "cursive", "fantasy", "monospace", "system-ui", "ui-serif", "ui-sans-serif", "ui-monospace", "ui-rounded", "math", "fangsong", "emoji", "generic(fangsong)", "generic(kai)", "generic(khmer-mul)", "generic(nastaliq)"]);
+      const CSS_WIDE_KW = new Set(["initial", "inherit", "unset", "revert", "revert-layer"]);
+      const SYS_COLORS = new Set(["canvas", "canvastext", "linktext", "visitedtext", "activetext", "buttonface", "buttontext", "buttonborder", "field", "fieldtext", "highlight", "highlighttext", "selecteditem", "selecteditemtext", "mark", "marktext", "graytext", "accentcolor", "accentcolortext"]);
+
+      let fontFamily = "";
+      let basePalette = "";
+      let overrideColors = "";
+
+      const decls = splitCssDeclarations(parsed.declText || "");
+      for (let di = 0; di < decls.length; di++) {
+        const d = decls[di];
+        const colonIdx = d.indexOf(":");
+        if (colonIdx < 0) continue;
+        const prop = d.slice(0, colonIdx).trim().toLowerCase();
+        const rawVal = d.slice(colonIdx + 1).trim();
+        if (!rawVal || CSS_WIDE_KW.has(rawVal.toLowerCase())) continue;
+
+        if (prop === "font-family") {
+          const parts = splitTopLevelComma(rawVal);
+          const validParts = [];
+          let ok = parts.length > 0;
+          for (let pi = 0; pi < parts.length; pi++) {
+            const p = parts[pi].trim();
+            if (!p) { ok = false; break; }
+            if ((p.startsWith("\"") && p.endsWith("\"")) || (p.startsWith("'") && p.endsWith("'"))) {
+              validParts.push(p);
+            } else if (/^[a-z_-][a-z0-9_-]*(?:\s+[a-z_-][a-z0-9_-]*)*$/i.test(p)) {
+              if (GENERIC_FAMILIES.has(p.toLowerCase())) { ok = false; break; }
+              validParts.push(p);
+            } else {
+              ok = false;
+              break;
+            }
+          }
+          if (ok) fontFamily = validParts.join(", ");
+        } else if (prop === "base-palette") {
+          const low = rawVal.toLowerCase();
+          if (low === "normal" || low === "light" || low === "dark") {
+            basePalette = low;
+          } else if (/^\+?\d+$/.test(rawVal)) {
+            basePalette = String(parseInt(rawVal, 10));
+          }
+        } else if (prop === "override-colors") {
+          const items = splitTopLevelComma(rawVal);
+          const pairs = [];
+          let ok = items.length > 0;
+          for (let ii = 0; ii < items.length; ii++) {
+            const item = items[ii].trim();
+            const sp = item.match(/^(\+?\d+)\s+([\s\S]+)$/);
+            if (!sp) { ok = false; break; }
+            const idxStr = String(parseInt(sp[1], 10));
+            const colRaw = sp[2].trim();
+            const colLow = colRaw.toLowerCase();
+            if (CSS_WIDE_KW.has(colLow) || /\b(?:currentcolor|light-dark|canvas|canvastext|linktext|visitedtext|activetext|buttonface|buttontext|buttonborder|field|fieldtext|highlight|highlighttext|selecteditem|selecteditemtext|mark|marktext|graytext|accentcolor|accentcolortext)\b/i.test(colRaw)) { ok = false; break; }
+            if (!isValidCssValue("color", colRaw)) { ok = false; break; }
+            const normCol = normalizeCssSpecifiedValue("color", colRaw);
+            pairs.push(idxStr + " " + normCol);
+          }
+          if (ok) overrideColors = pairs.join(", ");
+        }
+      }
+
+      Object.defineProperty(rule, "fontFamily", { get: function () { return fontFamily; }, configurable: true, enumerable: true });
+      Object.defineProperty(rule, "basePalette", { get: function () { return basePalette; }, configurable: true, enumerable: true });
+      Object.defineProperty(rule, "overrideColors", { get: function () { return overrideColors; }, configurable: true, enumerable: true });
       rule._serialize = function () {
-        let d = style.cssText;
-        if (d && !d.endsWith(";")) d += ";";
-        return "@font-palette-values " + rule.name + (d ? " { " + d + " }" : " { }");
+        const parts = [];
+        if (rule.fontFamily) parts.push("font-family: " + rule.fontFamily + ";");
+        if (rule.basePalette) parts.push("base-palette: " + rule.basePalette + ";");
+        if (rule.overrideColors) parts.push("override-colors: " + rule.overrideColors + ";");
+        const d = parts.join(" ");
+        return "@font-palette-values " + rawName + (d ? " { " + d + " }" : " { }");
       };
       return rule;
     }

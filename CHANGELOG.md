@@ -4464,3 +4464,6 @@
   - `src/js/shim/window.js`: `applyUsedValuesToComputedMap` 实现 `sibling-index()`/`sibling-count()`（含 `assignedSlot` 扁平树）求值与 `simplifySibCalc` 化简。
   - `src/js/shim/cssom.js`: `isValidCalcSyntax` 支持 `sibling-index( )`/`sibling-count( )` 空参数空白并拒绝非法参数。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 840**:
+  - `src/js/shim/cssom.js`: `constructRule` 为 `@font-palette-values` 实现前导校验、CSS 转义还原、三描述符 (`font-family`/`base-palette`/`override-colors`) 规范化与只读属性定义。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
