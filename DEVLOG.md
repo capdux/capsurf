@@ -3536,3 +3536,5 @@
 - 将 `cssom.js` 中 `isValidCalcSyntax` 的复杂 JS 正则校验下沉至 `cap:css` (`mathFunc.cp` `isValidCssMathSyntax`)，通过 `dom_binding.cp` `__capsurf_is_valid_css_math` 统一入口提供原生语法、单位与参数个数校验，同步打通 `acos-asin-atan-atan2-computed` 与 `exp-log-invalid`。
 ### Phase 848 — `cap:css` CSS Color 4 CSSOM 序列化下沉与 `transform`/`opacity` 数学语法校验收紧
 - 在 `cap:css` (`color.cp`) 完成 CSS Color 4 `lab`/`lch`/`oklab`/`oklch`/`color(...)`、`none` 缺省分量、`/*...*/` 注释与 `calc()` 解析序列化并接入 `dom_binding.cp`；同步收紧 `cssom.js` 中 `transform` 与 `opacity` 的数学函数语法与单位校验，批量收割 `sin-cos-tan-invalid` 与 `minmax-number-invalid`。
+### Phase 849 — 12 项 CSSOM 属性语法校验器全面下沉 `cap:css` 并接线验证
+- 将 `cssom.js` 中高频属性语法校验（`transform`/`rotate`/`scale`/`translate`/`opacity`/`color`/`z-index`/`flex-basis`/`animation-iteration-count`/`len-pct`/`time-list`/`gap`）统一收口下沉至 `cap:css` 纯 CP 零堆分配实现，通过 `dom_binding.cp` 暴露给 JS shim，大幅削减 CSSOM 层的 JS 正则校验逻辑。

@@ -4494,3 +4494,6 @@
 - `/data/dev/cp/lib/css/color.cp`: 新增 `CssColor.parseColorToCssomString`、`toCssomString`、`stripCssComments` 与 `CalcParser`，修复 `CalcVal?` 可空解包 (`?? return null`)。
 - `src/js/dom_binding.cp`: `__capsurf_parse_color` 接入 `CssColor.parseColorToCssomString`。
 - `src/js/shim/cssom.js`: `transform` 函数参数接入 `cap:css` `isValidCalcSyntax` 校验并拒绝 `rotate*`/`skew*` 返回 `<number>` 的函数；`opacity` 拒绝 `fr` 与混合百分比；`sin-cos-tan-invalid` (42/42)、`minmax-number-invalid` (48/48)、`exp-log-invalid`、`signs-abs-invalid` **PASS**，`--smoke` 3/3 **PASS**。
+### Phase 849 — 12 项 CSSOM 属性语法校验器全面下沉 `cap:css` 并接线验证
+- `/data/dev/cp/lib/css/{transform,transition,length,color,layoutctrl,index}.cp`: 新增并导出 `isValidCssTransformValue`、`isValidCssRotateValue`、`isValidCssScaleValue`、`isValidCssTimeListValue`、`isValidCssLenPct`、`isValidCssTranslateValue`、`isValidCssOpacityValue`、`isValidCssColorSyntax`、`isValidCssZIndexValue`、`isValidCssFlexBasisValue`、`isValidCssGapValue`、`isValidCssAnimIterCountValue`。
+- `src/js/dom_binding.cp` & `src/js/shim/cssom.js`: 暴露全部 12 个 `__capsurf_is_valid_css_*` 原生校验器并接入 `cssom.js`；11 项 WPT 回归 **11/11 PASS**，`--smoke` 3/3 **PASS**。

@@ -5164,6 +5164,10 @@
       _isValidCalcSyntax = isValidCalcSyntax;
 
       function isValidLenPct(tok, allowNegative) {
+        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_len_pct === "function" &&
+            !/\b(?:progress|media-progress|container-progress|calc-mix|calc-size)\(/i.test(tok)) {
+          return globalThis.__capsurf_is_valid_css_len_pct(tok, !!allowNegative);
+        }
         if (/^env\(/i.test(tok)) return isValidEnvSyntax(tok);
         if (/^(?:var|attr|anchor|anchor-size)\(/i.test(tok)) return true;
         if (/^(?:calc|min|max|clamp)\(/i.test(tok)) {
@@ -5400,7 +5404,7 @@
         if (/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(t)) {
           return Number(t) >= 0 && !t.startsWith("-");
         }
-        if (t.endsWith("%")) return false;
+        if (t.includes("%") && !/\b(?:var|env)\(/i.test(t)) return false;
         return isValidLenPct(t, false);
       }
       if (prop === "letter-spacing" || prop === "word-spacing") {
@@ -5409,6 +5413,9 @@
         return toks[0] === "normal" || isValidLenPct(toks[0], true);
       }
       if (prop === "opacity") {
+        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_opacity === "function") {
+          return globalThis.__capsurf_is_valid_css_opacity(vLower);
+        }
         const toks = splitCssTokens(vLower);
         if (toks.length !== 1) return false;
         const t = toks[0];
@@ -5497,7 +5504,7 @@
         for (let i = 0; i < toks.length; i++) {
           const t = toks[i];
           if (t === "thin" || t === "medium" || t === "thick") continue;
-          if (t.endsWith("%")) return false;
+          if (t.includes("%") && !/\b(?:var|env)\(/i.test(t)) return false;
           if (/^(?:calc|min|max|clamp)\(/i.test(t) && t.includes("%")) return false;
           if (!isValidLenPct(t, false)) return false;
         }
@@ -5844,7 +5851,7 @@
         if (toks.length !== 1) return false;
         const t = toks[0];
         if (t === "thin" || t === "medium" || t === "thick") return true;
-        if (t.endsWith("%")) return false;
+        if (t.includes("%") && !/\b(?:var|env)\(/i.test(t)) return false;
         if (/^(?:calc|min|max|clamp)\(/i.test(t) && t.includes("%")) return false;
         return isValidLenPct(t, false);
       }
@@ -5899,6 +5906,9 @@
         return /^[+-]?\d+$/.test(t);
       }
       if (prop === "flex-basis") {
+        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_flex_basis === "function") {
+          return globalThis.__capsurf_is_valid_css_flex_basis(vLower);
+        }
         const toks = splitCssTokens(vLower);
         if (toks.length !== 1) return false;
         const t = toks[0];
@@ -5981,6 +5991,9 @@
         return true;
       }
       if (prop === "transform") {
+        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_transform === "function") {
+          return globalThis.__capsurf_is_valid_css_transform(vLower);
+        }
         const toks = splitCssTokens(vLower);
         if (toks.length === 1 && toks[0] === "none") return true;
         if (toks.length < 1) return false;
@@ -6026,6 +6039,9 @@
         return true;
       }
       if (prop === "animation-iteration-count") {
+        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_anim_iter_count === "function") {
+          return globalThis.__capsurf_is_valid_css_anim_iter_count(vLower);
+        }
         const layers = splitTopLevelComma(vLower);
         for (let i = 0; i < layers.length; i++) {
           const toks = splitCssTokens(layers[i].trim());
@@ -6039,6 +6055,9 @@
       if (prop === "animation-duration" || prop === "transition-duration" || prop === "animation-delay" || prop === "transition-delay") {
         const allowNeg = prop.endsWith("-delay");
         const allowAuto = prop === "animation-duration";
+        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_time_list === "function") {
+          return globalThis.__capsurf_is_valid_css_time_list(vLower, allowNeg, allowAuto);
+        }
         const layers = splitTopLevelComma(vLower);
         for (let i = 0; i < layers.length; i++) {
           const toks = splitCssTokens(layers[i].trim());
@@ -6158,6 +6177,9 @@
         return false;
       }
       if (prop === "rotate") {
+        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_rotate === "function") {
+          return globalThis.__capsurf_is_valid_css_rotate(vLower);
+        }
         const toks = splitCssTokens(vLower);
         if (toks.length === 1 && toks[0] === "none") return true;
         const isAngle = (t) => t === "0" || t === "+0" || t === "-0" ||
@@ -6177,6 +6199,13 @@
         return false;
       }
       if (prop === "scale") {
+        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_scale === "function") {
+          let scArg = vLower;
+          let scOpen = 0;
+          for (let k = 0; k < scArg.length; k++) { if (scArg[k] === "(") scOpen++; else if (scArg[k] === ")" && scOpen > 0) scOpen--; }
+          while (scOpen > 0) { scArg += ")"; scOpen--; }
+          return globalThis.__capsurf_is_valid_css_scale(scArg);
+        }
         const toks = splitCssTokens(vLower);
         if (toks.length === 1 && toks[0] === "none") return true;
         if (toks.length < 1 || toks.length > 3) return false;
@@ -6196,6 +6225,9 @@
         return true;
       }
       if (prop === "translate") {
+        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_translate === "function") {
+          return globalThis.__capsurf_is_valid_css_translate(vLower);
+        }
         const toks = splitCssTokens(vLower);
         if (toks.length === 1 && toks[0] === "none") return true;
         if (toks.length < 1 || toks.length > 3) return false;
@@ -12542,6 +12574,9 @@
               return target.getPropertyValue ? target.getPropertyValue("-webkit-transform") : (target.transform || "");
             }
             if (prop === "transform") {
+        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_transform === "function") {
+          return globalThis.__capsurf_is_valid_css_transform(vLower);
+        }
               return target.getPropertyValue ? target.getPropertyValue("transform") : (target.transform || "");
             }
             if (!prop.startsWith("--") && !isCssPropertySupported(prop)) {

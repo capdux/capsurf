@@ -2515,3 +2515,4 @@
 | Phase 846 | `timeProps` / 反三角函数下沉 `cap:css` 与顶层逗号分割修复 | `src/js/shim/window.js`, `src/js/shim/cssom.js` | `minmax-time-{computed,invalid}` 2/2 **PASS** (76/76), `acos-asin-atan-atan2` 51/52; `--smoke` 3/3 PASS |
 | Phase 847 | `isValidCssMathSyntax` 语法校验下沉 `cap:css` | `mathFunc.cp`, `dom_binding.cp`, `cssom.js` | `acos-asin-atan-atan2-computed` (52/52), `exp-log-{compute,invalid}`, `sin-cos-tan-computed`, `minmax-time-*` **7/7 PASS**; `--smoke` 3/3 PASS |
 | Phase 848 | `cap:css` Color 4 CSSOM 序列化下沉与 `transform`/`opacity` 数学校验 | `color.cp`, `dom_binding.cp`, `cssom.js` | `sin-cos-tan-invalid` (42/42), `minmax-number-invalid` (48/48), `exp-log-invalid`, `signs-abs-invalid` **PASS**; `--smoke` 3/3 PASS |
+| Phase 849 | 12 项 CSSOM 属性语法校验器下沉 `cap:css` 全面接线 | `cap:css`, `dom_binding.cp`, `cssom.js` | 11 项 CSS Math/Color 回归 **11/11 PASS**; `--smoke` 3/3 PASS |

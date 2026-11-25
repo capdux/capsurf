@@ -55,7 +55,28 @@ import {
 import { Document, NodeId, NULL_NODE, NodeType } from "../dom/dom.cp";
 import { Matcher } from "../css/matcher.cp";
 import { StyleSheet, Cascade, ComputedStyle, CssPosition } from "../css/cascade.cp";
-import { MediaQueryList, MediaEnv, MediaType, CssColor, SupportsTree, SupportsKind, evalCssMathExpr, isValidCssMathSyntax } from "cap:css";
+import {
+    MediaQueryList,
+    MediaEnv,
+    MediaType,
+    CssColor,
+    SupportsTree,
+    SupportsKind,
+    evalCssMathExpr,
+    isValidCssMathSyntax,
+    isValidCssTransformValue,
+    isValidCssRotateValue,
+    isValidCssScaleValue,
+    isValidCssTimeListValue,
+    isValidCssLenPct,
+    isValidCssTranslateValue,
+    isValidCssOpacityValue,
+    isValidCssColorSyntax,
+    isValidCssZIndexValue,
+    isValidCssFlexBasisValue,
+    isValidCssGapValue,
+    isValidCssAnimIterCountValue,
+} from "cap:css";
 import { LayoutTree, Rect } from "../layout/layout.cp";
 import { RUNTIME_CHUNKS } from "./runtime_source.cp";
 import { MockFixtures } from "../net/mock_fixtures.cp";
@@ -819,6 +840,84 @@ fn linkMediaMatchesScreen(media_raw: []const u8): bool {
     const trimmed = std.mem.trim(u8, expr_slice, " \t\r\n");
     if (trimmed.len == 0) return jsFalse();
     return jsBool(isValidCssMathSyntax(trimmed));
+}
+
+fn callStrValidator1(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, pred: *const fn ([]const u8) bool): JSValue {
+    if (argc < 1) return jsFalse();
+    const s = jsToSlice(ctx, unsafe { argv[0] });
+    defer if (s.len > 0) std.heap.page_allocator.free(s);
+    const trimmed = std.mem.trim(u8, s, " \t\r\n");
+    if (trimmed.len == 0) return jsFalse();
+    return jsBool(pred(trimmed));
+}
+
+@c fn js_capsurf_is_valid_css_transform(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssTransformValue);
+}
+@c fn js_capsurf_is_valid_css_rotate(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssRotateValue);
+}
+@c fn js_capsurf_is_valid_css_scale(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssScaleValue);
+}
+@c fn js_capsurf_is_valid_css_translate(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssTranslateValue);
+}
+@c fn js_capsurf_is_valid_css_opacity(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssOpacityValue);
+}
+@c fn js_capsurf_is_valid_css_color(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssColorSyntax);
+}
+@c fn js_capsurf_is_valid_css_z_index(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssZIndexValue);
+}
+@c fn js_capsurf_is_valid_css_flex_basis(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssFlexBasisValue);
+}
+@c fn js_capsurf_is_valid_css_anim_iter_count(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssAnimIterCountValue);
+}
+@c fn js_capsurf_is_valid_css_len_pct(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 1) return jsFalse();
+    const s = jsToSlice(ctx, unsafe { argv[0] });
+    defer if (s.len > 0) std.heap.page_allocator.free(s);
+    const trimmed = std.mem.trim(u8, s, " \t\r\n");
+    if (trimmed.len == 0) return jsFalse();
+    const allow_neg = if (argc >= 2) jsToBool(ctx, unsafe { argv[1] }) else true;
+    return jsBool(isValidCssLenPct(trimmed, allow_neg));
+}
+@c fn js_capsurf_is_valid_css_time_list(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 1) return jsFalse();
+    const s = jsToSlice(ctx, unsafe { argv[0] });
+    defer if (s.len > 0) std.heap.page_allocator.free(s);
+    const trimmed = std.mem.trim(u8, s, " \t\r\n");
+    if (trimmed.len == 0) return jsFalse();
+    const allow_neg = if (argc >= 2) jsToBool(ctx, unsafe { argv[1] }) else false;
+    const allow_auto = if (argc >= 3) jsToBool(ctx, unsafe { argv[2] }) else false;
+    return jsBool(isValidCssTimeListValue(trimmed, allow_neg, allow_auto));
+}
+@c fn js_capsurf_is_valid_css_gap(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 1) return jsFalse();
+    const s = jsToSlice(ctx, unsafe { argv[0] });
+    defer if (s.len > 0) std.heap.page_allocator.free(s);
+    const trimmed = std.mem.trim(u8, s, " \t\r\n");
+    if (trimmed.len == 0) return jsFalse();
+    let max_toks: i32 = 1;
+    if (argc >= 2) * = JS_ToInt32(ctx, &max_toks, unsafe { argv[1] });
+    return jsBool(isValidCssGapValue(trimmed, if (max_toks >= 2) 2 else 1));
 }
 
 fn evalSupportsNodeTri(
@@ -2868,6 +2967,18 @@ pub fn mountDom(
     defineMethod(raw_ctx, global_obj, "__capsurf_eval_supports", js_capsurf_eval_supports, 3);
     defineMethod(raw_ctx, global_obj, "__capsurf_eval_css_math", js_capsurf_eval_css_math, 1);
     defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_math", js_capsurf_is_valid_css_math, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_transform", js_capsurf_is_valid_css_transform, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_rotate", js_capsurf_is_valid_css_rotate, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_scale", js_capsurf_is_valid_css_scale, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_translate", js_capsurf_is_valid_css_translate, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_opacity", js_capsurf_is_valid_css_opacity, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_color", js_capsurf_is_valid_css_color, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_z_index", js_capsurf_is_valid_css_z_index, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_flex_basis", js_capsurf_is_valid_css_flex_basis, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_anim_iter_count", js_capsurf_is_valid_css_anim_iter_count, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_len_pct", js_capsurf_is_valid_css_len_pct, 2);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_time_list", js_capsurf_is_valid_css_time_list, 3);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_gap", js_capsurf_is_valid_css_gap, 2);
 
     // Assemble and evaluate modular runtime shim
     let total_len: usize = 0;
