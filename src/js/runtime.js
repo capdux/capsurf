@@ -11177,6 +11177,7 @@
           }
           let lowerName = rawName.toLowerCase();
           if (lowerName === "-webkit-appearance") lowerName = "appearance";
+          if (context === "font-face" && lowerName === "font-width") lowerName = "font-stretch";
           if (context === "keyframe" && (priority === "important" || lowerName === "animation" || (lowerName.startsWith("animation-") && lowerName !== "animation-timing-function"))) continue;
           if (context === "page" && lowerName === "transform") continue;
           if (context === "font-face" && lowerName === "src") {
@@ -11235,11 +11236,12 @@
                   if (tItems.length === 0 || !tItems.every((x) => VALID_FONT_TECHS.has(x.trim().toLowerCase()))) {
                     ok = false; break;
                   }
+                  toks[ti] = "tech(" + tItems.map((x) => x.trim().toLowerCase()).join(", ") + ")";
                 } else {
                   ok = false; break;
                 }
               }
-              if (ok) kept.push(comp);
+              if (ok) kept.push(toks.join(" "));
             }
             if (kept.length === 0) continue;
             val = kept.join(", ");
@@ -11250,6 +11252,34 @@
           if (context === "font-face" && rawName.toLowerCase() === "size-adjust") {
             const num = parseFloat(val);
             if (!/^[+]?(?:\d+(?:\.\d+)?|\.\d+)%$/.test(val.trim()) || isNaN(num) || num < 0) continue;
+          }
+          if (context === "font-face" && (lowerName === "ascent-override" || lowerName === "descent-override" || lowerName === "line-gap-override")) {
+            const vt = val.trim().toLowerCase();
+            if (vt !== "normal") {
+              const num = parseFloat(vt);
+              if (!/^[+]?(?:\d+(?:\.\d+)?|\.\d+)%$/.test(vt) || isNaN(num) || num < 0) continue;
+            }
+            val = vt;
+          }
+          if (context === "font-face" && lowerName === "font-stretch") {
+            const vt = val.trim().toLowerCase();
+            if (vt === "auto" || vt === "normal") {
+              val = vt;
+            } else {
+              if (vt.includes(",")) continue;
+              const toks = splitCssTokens(vt);
+              const KW = new Set(["ultra-condensed", "extra-condensed", "condensed", "semi-condensed", "normal", "semi-expanded", "expanded", "extra-expanded", "ultra-expanded"]);
+              if (toks.length === 1) {
+                if (!KW.has(toks[0]) && !/^[+]?(?:\d+(?:\.\d+)?|\.\d+)%$/.test(toks[0])) continue;
+              } else if (toks.length === 2) {
+                const ok0 = KW.has(toks[0]) || /^[+]?(?:\d+(?:\.\d+)?|\.\d+)%$/.test(toks[0]);
+                const ok1 = KW.has(toks[1]) || /^[+]?(?:\d+(?:\.\d+)?|\.\d+)%$/.test(toks[1]);
+                if (!ok0 || !ok1) continue;
+              } else {
+                continue;
+              }
+              val = toks.join(" ");
+            }
           }
           if (context === "page" && rawName.toLowerCase() === "size") {
             val = canonicalizePageSize(val);
@@ -11330,6 +11360,7 @@
         const p = String(prop).trim();
         let key = p.startsWith("--") ? p : p.toLowerCase();
         if (key === "-webkit-appearance") key = "appearance";
+        if (context === "font-face" && key === "font-width") key = "font-stretch";
         if (context === "margin" && key === "size") return "";
         if (data.has(key)) {
           const rawVal = data.get(key).value;
@@ -11448,6 +11479,7 @@
         }
         let key = p.startsWith("--") ? p : p.toLowerCase();
         if (key === "-webkit-appearance") key = "appearance";
+        if (context === "font-face" && key === "font-width") key = "font-stretch";
         if (!p.startsWith("--")) {
           if (context === "page" && key === "size") {
             const cs = canonicalizePageSize(v);

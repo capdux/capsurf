@@ -4199,3 +4199,7 @@
   - `src/js/shim/element/element.js`: `STYLE_LEGACY_ALIASES` 新增 `-webkit-appearance`→`appearance`，`propToKebab` 兼容 `Webkit*`，`style[prop]` 对不支持属性返回 `undefined`。
   - `src/js/shim/cssom.js`: `parseInitial`、`setProperty`、`getPropertyValue`、`Proxy.get` 规范化 `-webkit-appearance` 为 `appearance` 并返回 `undefined` 于不支持属性。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 769**:
+  - `src/js/shim/cssom.js`: `@font-face` `src` 中 `tech(...)` 参数小写规范化；新增 `ascent-override`/`descent-override`/`line-gap-override` 非负百分比校验与 `font-width`↔`font-stretch` 别名校验。
+  - `test/wpt/wpt-expectations.json`: 收紧 `/css/css-fonts/parsing/font-face-src-tech.html` 为 `PASS`（`7,211` PASS）。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

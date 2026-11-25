@@ -3376,3 +3376,5 @@
 - 收紧 `cascade.cp` 中 `MediaQueryList.parse` 失败回退条件，避免未知媒体特性误回退到旧逻辑返回 `true`，使 `at-media-001.html` 与 `at-media-002.html` 均通过；同时完善 `/data/dev/cp/lib/css/media.cp` 支持 `and(` 无空格语法。
 ### Phase 768 — `/css/css-ui/` 9 项（`user-modify` 屏蔽、`@supports` 过滤、`-webkit-appearance` 别名规范化）全绿
 - 修复 `window.js` `@supports` 块未求值及不支持属性泄漏到 `getComputedStyle` 的问题；修复 `element.js`/`cssom.js` `-webkit-appearance` 别名规范化与 `Webkit*` 驼峰转换，使 `/css/css-ui/` 9 项回归用例全部恢复 **PASS**。
+### Phase 769 — `@font-face` `tech()`、`metric-overrides` 与 `font-width`/`font-stretch` 闭环
+- 修复 `cssom.js` 中 `@font-face` `tech()` 大小写规范化、`ascent/descent/line-gap-override` 非负百分比校验、以及 `font-width`/`font-stretch` 别名映射，3 项全绿（`font-face-src-tech.html` `FAIL→PASS`，基线增至 `7,211`）。

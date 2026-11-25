@@ -2846,7 +2846,7 @@
     "reason": null
   },
   "/css/css-fonts/parsing/font-face-src-tech.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-fonts/parsing/font-family-computed.html": {
