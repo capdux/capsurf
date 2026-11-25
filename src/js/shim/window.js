@@ -5886,6 +5886,13 @@ function installWindow(global) {
           !globalThis.__isCssPropertySupported(k)) {
         return;
       }
+      if (k === "display" && typeof globalThis !== "undefined" &&
+          typeof globalThis.__capsurf_canonicalizeDisplay === "function") {
+        const vl = String(v || "").trim().toLowerCase();
+        if (!/^(?:inherit|initial|unset|revert|revert-layer)$/i.test(vl) && vl.indexOf("var(") === -1) {
+          if (!globalThis.__capsurf_canonicalizeDisplay(v)) return;
+        }
+      }
       if (!isImp && impSet.has(k)) return;
       computedMap.set(k, v);
       if (isImp) impSet.add(k);
@@ -6635,7 +6642,7 @@ function installWindow(global) {
     }
     if (BLOCK_LEVEL_TAGS.has(tag)) return "block";
     if (tag === "table") return "table";
-    if (tag === "textarea") return "inline-block";
+    if (tag === "textarea" || tag === "button") return "inline-block";
     if (tag === "tr") return "table-row";
     if (tag === "td" || tag === "th") return "table-cell";
     if (tag === "tbody") return "table-row-group";
@@ -7451,7 +7458,26 @@ function installWindow(global) {
     {
       const posRaw = (computedMap.get("position") || "static").trim().toLowerCase();
       const flRaw = (computedMap.get("float") || "none").trim().toLowerCase();
-      if (posRaw === "absolute" || posRaw === "fixed" || (flRaw && flRaw !== "none")) {
+      let isFlexOrGridChild = false;
+      if (disp !== "none" && disp !== "contents") {
+        let lp = element.parentElement;
+        while (lp && lp.nodeType === 1) {
+          const lpMap = collectRawComputedMap(lp, "");
+          const lpDispRaw = (lpMap.get("display") || getDefaultDisplayForElement(lp)).trim().toLowerCase();
+          const lpDisp = (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_canonicalizeDisplay === "function")
+            ? (globalThis.__capsurf_canonicalizeDisplay(lpDispRaw) || lpDispRaw)
+            : lpDispRaw;
+          if (lpDisp === "contents") {
+            lp = lp.parentElement;
+            continue;
+          }
+          if (lpDisp === "flex" || lpDisp === "inline-flex" || lpDisp === "grid" || lpDisp === "inline-grid" || lpDisp === "grid-lanes" || lpDisp === "inline-grid-lanes" || lpDisp === "inline grid-lanes") {
+            isFlexOrGridChild = true;
+          }
+          break;
+        }
+      }
+      if (posRaw === "absolute" || posRaw === "fixed" || (flRaw && flRaw !== "none") || isFlexOrGridChild) {
         const BLOCKIFY = {
           "inline": "block", "inline-block": "block", "run-in": "block",
           "inline-flex": "flex", "inline-grid": "grid", "inline-grid-lanes": "grid-lanes", "inline grid-lanes": "grid-lanes", "inline-table": "table",

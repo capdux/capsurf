@@ -3398,3 +3398,5 @@
 - 在 `window.js` 补全 `::first-letter`/`::first-line` 与 `::before`/`::after` `math` 伪元素 `display` 规范化，`display-first-line-001`、`display-math-on-pseudo-elements-001` 及 `reading-flow` 2 项共计 4 项 **FAIL→PASS**（基线增至 `7,217`）。
 ### Phase 779 — `::first-letter` / `::first-line` 伪元素选择器识别与 `display-first-letter-001` 通过
 - 在 `window.js` `matchesSelector` 补全 `::first-letter` 与 `::first-line` 伪元素识别，使浮动/绝对定位首字块化正确匹配，`/css/css-display/display-first-letter-001.html` 恢复 **PASS**。
+### Phase 780 — `display: contents` 解析校验与穿透动态块化全绿
+- 在 `window.js` 中为 `display` 声明接入 `__capsurf_canonicalizeDisplay` 校验（拒绝 `display: content` 等非法值）、修正 `<button>` 默认 `inline-block`，并实现穿透 `display: contents` 祖先的 Flex/Grid 子项块化，`display-contents-parsing-001.html` 与 `display-contents-blockify-dynamic.html` 均恢复 **PASS**。
