@@ -14,6 +14,18 @@ const STYLE_LEGACY_ALIASES = {
   "grid-gap": "gap",
   "-webkit-border-radius": "border-radius",
   "-webkit-appearance": "appearance",
+  "-webkit-align-content": "align-content",
+  "-webkit-align-items": "align-items",
+  "-webkit-align-self": "align-self",
+  "-webkit-flex": "flex",
+  "-webkit-flex-basis": "flex-basis",
+  "-webkit-flex-direction": "flex-direction",
+  "-webkit-flex-flow": "flex-flow",
+  "-webkit-flex-grow": "flex-grow",
+  "-webkit-flex-shrink": "flex-shrink",
+  "-webkit-flex-wrap": "flex-wrap",
+  "-webkit-justify-content": "justify-content",
+  "-webkit-order": "order",
 };
 
 const BG_LONGHANDS = [
@@ -319,6 +331,20 @@ function createStyleProxy(element) {
         continue;
       }
       if (skip.has(k)) continue;
+      if (entry.pendingVar && entry.pendingOwner) {
+        const owner = entry.pendingOwner;
+        const pv = entry.pendingVar;
+        const pPri = entry.priority;
+        for (const [ok, oe] of map.entries()) {
+          if (oe.pendingOwner === owner && oe.pendingVar === pv && oe.priority === pPri) {
+            skip.add(ok);
+          }
+        }
+        let s = owner + ": " + pv;
+        if (pPri) s += " !" + pPri;
+        arr.push(s + ";");
+        continue;
+      }
       let s = entry.name + ": " + entry.value;
       if (entry.priority) s += " !" + entry.priority;
       arr.push(s + ";");

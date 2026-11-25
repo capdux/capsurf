@@ -3466,3 +3466,5 @@
 - 在 `cssom.js` 补全 `color(` 指定值分发与 `evalSpecCalc`（保留 `calc(NaN)`/`calc(infinity)`/`calc(...)` 包装，修正 `rad` 色相 `toPrecision(6)`），`color-valid-color-function` (340/340) 与 `color-valid-lab` (150/150) 均 **`FAIL → PASS`**。
 ### Phase 813 — `overscroll-behavior` 简写折叠/展开与逻辑属性物理映射
 - 在 `cssom.js` 补全 `overscroll-behavior` 重复值折叠与 `x`/`y` 展开/重组，并在 `window.js` `applyUsedValuesToComputedMap` 允许 `overscroll-behavior-block`/`inline` 覆盖默认 `"auto"` 物理长属性，`overscroll-behavior-valid` 与 `overscroll-behavior-logical` 全绿 **PASS**。
+### Phase 814 — `-webkit-*` flexbox 传统别名、`cross-fade()`、`view-transition-group` 与 `scrollbar-*`/`will-change` 计算值
+- 修复 `element.js` `formatStyleMap` 未重组 `pendingVar`/`pendingOwner` 及 `STYLE_LEGACY_ALIASES` 缺失导致 `-webkit-flex`/`-webkit-flex-flow: var(--v)` 丢失的问题，`cssom.js` `cross-fade()` 拒绝含长度单位的 `calc()` 及 `view-transition-group` 支持 `none`，`window.js` 补全 `scrollbar-color`（继承+双色规范化）、`scrollbar-width` 与 `will-change: auto` 初始值，6 项目标 WPT 全部 **PASS**。

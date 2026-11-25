@@ -4373,3 +4373,8 @@
   - `src/js/shim/cssom.js`: 新增 `overscroll-behavior` 双值折叠、展开至 `overscroll-behavior-{x,y}` 与 `serializeExpandedShorthand("overscroll-behavior")`。
   - `src/js/shim/window.js`: `applyUsedValuesToComputedMap` 修复 `overscroll-behavior-block`/`inline` 向物理 `x`/`y` 映射时默认 `"auto"` 覆盖问题。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 814**:
+  - `src/js/shim/element/element.js`: `STYLE_LEGACY_ALIASES` 补齐 `-webkit-*` flexbox 别名；`formatStyleMap` 重组序列化 `pendingVar`/`pendingOwner`。
+  - `src/js/shim/cssom.js`: 提取 `LEGACY_NAME_ALIASES` 统一规范化声明名；`view-transition-group` 允许 `none`；`cross-fade()` 拒绝 `calc(1% + 1px)` 混合长度单位。
+  - `src/js/shim/window.js`: `INHERITED_CSS_PROPS`、`STANDARD_COMPUTED_LONGHANDS` 与初始值表补全 `scrollbar-color`/`scrollbar-width`/`will-change` 及其颜色规范化。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

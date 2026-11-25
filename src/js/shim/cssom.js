@@ -3778,7 +3778,7 @@
       }
       if (toks.length !== 1) return false;
       const t0 = toks[0].toLowerCase();
-      return t0 === "normal" || t0 === "nearest" || t0 === "contain" || isCustomIdent(toks[0]);
+      return t0 === "none" || t0 === "normal" || t0 === "nearest" || t0 === "contain" || isCustomIdent(toks[0]);
     }
     if (prop === "color-scheme") {
       if (trimmed.includes(",")) return false;
@@ -3870,7 +3870,7 @@
             } else {
               const p0 = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))%$/.exec(ct[0]);
               const p1 = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))%$/.exec(ct[1]);
-              const isMathPct = (t) => /^(?:calc|min|max|clamp)\(/i.test(t) && t.includes("%");
+              const isMathPct = (t) => /^(?:calc|min|max|clamp)\(/i.test(t) && t.includes("%") && !/(?:px|em|rem|ex|ch|vw|vh|vmin|vmax|cm|mm|q|in|pt|pc)\b/i.test(t);
               if (p0) { pctTok = parseFloat(p0[1]); imgTok = ct[1]; if (!(pctTok >= 0 && pctTok <= 100)) return false; }
               else if (p1) { pctTok = parseFloat(p1[1]); imgTok = ct[0]; if (!(pctTok >= 0 && pctTok <= 100)) return false; }
               else if (isMathPct(ct[0])) { imgTok = ct[1]; }
@@ -8200,10 +8200,26 @@
       configurable: true,
     });
 
+    const LEGACY_NAME_ALIASES = {
+      "-webkit-appearance": "appearance",
+      "-webkit-align-content": "align-content",
+      "-webkit-align-items": "align-items",
+      "-webkit-align-self": "align-self",
+      "-webkit-flex": "flex",
+      "-webkit-flex-basis": "flex-basis",
+      "-webkit-flex-direction": "flex-direction",
+      "-webkit-flex-flow": "flex-flow",
+      "-webkit-flex-grow": "flex-grow",
+      "-webkit-flex-shrink": "flex-shrink",
+      "-webkit-flex-wrap": "flex-wrap",
+      "-webkit-justify-content": "justify-content",
+      "-webkit-order": "order"
+    };
+
     decl.getPropertyValue = function (prop) {
       const p = String(prop).trim();
       let key = p.startsWith("--") ? p : p.toLowerCase();
-      if (key === "-webkit-appearance") key = "appearance";
+      if (Object.prototype.hasOwnProperty.call(LEGACY_NAME_ALIASES, key)) key = LEGACY_NAME_ALIASES[key];
       if (context === "font-face" && key === "font-width") key = "font-stretch";
       if (context === "margin" && key === "size") return "";
       if (data.has(key)) {
@@ -8288,7 +8304,8 @@
 
     decl.getPropertyPriority = function (prop) {
       const p = String(prop).trim();
-      const key = p.startsWith("--") ? p : p.toLowerCase();
+      let key = p.startsWith("--") ? p : p.toLowerCase();
+      if (Object.prototype.hasOwnProperty.call(LEGACY_NAME_ALIASES, key)) key = LEGACY_NAME_ALIASES[key];
       const entry = data.get(key);
       if (entry) return entry.priority;
       if (SHORTHAND_EXPAND_LONGHANDS[key]) {
@@ -8322,7 +8339,8 @@
         return;
       }
       let key = p.startsWith("--") ? p : p.toLowerCase();
-      if (key === "-webkit-appearance") key = "appearance";
+      const isLegacyAlias = Object.prototype.hasOwnProperty.call(LEGACY_NAME_ALIASES, key);
+      if (isLegacyAlias) key = LEGACY_NAME_ALIASES[key];
       if (context === "font-face" && key === "font-width") key = "font-stretch";
       if (!p.startsWith("--")) {
         if (context === "page" && key === "size") {
@@ -8375,7 +8393,7 @@
       if (!data.has(key)) {
         authoredOrder.push(key);
       }
-      data.set(key, { name: key === "appearance" ? "appearance" : p, value: v, priority: pPriority });
+      data.set(key, { name: p.startsWith("--") ? p : (isLegacyAlias ? key : p), value: v, priority: pPriority });
       if (key === "font") {
         const fvLhs = SHORTHAND_EXPAND_LONGHANDS["font-variant"];
         for (let i = 0; i < fvLhs.length; i++) {
@@ -8389,7 +8407,8 @@
 
     decl.removeProperty = function (prop) {
       const p = String(prop).trim();
-      const key = p.startsWith("--") ? p : p.toLowerCase();
+      let key = p.startsWith("--") ? p : p.toLowerCase();
+      if (Object.prototype.hasOwnProperty.call(LEGACY_NAME_ALIASES, key)) key = LEGACY_NAME_ALIASES[key];
       let prev = "";
       if (data.has(key)) {
         prev = data.get(key).value;

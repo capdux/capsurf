@@ -6674,7 +6674,7 @@ function installWindow(global) {
     "text-combine-upright", "text-orientation", "writing-mode",
     "text-emphasis-color", "text-emphasis-position", "text-emphasis-style", "text-shadow", "text-underline-position", "text-decoration-skip-ink",
     "border-collapse", "border-spacing", "caption-side", "empty-cells",
-    "image-orientation", "image-rendering", "image-resolution", "accent-color", "color-scheme", "color-interpolation-filters", "forced-color-adjust",
+    "image-orientation", "image-rendering", "image-resolution", "accent-color", "color-scheme", "color-interpolation-filters", "forced-color-adjust", "scrollbar-color",
     "ruby-align", "ruby-position", "ruby-merge", "ruby-overhang",
     "list-style-image", "list-style-position", "list-style-type",
     "font-feature-settings", "font-kerning", "font-stretch", "font-width", "font-variant",
@@ -10032,7 +10032,10 @@ function installWindow(global) {
       ["overflow-block", "visible"],
       ["overflow-inline", "visible"],
       ["text-overflow", "clip"],
+      ["scrollbar-color", "auto"],
       ["scrollbar-gutter", "auto"],
+      ["scrollbar-width", "auto"],
+      ["will-change", "auto"],
       ["counter-increment", "none"],
       ["counter-reset", "none"],
       ["list-style-image", "none"],
@@ -10117,6 +10120,19 @@ function installWindow(global) {
       const acl = acRaw.toLowerCase();
       if (acl === "initial" || acl === "revert" || acl === "revert-layer") computedMap.set("accent-color", "auto");
       else if (acl !== "auto") computedMap.set("accent-color", acl === "currentcolor" ? elColor : normCol(acRaw));
+    }
+    const sbColRaw = (computedMap.get("scrollbar-color") || "").trim();
+    if (sbColRaw) {
+      const sbColL = sbColRaw.toLowerCase();
+      if (sbColL === "auto" || sbColL === "initial" || sbColL === "revert" || sbColL === "revert-layer") computedMap.set("scrollbar-color", "auto");
+      else {
+        const sbColToks = splitCssTopLevelWhitespace(sbColRaw);
+        if (sbColToks.length === 2) {
+          const c0 = sbColToks[0].toLowerCase() === "currentcolor" ? elColor : normCol(sbColToks[0]);
+          const c1 = sbColToks[1].toLowerCase() === "currentcolor" ? elColor : normCol(sbColToks[1]);
+          computedMap.set("scrollbar-color", c0 + " " + c1);
+        }
+      }
     }
     const smRaw = (computedMap.get("shape-margin") || "").trim();
     if (smRaw) {
@@ -11380,7 +11396,7 @@ function installWindow(global) {
     "padding-block-end", "padding-block-start", "padding-bottom", "padding-inline-end", "padding-inline-start",
     "padding-left", "padding-right", "padding-top", "page", "perspective", "perspective-origin", "pointer-events",
     "position", "position-try-fallbacks", "position-try-order", "position-visibility", "quotes", "reading-flow", "reading-order", "resize", "right", "rotate", "row-gap",
-    "ruby-align", "ruby-merge", "ruby-overhang", "ruby-position", "scale", "scroll-behavior", "scroll-marker-group", "scroll-target-group", "scrollbar-gutter",
+    "ruby-align", "ruby-merge", "ruby-overhang", "ruby-position", "scale", "scroll-behavior", "scroll-marker-group", "scroll-target-group", "scrollbar-color", "scrollbar-gutter", "scrollbar-width",
     "-webkit-transform", "-moz-transform",
     "scroll-margin-block-end", "scroll-margin-block-start", "scroll-margin-bottom",
     "scroll-margin-inline-end", "scroll-margin-inline-start", "scroll-margin-left",

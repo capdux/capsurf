@@ -7673,7 +7673,7 @@
         }
         if (toks.length !== 1) return false;
         const t0 = toks[0].toLowerCase();
-        return t0 === "normal" || t0 === "nearest" || t0 === "contain" || isCustomIdent(toks[0]);
+        return t0 === "none" || t0 === "normal" || t0 === "nearest" || t0 === "contain" || isCustomIdent(toks[0]);
       }
       if (prop === "color-scheme") {
         if (trimmed.includes(",")) return false;
@@ -7765,7 +7765,7 @@
               } else {
                 const p0 = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))%$/.exec(ct[0]);
                 const p1 = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))%$/.exec(ct[1]);
-                const isMathPct = (t) => /^(?:calc|min|max|clamp)\(/i.test(t) && t.includes("%");
+                const isMathPct = (t) => /^(?:calc|min|max|clamp)\(/i.test(t) && t.includes("%") && !/(?:px|em|rem|ex|ch|vw|vh|vmin|vmax|cm|mm|q|in|pt|pc)\b/i.test(t);
                 if (p0) { pctTok = parseFloat(p0[1]); imgTok = ct[1]; if (!(pctTok >= 0 && pctTok <= 100)) return false; }
                 else if (p1) { pctTok = parseFloat(p1[1]); imgTok = ct[0]; if (!(pctTok >= 0 && pctTok <= 100)) return false; }
                 else if (isMathPct(ct[0])) { imgTok = ct[1]; }
@@ -12095,10 +12095,26 @@
         configurable: true,
       });
 
+      const LEGACY_NAME_ALIASES = {
+        "-webkit-appearance": "appearance",
+        "-webkit-align-content": "align-content",
+        "-webkit-align-items": "align-items",
+        "-webkit-align-self": "align-self",
+        "-webkit-flex": "flex",
+        "-webkit-flex-basis": "flex-basis",
+        "-webkit-flex-direction": "flex-direction",
+        "-webkit-flex-flow": "flex-flow",
+        "-webkit-flex-grow": "flex-grow",
+        "-webkit-flex-shrink": "flex-shrink",
+        "-webkit-flex-wrap": "flex-wrap",
+        "-webkit-justify-content": "justify-content",
+        "-webkit-order": "order"
+      };
+
       decl.getPropertyValue = function (prop) {
         const p = String(prop).trim();
         let key = p.startsWith("--") ? p : p.toLowerCase();
-        if (key === "-webkit-appearance") key = "appearance";
+        if (Object.prototype.hasOwnProperty.call(LEGACY_NAME_ALIASES, key)) key = LEGACY_NAME_ALIASES[key];
         if (context === "font-face" && key === "font-width") key = "font-stretch";
         if (context === "margin" && key === "size") return "";
         if (data.has(key)) {
@@ -12183,7 +12199,8 @@
 
       decl.getPropertyPriority = function (prop) {
         const p = String(prop).trim();
-        const key = p.startsWith("--") ? p : p.toLowerCase();
+        let key = p.startsWith("--") ? p : p.toLowerCase();
+        if (Object.prototype.hasOwnProperty.call(LEGACY_NAME_ALIASES, key)) key = LEGACY_NAME_ALIASES[key];
         const entry = data.get(key);
         if (entry) return entry.priority;
         if (SHORTHAND_EXPAND_LONGHANDS[key]) {
@@ -12217,7 +12234,8 @@
           return;
         }
         let key = p.startsWith("--") ? p : p.toLowerCase();
-        if (key === "-webkit-appearance") key = "appearance";
+        const isLegacyAlias = Object.prototype.hasOwnProperty.call(LEGACY_NAME_ALIASES, key);
+        if (isLegacyAlias) key = LEGACY_NAME_ALIASES[key];
         if (context === "font-face" && key === "font-width") key = "font-stretch";
         if (!p.startsWith("--")) {
           if (context === "page" && key === "size") {
@@ -12270,7 +12288,7 @@
         if (!data.has(key)) {
           authoredOrder.push(key);
         }
-        data.set(key, { name: key === "appearance" ? "appearance" : p, value: v, priority: pPriority });
+        data.set(key, { name: p.startsWith("--") ? p : (isLegacyAlias ? key : p), value: v, priority: pPriority });
         if (key === "font") {
           const fvLhs = SHORTHAND_EXPAND_LONGHANDS["font-variant"];
           for (let i = 0; i < fvLhs.length; i++) {
@@ -12284,7 +12302,8 @@
 
       decl.removeProperty = function (prop) {
         const p = String(prop).trim();
-        const key = p.startsWith("--") ? p : p.toLowerCase();
+        let key = p.startsWith("--") ? p : p.toLowerCase();
+        if (Object.prototype.hasOwnProperty.call(LEGACY_NAME_ALIASES, key)) key = LEGACY_NAME_ALIASES[key];
         let prev = "";
         if (data.has(key)) {
           prev = data.get(key).value;
@@ -18308,6 +18327,18 @@
     "grid-gap": "gap",
     "-webkit-border-radius": "border-radius",
     "-webkit-appearance": "appearance",
+    "-webkit-align-content": "align-content",
+    "-webkit-align-items": "align-items",
+    "-webkit-align-self": "align-self",
+    "-webkit-flex": "flex",
+    "-webkit-flex-basis": "flex-basis",
+    "-webkit-flex-direction": "flex-direction",
+    "-webkit-flex-flow": "flex-flow",
+    "-webkit-flex-grow": "flex-grow",
+    "-webkit-flex-shrink": "flex-shrink",
+    "-webkit-flex-wrap": "flex-wrap",
+    "-webkit-justify-content": "justify-content",
+    "-webkit-order": "order",
   };
 
   const BG_LONGHANDS = [
@@ -18613,6 +18644,20 @@
           continue;
         }
         if (skip.has(k)) continue;
+        if (entry.pendingVar && entry.pendingOwner) {
+          const owner = entry.pendingOwner;
+          const pv = entry.pendingVar;
+          const pPri = entry.priority;
+          for (const [ok, oe] of map.entries()) {
+            if (oe.pendingOwner === owner && oe.pendingVar === pv && oe.priority === pPri) {
+              skip.add(ok);
+            }
+          }
+          let s = owner + ": " + pv;
+          if (pPri) s += " !" + pPri;
+          arr.push(s + ";");
+          continue;
+        }
         let s = entry.name + ": " + entry.value;
         if (entry.priority) s += " !" + entry.priority;
         arr.push(s + ";");
@@ -46986,7 +47031,7 @@
       "text-combine-upright", "text-orientation", "writing-mode",
       "text-emphasis-color", "text-emphasis-position", "text-emphasis-style", "text-shadow", "text-underline-position", "text-decoration-skip-ink",
       "border-collapse", "border-spacing", "caption-side", "empty-cells",
-      "image-orientation", "image-rendering", "image-resolution", "accent-color", "color-scheme", "color-interpolation-filters", "forced-color-adjust",
+      "image-orientation", "image-rendering", "image-resolution", "accent-color", "color-scheme", "color-interpolation-filters", "forced-color-adjust", "scrollbar-color",
       "ruby-align", "ruby-position", "ruby-merge", "ruby-overhang",
       "list-style-image", "list-style-position", "list-style-type",
       "font-feature-settings", "font-kerning", "font-stretch", "font-width", "font-variant",
@@ -50344,7 +50389,10 @@
         ["overflow-block", "visible"],
         ["overflow-inline", "visible"],
         ["text-overflow", "clip"],
+        ["scrollbar-color", "auto"],
         ["scrollbar-gutter", "auto"],
+        ["scrollbar-width", "auto"],
+        ["will-change", "auto"],
         ["counter-increment", "none"],
         ["counter-reset", "none"],
         ["list-style-image", "none"],
@@ -50429,6 +50477,19 @@
         const acl = acRaw.toLowerCase();
         if (acl === "initial" || acl === "revert" || acl === "revert-layer") computedMap.set("accent-color", "auto");
         else if (acl !== "auto") computedMap.set("accent-color", acl === "currentcolor" ? elColor : normCol(acRaw));
+      }
+      const sbColRaw = (computedMap.get("scrollbar-color") || "").trim();
+      if (sbColRaw) {
+        const sbColL = sbColRaw.toLowerCase();
+        if (sbColL === "auto" || sbColL === "initial" || sbColL === "revert" || sbColL === "revert-layer") computedMap.set("scrollbar-color", "auto");
+        else {
+          const sbColToks = splitCssTopLevelWhitespace(sbColRaw);
+          if (sbColToks.length === 2) {
+            const c0 = sbColToks[0].toLowerCase() === "currentcolor" ? elColor : normCol(sbColToks[0]);
+            const c1 = sbColToks[1].toLowerCase() === "currentcolor" ? elColor : normCol(sbColToks[1]);
+            computedMap.set("scrollbar-color", c0 + " " + c1);
+          }
+        }
       }
       const smRaw = (computedMap.get("shape-margin") || "").trim();
       if (smRaw) {
@@ -51692,7 +51753,7 @@
       "padding-block-end", "padding-block-start", "padding-bottom", "padding-inline-end", "padding-inline-start",
       "padding-left", "padding-right", "padding-top", "page", "perspective", "perspective-origin", "pointer-events",
       "position", "position-try-fallbacks", "position-try-order", "position-visibility", "quotes", "reading-flow", "reading-order", "resize", "right", "rotate", "row-gap",
-      "ruby-align", "ruby-merge", "ruby-overhang", "ruby-position", "scale", "scroll-behavior", "scroll-marker-group", "scroll-target-group", "scrollbar-gutter",
+      "ruby-align", "ruby-merge", "ruby-overhang", "ruby-position", "scale", "scroll-behavior", "scroll-marker-group", "scroll-target-group", "scrollbar-color", "scrollbar-gutter", "scrollbar-width",
       "-webkit-transform", "-moz-transform",
       "scroll-margin-block-end", "scroll-margin-block-start", "scroll-margin-bottom",
       "scroll-margin-inline-end", "scroll-margin-inline-start", "scroll-margin-left",
