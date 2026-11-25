@@ -9662,6 +9662,10 @@ function installWindow(global) {
       const ev = evalLinLenPctTok(smRaw);
       computedMap.set("shape-margin", /^-[\d.]+px$/.test(ev) ? "0px" : ev);
     }
+    if (!computedMap.has("direction") && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_getComputedDirection === "function") {
+      const cd = globalThis.__capsurf_getComputedDirection(element);
+      if (cd === "ltr" || cd === "rtl") computedMap.set("direction", cd);
+    }
     const bsftRaw = (computedMap.get("baseline-shift") || "").trim();
     if (bsftRaw && !/^(?:sub|super|top|center|bottom)$/i.test(bsftRaw)) {
       computedMap.set("baseline-shift", evalLinLenPctTok(bsftRaw));

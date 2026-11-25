@@ -1971,6 +1971,20 @@ function installElementExtensions(proto) {
         const dirAttr = getElementDirAttr(cur);
         const tag = String(cur.localName || cur.tagName || "").toLowerCase();
         if (dirAttr === "ltr" || dirAttr === "rtl") return dirAttr;
+        if (tag === "input") {
+          const inType = String(cur.getAttribute("type") || cur.type || "text").trim().toLowerCase();
+          if (dirAttr === "auto") {
+            if (inType === "text" || inType === "search" || inType === "tel" || inType === "url" || inType === "email" || inType === "password" || inType === "submit" || inType === "reset" || inType === "button" || inType === "hidden") {
+              return firstStrongDirectionInText(String(cur.value || "")) || "ltr";
+            }
+            return "ltr";
+          }
+          if (inType === "tel") return "ltr";
+        }
+        if (tag === "textarea" && dirAttr === "auto") {
+          const tv = cur._valueDirty ? String(cur.value || "") : String(cur.value || cur.textContent || "");
+          return firstStrongDirectionInText(tv) || "ltr";
+        }
         if (dirAttr === "auto" || (tag === "bdi" && dirAttr === "")) {
           const found = scanSubtreeForFirstStrong(cur, true, tag === "slot");
           return found || "ltr";
@@ -2012,6 +2026,16 @@ function installElementExtensions(proto) {
       const dirAttr = getElementDirAttr(cur);
       const tag = String(cur.localName || cur.tagName || "").toLowerCase();
       if (dirAttr === "ltr" || dirAttr === "rtl") return dirAttr;
+      if (tag === "input") {
+        const inType = String(cur.getAttribute("type") || cur.type || "text").trim().toLowerCase();
+        if (dirAttr === "auto") {
+          if (inType === "text" || inType === "search" || inType === "tel" || inType === "url" || inType === "email" || inType === "password") {
+            return firstStrongDirectionInText(String(cur.value || "")) || "ltr";
+          }
+          return "ltr";
+        }
+        if (inType === "tel") return "ltr";
+      }
       if (dirAttr === "auto" || (tag === "bdi" && dirAttr === "")) {
         const found = scanSubtreeForFirstStrong(cur, true, tag === "slot");
         if (found) return found;
@@ -2024,6 +2048,14 @@ function installElementExtensions(proto) {
 
   global.__capsurf_getNodeDirectionality = getNodeDirectionality;
   global.__capsurf_getComputedDirection = getComputedDirection;
+
+  if (!Object.getOwnPropertyDescriptor(proto, "dir")) {
+    Object.defineProperty(proto, "dir", {
+      get: function () { return getElementDirAttr(this); },
+      set: function (v) { this.setAttribute("dir", v == null ? "" : String(v)); },
+      configurable: true,
+    });
+  }
 
   // Fallback firstChild / lastChild to _children when native DOM lacks JS-only children (e.g. CDATASection/PI)
   const origElFirstChildDesc = Object.getOwnPropertyDescriptor(proto, "firstChild") ||

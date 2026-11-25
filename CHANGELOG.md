@@ -4264,3 +4264,9 @@
 - **Phase 785**:
   - `src/js/shim/window.js`: `getComputedStyle` 将 `propList` 与索引属性改为 Proxy 懒求值，新增 `STANDARD_COMPUTED_LONGHAND_SET`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 786**:
+  - `src/js/shim/element/element.js`: 新增 `proto.dir` 属性反射，完善 `input[type=tel]` 默认 `ltr` 与 `input`/`textarea` `dir="auto"` 方向判定。
+  - `src/js/dom_binding.cp`: 移除冗余的 `:dir()` 覆写并按控件白名单收窄 `_formDirAuto`。
+  - `src/js/shim/window.js`: `applyUsedValuesToComputedMap` 在未显式指定 `direction` 时回退至 `__capsurf_getComputedDirection(element)`。
+  - `test/wpt/wpt-expectations.json`: 收紧 `/css/selectors/dir-pseudo-on-input-element.html` 为 `PASS`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

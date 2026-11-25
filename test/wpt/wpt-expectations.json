@@ -9675,7 +9675,7 @@
     "reason": null
   },
   "/css/selectors/dir-pseudo-on-input-element.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": "15/20 subtests pass. dir=auto input-type gating is incomplete: the value is consulted for types whose directionality must NOT come from it (checkbox, radio, image), the telephone state is not forced to ltr inside an RTL block, and a dynamic type change doesn't re-resolve. HTML §the-dir-attribute limits value-derived directionality to the text-ish input states."
   },
   "/css/selectors/has-specificity.html": {
