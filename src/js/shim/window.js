@@ -12100,6 +12100,26 @@ function installWindow(global) {
       if (name === "border-style") return serializeBoxShorthand("border", "style");
       if (name === "border-color") return serializeBoxShorthand("border", "color");
       if (name === "border-radius") return serializeBorderRadius();
+      const TWO_CORNER_RADIUS_COMPUTED = {
+        "border-top-radius": ["border-top-left-radius", "border-top-right-radius"],
+        "border-bottom-radius": ["border-bottom-left-radius", "border-bottom-right-radius"],
+        "border-left-radius": ["border-top-left-radius", "border-bottom-left-radius"],
+        "border-right-radius": ["border-top-right-radius", "border-bottom-right-radius"],
+        "border-block-start-radius": ["border-top-left-radius", "border-top-right-radius"],
+        "border-block-end-radius": ["border-bottom-left-radius", "border-bottom-right-radius"],
+        "border-inline-start-radius": ["border-top-left-radius", "border-bottom-left-radius"],
+        "border-inline-end-radius": ["border-top-right-radius", "border-bottom-right-radius"],
+      };
+      if (TWO_CORNER_RADIUS_COMPUTED[name]) {
+        const c = TWO_CORNER_RADIUS_COMPUTED[name];
+        const p0 = (computedMap.get(c[0]) || "0px").trim().split(/\s+/);
+        const p1 = (computedMap.get(c[1]) || "0px").trim().split(/\s+/);
+        const h0 = p0[0] || "0px", v0 = p0[1] || h0;
+        const h1 = p1[0] || "0px", v1 = p1[1] || h1;
+        const hs = (h0 === h1) ? h0 : (h0 + " " + h1);
+        const vs = (v0 === v1) ? v0 : (v0 + " " + v1);
+        return hs === vs ? hs : (hs + " / " + vs);
+      }
       if (name === "gap" || name === "grid-gap") {
         const rg = computedMap.get("row-gap") || "normal";
         const cg = computedMap.get("column-gap") || "normal";

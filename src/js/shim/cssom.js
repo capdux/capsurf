@@ -34,8 +34,9 @@
     "border-left-style", "border-left-width", "border-radius", "border-right",
     "border-right-color", "border-right-style", "border-right-width", "border-spacing",
     "border-start-end-radius", "border-start-start-radius", "border-style", "border-top",
-    "border-top-color", "border-top-left-radius", "border-top-right-radius", "border-top-style",
-    "border-top-width", "border-width", "bottom", "box-decoration-break", "box-shadow",
+    "border-top-color", "border-top-left-radius", "border-top-radius", "border-top-right-radius", "border-top-style",
+    "border-top-width", "border-bottom-radius", "border-left-radius", "border-right-radius",
+    "border-block-start-radius", "border-block-end-radius", "border-inline-start-radius", "border-inline-end-radius", "border-width", "bottom", "box-decoration-break", "box-shadow",
     "box-sizing", "break-after", "break-before", "break-inside", "caption-side", "caret-color", "caret-shape",
     "clear", "clip", "clip-path", "clip-rule", "color", "color-interpolation-filters", "color-scheme", "column-count", "column-fill",
     "column-gap", "column-height", "column-rule", "column-rule-color", "column-rule-style", "column-rule-width",
@@ -119,6 +120,14 @@
     "border-style": ["border-top-style", "border-right-style", "border-bottom-style", "border-left-style"],
     "border-color": ["border-top-color", "border-right-color", "border-bottom-color", "border-left-color"],
     "border-radius": ["border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius", "border-bottom-left-radius"],
+    "border-top-radius": ["border-top-left-radius", "border-top-right-radius"],
+    "border-bottom-radius": ["border-bottom-left-radius", "border-bottom-right-radius"],
+    "border-left-radius": ["border-top-left-radius", "border-bottom-left-radius"],
+    "border-right-radius": ["border-top-right-radius", "border-bottom-right-radius"],
+    "border-block-start-radius": ["border-top-left-radius", "border-top-right-radius"],
+    "border-block-end-radius": ["border-bottom-left-radius", "border-bottom-right-radius"],
+    "border-inline-start-radius": ["border-top-left-radius", "border-bottom-left-radius"],
+    "border-inline-end-radius": ["border-top-right-radius", "border-bottom-right-radius"],
     overflow: ["overflow-x", "overflow-y"]
   };
 
@@ -7215,6 +7224,31 @@
       const corners = ["border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius", "border-bottom-left-radius"];
       return corners.map((cn, idx) => [cn, h[idx] === v[idx] ? h[idx] : (h[idx] + " " + v[idx])]);
     }
+    const TWO_CORNER_RADIUS_MAP = {
+      "border-top-radius": ["border-top-left-radius", "border-top-right-radius"],
+      "border-bottom-radius": ["border-bottom-left-radius", "border-bottom-right-radius"],
+      "border-left-radius": ["border-top-left-radius", "border-bottom-left-radius"],
+      "border-right-radius": ["border-top-right-radius", "border-bottom-right-radius"],
+      "border-block-start-radius": ["border-top-left-radius", "border-top-right-radius"],
+      "border-block-end-radius": ["border-bottom-left-radius", "border-bottom-right-radius"],
+      "border-inline-start-radius": ["border-top-left-radius", "border-bottom-left-radius"],
+      "border-inline-end-radius": ["border-top-right-radius", "border-bottom-right-radius"],
+    };
+    if (TWO_CORNER_RADIUS_MAP[key]) {
+      const si = normV.indexOf("/");
+      const exp2 = (str) => {
+        const p = splitCssTokens(str.trim());
+        if (p.length === 1) return [p[0], p[0]];
+        if (p.length === 2) return [p[0], p[1]];
+        return null;
+      };
+      const h = exp2(si === -1 ? normV : normV.slice(0, si));
+      if (!h) return null;
+      const v = si === -1 ? h : exp2(normV.slice(si + 1));
+      if (!v) return null;
+      const corners = TWO_CORNER_RADIUS_MAP[key];
+      return corners.map((cn, idx) => [cn, h[idx] === v[idx] ? h[idx] : (h[idx] + " " + v[idx])]);
+    }
     if (key === "border-color" || key === "border-style" || key === "border-width") {
       const p = splitCssTokens(normV);
       if (p.length < 1 || p.length > 4) return null;
@@ -7827,6 +7861,14 @@
 
   const SHORTHAND_EXPAND_LONGHANDS = {
     "border-radius": ["border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius", "border-bottom-left-radius"],
+    "border-top-radius": ["border-top-left-radius", "border-top-right-radius"],
+    "border-bottom-radius": ["border-bottom-left-radius", "border-bottom-right-radius"],
+    "border-left-radius": ["border-top-left-radius", "border-bottom-left-radius"],
+    "border-right-radius": ["border-top-right-radius", "border-bottom-right-radius"],
+    "border-block-start-radius": ["border-top-left-radius", "border-top-right-radius"],
+    "border-block-end-radius": ["border-bottom-left-radius", "border-bottom-right-radius"],
+    "border-inline-start-radius": ["border-top-left-radius", "border-bottom-left-radius"],
+    "border-inline-end-radius": ["border-top-right-radius", "border-bottom-right-radius"],
     "border-color": ["border-top-color", "border-right-color", "border-bottom-color", "border-left-color"],
     "border-style": ["border-top-style", "border-right-style", "border-bottom-style", "border-left-style"],
     "border-width": ["border-top-width", "border-right-width", "border-bottom-width", "border-left-width"],
@@ -7991,6 +8033,16 @@
         v.push(p[1] || p[0] || "0px");
       }
       const hs = col4(h), vs = col4(v);
+      return hs === vs ? hs : (hs + " / " + vs);
+    }
+    if (key === "border-top-radius" || key === "border-bottom-radius" || key === "border-left-radius" || key === "border-right-radius" ||
+        key === "border-block-start-radius" || key === "border-block-end-radius" || key === "border-inline-start-radius" || key === "border-inline-end-radius") {
+      const p0 = splitCssTokens(vals[0]);
+      const p1 = splitCssTokens(vals[1]);
+      const h0 = p0[0] || "0px", v0 = p0[1] || h0;
+      const h1 = p1[0] || "0px", v1 = p1[1] || h1;
+      const hs = (h0 === h1) ? h0 : (h0 + " " + h1);
+      const vs = (v0 === v1) ? v0 : (v0 + " " + v1);
       return hs === vs ? hs : (hs + " / " + vs);
     }
     if (key === "border-color" || key === "border-style" || key === "border-width") {

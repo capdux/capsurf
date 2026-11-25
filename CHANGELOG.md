@@ -4664,3 +4664,5 @@
 - `src/js/shim/cssom.js`, `src/js/shim/element/element.js`: 放行 `repeat(auto-fill/auto-fit)` `<intrinsic-size>` 轨道并完善行内 `grid`/`grid-template` 展开与 `cssText` 折叠序列化，3 项 WPT 全部 **FAIL→PASS**（183/183 subtests），`--smoke` 3/3 **PASS**。
 ### Phase 913 — `scrollWidth`/`scrollHeight` 扣除 `clientLeft`/`clientTop` 修复 `css-multicol` 溢出回归
 - `src/js/shim/element/element.js`: `scrollHeight`/`scrollWidth` 扣除 `clientTop`/`clientLeft`，修复 `border: thick` 下的 +5px 偏差，4 项 `css-multicol` WPT **4/4 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 914 — CSS Borders 4 双角圆角简写（16 项 `border-*-radius-*` 全绿）
+- `src/js/shim/cssom.js`, `src/js/shim/window.js`: 统一接入 `border-{top,bottom,left,right,block-start,block-end,inline-start,inline-end}-radius` 的展开与计算值序列化，8 项 `-computed.html` + 8 项 `-valid.html` 共 **16/16 FAIL→PASS**，`--smoke` 3/3 **PASS**。

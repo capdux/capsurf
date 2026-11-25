@@ -3667,3 +3667,5 @@
 - 补齐 `element.js` `setEntryInStyleMap`/`removeKeyFromStyleMap` 对 `grid` 与 `grid-template` 简写的 longhand 展开与清理，并在 `formatStyleMap` 中按 `grid` -> `grid-template` 优先顺序折叠回 `cssText`，`grid-shorthand-serialization.html` 141/141 全绿；同步在 `cssom.js` 按 CSS Grid 3 放行 `repeat(auto-fill/auto-fit)` 内的 `<intrinsic-size>`，2 项 tentative 测试全部 `FAIL→PASS`。
 ### Phase 913 — `scrollWidth`/`scrollHeight` padding-box 原点修正
 - `element.js` 的 `scrollWidth`/`scrollHeight` 原直接用 `cr.x - parentR.x`（border-box 原点）计算子元素偏移，未减去 `this.clientLeft`/`this.clientTop`，导致 `border: solid thick` 容器多计 5px。扣除 `clientLeft`/`clientTop` 后，`multicol-overflow-transform-001` 与 `multicol-overflow-positioned-transform-001` 一次通过。
+### Phase 914 — CSS Borders 4 双角圆角简写映射与计算值序列化
+- 在 `cssom.js` 与 `window.js` 通过 `TWO_CORNER_RADIUS_MAP` 统一处理 8 个物理/逻辑双角圆角简写向 4 角 `border-*-radius` longhand 的展开与 `h0 [h1] / v0 [v1]` 折叠序列化，一次扫平 8 项 `-computed.html` 与 8 项 `-valid.html`。
