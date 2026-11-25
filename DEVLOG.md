@@ -3641,3 +3641,5 @@
 - 定位 `calc(1 + 100%)` 漏过原因为 `%\b` 在非单词字符 `%` 后无法匹配；调整为 `(?:px|...|)\b|%` 并校验 `anchor-size()` fallback 维度，一次性通过 `calc-letter-spacing.html`、`various-values-important.html`、`anchor-function-zero-fallback.html`。
 ### Phase 900 — `css-env` 语法校验与 IACVT 回退
 - 补齐 `elem.style.cssText` (`parseStyleMap`) 与 `isValidCssValue` 对 `env()` 首参 `<custom-ident>`、注释 `/**/` 及未闭合括号 `{)` 的解析期拦截，并在 `substituteStr` 后引入 `CSS.supports` 检验以在替换结果非法时正确触发 IACVT 回退至初始值，使 `syntax.tentative.html` (18/18) 全绿通过。
+### Phase 901 — `contain: layout`/`paint` 独立格式化上下文与包含块
+- 在 `cascade.cp` 与 `layout.cp` 实装 `contain: layout/paint` 对 `position: absolute/fixed` 的包含块拦截、`establishes_bfc` 隔离、`contain_layout` 基线抑制，同时补齐 `AlignItems.Baseline` 弹性基线对齐、同 BFC 跨块级元素浮动清除与非 BFC 首/末子元素外边距穿透折叠，一次性全绿通过 `contain-layout-dynamic-001.html` 与 `contain-paint-dynamic-001.html`。

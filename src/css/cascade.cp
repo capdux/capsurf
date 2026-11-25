@@ -757,11 +757,13 @@ pub enum AlignItems {
     FlexStart,
     FlexEnd,
     Center,
+    Baseline,
 
     static fn parse(raw: []const u8): AlignItems? {
         const s = std.mem.trim(u8, raw, " \t\r\n");
         if (std.ascii.eqlIgnoreCase(s, "stretch") || std.ascii.eqlIgnoreCase(s, "normal")) return AlignItems.Stretch;
-        if (std.ascii.eqlIgnoreCase(s, "flex-start") || std.ascii.eqlIgnoreCase(s, "start") || std.ascii.eqlIgnoreCase(s, "baseline") || std.ascii.eqlIgnoreCase(s, "first baseline")) return AlignItems.FlexStart;
+        if (std.ascii.eqlIgnoreCase(s, "flex-start") || std.ascii.eqlIgnoreCase(s, "start")) return AlignItems.FlexStart;
+        if (std.ascii.eqlIgnoreCase(s, "baseline") || std.ascii.eqlIgnoreCase(s, "first baseline")) return AlignItems.Baseline;
         if (std.ascii.eqlIgnoreCase(s, "flex-end") || std.ascii.eqlIgnoreCase(s, "end") || std.ascii.eqlIgnoreCase(s, "last baseline")) return AlignItems.FlexEnd;
         if (std.ascii.eqlIgnoreCase(s, "center")) return AlignItems.Center;
         return null;
@@ -2512,6 +2514,10 @@ pub struct ComputedStyle {
     container_name_buf: [64]u8 = [0; 64];
     container_name_len: usize = 0;
     contain_style: bool = false;
+    contain_layout: bool = false;
+    contain_paint: bool = false;
+    contain_size: bool = false;
+    contain_inline_size: bool = false;
     overflow_visible: bool = true;
     overflow_x: OverflowMode = OverflowMode.Visible;
     overflow_y: OverflowMode = OverflowMode.Visible;
@@ -5213,13 +5219,38 @@ pub struct ComputedStyle {
         if (std.ascii.eqlIgnoreCase(name, "contain")) {
             if (_.tryClaimSlot(PROP_CONTAIN, weight)) {
                 let cs = false;
+                let cl = false;
+                let cp = false;
+                let csz = false;
+                let cisz = false;
                 let cit = std.mem.tokenizeAny(u8, val, " \t\r\n");
                 while (ctok := cit.next()) {
-                    if (std.ascii.eqlIgnoreCase(ctok, "style") || std.ascii.eqlIgnoreCase(ctok, "content") || std.ascii.eqlIgnoreCase(ctok, "strict")) {
+                    if (std.ascii.eqlIgnoreCase(ctok, "style")) {
+                        cs = true;
+                    } else if (std.ascii.eqlIgnoreCase(ctok, "layout")) {
+                        cl = true;
+                    } else if (std.ascii.eqlIgnoreCase(ctok, "paint")) {
+                        cp = true;
+                    } else if (std.ascii.eqlIgnoreCase(ctok, "size")) {
+                        csz = true;
+                    } else if (std.ascii.eqlIgnoreCase(ctok, "inline-size")) {
+                        cisz = true;
+                    } else if (std.ascii.eqlIgnoreCase(ctok, "content")) {
+                        cl = true;
+                        cp = true;
+                        cs = true;
+                    } else if (std.ascii.eqlIgnoreCase(ctok, "strict")) {
+                        csz = true;
+                        cl = true;
+                        cp = true;
                         cs = true;
                     }
                 }
                 _.contain_style = cs;
+                _.contain_layout = cl;
+                _.contain_paint = cp;
+                _.contain_size = csz;
+                _.contain_inline_size = cisz;
             }
             return;
         }

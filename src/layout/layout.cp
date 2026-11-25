@@ -223,6 +223,12 @@ pub struct LayoutTree {
     abs_cb_y: f32 = 0.0;
     abs_cb_w: f32 = 1280.0;
     abs_cb_h: f32 = 800.0;
+    fixed_cb_x: f32 = 0.0;
+    fixed_cb_y: f32 = 0.0;
+    fixed_cb_w: f32 = 1280.0;
+    fixed_cb_h: f32 = 800.0;
+    bfc_float_left_bottom: f32 = 0.0;
+    bfc_float_right_bottom: f32 = 0.0;
 
     static fn parseSvgTranslate(attr: []const u8): [2]f32 {
         let tx: f32 = 0.0;
@@ -771,6 +777,10 @@ pub struct LayoutTree {
             viewport_width: vw,
             viewport_height: vh,
             root_font_px: 16.0,
+            abs_cb_w: vw,
+            abs_cb_h: vh,
+            fixed_cb_w: vw,
+            fixed_cb_h: vh,
         };
         return tree;
     }
@@ -1120,12 +1130,17 @@ pub struct LayoutTree {
             }
         }
 
-        // Track positioned containing block for descendant position:absolute elements
+        // Track positioned containing block for descendant position:absolute / position:fixed elements
         const prev_abs_cb_x = _.abs_cb_x;
         const prev_abs_cb_y = _.abs_cb_y;
         const prev_abs_cb_w = _.abs_cb_w;
         const prev_abs_cb_h = _.abs_cb_h;
-        if (style.position != CssPosition.Static) {
+        const prev_fixed_cb_x = _.fixed_cb_x;
+        const prev_fixed_cb_y = _.fixed_cb_y;
+        const prev_fixed_cb_w = _.fixed_cb_w;
+        const prev_fixed_cb_h = _.fixed_cb_h;
+        const is_fixed_cb = (style.contain_layout || style.contain_paint);
+        if (style.position != CssPosition.Static || is_fixed_cb) {
             let cb_x = border_box_x + box.border_left;
             let cb_y = border_box_y + box.border_top;
             if (style.position == CssPosition.Relative) {
@@ -1157,16 +1172,28 @@ pub struct LayoutTree {
                     cb_y = origin_y + avail_h - b_px - box.borderBoxHeight() - box.margin_bottom + box.border_top;
                 }
             }
+            const cb_w = box.content_width + box.paddingHorizontal();
+            const cb_h = box.content_height + box.paddingVertical();
             _.abs_cb_x = cb_x;
             _.abs_cb_y = cb_y;
-            _.abs_cb_w = box.content_width + box.paddingHorizontal();
-            _.abs_cb_h = box.content_height + box.paddingVertical();
+            _.abs_cb_w = cb_w;
+            _.abs_cb_h = cb_h;
+            if (is_fixed_cb) {
+                _.fixed_cb_x = cb_x;
+                _.fixed_cb_y = cb_y;
+                _.fixed_cb_w = cb_w;
+                _.fixed_cb_h = cb_h;
+            }
         }
         defer {
             _.abs_cb_x = prev_abs_cb_x;
             _.abs_cb_y = prev_abs_cb_y;
             _.abs_cb_w = prev_abs_cb_w;
             _.abs_cb_h = prev_abs_cb_h;
+            _.fixed_cb_x = prev_fixed_cb_x;
+            _.fixed_cb_y = prev_fixed_cb_y;
+            _.fixed_cb_w = prev_fixed_cb_w;
+            _.fixed_cb_h = prev_fixed_cb_h;
         }
 
         if (!is_replaced && !is_svg_elem && style.display.isTable()) {
@@ -3150,7 +3177,7 @@ pub struct LayoutTree {
                 if (it.kind == InlineItemKind.AbsPos) {
                     const cst = &styles[@as(usize, it.node_id)];
                     if (cst.position == CssPosition.Fixed) {
-                        _.layoutNodeEx(doc, styles, it.node_id, 0.0, 0.0, _.viewport_width, _.viewport_height, content_x + it.line_x, line_y, true);
+                        _.layoutNodeEx(doc, styles, it.node_id, _.fixed_cb_x, _.fixed_cb_y, _.fixed_cb_w, _.fixed_cb_h, content_x + it.line_x, line_y, true);
                     } else {
                         _.layoutNodeEx(doc, styles, it.node_id, _.abs_cb_x, _.abs_cb_y, _.abs_cb_w, _.abs_cb_h, content_x + it.line_x, line_y, true);
                     }
@@ -3164,9 +3191,11 @@ pub struct LayoutTree {
                         if (dx != 0.0) _.shiftSubtree(doc, it.node_id, dx, 0.0);
                         const fb = line_y + cbox.outerHeight();
                         if (fb > float_right_bottom.*) float_right_bottom.* = fb;
+                        if (fb > _.bfc_float_right_bottom) _.bfc_float_right_bottom = fb;
                     } else {
                         const fb = line_y + cbox.outerHeight();
                         if (fb > float_left_bottom.*) float_left_bottom.* = fb;
+                        if (fb > _.bfc_float_left_bottom) _.bfc_float_left_bottom = fb;
                     }
                     const cr = _.boxes.items[@as(usize, it.node_id)].rect.right();
                     if (cr > max_child_right.*) max_child_right.* = cr;
@@ -3304,7 +3333,7 @@ pub struct LayoutTree {
             } else if (it.kind == InlineItemKind.AbsPos) {
                 const cst = &styles[@as(usize, it.node_id)];
                 if (cst.position == CssPosition.Fixed) {
-                    _.layoutNodeEx(doc, styles, it.node_id, 0.0, 0.0, _.viewport_width, _.viewport_height, content_x + it.line_x, line_y, true);
+                    _.layoutNodeEx(doc, styles, it.node_id, _.fixed_cb_x, _.fixed_cb_y, _.fixed_cb_w, _.fixed_cb_h, content_x + it.line_x, line_y, true);
                 } else {
                     _.layoutNodeEx(doc, styles, it.node_id, _.abs_cb_x, _.abs_cb_y, _.abs_cb_w, _.abs_cb_h, content_x + it.line_x, line_y, true);
                 }
@@ -3318,9 +3347,11 @@ pub struct LayoutTree {
                     if (dx != 0.0) _.shiftSubtree(doc, it.node_id, dx, 0.0);
                     const fb = line_y + cbox.outerHeight();
                     if (fb > float_right_bottom.*) float_right_bottom.* = fb;
+                    if (fb > _.bfc_float_right_bottom) _.bfc_float_right_bottom = fb;
                 } else {
                     const fb = line_y + cbox.outerHeight();
                     if (fb > float_left_bottom.*) float_left_bottom.* = fb;
+                    if (fb > _.bfc_float_left_bottom) _.bfc_float_left_bottom = fb;
                 }
                 const cr = _.boxes.items[@as(usize, it.node_id)].rect.right();
                 if (cr > max_child_right.*) max_child_right.* = cr;
@@ -3439,6 +3470,26 @@ pub struct LayoutTree {
         let last_baseline_rel: f32 = -1.0;
 
         const pstyle_blk = &styles[@as(usize, parent_id)];
+        const establishes_bfc = pstyle_blk.display.isFlowRoot() ||
+            !pstyle_blk.overflow_visible ||
+            pstyle_blk.contain_layout ||
+            pstyle_blk.contain_paint ||
+            pstyle_blk.display.isInlineBlock() ||
+            pstyle_blk.float_mode != FloatMode.None ||
+            pstyle_blk.position == CssPosition.Absolute ||
+            pstyle_blk.position == CssPosition.Fixed ||
+            pstyle_blk.display.isTableCell() ||
+            pstyle_blk.display.isTableCaption();
+        const prev_bfc_fl = _.bfc_float_left_bottom;
+        const prev_bfc_fr = _.bfc_float_right_bottom;
+        if (establishes_bfc) {
+            _.bfc_float_left_bottom = 0.0;
+            _.bfc_float_right_bottom = 0.0;
+        }
+        defer {
+            _.bfc_float_left_bottom = if (establishes_bfc) prev_bfc_fl else @max(prev_bfc_fl, _.bfc_float_left_bottom);
+            _.bfc_float_right_bottom = if (establishes_bfc) prev_bfc_fr else @max(prev_bfc_fr, _.bfc_float_right_bottom);
+        }
         let emitted_lines: u32 = 0;
         const clamp_limit: u32 = if (pstyle_blk.is_line_clamped) pstyle_blk.webkit_line_clamp else 0;
         const parent_pinned_v = (pstyle_blk.position == CssPosition.Absolute || pstyle_blk.position == CssPosition.Fixed) &&
@@ -3447,6 +3498,7 @@ pub struct LayoutTree {
         const child_h_definite = !parent_box.height_is_auto || parent_pinned_v;
         let prev_block_mb: f32 = 0.0;
         let has_prev_block_mb: bool = false;
+        let has_inflow_before_first_block: bool = false;
 
         let child = doc.nodes.items[@as(usize, parent_id)].first_child;
         while (child != NULL_NODE && @as(usize, child) < doc.nodes.items.len) {
@@ -3496,16 +3548,25 @@ pub struct LayoutTree {
                     }
 
                     // Handle CSS clear
+                    const eff_fl = @max(float_left_bottom, _.bfc_float_left_bottom);
+                    const eff_fr = @max(float_right_bottom, _.bfc_float_right_bottom);
                     if (cstyle.clear_mode == ClearMode.Left || cstyle.clear_mode == ClearMode.Both) {
-                        if (float_left_bottom > cursor_y) { cursor_y = float_left_bottom; has_prev_block_mb = false; }
+                        if (eff_fl > cursor_y) { cursor_y = eff_fl; has_prev_block_mb = false; }
                     }
                     if (cstyle.clear_mode == ClearMode.Right || cstyle.clear_mode == ClearMode.Both) {
-                        if (float_right_bottom > cursor_y) { cursor_y = float_right_bottom; has_prev_block_mb = false; }
+                        if (eff_fr > cursor_y) { cursor_y = eff_fr; has_prev_block_mb = false; }
                     }
 
                     _.layoutNodeEx(doc, styles, child, content_x, cursor_y, content_w, content_h, content_x, cursor_y, child_h_definite);
                     const cbox = &_.boxes.items[@as(usize, child)];
-                    if (has_prev_block_mb && prev_block_mb > 0.0 && cbox.margin_top > 0.0) {
+                    if (!has_inflow_before_first_block) {
+                        has_inflow_before_first_block = true;
+                        const pb = &_.boxes.items[@as(usize, parent_id)];
+                        if (!establishes_bfc && pb.padding_top == 0.0 && pb.border_top == 0.0 && cbox.margin_top > 0.0) {
+                            _.shiftSubtree(doc, child, 0.0, -cbox.margin_top);
+                            cursor_y -= cbox.margin_top;
+                        }
+                    } else if (has_prev_block_mb && prev_block_mb > 0.0 && cbox.margin_top > 0.0) {
                         const overlap = @min(prev_block_mb, cbox.margin_top);
                         if (overlap > 0.0) {
                             _.shiftSubtree(doc, child, 0.0, -overlap);
@@ -3708,6 +3769,7 @@ pub struct LayoutTree {
             }
             if (cursor_y > run_start_y) {
                 has_prev_block_mb = false;
+                has_inflow_before_first_block = true;
             }
 
             // Compute bounding rects for inline wrappers bottom-up (deepest first)
@@ -3720,18 +3782,14 @@ pub struct LayoutTree {
             }
         }
 
-        if (last_baseline_rel >= 0.0) {
+        if (last_baseline_rel >= 0.0 && !pstyle_blk.contain_layout) {
             _.boxes.items[@as(usize, parent_id)].baseline_offset = last_baseline_rel;
         }
 
-        const establishes_bfc = pstyle_blk.display.isFlowRoot() ||
-            !pstyle_blk.overflow_visible ||
-            pstyle_blk.display.isInlineBlock() ||
-            pstyle_blk.float_mode != FloatMode.None ||
-            pstyle_blk.position == CssPosition.Absolute ||
-            pstyle_blk.position == CssPosition.Fixed ||
-            pstyle_blk.display.isTableCell() ||
-            pstyle_blk.display.isTableCaption();
+        const pb_end = &_.boxes.items[@as(usize, parent_id)];
+        if (!establishes_bfc && pb_end.height_is_auto && pb_end.padding_bottom == 0.0 && pb_end.border_bottom == 0.0 && has_prev_block_mb && prev_block_mb > 0.0) {
+            cursor_y -= prev_block_mb;
+        }
         const scroll_bottom = @max(cursor_y, @max(float_left_bottom, float_right_bottom));
         const effective_bottom = if (establishes_bfc) scroll_bottom else cursor_y;
         const scroll_h = if (scroll_bottom > content_y) (scroll_bottom - content_y) else 0.0;
@@ -3979,7 +4037,7 @@ pub struct LayoutTree {
                 const abs_id = abs_children[ai];
                 const astyle = &styles[@as(usize, abs_id)];
                 if (astyle.position == CssPosition.Fixed) {
-                    _.layoutNodeEx(doc, styles, abs_id, 0.0, 0.0, _.viewport_width, _.viewport_height, content_x, content_y, true);
+                    _.layoutNodeEx(doc, styles, abs_id, _.fixed_cb_x, _.fixed_cb_y, _.fixed_cb_w, _.fixed_cb_h, content_x, content_y, true);
                 } else {
                     let cb_left = pad_x;
                     let cb_right = pad_x + pad_w;
@@ -4045,7 +4103,7 @@ pub struct LayoutTree {
     ) {
         const astyle = &styles[@as(usize, aid)];
         if (astyle.position == CssPosition.Fixed) {
-            _.layoutNodeEx(doc, styles, aid, 0.0, 0.0, _.viewport_width, _.viewport_height, content_x, content_y, true);
+            _.layoutNodeEx(doc, styles, aid, _.fixed_cb_x, _.fixed_cb_y, _.fixed_cb_w, _.fixed_cb_h, content_x, content_y, true);
             return;
         }
         _.resolveBoxMetrics(doc, styles, aid, astyle, _.abs_cb_w, _.abs_cb_h, true);
@@ -4066,6 +4124,7 @@ pub struct LayoutTree {
                 .FlexStart => AlignSelf.FlexStart,
                 .FlexEnd => AlignSelf.FlexEnd,
                 .Center => AlignSelf.Center,
+                .Baseline => AlignSelf.Start,
             },
             * => astyle.align_self,
         };
@@ -4474,6 +4533,31 @@ pub struct LayoutTree {
                 current_main += step_main + between_step;
             }
 
+            if (is_row && pstyle.align_items == .Baseline) {
+                let max_bl: f32 = 0.0;
+                let bk: usize = l_start;
+                while (bk < l_end) : (bk += 1) {
+                    const bcid = items[bk].node_id;
+                    const bbox = &_.boxes.items[@as(usize, bcid)];
+                    const bstyle = &styles[@as(usize, bcid)];
+                    const bl = if (!bstyle.contain_layout && bbox.baseline_offset >= 0.0) bbox.baseline_offset else bbox.borderBoxHeight();
+                    if (bl > max_bl) max_bl = bl;
+                }
+                bk = l_start;
+                while (bk < l_end) : (bk += 1) {
+                    const bcid = items[bk].node_id;
+                    const bbox = &_.boxes.items[@as(usize, bcid)];
+                    const bstyle = &styles[@as(usize, bcid)];
+                    const bl = if (!bstyle.contain_layout && bbox.baseline_offset >= 0.0) bbox.baseline_offset else bbox.borderBoxHeight();
+                    const dy = max_bl - bl;
+                    if (dy > 0.0) {
+                        _.shiftSubtree(doc, bcid, 0.0, dy);
+                        const total_h = dy + _.boxes.items[@as(usize, bcid)].borderBoxHeight();
+                        if (total_h > line_max_cross) line_max_cross = total_h;
+                    }
+                }
+            }
+
             const line_used_main = if (l_count > 0) (current_main - between_step) else 0.0;
             if (line_used_main > max_used_main) {
                 max_used_main = line_used_main;
@@ -4531,7 +4615,7 @@ pub struct LayoutTree {
                     if (!fst.display.isNone() && fst.position != CssPosition.Absolute && fst.position != CssPosition.Fixed) {
                         const fbox = &_.boxes.items[@as(usize, fch)];
                         let bl: f32 = -1.0;
-                        if (fbox.baseline_offset >= 0.0) {
+                        if (!fst.contain_layout && fbox.baseline_offset >= 0.0) {
                             bl = (fbox.rect.y - pbox_y) + fbox.baseline_offset;
                         } else if (fbox.rect.height > 0.0) {
                             bl = (fbox.rect.y - pbox_y) + fbox.rect.height;
