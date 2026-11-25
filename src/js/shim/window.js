@@ -7580,6 +7580,18 @@ function installWindow(global) {
       element._rawBaseCache = { domEpoch: curDomEpoch, sheetKey: sheetKey, baseMap: baseSnap, impKeys: impSnap, ancestors: ancestors };
       if (rawInlineSelf) {
         parseDeclarationsBlockInto(element, rawInlineSelf, computedMap);
+        for (let vi = 0; vi < valCheckProps.length; vi++) {
+          const vp = valCheckProps[vi];
+          if (computedMap.has(vp)) {
+            const vv = String(computedMap.get(vp) || "").trim();
+            const vl = vv.toLowerCase();
+            if (vl !== "inherit" && vl !== "initial" && vl !== "unset" && vl !== "revert" && vl !== "revert-layer" &&
+                typeof globalThis.__capsurf_isValidCssValue === "function" && !globalThis.__capsurf_isValidCssValue(vp, vv)) {
+              if (baseSnap.has(vp)) computedMap.set(vp, baseSnap.get(vp));
+              else computedMap.delete(vp);
+            }
+          }
+        }
         if (/\b(?:inherit|initial|unset|revert(?:-layer)?)\b/i.test(rawInlineSelf)) {
           resolveCssWideKeywordsInMap(computedMap);
         }
@@ -9245,7 +9257,13 @@ function installWindow(global) {
           computedMap.set(sk, (sk === "letter-spacing" && px === 0) ? "normal" : formatCssPx(px));
         }
       } else if (/^calc\(/i.test(sv) && sv.indexOf("%") !== -1) {
-        const inner = sv.slice(5, -1).trim();
+        let bal = 0;
+        for (let bi = 0; bi < sv.length; bi++) {
+          if (sv[bi] === "(") bal++;
+          else if (sv[bi] === ")") bal--;
+        }
+        const svBal = bal > 0 ? (sv + ")".repeat(bal)) : sv;
+        const inner = svBal.slice(5, -1).trim();
         const evalLinear = (pctVal, pxVal) => {
           const e = inner
             .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))%/g, (_, n) => String(Number(n) * pctVal))

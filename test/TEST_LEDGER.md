@@ -2545,3 +2545,4 @@
 | Phase 876 | `block-size`/`inline-size` 按需懒计算性能优化 | `src/js/shim/window.js` | `css-logical/inheritance.html` 10.9s→5.2s (`68/68` 功能 PASS); `--smoke` 3/3 PASS |
 
 | Phase 877 | `animation-{iteration-count,delay,name}` 计算值与反斜杠转义修复 | `src/js/shim/cssom.js` | `animation-{iteration-count,delay,name}-computed.html` **3/3 PASS**; `--smoke` 3/3 PASS |
+| Phase 878 | `text-orientation` 校验、`text-align-all` 继承 & `calc()` EOF 括号闭合 | `cssom.js`, `window.js` | `/css/css-writing-modes/` **20/20 (100%) PASS**, `{letter,word}-spacing-computed` & `css-text/inheritance` **4/4 PASS**; `--smoke` 3/3 PASS |

@@ -3595,3 +3595,5 @@
 
 ### Phase 877 — `animation-name` 转义丢失根因定位与 `sign()`/`cq*` 数学函数放行
 - 定位 `getComputedStyle(d).animationName` 丢失 `multi\ word\ string` 反斜杠转义的根因：`wrapComputedStyleDecl` 对所有非自定义属性无条件调用 `normalizeCssColor()`，其内部反斜杠解义将 `\ ` 剥离；跳过 `animation-name` 等标识符/字符串属性后全量 27 项子测试通过。
+### Phase 878 — `valCheckProps` 内联二次校验与 `calc()` EOF 括号闭合
+- 解决 `rawInlineSelf` 在 `_skipInline` 路径晚于 `valCheckProps` 解析导致 `text-orientation: foo` 覆盖继承值 `upright` 的问题；同时发现 `ZERO_PX_PROPS` 在 `normalizeCssSpecifiedValue` 中提前命中 `canonicalizeCalcToken`，在 `canonicalizeCalcToken` 顶部统一补齐未闭合 `)` 后彻底修复 `calc(10px - (5% + 10%)` 的序列化与 `splitCssDeclarations` 截断问题。

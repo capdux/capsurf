@@ -91,7 +91,7 @@
     "scroll-initial-target", "scroll-axis-lock", "scroll-marker-group", "scroll-target-group", "scroll-padding-top", "scroll-snap-align", "scroll-snap-stop", "scroll-snap-type",
     "scrollbar-color", "scrollbar-gutter", "scrollbar-width", "shape-image-threshold",
     "shape-margin", "shape-outside", "size", "src", "tab-size", "table-layout",
-    "text-align", "text-align-last", "text-autospace", "text-combine-upright", "text-decoration",
+    "text-align", "text-align-all", "text-align-last", "text-autospace", "text-combine-upright", "text-decoration",
     "text-decoration-color", "text-decoration-inset", "text-decoration-line", "text-decoration-skip-ink",
     "text-decoration-skip-spaces", "text-decoration-style", "text-decoration-thickness", "text-emphasis",
     "text-emphasis-color", "text-emphasis-position", "text-emphasis-style", "text-fit", "text-group-align", "text-indent",
@@ -1306,6 +1306,14 @@
     _isValidCalcSyntax = isValidCalcSyntax;
 
     function isValidLenPct(tok, allowNegative) {
+      if (/^(?:calc|min|max|clamp)\(/i.test(tok)) {
+        let bal = 0;
+        for (let bi = 0; bi < tok.length; bi++) {
+          if (tok[bi] === "(") bal++;
+          else if (tok[bi] === ")") bal--;
+        }
+        if (bal > 0) tok = tok + ")".repeat(bal);
+      }
       if (/^calc\(\s*[+-]?(?:\d+\.?\d*|\.\d+)\s*\/\s*(?:max|min)?\(?[+-]?(?:\d+\.?\d*|\.\d+)(?:px|em|rem|ex|ch|vw|vh|vmin|vmax|cm|mm|in|pt|pc)\b/i.test(tok)) {
         return false;
       }
@@ -4542,6 +4550,14 @@
     "overflow", "gap", "grid-gap"
   ]);
   function canonicalizeCalcToken(t) {
+    if (/^(?:calc|min|max|clamp)\(/i.test(t)) {
+      let bal = 0;
+      for (let bi = 0; bi < t.length; bi++) {
+        if (t[bi] === "(") bal++;
+        else if (t[bi] === ")") bal--;
+      }
+      if (bal > 0) t = t + ")".repeat(bal);
+    }
     const m = /^calc\(\s*(.+)\s*\)$/i.exec(t);
     if (!m) return t;
     const ABS_PX = { px: 1, in: 96, cm: 96 / 2.54, mm: 96 / 25.4, q: 96 / 101.6, pt: 96 / 72, pc: 16 };
@@ -5854,7 +5870,15 @@
       }).join(", ");
     }
     if (key === "letter-spacing" || key === "word-spacing") {
-      const sl = s.toLowerCase();
+      let sl = s.toLowerCase();
+      if (/^(?:calc|min|max|clamp)\(/i.test(sl)) {
+        let bal = 0;
+        for (let bi = 0; bi < sl.length; bi++) {
+          if (sl[bi] === "(") bal++;
+          else if (sl[bi] === ")") bal--;
+        }
+        if (bal > 0) sl = sl + ")".repeat(bal);
+      }
       if (/^calc\(\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:ch|em|rem|ex|px|vw|vh))\s*([+-])\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+)%)\s*\)$/i.test(sl)) {
         return sl.replace(/^calc\(\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:ch|em|rem|ex|px|vw|vh))\s*([+-])\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+)%)\s*\)$/i, (_, len, op, pct) => {
           const signedPct = op === "-" ? (pct.startsWith("-") ? pct.slice(1) : "-" + pct) : pct;

@@ -4577,3 +4577,7 @@
 
 ### Phase 877 — `animation-{iteration-count,delay,name}` 计算值序列化与转义保留
 - `src/js/shim/cssom.js`: `animation-iteration-count` 与 `animation-{delay,duration}`/`transition-{delay,duration}` 含 `sign()`/`cq*` 时绕过 `cap:css` 并剥离 `sign()`；`animation-name` 规范化保留反斜杠转义；`wrapComputedStyleDecl` 对 `animation-name`/`font-family`/`content`/`quotes` 跳过 `normalizeCssColor`；`src/js/{runtime.js,runtime_source.cp}` 重新打包；3 项 `animation-*-computed.html` **3/3 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 878 — `css-writing-modes` 100% 全绿与 `css-text` 解析/继承修复
+- `src/js/shim/window.js`: `_skipInline` 合入 `rawInlineSelf` 后二次校验 `valCheckProps` 回滚非法内联值；`letter-spacing`/`word-spacing` `calc()` 求值补齐 EOF 未闭合括号。
+- `src/js/shim/cssom.js`: `SUPPORTED_CSS_PROPERTIES` 补充 `text-align-all`；`isValidLenPct` 与 `canonicalizeCalcToken` 为 `calc(`/`min(`/`max(`/`clamp(` 自动补齐 EOF 未闭合括号。
+- `src/js/{runtime.js,runtime_source.cp}`: 重新打包；`text-orientation-parsing-001.html`、`letter-spacing-computed.html`、`word-spacing-computed.html`、`css-text/inheritance.html` **4/4 PASS**（`/css/css-writing-modes/` **20/20 100% PASS**），`--smoke` 3/3 **PASS**。
