@@ -3494,3 +3494,5 @@
 - 在 `cssom.js` 补齐 `initial-letter` 的属性登记、合法/非法语法校验（拒收 `<1` 数值与非整数第二参数）及 `drop`/`raise` 顺序规范化；在 `window.js` 为 `evalSignCalls` 补充 `rem` 单位支持并实现 `initial-letter` 的 `calc()`/`sign()` 计算值求值，`initial-letter-{valid,invalid,computed,sign-function}` 4/4 全绿 **PASS**。
 ### Phase 827 — `getComputedStyle` 6 倍提速与 `cap:css` `CssColor` 下沉/精度修复
 - 通过 `collectRawComputedMap` `baseMap` 缓存与 `applyUsedValuesToComputedMap` 懒求值/前置守卫将 200 次 `cs.color` 从 `4,580ms` 压至 `768ms`；同步将不透明 sRGB/HSL/HWB 解析下沉至 `cap:css` `__capsurf_parse_color`，并修复 `lib/css/color.cp` `fromHwb` 浮点精度与 `cssom.js` `hwb` `none` `%` 序列化，`/css/css-color/parsing/color-computed-hwb.html` (56/56) 全绿 **PASS**。
+### Phase 828 — 原生 `object-fit` / `object-position` 与 `background-size: contain|cover` 集群攻坚
+- 在 `cascade.cp` 与 `painter.cp` 完整实现 `object-fit` (`fill`/`contain`/`cover`/`none`/`scale-down`)、`object-position`（含 3/4 token 边缘偏移语法）以及 `background-size: contain|cover` + `background-position` 绘制与裁剪，一次性通过 `/css/css-images/object-fit-*` **171/173** 项 WPT Reftest。

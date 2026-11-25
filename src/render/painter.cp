@@ -2,7 +2,7 @@
 // CapSurf 2D Software Rasterizer & Screenshot Entrypoint (Milestone 5)
 
 import { Document, NodeData, NodeType, NodeId, NULL_NODE } from "../dom/dom.cp";
-import { ComputedStyle, ResolvedPaintStyle, CssPosition, CornerShape, Visibility, BgGradientKind, FloatMode, ListStyleType } from "../css/cascade.cp";
+import { ComputedStyle, ResolvedPaintStyle, CssPosition, CornerShape, Visibility, BgGradientKind, FloatMode, ListStyleType, ObjectFit, BgSizeKeyword, ObjectPos } from "../css/cascade.cp";
 import {
     Direction,
     UnicodeBidi,
@@ -2280,12 +2280,108 @@ fn decodePngAnyToRgba(allocator: std.mem.Allocator, bytes: []const u8, out_w: *u
     return out_rgba;
 }
 
+fn computePlacedImageRect(
+    box_rect: Rect,
+    nat_w: f32,
+    nat_h: f32,
+    fit: ObjectFit,
+    pos: ObjectPos,
+): Rect {
+    if (nat_w <= 0.0 || nat_h <= 0.0 || box_rect.width <= 0.0 || box_rect.height <= 0.0) {
+        return box_rect;
+    }
+    let target_w = box_rect.width;
+    let target_h = box_rect.height;
+    switch (fit) {
+        .Fill => {
+            target_w = box_rect.width;
+            target_h = box_rect.height;
+        },
+        .Contain => {
+            const s = @min(box_rect.width / nat_w, box_rect.height / nat_h);
+            target_w = nat_w * s;
+            target_h = nat_h * s;
+        },
+        .Cover => {
+            const s = @max(box_rect.width / nat_w, box_rect.height / nat_h);
+            target_w = nat_w * s;
+            target_h = nat_h * s;
+        },
+        .None => {
+            target_w = nat_w;
+            target_h = nat_h;
+        },
+        .ScaleDown => {
+            if (nat_w <= box_rect.width && nat_h <= box_rect.height) {
+                target_w = nat_w;
+                target_h = nat_h;
+            } else {
+                const s = @min(box_rect.width / nat_w, box_rect.height / nat_h);
+                target_w = nat_w * s;
+                target_h = nat_h * s;
+            }
+        },
+    }
+    const dx = (box_rect.width - target_w) * pos.x_pct + pos.x_px;
+    const dy = (box_rect.height - target_h) * pos.y_pct + pos.y_px;
+    return Rect {
+        x: box_rect.x + dx,
+        y: box_rect.y + dy,
+        width: target_w,
+        height: target_h,
+        visible: true,
+    };
+}
+
+fn intersectBoxClip(box_rect: Rect, parent_clip: ClipRect?): ClipRect {
+    const bclip = ClipRect.fromRect(box_rect);
+    if (pc := parent_clip) {
+        const x0 = @max(pc.x0, bclip.x0);
+        const y0 = @max(pc.y0, bclip.y0);
+        const x1 = @min(pc.x1, bclip.x1);
+        const y1 = @min(pc.y1, bclip.y1);
+        return ClipRect {
+            x0: x0,
+            y0: y0,
+            x1: @max(x0, x1),
+            y1: @max(y0, y1),
+        };
+    }
+    return bclip;
+}
+
+fn computeNodePaddingRect(r: Rect, paint_style: ResolvedPaintStyle): Rect {
+    return Rect {
+        x: r.x + paint_style.border_left_width,
+        y: r.y + paint_style.border_top_width,
+        width: @max(0.0, r.width - paint_style.border_left_width - paint_style.border_right_width),
+        height: @max(0.0, r.height - paint_style.border_top_width - paint_style.border_bottom_width),
+        visible: r.visible,
+    };
+}
+
+fn computeNodeContentRect(r: Rect, style: *const ComputedStyle, paint_style: ResolvedPaintStyle, vw: f32, vh: f32): Rect {
+    const pad_l = style.padding_left.resolvePx(r.width, style.font_size_px, 16.0, vw, vh);
+    const pad_r = style.padding_right.resolvePx(r.width, style.font_size_px, 16.0, vw, vh);
+    const pad_t = style.padding_top.resolvePx(r.height, style.font_size_px, 16.0, vw, vh);
+    const pad_b = style.padding_bottom.resolvePx(r.height, style.font_size_px, 16.0, vw, vh);
+    return Rect {
+        x: r.x + paint_style.border_left_width + pad_l,
+        y: r.y + paint_style.border_top_width + pad_t,
+        width: @max(0.0, r.width - paint_style.border_left_width - paint_style.border_right_width - pad_l - pad_r),
+        height: @max(0.0, r.height - paint_style.border_top_width - paint_style.border_bottom_width - pad_t - pad_b),
+        visible: r.visible,
+    };
+}
+
 fn paintBackgroundImage(
     canvas: *Canvas,
     allocator: std.mem.Allocator,
     src: []const u8,
     box_rect: Rect,
     parent_clip: ClipRect?,
+    fit: ObjectFit,
+    pos: ObjectPos,
 ) {
     if (!box_rect.visible || box_rect.width <= 0.0 || box_rect.height <= 0.0 || src.len == 0) return;
     if (std.mem.startsWith(u8, src, "data:image/svg+xml") || std.mem.indexOf(u8, src, ".svg") != null) {
@@ -2305,11 +2401,13 @@ fn paintBackgroundImage(
     const rgba = rgba_opt.?;
     defer allocator.free(rgba);
     if (img_w == 0 || img_h == 0 || rgba.len == 0) return;
-    const dst_x = @as(i32, @intFromFloat(@floor(box_rect.x)));
-    const dst_y = @as(i32, @intFromFloat(@floor(box_rect.y)));
-    const dst_w = @as(u32, @intFromFloat(@max(1.0, @ceil(box_rect.width))));
-    const dst_h = @as(u32, @intFromFloat(@max(1.0, @ceil(box_rect.height))));
-    canvas.blitScaledRgbaClipped(dst_x, dst_y, dst_w, dst_h, rgba, img_w, img_h, parent_clip);
+    const placed = computePlacedImageRect(box_rect, @as(f32, @floatFromInt(img_w)), @as(f32, @floatFromInt(img_h)), fit, pos);
+    const clip_box = intersectBoxClip(box_rect, parent_clip);
+    const dst_x = @as(i32, @intFromFloat(@floor(placed.x)));
+    const dst_y = @as(i32, @intFromFloat(@floor(placed.y)));
+    const dst_w = @as(u32, @intFromFloat(@max(1.0, @ceil(placed.width))));
+    const dst_h = @as(u32, @intFromFloat(@max(1.0, @ceil(placed.height))));
+    canvas.blitScaledRgbaClipped(dst_x, dst_y, dst_w, dst_h, rgba, img_w, img_h, clip_box);
 }
 
 fn scaleColorAlpha(c: CssColor, factor: f32): CssColor {
@@ -3046,13 +3144,20 @@ fn paintNodeRecursive(
         } else {
             canvas.paintBoxClipped(r, effective_paint_style, active_clip);
             if (style.bg_image_url_len > 0) {
-                paintBackgroundImage(canvas, canvas.allocator, style.bg_image_url_buf[0..style.bg_image_url_len], r, active_clip);
+                const bg_fit = switch (style.bg_size_kw) {
+                    .Auto => ObjectFit.Fill,
+                    .Contain => ObjectFit.Contain,
+                    .Cover => ObjectFit.Cover,
+                };
+                const pad_rect = computeNodePaddingRect(r, effective_paint_style);
+                paintBackgroundImage(canvas, canvas.allocator, style.bg_image_url_buf[0..style.bg_image_url_len], pad_rect, active_clip, bg_fit, style.bg_pos);
             }
         }
 
         if (node.hasTag("img")) {
             if (src := node.getAttribute("src")) {
-                paintBackgroundImage(canvas, canvas.allocator, src, r, active_clip);
+                const content_rect = computeNodeContentRect(r, style, effective_paint_style, vw, vh);
+                paintBackgroundImage(canvas, canvas.allocator, src, content_rect, active_clip, style.object_fit, style.object_pos);
             }
         }
 
@@ -3060,11 +3165,12 @@ fn paintNodeRecursive(
         while (cbi < opts.canvas_bitmaps.len) : (cbi += 1) {
             const cb = &opts.canvas_bitmaps[cbi];
             if (cb.node_id == node_id && cb.pixels.len >= @as(usize, cb.width) * @as(usize, cb.height) * 4) {
-                let dst_w = @as(u32, @intFromFloat(@max(0.0, r.width)));
-                let dst_h = @as(u32, @intFromFloat(@max(0.0, r.height)));
-                if (dst_w == 0) dst_w = cb.width;
-                if (dst_h == 0) dst_h = cb.height;
-                canvas.blitScaledRgba(@as(i32, @intFromFloat(r.x)), @as(i32, @intFromFloat(r.y)), dst_w, dst_h, cb.pixels, cb.width, cb.height);
+                const content_rect = computeNodeContentRect(r, style, effective_paint_style, vw, vh);
+                const placed = computePlacedImageRect(content_rect, @as(f32, @floatFromInt(cb.width)), @as(f32, @floatFromInt(cb.height)), style.object_fit, style.object_pos);
+                const cclip = intersectBoxClip(content_rect, active_clip);
+                const dst_w = @as(u32, @intFromFloat(@max(1.0, @ceil(placed.width))));
+                const dst_h = @as(u32, @intFromFloat(@max(1.0, @ceil(placed.height))));
+                canvas.blitScaledRgbaClipped(@as(i32, @intFromFloat(@floor(placed.x))), @as(i32, @intFromFloat(@floor(placed.y))), dst_w, dst_h, cb.pixels, cb.width, cb.height, cclip);
                 break;
             }
         }

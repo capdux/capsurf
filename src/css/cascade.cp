@@ -1074,7 +1074,139 @@ pub const PROP_BREAK_AFTER: usize = 97;
 pub const PROP_BREAK_INSIDE: usize = 98;
 pub const PROP_DIRECTION: usize = 99;
 pub const PROP_UNICODE_BIDI: usize = 100;
-pub const TOTAL_PROP_SLOTS: usize = 101;
+pub const PROP_OBJECT_FIT: usize = 101;
+pub const PROP_OBJECT_POS: usize = 102;
+pub const PROP_BG_POS: usize = 103;
+pub const TOTAL_PROP_SLOTS: usize = 104;
+
+pub enum ObjectFit {
+    Fill,
+    Contain,
+    Cover,
+    None,
+    ScaleDown,
+
+    static fn parse(raw: []const u8): ObjectFit? {
+        const s = std.mem.trim(u8, raw, " \t\r\n");
+        if (std.ascii.eqlIgnoreCase(s, "fill")) return ObjectFit.Fill;
+        if (std.ascii.eqlIgnoreCase(s, "contain")) return ObjectFit.Contain;
+        if (std.ascii.eqlIgnoreCase(s, "cover")) return ObjectFit.Cover;
+        if (std.ascii.eqlIgnoreCase(s, "none")) return ObjectFit.None;
+        if (std.ascii.eqlIgnoreCase(s, "scale-down")) return ObjectFit.ScaleDown;
+        return null;
+    }
+}
+
+pub enum BgSizeKeyword {
+    Auto,
+    Contain,
+    Cover,
+}
+
+pub struct ObjectPos {
+    x_pct: f32 = 0.5;
+    x_px: f32 = 0.0;
+    y_pct: f32 = 0.5;
+    y_px: f32 = 0.0;
+
+    static fn parseOffsetPxOrPct(tok: []const u8): (struct { is_pct: bool, val: f32 })? {
+        const s = std.mem.trim(u8, tok, " \t\r\n");
+        if (s.len == 0) return null;
+        if (s[s.len - 1] == '%') {
+            const v = std.fmt.parseFloat(f32, s[0 .. s.len - 1]) catch return null;
+            return .{ is_pct: true, val: v / 100.0 };
+        }
+        if (std.mem.endsWith(u8, s, "px") || std.mem.endsWith(u8, s, "PX")) {
+            const v = std.fmt.parseFloat(f32, s[0 .. s.len - 2]) catch return null;
+            return .{ is_pct: false, val: v };
+        }
+        if (std.mem.eql(u8, s, "0")) {
+            return .{ is_pct: false, val: 0.0 };
+        }
+        return null;
+    }
+
+    static fn parse(raw: []const u8, default_pct: f32): ObjectPos {
+        let res = ObjectPos { x_pct: default_pct, x_px: 0.0, y_pct: default_pct, y_px: 0.0 };
+        let toks: [4][]const u8 = ["", "", "", ""];
+        let count: usize = 0;
+        let it = std.mem.tokenizeAny(u8, raw, " \t\r\n");
+        while (t := it.next()) {
+            if (count < 4) {
+                toks[count] = t;
+                count += 1;
+            }
+        }
+        if (count == 0) return res;
+        // 1-token case
+        if (count == 1) {
+            const t = toks[0];
+            if (std.ascii.eqlIgnoreCase(t, "center")) { res.x_pct = 0.5; res.y_pct = 0.5; }
+            else if (std.ascii.eqlIgnoreCase(t, "left")) { res.x_pct = 0.0; res.y_pct = 0.5; }
+            else if (std.ascii.eqlIgnoreCase(t, "right")) { res.x_pct = 1.0; res.y_pct = 0.5; }
+            else if (std.ascii.eqlIgnoreCase(t, "top")) { res.x_pct = 0.5; res.y_pct = 0.0; }
+            else if (std.ascii.eqlIgnoreCase(t, "bottom")) { res.x_pct = 0.5; res.y_pct = 1.0; }
+            else if (p := ObjectPos.parseOffsetPxOrPct(t)) {
+                if (p.is_pct) { res.x_pct = p.val; res.x_px = 0.0; } else { res.x_pct = 0.0; res.x_px = p.val; }
+                res.y_pct = 0.5; res.y_px = 0.0;
+            }
+            return res;
+        }
+        // Parse 2..4 tokens with optional edge keywords (left/right/top/bottom/center)
+        let has_x = false;
+        let has_y = false;
+        let i: usize = 0;
+        while (i < count) : (i += 1) {
+            const t = toks[i];
+            if (std.ascii.eqlIgnoreCase(t, "left") || std.ascii.eqlIgnoreCase(t, "right")) {
+                const is_right = std.ascii.eqlIgnoreCase(t, "right");
+                let xp: f32 = if (is_right) 1.0 else 0.0;
+                let xpx: f32 = 0.0;
+                if (i + 1 < count) {
+                    if (off := ObjectPos.parseOffsetPxOrPct(toks[i + 1])) {
+                        if (off.is_pct) {
+                            xp = if (is_right) (1.0 - off.val) else off.val;
+                        } else {
+                            xpx = if (is_right) (-off.val) else off.val;
+                        }
+                        i += 1;
+                    }
+                }
+                res.x_pct = xp; res.x_px = xpx; has_x = true;
+            } else if (std.ascii.eqlIgnoreCase(t, "top") || std.ascii.eqlIgnoreCase(t, "bottom")) {
+                const is_bot = std.ascii.eqlIgnoreCase(t, "bottom");
+                let yp: f32 = if (is_bot) 1.0 else 0.0;
+                let ypx: f32 = 0.0;
+                if (i + 1 < count) {
+                    if (off := ObjectPos.parseOffsetPxOrPct(toks[i + 1])) {
+                        if (off.is_pct) {
+                            yp = if (is_bot) (1.0 - off.val) else off.val;
+                        } else {
+                            ypx = if (is_bot) (-off.val) else off.val;
+                        }
+                        i += 1;
+                    }
+                }
+                res.y_pct = yp; res.y_px = ypx; has_y = true;
+            } else if (std.ascii.eqlIgnoreCase(t, "center")) {
+                if (!has_x && (i == 0 || has_y)) {
+                    res.x_pct = 0.5; res.x_px = 0.0; has_x = true;
+                } else {
+                    res.y_pct = 0.5; res.y_px = 0.0; has_y = true;
+                }
+            } else if (off := ObjectPos.parseOffsetPxOrPct(t)) {
+                if (!has_x) {
+                    if (off.is_pct) { res.x_pct = off.val; res.x_px = 0.0; } else { res.x_pct = 0.0; res.x_px = off.val; }
+                    has_x = true;
+                } else if (!has_y) {
+                    if (off.is_pct) { res.y_pct = off.val; res.y_px = 0.0; } else { res.y_pct = 0.0; res.y_px = off.val; }
+                    has_y = true;
+                }
+            }
+        }
+        return res;
+    }
+}
 
 pub enum ColorScheme {
     Normal,
@@ -2030,6 +2162,10 @@ pub struct ComputedStyle {
     bg_clip_count: usize = 0;
     bg_image_url_buf: [256]u8 = [0; 256];
     bg_image_url_len: usize = 0;
+    bg_size_kw: BgSizeKeyword = BgSizeKeyword.Auto;
+    bg_pos: ObjectPos = ObjectPos { x_pct: 0.0, x_px: 0.0, y_pct: 0.0, y_px: 0.0 };
+    object_fit: ObjectFit = ObjectFit.Fill;
+    object_pos: ObjectPos = ObjectPos {};
     container_type: ContainerType = ContainerType.Normal;
     container_name_buf: [64]u8 = [0; 64];
     container_name_len: usize = 0;
@@ -4173,21 +4309,49 @@ pub struct ComputedStyle {
             }
             return;
         }
+        if (std.ascii.eqlIgnoreCase(name, "object-fit")) {
+            if (ofit := ObjectFit.parse(val)) {
+                if (_.tryClaimSlot(PROP_OBJECT_FIT, weight)) {
+                    _.object_fit = ofit;
+                }
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "object-position")) {
+            if (_.tryClaimSlot(PROP_OBJECT_POS, weight)) {
+                _.object_pos = ObjectPos.parse(val, 0.5);
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "background-position")) {
+            if (_.tryClaimSlot(PROP_BG_POS, weight)) {
+                _.bg_pos = ObjectPos.parse(val, 0.0);
+            }
+            return;
+        }
         if (std.ascii.eqlIgnoreCase(name, "background-size")) {
             if (_.tryClaimSlot(PROP_BG_SIZE, weight)) {
-                let sit = std.mem.tokenizeAny(u8, val, " \t\r\n");
-                if (s0 := sit.next()) {
-                    if (v0 := parseGradPxToken(s0)) {
-                        if (v0 > 0.0) {
-                            _.bg_gradient.tile_w = v0;
-                            _.bg_gradient.tile_h = v0;
+                const trim_bs = std.mem.trim(u8, val, " \t\r\n");
+                if (std.ascii.eqlIgnoreCase(trim_bs, "contain")) {
+                    _.bg_size_kw = BgSizeKeyword.Contain;
+                } else if (std.ascii.eqlIgnoreCase(trim_bs, "cover")) {
+                    _.bg_size_kw = BgSizeKeyword.Cover;
+                } else {
+                    _.bg_size_kw = BgSizeKeyword.Auto;
+                    let sit = std.mem.tokenizeAny(u8, val, " \t\r\n");
+                    if (s0 := sit.next()) {
+                        if (v0 := parseGradPxToken(s0)) {
+                            if (v0 > 0.0) {
+                                _.bg_gradient.tile_w = v0;
+                                _.bg_gradient.tile_h = v0;
+                            }
                         }
                     }
-                }
-                if (s1 := sit.next()) {
-                    if (v1 := parseGradPxToken(s1)) {
-                        if (v1 > 0.0) {
-                            _.bg_gradient.tile_h = v1;
+                    if (s1 := sit.next()) {
+                        if (v1 := parseGradPxToken(s1)) {
+                            if (v1 > 0.0) {
+                                _.bg_gradient.tile_h = v1;
+                            }
                         }
                     }
                 }

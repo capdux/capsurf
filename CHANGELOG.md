@@ -4428,3 +4428,6 @@
   - `src/js/shim/cssom.js`: `normalizeSingleColor` 接入 `__capsurf_parse_color` (`cap:css` `CssColor.parse`) 快路径，并修复 `hwb(... none)` 保留 `%` 后缀。
   - `/data/dev/cp/lib/css/color.cp`: `CssColor.fromHwb` 消除 `fromHsl` 中间 `u8` 量化及 `1.0 - w - bl` 浮点误差。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 828**:
+  - `src/css/cascade.cp`: 新增 `ObjectFit`、`BgSizeKeyword`、`ObjectPos` 及其 1~4 token 边缘偏移解析，接入 `object-fit`、`object-position`、`background-size: contain|cover`、`background-position`。
+  - `src/render/painter.cp`: 新增 `computePlacedImageRect`、`intersectBoxClip`、`computeNodeContentRect`、`computeNodePaddingRect`，为 `<img>`、`<canvas>` 与 `background-image` 实现原生内容区/内边距区裁剪与 `object-fit`/`object-position` 绘制。
