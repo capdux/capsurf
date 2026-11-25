@@ -2548,3 +2548,4 @@
 | Phase 878 | `text-orientation` 校验、`text-align-all` 继承 & `calc()` EOF 括号闭合 | `cssom.js`, `window.js` | `/css/css-writing-modes/` **20/20 (100%) PASS**, `{letter,word}-spacing-computed` & `css-text/inheritance` **4/4 PASS**; `--smoke` 3/3 PASS |
 | Phase 879 | `sheetKey` FNV-1a 全文哈希防碰撞修复 | `src/js/shim/window.js` | `transition-property-002.html` **PASS**; `--smoke` 3/3 PASS |
 | Phase 880 | `steps()`/`cubic-bezier()` 序列化与 `calc()`/`sign()` 钳位求值 | `cssom.js`, `window.js` | `step-timing-functions-syntax`, `timing-functions-syntax-{computed,valid}` **3/3 PASS**; `--smoke` 3/3 PASS |
+| Phase 881 | `linear(...)` 语法校验、折叠与嵌套 `calc()`/`min()` 求值 | `cssom.js`, `window.js` | `linear-timing-functions-syntax` 等 5 项 **5/5 PASS**; `--smoke` 3/3 PASS |

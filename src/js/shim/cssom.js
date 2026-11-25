@@ -3433,6 +3433,35 @@
         if (t.startsWith("linear(") && t.endsWith(")")) {
           const inner = t.slice(7, -1).trim();
           if (!inner) return false;
+          const stops = splitTopLevelComma(inner);
+          if (stops.length < 2) return false;
+          const isLinPct = (tok) => {
+            if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?%$/i.test(tok)) return true;
+            if (/^(?:calc|min|max|clamp)\(/i.test(tok)) {
+              if (!isValidCalcSyntax(tok)) return false;
+              if (/(?:\d|\.)(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|deg|rad|grad|turn|s|ms|hz|khz|dpi|dpcm|dppx|fr)\b/i.test(tok)) return false;
+              if (!tok.includes("%") && !/(?:var|env)\(/i.test(tok)) return false;
+              return true;
+            }
+            return false;
+          };
+          const isLinNum = (tok) => {
+            if (isNum(tok)) return true;
+            if (/^(?:calc|min|max|clamp|var|env|sign|sibling-index)\(/i.test(tok)) {
+              if (/^(?:calc|min|max|clamp)\(/i.test(tok) && !isValidCalcSyntax(tok)) return false;
+              if (/(?:\d|\.)(?:%|px|em|rem|ex|ch|vw|vh|deg|rad|grad|turn|s|ms)\b/i.test(tok)) return false;
+              return true;
+            }
+            return false;
+          };
+          for (let si = 0; si < stops.length; si++) {
+            const stToks = splitCssTokens(stops[si]);
+            if (stToks.length < 1 || stToks.length > 3) return false;
+            if (!isLinNum(stToks[0])) return false;
+            for (let pi = 1; pi < stToks.length; pi++) {
+              if (!isLinPct(stToks[pi])) return false;
+            }
+          }
           continue;
         }
         return false;
@@ -5908,6 +5937,49 @@
             });
             return "cubic-bezier(" + normArgs.join(", ") + ")";
           }
+        }
+        if (/^linear\(/i.test(pl) && pl.endsWith(")")) {
+          const stops = splitTopLevelComma(p.slice(7, -1).trim());
+          let hasZeroDiv = false;
+          const foldLinPct = (tok) => {
+            const m = /^calc\(\s*(.+)\s*\)$/i.exec(tok);
+            if (!m) return tok.toLowerCase();
+            const inn = m[1].trim();
+            if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)%(?:\s*[+-]\s*[+-]?(?:\d+(?:\.\d+)?|\.\d+)%)*$/.test(inn)) {
+              try {
+                const v = Function("return (" + inn.replace(/%/g, "") + ")")();
+                if (typeof v === "number" && isFinite(v)) return "calc(" + Number(v.toFixed(6)) + "%)";
+              } catch (_) {}
+            }
+            return tok.toLowerCase();
+          };
+          const normStops = stops.map((st) => {
+            const toks = splitCssTokens(st);
+            return toks.map((tk, idx) => {
+              if (idx === 0) {
+                if (/^calc\(/i.test(tk)) {
+                  const inn = tk.slice(5, -1).trim();
+                  if (/^[\d+\-*/().\s]+$/.test(inn)) {
+                    try {
+                      const v = Function("return (" + inn + ")")();
+                      if (typeof v !== "number" || !isFinite(v)) { hasZeroDiv = true; return "0"; }
+                    } catch (_) { hasZeroDiv = true; return "0"; }
+                  }
+                  return canonicalizeCalcToken(tk);
+                }
+                if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(tk)) {
+                  const n = Number(tk);
+                  return String(n === 0 ? 0 : n);
+                }
+                return tk.toLowerCase();
+              }
+              return foldLinPct(tk);
+            }).join(" ");
+          });
+          if (hasZeroDiv && normStops.length === 2 && normStops[0] === "0" && normStops[1] === "1") {
+            return "linear(0 0%, 1 100%)";
+          }
+          return "linear(" + normStops.join(", ") + ")";
         }
         return pl;
       }).join(", ");

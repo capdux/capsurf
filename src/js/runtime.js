@@ -7328,6 +7328,35 @@
           if (t.startsWith("linear(") && t.endsWith(")")) {
             const inner = t.slice(7, -1).trim();
             if (!inner) return false;
+            const stops = splitTopLevelComma(inner);
+            if (stops.length < 2) return false;
+            const isLinPct = (tok) => {
+              if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?%$/i.test(tok)) return true;
+              if (/^(?:calc|min|max|clamp)\(/i.test(tok)) {
+                if (!isValidCalcSyntax(tok)) return false;
+                if (/(?:\d|\.)(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|deg|rad|grad|turn|s|ms|hz|khz|dpi|dpcm|dppx|fr)\b/i.test(tok)) return false;
+                if (!tok.includes("%") && !/(?:var|env)\(/i.test(tok)) return false;
+                return true;
+              }
+              return false;
+            };
+            const isLinNum = (tok) => {
+              if (isNum(tok)) return true;
+              if (/^(?:calc|min|max|clamp|var|env|sign|sibling-index)\(/i.test(tok)) {
+                if (/^(?:calc|min|max|clamp)\(/i.test(tok) && !isValidCalcSyntax(tok)) return false;
+                if (/(?:\d|\.)(?:%|px|em|rem|ex|ch|vw|vh|deg|rad|grad|turn|s|ms)\b/i.test(tok)) return false;
+                return true;
+              }
+              return false;
+            };
+            for (let si = 0; si < stops.length; si++) {
+              const stToks = splitCssTokens(stops[si]);
+              if (stToks.length < 1 || stToks.length > 3) return false;
+              if (!isLinNum(stToks[0])) return false;
+              for (let pi = 1; pi < stToks.length; pi++) {
+                if (!isLinPct(stToks[pi])) return false;
+              }
+            }
             continue;
           }
           return false;
@@ -9803,6 +9832,49 @@
               });
               return "cubic-bezier(" + normArgs.join(", ") + ")";
             }
+          }
+          if (/^linear\(/i.test(pl) && pl.endsWith(")")) {
+            const stops = splitTopLevelComma(p.slice(7, -1).trim());
+            let hasZeroDiv = false;
+            const foldLinPct = (tok) => {
+              const m = /^calc\(\s*(.+)\s*\)$/i.exec(tok);
+              if (!m) return tok.toLowerCase();
+              const inn = m[1].trim();
+              if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)%(?:\s*[+-]\s*[+-]?(?:\d+(?:\.\d+)?|\.\d+)%)*$/.test(inn)) {
+                try {
+                  const v = Function("return (" + inn.replace(/%/g, "") + ")")();
+                  if (typeof v === "number" && isFinite(v)) return "calc(" + Number(v.toFixed(6)) + "%)";
+                } catch (_) {}
+              }
+              return tok.toLowerCase();
+            };
+            const normStops = stops.map((st) => {
+              const toks = splitCssTokens(st);
+              return toks.map((tk, idx) => {
+                if (idx === 0) {
+                  if (/^calc\(/i.test(tk)) {
+                    const inn = tk.slice(5, -1).trim();
+                    if (/^[\d+\-*/().\s]+$/.test(inn)) {
+                      try {
+                        const v = Function("return (" + inn + ")")();
+                        if (typeof v !== "number" || !isFinite(v)) { hasZeroDiv = true; return "0"; }
+                      } catch (_) { hasZeroDiv = true; return "0"; }
+                    }
+                    return canonicalizeCalcToken(tk);
+                  }
+                  if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(tk)) {
+                    const n = Number(tk);
+                    return String(n === 0 ? 0 : n);
+                  }
+                  return tk.toLowerCase();
+                }
+                return foldLinPct(tk);
+              }).join(" ");
+            });
+            if (hasZeroDiv && normStops.length === 2 && normStops[0] === "0" && normStops[1] === "1") {
+              return "linear(0 0%, 1 100%)";
+            }
+            return "linear(" + normStops.join(", ") + ")";
           }
           return pl;
         }).join(", ");
@@ -51054,18 +51126,79 @@
           computedMap.set(tfKey, tfRaw);
         }
         if (tfRaw && /\blinear\(/i.test(tfRaw)) {
-          computedMap.set(tfKey, tfRaw.replace(/\blinear\(([^)]*)\)/gi, (_, body) => {
-            const rawStops = body.split(",").map((s) => s.trim()).filter(Boolean);
+          const evalLinNum = (tk) => {
+            const s = String(tk || "").trim();
+            if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(s)) return Number(s);
+            if (/^(?:calc|min|max|clamp)\(/i.test(s)) {
+              let e = s.slice(s.indexOf("(") + 1, -1).trim();
+              e = e.replace(/\bmin\(/gi, "Math.min(").replace(/\bmax\(/gi, "Math.max(");
+              if (/^[\d+\-*/().,\sMathminx]+$/.test(e.replace(/Math\.(?:min|max)/g, ""))) {
+                try {
+                  const v = Function("return (" + e + ")")();
+                  if (typeof v === "number" && isFinite(v)) return v;
+                } catch (_) {}
+              }
+            }
+            return 0;
+          };
+          const evalLinPct = (tk) => {
+            const s = String(tk || "").trim();
+            if (s.endsWith("%") && /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?%$/i.test(s)) return parseFloat(s);
+            if (/^(?:calc|min|max|clamp)\(/i.test(s)) {
+              let e = s.slice(s.indexOf("(") + 1, -1).trim().replace(/%/g, "");
+              e = e.replace(/\bmin\(/gi, "Math.min(").replace(/\bmax\(/gi, "Math.max(");
+              if (/^[\d+\-*/().,\s]+$/.test(e.replace(/Math\.(?:min|max)/g, ""))) {
+                try {
+                  const v = Function("return (" + e + ")")();
+                  if (typeof v === "number" && isFinite(v)) return v;
+                } catch (_) {}
+              }
+            }
+            return parseFloat(s);
+          };
+          const tfItems2 = [];
+          let c2 = "", d2 = 0;
+          for (let i2 = 0; i2 < tfRaw.length; i2++) {
+            const ch = tfRaw[i2];
+            if (ch === "(") d2++;
+            else if (ch === ")") d2--;
+            if (ch === "," && d2 === 0) { tfItems2.push(c2.trim()); c2 = ""; }
+            else c2 += ch;
+          }
+          if (c2.trim()) tfItems2.push(c2.trim());
+          computedMap.set(tfKey, tfItems2.map((it) => {
+            if (!/^linear\(/i.test(it) || !it.endsWith(")")) return it;
+            const body = it.slice(7, -1);
+            const rawStops = [];
+            let sc = "", sd = 0;
+            for (let si = 0; si < body.length; si++) {
+              const ch = body[si];
+              if (ch === "(") sd++;
+              else if (ch === ")") sd--;
+              if (ch === "," && sd === 0) { if (sc.trim()) rawStops.push(sc.trim()); sc = ""; }
+              else sc += ch;
+            }
+            if (sc.trim()) rawStops.push(sc.trim());
             if (!rawStops.length) return "linear()";
             const stops = [];
             for (let i = 0; i < rawStops.length; i++) {
-              const toks = rawStops[i].split(/\s+/);
-              const y = String(Number(toks[0]));
+              const toks = [];
+              let tc = "", td = 0;
+              for (let ti = 0; ti < rawStops[i].length; ti++) {
+                const ch = rawStops[i][ti];
+                if (ch === "(") td++;
+                else if (ch === ")") td--;
+                if (/\s/.test(ch) && td === 0) { if (tc) { toks.push(tc); tc = ""; } }
+                else tc += ch;
+              }
+              if (tc) toks.push(tc);
+              const yVal = evalLinNum(toks[0]);
+              const y = String(yVal === 0 ? 0 : Number(yVal.toFixed(6)));
               if (toks.length === 1) stops.push({ y, p: null });
-              else if (toks.length === 2) stops.push({ y, p: parseFloat(toks[1]) });
+              else if (toks.length === 2) stops.push({ y, p: evalLinPct(toks[1]) });
               else {
-                stops.push({ y, p: parseFloat(toks[1]) });
-                stops.push({ y, p: parseFloat(toks[2]) });
+                stops.push({ y, p: evalLinPct(toks[1]) });
+                stops.push({ y, p: evalLinPct(toks[2]) });
               }
             }
             if (stops[0].p === null) stops[0].p = 0;
@@ -51088,7 +51221,7 @@
               } else i++;
             }
             return "linear(" + stops.map((st) => st.y + " " + Number(st.p.toFixed(6)) + "%").join(", ") + ")";
-          }));
+          }).join(", "));
         }
       }
       const rangeProps = ["animation-range-start", "animation-range-end"];

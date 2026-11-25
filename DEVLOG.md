@@ -3601,3 +3601,5 @@
 - 定位 `transition-property-002.html` 中 `"all, foobar"` -> `"foobar, all"` 与 `"inherit"` -> `"initial"` 连续切换返回旧值的根因：`sheetKey` 仅拼接 `t.length + ":" + t.slice(0, 64)`，导致前 64 字符和总长度相同的 `<style>.textContent` 发生缓存键碰撞；改用 FNV-1a 全文哈希后问题彻底消除。
 ### Phase 880 — `css-easing` 阶跃与贝塞尔缓动函数规范化闭环
 - 在 `cssom.js` 与 `window.js` 补齐 `step-start`/`step-end` 到 `steps(1, start)`/`steps(1)` 的规范序列化、`steps(n, end|jump-end)` 省略默认位置参数，以及 `steps(calc/sign)`、`cubic-bezier(calc/sign)` 在解析期与计算期的数值求值与边界钳位。
+### Phase 881 — `linear(...)` 缓动函数嵌套括号解析与严格校验
+- 消除 `window.js` 中 `linear\(([^)]*)\)` 正则遇到嵌套 `calc()`/`min()` 提前截断的缺陷，并在 `cssom.js` 补全 `linear()` stop 语法校验与 `%` `calc()` 折叠，使 `linear-timing-functions-syntax.html` 全量 35 项子测试全部通过。

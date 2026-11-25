@@ -4588,3 +4588,7 @@
 - `src/js/shim/cssom.js`: 放行 `steps()`/`cubic-bezier()` 内 `calc()`/`sign()`/`sibling-index()` 并拒绝 `calc(0/0)`；规范化 `step-start`、`step-end`、`steps(n, end|jump-end)` 与 `calc()`。
 - `src/js/shim/window.js`: `applyUsedValuesToComputedMap` 求值并钳位 `steps()`（`>=1` 或 `jump-none` 时 `>=2`）与 `cubic-bezier()`（`x1`/`x2` 钳位 `[0,1]`）。
 - `src/js/{runtime.js,runtime_source.cp}`: 重新打包；`step-timing-functions-syntax.html`、`timing-functions-syntax-computed.html`、`timing-functions-syntax-valid.html` **3/3 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 881 — CSS Easing `linear(...)` 语法校验与嵌套 `calc()`/`min()` 求值
+- `src/js/shim/cssom.js`: 校验 `linear(...)` 至少 2 个 stop 与 `<number> <percentage>{0,2}` 结构，拒绝单位混用及非法 `calc()`，规范折叠百分比 `calc()` 与 `calc(0/0)`。
+- `src/js/shim/window.js`: 以括号平衡扫描替代 `[^)]*` 解析 `linear(...)`，支持嵌套 `calc()`/`min()`/`max()` 求值。
+- `src/js/{runtime.js,runtime_source.cp}`: 重新打包；`linear-timing-functions-syntax.html` 等 5 项 `css-easing` 测试 **5/5 PASS**，`--smoke` 3/3 **PASS**。
