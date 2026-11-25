@@ -3603,3 +3603,5 @@
 - 在 `cssom.js` 与 `window.js` 补齐 `step-start`/`step-end` 到 `steps(1, start)`/`steps(1)` 的规范序列化、`steps(n, end|jump-end)` 省略默认位置参数，以及 `steps(calc/sign)`、`cubic-bezier(calc/sign)` 在解析期与计算期的数值求值与边界钳位。
 ### Phase 881 — `linear(...)` 缓动函数嵌套括号解析与严格校验
 - 消除 `window.js` 中 `linear\(([^)]*)\)` 正则遇到嵌套 `calc()`/`min()` 提前截断的缺陷，并在 `cssom.js` 补全 `linear()` stop 语法校验与 `%` `calc()` 折叠，使 `linear-timing-functions-syntax.html` 全量 35 项子测试全部通过。
+### Phase 882 — Web Animations 帧时间一致性与越界缓动外推
+- 修复 `DocumentTimeline.currentTime` 每次读取都调用 `performance.now()` 导致同步断言出现 `0.1px` 漂移的全局时序缺陷，并打通关键帧 `segT` 越界进度传递，使 `linear()` 与 `steps()` 输出外推测试全绿。

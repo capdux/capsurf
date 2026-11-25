@@ -2549,3 +2549,4 @@
 | Phase 879 | `sheetKey` FNV-1a 全文哈希防碰撞修复 | `src/js/shim/window.js` | `transition-property-002.html` **PASS**; `--smoke` 3/3 PASS |
 | Phase 880 | `steps()`/`cubic-bezier()` 序列化与 `calc()`/`sign()` 钳位求值 | `cssom.js`, `window.js` | `step-timing-functions-syntax`, `timing-functions-syntax-{computed,valid}` **3/3 PASS**; `--smoke` 3/3 PASS |
 | Phase 881 | `linear(...)` 语法校验、折叠与嵌套 `calc()`/`min()` 求值 | `cssom.js`, `window.js` | `linear-timing-functions-syntax` 等 5 项 **5/5 PASS**; `--smoke` 3/3 PASS |
+| Phase 882 | `DocumentTimeline` 帧时间冻结与 `linear()`/`steps()` 输出外推 | `src/js/shim/animations.js` | `linear-timing-functions-output`, `step-timing-functions-output` **2/2 PASS**; `--smoke` 3/3 PASS |

@@ -4592,3 +4592,6 @@
 - `src/js/shim/cssom.js`: 校验 `linear(...)` 至少 2 个 stop 与 `<number> <percentage>{0,2}` 结构，拒绝单位混用及非法 `calc()`，规范折叠百分比 `calc()` 与 `calc(0/0)`。
 - `src/js/shim/window.js`: 以括号平衡扫描替代 `[^)]*` 解析 `linear(...)`，支持嵌套 `calc()`/`min()`/`max()` 求值。
 - `src/js/{runtime.js,runtime_source.cp}`: 重新打包；`linear-timing-functions-syntax.html` 等 5 项 `css-easing` 测试 **5/5 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 882 — Web Animations `DocumentTimeline` 帧时间冻结与 `linear()`/`steps()` 输出外推
+- `src/js/shim/animations.js`: 冻结单轮同步任务 `DocumentTimeline.prototype.currentTime` 消除动画求值毫秒漂移；支持 `linear(...)` 缓动校验与分段线性/外推求值；移除关键帧段进度 `segT` 的 `[0,1]` 强钳位并修正 `steps()`/`step-start`/`step-end` 越界外推。
+- `src/js/{runtime.js,runtime_source.cp}`: 重新打包；`linear-timing-functions-output.html` 与 `step-timing-functions-output.html` **2/2 PASS**，`--smoke` 3/3 **PASS**。

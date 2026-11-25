@@ -39589,7 +39589,12 @@
   DocumentTimeline.prototype.constructor = DocumentTimeline;
   Object.defineProperty(DocumentTimeline.prototype, "currentTime", {
     get: function () {
-      return (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+      if (this._frameTime !== undefined && this._frameTime !== null) return this._frameTime;
+      const now = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+      this._frameTime = now;
+      const tl = this;
+      Promise.resolve().then(function () { tl._frameTime = null; });
+      return now;
     },
     configurable: true,
   });
@@ -39634,6 +39639,25 @@
       const jump = st[2] || "end";
       if (count > 0 && !(jump === "jump-none" && count < 2)) {
         return s;
+      }
+    }
+    if (s.startsWith("linear(") && s.endsWith(")")) {
+      const body = s.slice(7, -1).trim();
+      if (body) {
+        const stops = body.split(",").map((x) => x.trim());
+        if (stops.length >= 2) {
+          let ok = true;
+          for (let i = 0; i < stops.length; i++) {
+            const toks = stops[i].split(/\s+/).filter(Boolean);
+            if (toks.length < 1 || toks.length > 3) { ok = false; break; }
+            if (!/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/.test(toks[0])) { ok = false; break; }
+            for (let j = 1; j < toks.length; j++) {
+              if (!/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?%$/.test(toks[j])) { ok = false; break; }
+            }
+            if (!ok) break;
+          }
+          if (ok) return s;
+        }
       }
     }
     throw new TypeError("Failed to parse easing '" + easing + "': Invalid timing function.");
@@ -39764,13 +39788,10 @@
         return solveCubicBezier(x1, y1, x2, y2, t);
       }
     }
-    if (s === "step-start") {
-      return t >= 1 ? 1 : 1;
-    }
-    if (s === "step-end") {
-      return t >= 1 ? 1 : 0;
-    }
-    const st = s.match(/^steps\(\s*(\d+)(?:\s*,\s*(start|end|jump-start|jump-end|jump-none|jump-both))?\s*\)$/);
+    let stEff = s;
+    if (s === "step-start") stEff = "steps(1, start)";
+    else if (s === "step-end") stEff = "steps(1, end)";
+    const st = stEff.match(/^steps\(\s*(\d+)(?:\s*,\s*(start|end|jump-start|jump-end|jump-none|jump-both))?\s*\)$/);
     if (st) {
       const steps = parseInt(st[1], 10);
       const jump = st[2] || "end";
@@ -39781,9 +39802,69 @@
       let jumps = steps;
       if (jump === "jump-none") jumps = steps - 1;
       else if (jump === "jump-both") jumps = steps + 1;
-      if (currentStep < 0) currentStep = 0;
-      if (currentStep > jumps) currentStep = jumps;
+      if (t >= 0 && currentStep < 0) currentStep = 0;
+      if (t <= 1 && currentStep > jumps) currentStep = jumps;
       return jumps > 0 ? currentStep / jumps : 1;
+    }
+    if (s.startsWith("linear(") && s.endsWith(")")) {
+      const rawStops = s.slice(7, -1).split(",").map((x) => x.trim()).filter(Boolean);
+      const stops = [];
+      for (let i = 0; i < rawStops.length; i++) {
+        const toks = rawStops[i].split(/\s+/).filter(Boolean);
+        const y = parseFloat(toks[0]);
+        if (toks.length === 1) stops.push({ y, p: null });
+        else if (toks.length === 2) stops.push({ y, p: parseFloat(toks[1]) / 100 });
+        else {
+          stops.push({ y, p: parseFloat(toks[1]) / 100 });
+          stops.push({ y, p: parseFloat(toks[2]) / 100 });
+        }
+      }
+      if (stops.length >= 2) {
+        if (stops[0].p === null) stops[0].p = 0;
+        if (stops[stops.length - 1].p === null) stops[stops.length - 1].p = 1;
+        let maxP = stops[0].p;
+        for (let i = 0; i < stops.length; i++) {
+          if (stops[i].p !== null) {
+            if (stops[i].p < maxP) stops[i].p = maxP;
+            maxP = stops[i].p;
+          }
+        }
+        let i = 0;
+        while (i < stops.length) {
+          if (stops[i].p === null) {
+            let j = i + 1;
+            while (j < stops.length && stops[j].p === null) j++;
+            const p0 = stops[i - 1].p, p1 = stops[j].p, cnt = j - i + 1;
+            for (let k = i; k < j; k++) stops[k].p = p0 + ((p1 - p0) * (k - i + 1)) / cnt;
+            i = j;
+          } else i++;
+        }
+        if (t < stops[0].p) {
+          let j = 1;
+          while (j < stops.length && stops[j].p === stops[0].p) j++;
+          if (j < stops.length && stops[j].p !== stops[0].p) {
+            return stops[0].y + ((t - stops[0].p) / (stops[j].p - stops[0].p)) * (stops[j].y - stops[0].y);
+          }
+          return stops[0].y;
+        }
+        const last = stops.length - 1;
+        if (t >= stops[last].p) {
+          let j = last - 1;
+          while (j >= 0 && stops[j].p === stops[last].p) j--;
+          if (j >= 0 && stops[last].p !== stops[j].p) {
+            return stops[last].y + ((t - stops[last].p) / (stops[last].p - stops[j].p)) * (stops[last].y - stops[j].y);
+          }
+          return stops[last].y;
+        }
+        for (let k = 0; k < last; k++) {
+          if (t >= stops[k].p && t < stops[k + 1].p) {
+            const span = stops[k + 1].p - stops[k].p;
+            if (span === 0) return stops[k + 1].y;
+            return stops[k].y + ((t - stops[k].p) / span) * (stops[k + 1].y - stops[k].y);
+          }
+        }
+        return stops[last].y;
+      }
     }
     return t;
   }
@@ -40316,7 +40397,7 @@
       const f0 = frames[idx];
       const f1 = frames[idx + 1] || f0;
       const span = offsets[idx + 1] - offsets[idx];
-      const segT = span > 0 ? Math.max(0, Math.min(1, (effectProgress - offsets[idx]) / span)) : 1;
+      const segT = span > 0 ? (effectProgress - offsets[idx]) / span : 1;
       const easedP = evaluateAnimationEasing(f0.easing || "linear", segT);
 
       const props = new Set();
