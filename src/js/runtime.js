@@ -5062,6 +5062,8 @@
       if (prop === "unicode-bidi" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_unicode_bidi === "function") return globalThis.__capsurf_is_valid_css_unicode_bidi(vLower);
       if (prop === "float" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_float === "function") return globalThis.__capsurf_is_valid_css_float(vLower);
       if (prop === "clear" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_clear === "function") return globalThis.__capsurf_is_valid_css_clear(vLower);
+      if (prop === "content-visibility" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_content_visibility === "function") return globalThis.__capsurf_is_valid_css_content_visibility(vLower);
+      if (prop === "isolation" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_isolation === "function") return globalThis.__capsurf_is_valid_css_isolation(vLower);
       if (allowedKeywords) {
         return allowedKeywords.indexOf(vLower) !== -1;
       }
@@ -6946,6 +6948,9 @@
         return true;
       }
       if (prop === "contain") {
+        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_contain === "function") {
+          return globalThis.__capsurf_is_valid_css_contain(vLower);
+        }
         const toks = splitCssTokens(trimmed);
         if (toks.length === 0) return false;
         if (toks.length === 1) {
@@ -8224,6 +8229,9 @@
         return true;
       }
       if (prop === "mix-blend-mode" || prop === "background-blend-mode") {
+        if (prop === "mix-blend-mode" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_mix_blend_mode === "function") {
+          return globalThis.__capsurf_is_valid_css_mix_blend_mode(vLower);
+        }
         const BLEND_MODES = new Set([
           "normal", "multiply", "screen", "overlay", "darken", "lighten",
           "color-dodge", "color-burn", "hard-light", "soft-light",

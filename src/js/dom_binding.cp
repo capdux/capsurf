@@ -117,6 +117,10 @@ import {
     isValidCssFloatValue,
     isValidCssClearValue,
     isValidCssObjectFitValue,
+    isValidCssContainValue,
+    isValidCssContentVisibilityValue,
+    isValidCssIsolationValue,
+    isValidCssMixBlendModeValue,
 } from "cap:css";
 import { LayoutTree, Rect } from "../layout/layout.cp";
 import { RUNTIME_CHUNKS } from "./runtime_source.cp";
@@ -1131,6 +1135,22 @@ fn callStrValidator1(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, pred: 
 @c fn js_capsurf_is_valid_css_object_fit(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     * = this_val;
     return callStrValidator1(ctx, argc, argv, isValidCssObjectFitValue);
+}
+@c fn js_capsurf_is_valid_css_contain(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssContainValue);
+}
+@c fn js_capsurf_is_valid_css_content_visibility(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssContentVisibilityValue);
+}
+@c fn js_capsurf_is_valid_css_isolation(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssIsolationValue);
+}
+@c fn js_capsurf_is_valid_css_mix_blend_mode(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssMixBlendModeValue);
 }
 @c fn js_capsurf_is_valid_css_len_pct(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     * = this_val;
@@ -3265,6 +3285,10 @@ pub fn mountDom(
     defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_float", js_capsurf_is_valid_css_float, 1);
     defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_clear", js_capsurf_is_valid_css_clear, 1);
     defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_object_fit", js_capsurf_is_valid_css_object_fit, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_contain", js_capsurf_is_valid_css_contain, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_content_visibility", js_capsurf_is_valid_css_content_visibility, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_isolation", js_capsurf_is_valid_css_isolation, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_mix_blend_mode", js_capsurf_is_valid_css_mix_blend_mode, 1);
 
     // Assemble and evaluate modular runtime shim
     let total_len: usize = 0;

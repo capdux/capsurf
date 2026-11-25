@@ -3562,3 +3562,5 @@
 - 将 `list-style-position` 与 `list-style-type` 校验收口至 `cap:css` (`liststyle.cp`) 并全量通过 4 项对应 WPT 解析测试，累计已有 **47 个** CSSOM 高频语法校验/求值/序列化入口完成 `cap:css` 下沉。
 ### Phase 861 — `writing-mode` / `direction` / `unicode-bidi` / `float` / `clear` / `object-fit` 下沉 `cap:css`
 - 将 `writing-mode`/`direction`/`unicode-bidi`/`float`/`clear`/`object-fit` 校验收口至 `cap:css` (`layoutctrl.cp`) 并全量通过 8 项对应 WPT 解析测试，累计已有 **53 个** CSSOM 高频语法校验/求值/序列化入口完成 `cap:css` 下沉。
+### Phase 862 — `contain` / `content-visibility` / `isolation` / `mix-blend-mode` 下沉 `cap:css`
+- 将 `contain`/`content-visibility`/`isolation`/`mix-blend-mode` 校验收口至 `cap:css` (`containProp.cp`) 并全量通过 6 项对应 WPT 解析测试，累计已有 **57 个** CSSOM 高频语法校验/求值/序列化入口完成 `cap:css` 下沉。
