@@ -408,6 +408,10 @@ function interpolateAnimValue(prop, fromVal, toVal, p) {
       const parts = [];
       let allNum = true;
       for (let i = 0; i < a1.length; i++) {
+        if (a1[i].toLowerCase() === a2[i].toLowerCase() && (/^[a-z\/]+$/i.test(a1[i]) || a1[i] === "/")) {
+          parts.push(a1[i].toLowerCase());
+          continue;
+        }
         const m1 = a1[i].match(/^([+-]?(?:\d+\.?\d*|\.\d+))([a-z%]*)$/i);
         const m2 = a2[i].match(/^([+-]?(?:\d+\.?\d*|\.\d+))([a-z%]*)$/i);
         if (!m1 || !m2 || m1[2] !== m2[2]) { allNum = false; break; }

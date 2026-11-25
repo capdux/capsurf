@@ -5956,7 +5956,7 @@
           : new Set(["content-box", "padding-box", "border-box", "margin-box"]);
         let hasShape = false, hasBox = false;
         const isValidShape = (sh) => {
-          const sm = /^([a-z-]+)\((.*)\)$/i.exec(sh);
+          const sm = /^([a-z-]+)\(([\s\S]*)\)$/i.exec(sh);
           if (!sm) return false;
           const fn = sm[1].toLowerCase(), body = sm[2].trim();
           if (fn === "url") return body.length > 0;
@@ -40638,6 +40638,10 @@
         const parts = [];
         let allNum = true;
         for (let i = 0; i < a1.length; i++) {
+          if (a1[i].toLowerCase() === a2[i].toLowerCase() && (/^[a-z\/]+$/i.test(a1[i]) || a1[i] === "/")) {
+            parts.push(a1[i].toLowerCase());
+            continue;
+          }
           const m1 = a1[i].match(/^([+-]?(?:\d+\.?\d*|\.\d+))([a-z%]*)$/i);
           const m2 = a2[i].match(/^([+-]?(?:\d+\.?\d*|\.\d+))([a-z%]*)$/i);
           if (!m1 || !m2 || m1[2] !== m2[2]) { allNum = false; break; }
@@ -53537,51 +53541,32 @@
           }
           const rawD = strTok.replace(/^['"]|['"]$/g, "").trim();
           const toks = rawD.match(/[MmLlHhVvCcSsQqTtAaZz]|[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?/g) || [];
-          let ti = 0, cmd = "", cx = 0, cy = 0, sx = 0, sy = 0;
+          let ti = 0, cmd = "";
           const out = [], fmtN = (n) => String(Number(n.toFixed(6)));
           const nextN = () => Number(toks[ti++]);
           const isNum = () => ti < toks.length && !/^[A-Za-z]$/.test(toks[ti]);
           while (ti < toks.length) {
             if (/^[A-Za-z]$/.test(toks[ti])) cmd = toks[ti++];
             const up = cmd.toUpperCase(), rel = cmd !== up;
-            if (up === "Z") { out.push("Z"); cx = sx; cy = sy; cmd = ""; continue; }
+            if (up === "Z") { out.push("Z"); cmd = ""; continue; }
             if (!isNum()) break;
             if (up === "M") {
               let first = true;
               while (isNum()) {
-                const x = (rel ? cx : 0) + nextN(), y = (rel ? cy : 0) + nextN();
-                cx = x; cy = y;
-                if (first) { sx = x; sy = y; out.push("M", fmtN(x), fmtN(y)); first = false; cmd = rel ? "l" : "L"; }
-                else out.push("L", fmtN(x), fmtN(y));
+                const x = nextN(), y = nextN();
+                if (first) { out.push(cmd, fmtN(x), fmtN(y)); first = false; cmd = rel ? "l" : "L"; }
+                else out.push(cmd, fmtN(x), fmtN(y));
               }
             } else if (up === "L" || up === "T") {
-              while (isNum()) {
-                const x = (rel ? cx : 0) + nextN(), y = (rel ? cy : 0) + nextN();
-                cx = x; cy = y; out.push(up, fmtN(x), fmtN(y));
-              }
-            } else if (up === "H") {
-              while (isNum()) { cx = (rel ? cx : 0) + nextN(); out.push("H", fmtN(cx)); }
-            } else if (up === "V") {
-              while (isNum()) { cy = (rel ? cy : 0) + nextN(); out.push("V", fmtN(cy)); }
+              while (isNum()) { out.push(cmd, fmtN(nextN()), fmtN(nextN())); }
+            } else if (up === "H" || up === "V") {
+              while (isNum()) { out.push(cmd, fmtN(nextN())); }
             } else if (up === "C") {
-              while (isNum()) {
-                const x1 = (rel ? cx : 0) + nextN(), y1 = (rel ? cy : 0) + nextN();
-                const x2 = (rel ? cx : 0) + nextN(), y2 = (rel ? cy : 0) + nextN();
-                const x = (rel ? cx : 0) + nextN(), y = (rel ? cy : 0) + nextN();
-                cx = x; cy = y; out.push("C", fmtN(x1), fmtN(y1), fmtN(x2), fmtN(y2), fmtN(x), fmtN(y));
-              }
+              while (isNum()) { out.push(cmd, fmtN(nextN()), fmtN(nextN()), fmtN(nextN()), fmtN(nextN()), fmtN(nextN()), fmtN(nextN())); }
             } else if (up === "S" || up === "Q") {
-              while (isNum()) {
-                const x1 = (rel ? cx : 0) + nextN(), y1 = (rel ? cy : 0) + nextN();
-                const x = (rel ? cx : 0) + nextN(), y = (rel ? cy : 0) + nextN();
-                cx = x; cy = y; out.push(up, fmtN(x1), fmtN(y1), fmtN(x), fmtN(y));
-              }
+              while (isNum()) { out.push(cmd, fmtN(nextN()), fmtN(nextN()), fmtN(nextN()), fmtN(nextN())); }
             } else if (up === "A") {
-              while (isNum()) {
-                const rx = nextN(), ry = nextN(), rot = nextN(), la = nextN(), sw = nextN();
-                const x = (rel ? cx : 0) + nextN(), y = (rel ? cy : 0) + nextN();
-                cx = x; cy = y; out.push("A", fmtN(rx), fmtN(ry), fmtN(rot), fmtN(la), fmtN(sw), fmtN(x), fmtN(y));
-              }
+              while (isNum()) { out.push(cmd, fmtN(nextN()), fmtN(nextN()), fmtN(nextN()), fmtN(nextN()), fmtN(nextN()), fmtN(nextN()), fmtN(nextN())); }
             } else break;
           }
           res = "path(" + (fr === "evenodd" ? "evenodd, " : "") + '"' + out.join(" ") + '")';

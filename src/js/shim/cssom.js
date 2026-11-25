@@ -2003,7 +2003,7 @@
         : new Set(["content-box", "padding-box", "border-box", "margin-box"]);
       let hasShape = false, hasBox = false;
       const isValidShape = (sh) => {
-        const sm = /^([a-z-]+)\((.*)\)$/i.exec(sh);
+        const sm = /^([a-z-]+)\(([\s\S]*)\)$/i.exec(sh);
         if (!sm) return false;
         const fn = sm[1].toLowerCase(), body = sm[2].trim();
         if (fn === "url") return body.length > 0;

@@ -4678,3 +4678,5 @@
 - `src/js/shim/window.js`: 将 `shape-outside` 与 `clip-path` 接入 `valCheckProps` 校验过滤，15 项 `shape-outside-invalid-*.html` **15/15 PASS**，`--smoke` 3/3 **PASS**。
 ### Phase 920 — `ex`/`vmin`/`vmax` 单位解析与 `shape-outside` `toPrecision(6)` 精度全绿
 - `src/js/shim/window.js`: `evalCssLengthExpr`/`evalLinLenPctTok` 补齐 `ex`/`vmin`/`vmax` 并为 `shape-outside`/`clip-path` 改用 `toPrecision(6)` 序列化，`shape-outside-polygon-004.html` (144/144)、`shape-outside-circle-005.html` (52/52)、`shape-outside-shape-arguments-000.html` **3/3 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 921 — `path()` 相对指令保留、跨行 `polygon()` 与 `inset(round)` 插值
+- `src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/shim/animations.js`: 修复跨行 `polygon()` 正则匹配、`path()` 保留相对指令序列化及 `inset(... round ...)` 关键字透传插值，`shape-outside-shape-notation-000.html`、`basic-shape-interpolation.html`、`path-function-computed.html` **3/3 PASS**，`--smoke` 3/3 **PASS**。

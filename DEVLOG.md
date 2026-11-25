@@ -3681,3 +3681,5 @@
 - `cssom.js` 已具备完整的 `inset()`/`circle()`/`ellipse()` 参数校验，但 `window.js` `collectRawComputedMap` 的 `valCheckProps` 漏列 `shape-outside`/`clip-path`，补入后 15 个 `shape-outside-invalid-*.html` 全部一次通过。
 ### Phase 920 — `ex`/`vmin`/`vmax` 单位与 `toPrecision(6)` 直接序列化
 - 排查发现 `evalCssLengthExpr` 正则漏列 `ex|vmin|vmax`，且 `evalLinLenPctTok` 先用 `toFixed(4)` 截断 `20cm` (`755.9055`) 导致再次转 `toPrecision(6)` 时因 IEEE-754 向下舍入成 `755.905`。改为直接从 `evalCssLengthExpr` 输出 `toPrecision(6)` 并补全 `ex`/`vmin`/`vmax` 后，3 项共 206 个 subtest 一次全绿。
+### Phase 921 — `path()` 相对指令规范、`[\s\S]*` 跨行形状与 `inset` 关键字插值
+- 修复 `cssom.js` `isValidShape` 因 `(.*)` 不匹配 `\n` 导致多行 `polygon()` 被拒绝、`window.js` `path()` 误将 `h`/`v` 转为绝对 `H`/`V` 坐标、以及 `animations.js` 函数参数插值遇到 `round`/`at` 关键字中断的问题，三项全部通过。
