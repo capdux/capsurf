@@ -3430,3 +3430,5 @@
 - 将 `CSSStyleSheet.prototype.title` 改为只读 getter 并为 `:host-context` 补全函数式伪类必选括号校验，`stylesheet-title-002.html` 与 `host-context-parsing.html` 均 **PASS**。
 ### Phase 795 — `::slotted()` 伪元素/宽容选择器链式解析全绿（36/36）
 - 在 `selector.js` 补全 `::slotted()` 后接 tree-abiding 伪元素（`::before`/`::after`/`::marker`/`::placeholder`/`::file-selector-button`/`::details-content`/`::picker(...)`/`::picker-icon`）及 `:is()`/`:where()` 的链式校验，并在 `cssom.js` `CSS.supports("selector(...)")` 严格模式拦截 `::slotted(...):is/:where`，`slotted-parsing.html` 36/36 **PASS**。
+### Phase 796 — `::part()` 序列化规范化与后接伪类校验全绿（70/70）
+- 在 `selector.js` 实现 `::part()` 未加引号反斜杠转义跳过、空白折叠（保留 `\ ` 尾随转义空格）及 `::part()` 后接结构/树信息伪类（含 `:not()` 透传）校验，并在 `cssom.js` 严格模式拦截 `::part():is/:where` 中的非法伪类，`part/serialization.html` (3/3) 与 `part/pseudo-classes-after-part.html` (67/67) 均 **PASS**。

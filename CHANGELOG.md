@@ -4304,3 +4304,7 @@
   - `src/js/shim/selector.js`: 补全 `::picker`/`::picker-icon`、`::slotted()` 后接 tree-abiding 伪元素与 `:is()`/`:where()` 校验及 `:where(::before)` 保留。
   - `src/js/shim/cssom.js`: `selectorSupported` 在 `CSS.supports("selector(...)")` 严格模式下拦截 `::slotted(...):is/:where`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 796**:
+  - `src/js/shim/selector.js`: 补全 `:active-view-transition*`/`:xr-overlay`，修复 `::part()` 反斜杠转义与空格折叠，以及 `::part()` 后接结构/树信息伪类（含 `:not()` 内 `inPart` 透传）校验。
+  - `src/js/shim/cssom.js`: `selectorSupported` 在严格模式下拦截 `::part():is/:where` 中的结构/树信息伪类。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

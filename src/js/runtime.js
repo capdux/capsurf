@@ -11048,6 +11048,7 @@
     function selectorSupported(selector) {
       if (typeof selector !== "string") return false;
       if (/::slotted\([\s\S]*\)\s*:(?:is|where)\(/i.test(selector)) return false;
+      if (/::part\([^)]*\)\s*:(?:is|where)\([^)]*:(?:empty|first-child|first-of-type|last-child|last-of-type|nth-|only-|host|has|scope|left|right|first)\b/i.test(selector)) return false;
       if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_canonicalizeSelector === "function") {
         return globalThis.__capsurf_canonicalizeSelector(selector, false) !== null;
       }
@@ -16821,9 +16822,15 @@
   const REQUIRED_FUNC_PSEUDOS = new Set([
     ":not", ":is", ":where", ":has", ":state", ":lang", ":dir", ":host-context",
     ":nth-child", ":nth-last-child", ":nth-of-type", ":nth-last-of-type",
-    "::slotted", "::part", "::scroll-button", "::picker"
+    "::slotted", "::part", "::scroll-button", "::picker", ":active-view-transition-type"
   ]);
-  const NON_EMPTY_FUNC_PSEUDOS = new Set([":not", ":has", ":state", ":host-context", "::slotted", "::part", ":lang", ":dir"]);
+  const NON_EMPTY_FUNC_PSEUDOS = new Set([":not", ":has", ":state", ":host-context", "::slotted", "::part", ":lang", ":dir", ":active-view-transition-type"]);
+  const PART_DISALLOWED_PSEUDOS = new Set([
+    ":empty", ":first-child", ":first-of-type", ":last-child", ":last-of-type",
+    ":nth-child", ":nth-last-child", ":nth-last-of-type", ":nth-of-type",
+    ":only-child", ":only-of-type", ":host", ":host-context", ":has", ":scope",
+    ":left", ":right", ":first", "::part"
+  ]);
   const KNOWN_PSEUDO_CLASSES = new Set([
     ":hover", ":active", ":focus", ":focus-visible", ":focus-within", ":target",
     ":visited", ":link", ":any-link", ":local-link", ":enabled", ":disabled",
@@ -16837,7 +16844,7 @@
     ":popover-open", ":autofill", ":playing", ":paused", ":muted", ":seeking",
     ":stalled", ":buffering", ":volume-locked", ":open", ":closed", ":target-within",
     ":past", ":current", ":future", ":blank", ":heading", ":before", ":after",
-    ":first-line", ":first-letter"
+    ":first-line", ":first-letter", ":active-view-transition", ":active-view-transition-type", ":xr-overlay"
   ]);
   const KNOWN_PSEUDO_ELEMENTS = new Set([
     "::before", "::after", "::first-line", "::first-letter", "::selection",
@@ -16875,7 +16882,7 @@
     return out;
   }
 
-  function canonicalizeComplexSelector(raw, inHas, inFunc) {
+  function canonicalizeComplexSelector(raw, inHas, inFunc, inPart) {
     if (/[\x00-\x08\x0b\x0e-\x1f\x7f]/.test(raw)) return null;
     const s = raw.trim();
     if (!s) return null;
@@ -16884,6 +16891,7 @@
     let prevWasCombinator = false;
     let atStart = true;
     let seenTerminalPseudoEl = false;
+    let seenPart = !!inPart;
     let lastPseudoEl = "";
 
     while (i < s.length) {
@@ -16993,6 +17001,7 @@
           ));
           if (!allowChain) return null;
         }
+        if (seenPart && PART_DISALLOWED_PSEUDOS.has(pName)) return null;
         if (isDouble) {
           if (inFunc || !KNOWN_PSEUDO_ELEMENTS.has(pName)) return null;
         } else {
@@ -17002,8 +17011,8 @@
           if (pName === "::view-transition" || pName === ":current") return null;
           let k = j + 1, dp = 1, q = "";
           while (k < s.length && dp > 0) {
+            if (s[k] === "\\" && k + 1 < s.length) { k += 2; continue; }
             if (q) {
-              if (s[k] === "\\" && k + 1 < s.length) { k += 2; continue; }
               if (s[k] === q) q = "";
             } else {
               if (s[k] === '"' || s[k] === "'") q = s[k];
@@ -17013,9 +17022,36 @@
             k++;
           }
           if (dp !== 0 && (inFunc || inHas || q || dp !== 1)) return null;
-          const inner = (dp === 0 ? s.slice(j + 1, k - 1) : s.slice(j + 1)).trim();
+          const rawInner = (dp === 0 ? s.slice(j + 1, k - 1) : s.slice(j + 1));
+          const inner = rawInner.trim();
           if (NON_EMPTY_FUNC_PSEUDOS.has(pName) && !inner) return null;
           if (pName === ":has" && inHas) return null;
+          if (pName === "::part") {
+            // Collapse unescaped whitespace, preserving escaped trailing spaces (e.g. "bar\ ")
+            let pOut = "", pi = 0;
+            while (pi < rawInner.length && /\s/.test(rawInner[pi])) pi++;
+            let inWs = false;
+            while (pi < rawInner.length) {
+              if (rawInner[pi] === "\\" && pi + 1 < rawInner.length) {
+                if (inWs && pOut) pOut += " ";
+                inWs = false;
+                pOut += rawInner[pi] + rawInner[pi + 1];
+                pi += 2;
+              } else if (/\s/.test(rawInner[pi])) {
+                inWs = true;
+                pi++;
+              } else {
+                if (inWs && pOut) pOut += " ";
+                inWs = false;
+                pOut += rawInner[pi++];
+              }
+            }
+            if (!pOut) return null;
+            out += "::part(" + pOut + ")";
+            seenPart = true;
+            i = k;
+            continue;
+          }
           if (pName === "::slotted") {
             const sub = canonicalizeComplexSelector(inner, false, true);
             if (sub === null || /[\s>+~]/.test(sub.replace(/\[[^\]]*\]/g, "").replace(/\([^)]*\)/g, ""))) return null;
@@ -17035,11 +17071,22 @@
               const kept = [];
               for (let ii = 0; ii < items.length; ii++) {
                 const allowPseudo = (lastPseudoEl === "::slotted" && pName === ":where" && /^::(?:before|after|marker|placeholder|file-selector-button|details-content|picker-icon|backdrop)$/i.test(items[ii].trim()));
-                const c = canonicalizeComplexSelector(items[ii], inHas, !allowPseudo);
+                const c = canonicalizeComplexSelector(items[ii], inHas, !allowPseudo, false);
                 if (c !== null) kept.push(c);
               }
               out += pName + "(" + kept.join(", ") + ")";
             }
+          } else if (pName === ":not" && seenPart) {
+            if (!inner) return null;
+            const items = splitTopLevelSelectorList(inner);
+            if (!items) return null;
+            const kept = [];
+            for (let ii = 0; ii < items.length; ii++) {
+              const c = canonicalizeComplexSelector(items[ii], inHas, true, true);
+              if (c === null) return null;
+              kept.push(c);
+            }
+            out += ":not(" + kept.join(", ") + ")";
           } else if (FUNC_SELECTOR_PSEUDOS.has(pName)) {
             if (!inner) {
               out += pName + "()";

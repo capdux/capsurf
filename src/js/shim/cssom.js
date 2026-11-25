@@ -7153,6 +7153,7 @@
   function selectorSupported(selector) {
     if (typeof selector !== "string") return false;
     if (/::slotted\([\s\S]*\)\s*:(?:is|where)\(/i.test(selector)) return false;
+    if (/::part\([^)]*\)\s*:(?:is|where)\([^)]*:(?:empty|first-child|first-of-type|last-child|last-of-type|nth-|only-|host|has|scope|left|right|first)\b/i.test(selector)) return false;
     if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_canonicalizeSelector === "function") {
       return globalThis.__capsurf_canonicalizeSelector(selector, false) !== null;
     }

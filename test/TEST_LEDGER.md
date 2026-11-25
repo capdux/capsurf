@@ -2462,3 +2462,4 @@
 | Phase 793 | WPT `::backdrop` 继承匹配与 `dialog.showModal()` 顶层 `sticky → absolute` | `src/js/shim/element/dialog.js`, `src/js/shim/window.js` | `backdrop-inherit-computed` (4/4 **PASS**)、`sticky-dialog` (**PASS**); `--smoke` 3/3 PASS |
 | Phase 794 | WPT `CSSStyleSheet.title` 只读与 `:host-context` 必选括号校验 | `src/js/shim/cssom.js`, `src/js/shim/selector.js` | `stylesheet-title-002` **PASS**、`host-context-parsing` **PASS**; `--smoke` 3/3 PASS |
 | Phase 795 | WPT `::slotted()` 后接伪元素与宽容选择器链式解析（36/36） | `src/js/shim/selector.js`, `src/js/shim/cssom.js` | `slotted-parsing.html` (**36/36 PASS**); `--smoke` 3/3 PASS |
+| Phase 796 | WPT `::part()` 序列化与后接伪类校验（70/70） | `src/js/shim/selector.js`, `src/js/shim/cssom.js` | `part/serialization` (3/3 **PASS**)、`part/pseudo-classes-after-part` (67/67 **PASS**); `--smoke` 3/3 PASS |
