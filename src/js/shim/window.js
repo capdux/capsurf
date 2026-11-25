@@ -7691,6 +7691,9 @@ function installWindow(global) {
       if (unit === "q") return num * (96 / 101.6);
       if (unit === "vw") return (num / 100) * 800;
       if (unit === "vh") return (num / 100) * 600;
+      if (unit === "vmin") return (num / 100) * 600;
+      if (unit === "vmax") return (num / 100) * 800;
+      if (unit === "ex") return num * (fontSizePx || 16) * 0.8;
       if (unit === "cqw" || unit === "cqi" || unit === "cqh" || unit === "cqb") return num;
       if (unit === "ch") {
         const cw = (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_tty_cell_w === "number" && globalThis.__capsurf_tty_cell_w > 0) ? globalThis.__capsurf_tty_cell_w : 8;
@@ -7704,7 +7707,7 @@ function installWindow(global) {
     }
 
     // Fast path for simple length/percentage
-    const simple = s.match(/^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(px|%|em|rem|pt|pc|in|cm|mm|q|vw|vh|ch|lh|cqw|cqi|cqh|cqb)?$/i);
+    const simple = s.match(/^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(px|%|em|rem|pt|pc|in|cm|mm|q|vw|vh|vmin|vmax|ex|ch|lh|cqw|cqi|cqh|cqb)?$/i);
     if (simple) {
       return resolveUnitPx(parseFloat(simple[1]), (simple[2] || "").toLowerCase());
     }
@@ -7713,7 +7716,7 @@ function installWindow(global) {
     if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_eval_css_math === "function" &&
         (/\b(?:round|mod|rem|sin|cos|tan|asin|acos|atan|atan2|pow|sqrt|hypot|log|exp|pi|infinity|nan)\b|\be\b/i.test(s))) {
       let hasUnresolvedUnit = false;
-      let norm = s.replace(/;+$/, "").replace(/([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(px|%|em|rem|pt|pc|in|cm|mm|q|vw|vh|ch|lh|cqw|cqi|cqh|cqb)\b/gi, (m, n, u) => {
+      let norm = s.replace(/;+$/, "").replace(/([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(px|%|em|rem|pt|pc|in|cm|mm|q|vw|vh|vmin|vmax|ex|ch|lh|cqw|cqi|cqh|cqb)\b/gi, (m, n, u) => {
         const px = resolveUnitPx(parseFloat(n), u.toLowerCase());
         if (px === null) { hasUnresolvedUnit = true; return m; }
         return String(px);
@@ -10290,12 +10293,15 @@ function installWindow(global) {
     }
     const isAhemText = /ahem/i.test(computedMap.get("font-family") || computedMap.get("font") || "");
     const chUnitText = isAhemText ? fontSize : ((typeof globalThis !== "undefined" && typeof globalThis.__capsurf_tty_cell_w === "number" && globalThis.__capsurf_tty_cell_w > 0) ? globalThis.__capsurf_tty_cell_w : 8);
+    const exUnitText = isAhemText ? (fontSize * 0.8) : (fontSize * 0.5);
     const evalLinLenPctTok = (tok) => {
       const tl = tok.toLowerCase();
       if (/^[+-]?0(?:\.0+)?$/.test(tl)) return "0px";
       if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)%$/.test(tl)) return tl;
       if (tl.indexOf("%") === -1) {
-        const rep = tl.replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))ch\b/gi, (_, n) => String(Number(n) * chUnitText) + "px");
+        const rep = tl
+          .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))ch\b/gi, (_, n) => String(Number(n) * chUnitText) + "px")
+          .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))ex\b/gi, (_, n) => String(Number(n) * exUnitText) + "px");
         const px = evalCssLengthExpr(rep, 0, fontSize);
         if (px !== null) return formatCssPx(px);
       } else if (/^calc\(/i.test(tl)) {
@@ -10305,6 +10311,7 @@ function installWindow(global) {
             .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))%/g, (_, n) => String(Number(n) * pctV))
             .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))em\b/gi, (_, n) => String(Number(n) * fontSize * pxV))
             .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))ch\b/gi, (_, n) => String(Number(n) * chUnitText * pxV))
+            .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))ex\b/gi, (_, n) => String(Number(n) * exUnitText * pxV))
             .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))px\b/gi, (_, n) => String(Number(n) * pxV));
           if (/^[\d+\-*/().\s]+$/.test(e)) {
             try {
@@ -11474,6 +11481,15 @@ function installWindow(global) {
             expr = expr.replace(/sibling-index\(\)/gi, String(si));
           }
           if (/sign\(/i.test(expr)) expr = evalSignCalls(expr, element);
+          if (expr.indexOf("%") === -1) {
+            const rep = expr.toLowerCase()
+              .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))ch\b/gi, (_, n) => String(Number(n) * chUnitText) + "px")
+              .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))ex\b/gi, (_, n) => String(Number(n) * exUnitText) + "px");
+            const px = evalCssLengthExpr(rep, 0, fontSize);
+            if (px !== null && isFinite(px)) {
+              return (Math.abs(px) < 1e-9 ? "0" : String(Number(px.toPrecision(6)))) + "px";
+            }
+          }
           return evalLinLenPctTok(expr);
         }
         return t;

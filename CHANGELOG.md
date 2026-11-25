@@ -4676,3 +4676,5 @@
 - `src/layout/layout.cp`, `src/js/shim/cssom.js`, `src/js/shim/window.js`: 补齐 `CSSStyleRule.prototype.style` `[PutForwards=cssText]` 与声明合法性过滤、table-cell `min/max-width` 夹紧及 6 项 `gap` 属性整条校验与 `calc(% + px)` 规范化；通过 `cpc fix` + `cpc brief` 4 门禁，8 项 WPT **8/8 PASS**，`--smoke` 3/3 **PASS**。
 ### Phase 919 — `shape-outside` / `clip-path` 声明合法性过滤（15 项 `shape-outside-invalid-*` 全绿）
 - `src/js/shim/window.js`: 将 `shape-outside` 与 `clip-path` 接入 `valCheckProps` 校验过滤，15 项 `shape-outside-invalid-*.html` **15/15 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 920 — `ex`/`vmin`/`vmax` 单位解析与 `shape-outside` `toPrecision(6)` 精度全绿
+- `src/js/shim/window.js`: `evalCssLengthExpr`/`evalLinLenPctTok` 补齐 `ex`/`vmin`/`vmax` 并为 `shape-outside`/`clip-path` 改用 `toPrecision(6)` 序列化，`shape-outside-polygon-004.html` (144/144)、`shape-outside-circle-005.html` (52/52)、`shape-outside-shape-arguments-000.html` **3/3 PASS**，`--smoke` 3/3 **PASS**。

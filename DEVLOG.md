@@ -3679,3 +3679,5 @@
 - 发现 `cssRule.style = "..."` 直接覆盖数据属性为字符串，在 `CSSStyleRule.prototype` 定义 `[PutForwards=cssText]` 并于 `parseDeclarationsBlockInto` 启用 `isValidCssValue` 过滤后 `logicalprops-quirklength.html` 10/10 全绿；同步为 `layoutTableContainer` 补齐 `min/max-width` 夹紧并将 `gap`/`row-gap`/`column-gap` 接入 `valCheckProps` 与 `calc(% + px)` 排序，8 项 WPT 全绿。
 ### Phase 919 — 接入 `shape-outside`/`clip-path` `valCheckProps` 扫平 15 项非法声明测试
 - `cssom.js` 已具备完整的 `inset()`/`circle()`/`ellipse()` 参数校验，但 `window.js` `collectRawComputedMap` 的 `valCheckProps` 漏列 `shape-outside`/`clip-path`，补入后 15 个 `shape-outside-invalid-*.html` 全部一次通过。
+### Phase 920 — `ex`/`vmin`/`vmax` 单位与 `toPrecision(6)` 直接序列化
+- 排查发现 `evalCssLengthExpr` 正则漏列 `ex|vmin|vmax`，且 `evalLinLenPctTok` 先用 `toFixed(4)` 截断 `20cm` (`755.9055`) 导致再次转 `toPrecision(6)` 时因 IEEE-754 向下舍入成 `755.905`。改为直接从 `evalCssLengthExpr` 输出 `toPrecision(6)` 并补全 `ex`/`vmin`/`vmax` 后，3 项共 206 个 subtest 一次全绿。
