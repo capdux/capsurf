@@ -10721,6 +10721,7 @@ function installWindow(global) {
     "visibility", "white-space", "white-space-collapse", "widows", "width", "will-change", "word-break", "word-space-transform", "word-spacing", "word-wrap",
     "writing-mode", "z-index"
   ];
+  const STANDARD_COMPUTED_LONGHAND_SET = new Set(STANDARD_COMPUTED_LONGHANDS);
 
   function getComputedStyle(element, pseudoElt) {
     if (!element || typeof element !== "object") {
@@ -10741,32 +10742,45 @@ function installWindow(global) {
     let lastActiveEl = liveDoc ? liveDoc.activeElement : null;
     let computedMap = collectRawComputedMap(element, normalizedPseudo);
     applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo);
+    let _cachedPropList = null;
     function ensureLiveComputed() {
       const curStyleAttr = (element && typeof element.getAttribute === "function") ? (element.getAttribute("style") || "") : "";
       const curActiveEl = liveDoc ? liveDoc.activeElement : null;
       if (curStyleAttr !== lastStyleAttr || curActiveEl !== lastActiveEl) {
         lastStyleAttr = curStyleAttr;
         lastActiveEl = curActiveEl;
+        _cachedPropList = null;
         computedMap = collectRawComputedMap(element, normalizedPseudo);
         applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo);
       }
     }
 
     const declTarget = Object.create(CSSStyleDeclaration.prototype);
-    const propSet = new Set(computedMap.keys());
-    for (let i = 0; i < STANDARD_COMPUTED_LONGHANDS.length; i++) {
-      propSet.add(STANDARD_COMPUTED_LONGHANDS[i]);
+    function getPropList() {
+      if (_cachedPropList) return _cachedPropList;
+      const propSet = new Set(computedMap.keys());
+      for (let i = 0; i < STANDARD_COMPUTED_LONGHANDS.length; i++) {
+        propSet.add(STANDARD_COMPUTED_LONGHANDS[i]);
+      }
+      _cachedPropList = Array.from(propSet);
+      return _cachedPropList;
     }
-    const propList = Array.from(propSet);
-    declTarget.length = propList.length;
+    function hasKnownComputedProp(p) {
+      return STANDARD_COMPUTED_LONGHAND_SET.has(p) || computedMap.has(p);
+    }
+    Object.defineProperty(declTarget, "length", {
+      get: function () { return getPropList().length; },
+      configurable: true,
+    });
     declTarget.parentRule = null;
 
     declTarget.item = markNative(function (index) {
       let idx = Number(index);
       if (isNaN(idx)) idx = 0;
       else idx = Math.floor(idx);
-      if (idx < 0 || idx >= propList.length) return "";
-      return propList[idx];
+      const list = getPropList();
+      if (idx < 0 || idx >= list.length) return "";
+      return list[idx];
     }, "item");
 
     function shorten4(tl, tr, br, bl) {
@@ -11160,15 +11174,16 @@ function installWindow(global) {
       configurable: true,
     });
 
-    for (let i = 0; i < propList.length; i++) {
-      declTarget[i] = propList[i];
-    }
-
     return new Proxy(declTarget, {
       get: function (target, prop, receiver) {
         if (typeof prop === "symbol") return target[prop];
         if (prop in target) return target[prop];
         if (typeof prop === "string") {
+          if (/^(?:0|[1-9]\d*)$/.test(prop)) {
+            const idx = Number(prop);
+            const list = getPropList();
+            return idx < list.length ? list[idx] : undefined;
+          }
           ensureLiveComputed();
           if (prop === "size" || prop === "page-orientation" || prop === "pageOrientation") {
             return "";
@@ -11213,12 +11228,13 @@ function installWindow(global) {
       has: function (target, prop) {
         if (prop in target) return true;
         if (typeof prop === "string") {
+          if (/^(?:0|[1-9]\d*)$/.test(prop)) return Number(prop) < getPropList().length;
           if (prop === "size" || prop === "page-orientation" || prop === "pageOrientation") return false;
           if (prop === "cssFloat" || prop === "fontStretch" || prop === "font-stretch" || getShorthandComputed(prop) !== null) return true;
-          if (propSet.has(prop) || computedMap.has(prop)) return true;
+          if (hasKnownComputedProp(prop)) return true;
           const kebab = prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
           if (getShorthandComputed(kebab) !== null) return true;
-          if (propSet.has(kebab) || computedMap.has(kebab)) return true;
+          if (hasKnownComputedProp(kebab)) return true;
         }
         return false;
       },
@@ -11226,10 +11242,18 @@ function installWindow(global) {
         const own = Reflect.getOwnPropertyDescriptor(target, prop);
         if (own) return own;
         if (typeof prop === "string") {
+          if (/^(?:0|[1-9]\d*)$/.test(prop)) {
+            const idx = Number(prop);
+            const list = getPropList();
+            if (idx < list.length) {
+              return { value: list[idx], writable: false, enumerable: true, configurable: true };
+            }
+            return undefined;
+          }
           if (prop === "size" || prop === "page-orientation" || prop === "pageOrientation") return undefined;
           const kebab = prop.replace(/[A-Z]/g, function (m) { return "-" + m.toLowerCase(); });
-          if (prop === "cssFloat" || prop === "fontStretch" || prop === "font-stretch" || getShorthandComputed(prop) !== null || propSet.has(prop) || computedMap.has(prop) ||
-              getShorthandComputed(kebab) !== null || propSet.has(kebab) || computedMap.has(kebab)) {
+          if (prop === "cssFloat" || prop === "fontStretch" || prop === "font-stretch" || getShorthandComputed(prop) !== null || hasKnownComputedProp(prop) ||
+              getShorthandComputed(kebab) !== null || hasKnownComputedProp(kebab)) {
             return { value: target.getPropertyValue(kebab), writable: false, enumerable: false, configurable: true };
           }
         }
@@ -11238,8 +11262,9 @@ function installWindow(global) {
       ownKeys: function (target) {
         const base = Reflect.ownKeys(target);
         const seen = new Set(base);
-        for (let i = 0; i < propList.length; i++) {
-          const p = propList[i];
+        const list = getPropList();
+        for (let i = 0; i < list.length; i++) {
+          const p = list[i];
           if (!seen.has(p)) {
             seen.add(p);
             base.push(p);

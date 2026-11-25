@@ -3408,3 +3408,5 @@
 - 在 `cssom.js` 与 `window.js` 中补全 `caret-shape`（可继承，初始 `auto`，支持 `auto | bar | block | underscore`）与 `nav-{down,left,right,up}`（非继承，初始 `auto`，支持 `#id [current|root|<string>]`），`/css/css-ui/inheritance.html` **FAIL→PASS**，实现 `/css/css-ui/` 主目录 0 FAIL 清零。
 ### Phase 784 — `filter` / `backdrop-filter` 滤镜函数计算值规范化
 - 在 `window.js` `applyUsedValuesToComputedMap` 中实现 `blur`/`brightness`/`contrast`/`grayscale`/`invert`/`opacity`/`saturate`/`sepia`/`hue-rotate`/`drop-shadow` 的缺省参数、百分比转小数、角度转 `deg`、`drop-shadow` 颜色补全及 `[0,1]`/`>=0` 夹紧，`/css/filter-effects/parsing/backdrop-filter-computed.html` **FAIL→PASS**。
+### Phase 785 — `getComputedStyle` Proxy 懒求值提速（2.25x）
+- 移除 `getComputedStyle` 每次调用在 `declTarget` 上批量写入 400+ 索引属性及急切构造 `propSet`/`propList` 的开销，改由 `Proxy` 按需处理数字索引、`length`、`has`、`getOwnPropertyDescriptor` 与 `ownKeys`，单次 `getComputedStyle(el).display` 从 `18.6ms` 降至 `8.25ms`。

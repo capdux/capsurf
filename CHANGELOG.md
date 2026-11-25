@@ -4261,3 +4261,6 @@
   - `src/js/shim/window.js`: `applyUsedValuesToComputedMap` 新增 `filter` 与 `backdrop-filter` 滤镜函数计算值规范化。
   - `test/wpt/wpt-expectations.json`: 收紧 `/css/filter-effects/parsing/backdrop-filter-computed.html` 为 `PASS`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 785**:
+  - `src/js/shim/window.js`: `getComputedStyle` 将 `propList` 与索引属性改为 Proxy 懒求值，新增 `STANDARD_COMPUTED_LONGHAND_SET`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

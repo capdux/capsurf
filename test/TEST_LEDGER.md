@@ -2451,3 +2451,4 @@
 | Phase 782 | WPT `column-height`/`column-wrap` 与 `columns` `/` 简写重置/计算值 | `src/js/shim/cssom.js`, `src/js/shim/window.js` | `columns-shorthand-reset-wrap` (3/3 **PASS**)、`columns-computed` (27/27 **PASS**); `--smoke` 3/3 PASS |
 | Phase 783 | WPT `caret-shape` 与 `nav-*` 补全及 `/css/css-ui/` 清零 | `src/js/shim/cssom.js`, `src/js/shim/window.js`, `test/wpt/wpt-expectations.json` | `/css/css-ui/inheritance.html` **FAIL→PASS**（`/css/css-ui/` 0 FAIL，`7,212` PASS）; `--smoke` 3/3 PASS |
 | Phase 784 | WPT `filter`/`backdrop-filter` 滤镜函数计算值规范化 | `src/js/shim/window.js`, `test/wpt/wpt-expectations.json` | `/css/filter-effects/parsing/backdrop-filter-computed.html` **FAIL→PASS**（`7,213` PASS）; `--smoke` 3/3 PASS |
+| Phase 785 | `getComputedStyle` Proxy 懒求值与 `propList` 延迟构造优化 | `src/js/shim/window.js` | 单次调用 `18.6ms→8.25ms` (2.25x)；`css-ui/inheritance` **PASS**; `--smoke` 3/3 PASS |
