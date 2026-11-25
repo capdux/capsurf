@@ -3520,3 +3520,5 @@
 - 在 `window.js` `applyUsedValuesToComputedMap` 统一解析 `sibling-index()`/`sibling-count()`（兼容 Shadow DOM `assignedSlot` 扁平树）并经 `simplifySibCalc` 执行乘除加减化简与单值解包，同时在 `cssom.js` 规范空白/参数校验，`/css/css-values/tree-counting/` 一次性收获 **10 项 `FAIL→PASS`**，`--smoke` 3/3 **PASS**。
 ### Phase 840 — `@font-palette-values` 规则与描述符全量合规 (`2/2 FAIL→PASS`)
 - 在 `cssom.js` 为 `@font-palette-values` 实现 `<dashed-ident>` 前导校验、CSS 转义还原、`font-family`/`base-palette`/`override-colors` 描述符校验（禁用泛型族、负数索引及 `currentcolor`/`light-dark()`/系统色）与只读 `CSSFontPaletteValuesRule` 属性，`font-palette-values-valid.html` (36/36) 与 `font-palette-values-invalid.html` (27/27) 双双 **`FAIL→PASS`**，`--smoke` 3/3 **PASS**。
+### Phase 841 — `@scope` (`CSSScopeRule`) 规则解析、CSSOM 与邻近度 (`prox`) 级联求值
+- 在 `cssom.js` 新增 `CSSScopeRule` 与 `parseScopePrelude`，并在 `window.js` 实现 `@scope (<start>) to (<end>)` 作用域根/下限匹配、`:scope` 传递与 `prox` 邻近度排序，`scope-cssom`、`scope-featureless`、`scope-overlapping-has`、`scope-supports` 等 **9/36 PASS**，`--smoke` 3/3 **PASS**。

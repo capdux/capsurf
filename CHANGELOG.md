@@ -4467,3 +4467,7 @@
 - **Phase 840**:
   - `src/js/shim/cssom.js`: `constructRule` 为 `@font-palette-values` 实现前导校验、CSS 转义还原、三描述符 (`font-family`/`base-palette`/`override-colors`) 规范化与只读属性定义。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 841**:
+  - `src/js/shim/cssom.js`: 新增 `CSSScopeRule`、`parseScopePrelude` 与 `@scope` 规则解析/序列化。
+  - `src/js/shim/window.js`: `collectFromText` 与 `matchesSingleSelector` 实现 `@scope` 根/下限匹配、`:scope` 上下文与 `prox` 邻近度级联排序。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

@@ -12750,6 +12750,57 @@
     markNative(CSSFontPaletteValuesRule, "CSSFontPaletteValuesRule");
     global.CSSFontPaletteValuesRule = CSSFontPaletteValuesRule;
 
+    // 5.8 CSSScopeRule
+    function CSSScopeRule() {
+      CSSGroupingRule.call(this);
+      this._type = 0;
+      this.start = null;
+      this.end = null;
+    }
+    CSSScopeRule.prototype = Object.create(CSSGroupingRule.prototype);
+    CSSScopeRule.prototype.constructor = CSSScopeRule;
+    markNative(CSSScopeRule, "CSSScopeRule");
+    global.CSSScopeRule = CSSScopeRule;
+
+    function parseScopePrelude(preludeRaw) {
+      const s = String(preludeRaw || "").trim();
+      if (!s) return { start: null, end: null, valid: true };
+      let pos = 0;
+      const skipWs = () => { while (pos < s.length && /\s/.test(s[pos])) pos++; };
+      const readParen = () => {
+        if (s[pos] !== "(") return null;
+        let d = 0, q = "";
+        const begin = pos + 1;
+        for (; pos < s.length; pos++) {
+          const c = s[pos];
+          if (q) { if (c === "\\" && pos + 1 < s.length) pos++; else if (c === q) q = ""; continue; }
+          if (c === "\"" || c === "'") q = c;
+          else if (c === "(") d++;
+          else if (c === ")") { d--; if (d === 0) { const inner = s.slice(begin, pos).trim(); pos++; return inner; } }
+        }
+        return null;
+      };
+      let start = null, end = null;
+      skipWs();
+      if (s[pos] === "(") {
+        start = readParen();
+        if (start === null) return { start: null, end: null, valid: false };
+        skipWs();
+      }
+      if (pos < s.length) {
+        const rest = s.slice(pos);
+        const toM = /^to\s*(?=\()/i.exec(rest);
+        if (!toM) return { start: null, end: null, valid: false };
+        pos += toM[0].length;
+        end = readParen();
+        if (end === null) return { start: null, end: null, valid: false };
+        skipWs();
+      }
+      if (pos < s.length) return { start: null, end: null, valid: false };
+      return { start: start, end: end, valid: true };
+    }
+    global.parseScopePrelude = parseScopePrelude;
+
     const MARGIN_BOX_NAMES = new Set([
       "top-left-corner", "top-left", "top-center", "top-right", "top-right-corner",
       "bottom-left-corner", "bottom-left", "bottom-center", "bottom-right", "bottom-right-corner",
@@ -13467,6 +13518,7 @@
         case "keyframes":
         case "-webkit-keyframes": return "keyframes";
         case "page": return "page";
+        case "scope": return "scope";
         case "charset": return "charset";
         case "counter-style": return "counter-style";
         default: return "unknown";
@@ -13720,6 +13772,37 @@
           let d = style.cssText;
           if (d && !d.endsWith(";")) d += ";";
           return "@font-face" + (d ? " { " + d + " }" : " { }");
+        };
+        return rule;
+      }
+
+      if (kind === "scope") {
+        const prelude = sel.replace(/^@scope\b/i, "").trim();
+        const sp = parseScopePrelude(prelude);
+        if (!sp.valid) return null;
+        const rule = new CSSScopeRule();
+        rule.parentRule = parentRule || null;
+        rule.parentStyleSheet = parentSheet || null;
+        rule._onMutate = onMutate || null;
+        rule.start = sp.start;
+        rule.end = sp.end;
+        const childArr = [];
+        const bodyParsed = splitStylesheetRules(parsed.declText || "");
+        for (let i = 0; i < bodyParsed.length; i++) {
+          const cr = constructRule(bodyParsed[i], parentSheet, rule, onMutate);
+          if (cr) childArr.push(cr);
+        }
+        rule.cssRules = makeRuleList(childArr);
+        rule._serialize = function () {
+          let head = "@scope";
+          if (rule.start !== null) head += " (" + rule.start + ")";
+          if (rule.end !== null) head += " to (" + rule.end + ")";
+          if (rule.cssRules.length === 0) return head + " {\n}";
+          const lines = [];
+          for (let i = 0; i < rule.cssRules.length; i++) {
+            lines.push("  " + rule.cssRules[i].cssText);
+          }
+          return head + " {\n" + lines.join("\n") + "\n}";
         };
         return rule;
       }
@@ -46878,10 +46961,16 @@
       }
     }
 
-    function matchesSingleSelector(el, sel) {
+    function matchesSingleSelector(el, sel, scopeEl) {
       if (!el || !sel) return false;
       const s = sel.trim();
       if (s === "*") return true;
+      if (scopeEl && s.indexOf(":scope") !== -1 && typeof matchesElementSelector === "function") {
+        try {
+          if (matchesElementSelector(el, s, scopeEl, true)) return true;
+        } catch (e) {}
+        return false;
+      }
 
       // :focus support
       if (s === ":focus") {
@@ -46944,7 +47033,7 @@
       return false;
     }
 
-    function matchesSelector(element, selectorStr, normalizedPseudo) {
+    function matchesSelector(element, selectorStr, normalizedPseudo, scopeEl) {
       if (!element || !selectorStr) return false;
       const selectors = [];
       {
@@ -47012,7 +47101,7 @@
           if (selPseudo) return true;
           continue;
         }
-        if (matchesSingleSelector(element, baseSel)) return true;
+        if (matchesSingleSelector(element, baseSel, scopeEl)) return true;
       }
       return false;
     }
@@ -47186,7 +47275,8 @@
         }
         return sa.length > sb.length ? -1 : 1;
       };
-      const collectFromText = (text, layerPrefix) => {
+      const collectFromText = (text, layerPrefix, scopeRoot, scopeProx) => {
+        const curProx = scopeProx === undefined ? Infinity : scopeProx;
         if (typeof parseFn === "function") {
           const rules = getParsedRules(text);
           for (let i = 0; i < rules.length; i++) {
@@ -47194,6 +47284,12 @@
             if (!r) continue;
             const sel = String(r.selectorText || "").trim();
             const rawCss = String(r.cssText || "").trim();
+            if (!sel && rawCss && scopeRoot && rawCss.indexOf(":") !== -1 && rawCss.indexOf("{") === -1 && !/^@/.test(rawCss)) {
+              if (element === scopeRoot && !normalizedPseudo) {
+                matched.push({ decl: rawCss, layer: layerPrefix || "", spec: 0, prox: curProx, order: seq++ });
+              }
+              continue;
+            }
             if (!sel && /^@layer\b/i.test(rawCss)) {
               const stmt = rawCss.replace(/^@layer\b/i, "").replace(/;$/, "").trim();
               if (stmt) {
@@ -47210,25 +47306,77 @@
               const full = nm
                 ? registerLayerPath(layerPrefix ? (layerPrefix + "." + nm) : nm)
                 : registerLayerPath((layerPrefix ? (layerPrefix + ".") : "") + "__anon_" + (anonLayerSeq++));
-              collectFromText(r.declText || "", full);
+              collectFromText(r.declText || "", full, scopeRoot, curProx);
             } else if (sel.startsWith("@media")) {
               const query = sel.replace(/^@media\s*/i, "");
               if (evaluateMediaQuery(query)) {
-                collectFromText(r.declText || "", layerPrefix);
+                collectFromText(r.declText || "", layerPrefix, scopeRoot, curProx);
               }
             } else if (sel.startsWith("@supports")) {
               const cond = sel.replace(/^@supports\s*/i, "").trim();
               if (typeof CSS !== "undefined" && typeof CSS.supports === "function" && CSS.supports(cond)) {
-                collectFromText(r.declText || "", layerPrefix);
+                collectFromText(r.declText || "", layerPrefix, scopeRoot, curProx);
+              }
+            } else if (/^@scope\b/i.test(sel)) {
+              const parseScopeFn = global.parseScopePrelude || (typeof globalThis !== "undefined" && globalThis.parseScopePrelude);
+              const sp = typeof parseScopeFn === "function" ? parseScopeFn(sel.replace(/^@scope\b/i, "").trim()) : null;
+              if (!sp || !sp.valid) continue;
+              const candidates = [];
+              if (sp.start !== null) {
+                let cur = element;
+                let dist = 0;
+                while (cur && cur.nodeType === 1) {
+                  if (matchesSingleSelector(cur, sp.start, scopeRoot)) {
+                    candidates.push({ root: cur, prox: dist });
+                  }
+                  cur = cur.parentElement;
+                  dist++;
+                }
+              } else {
+                // Implicit scope: direct parentElement of a <style> element
+                let cur = element;
+                let dist = 0;
+                while (cur && cur.nodeType === 1) {
+                  let hasDirectStyle = false;
+                  if (cur.children) {
+                    for (let k = 0; k < cur.children.length; k++) {
+                      if ((cur.children[k].tagName || "").toLowerCase() === "style") { hasDirectStyle = true; break; }
+                    }
+                  }
+                  if (hasDirectStyle) {
+                    candidates.push({ root: cur, prox: dist });
+                    break;
+                  }
+                  cur = cur.parentElement;
+                  dist++;
+                }
+              }
+              for (let ci = 0; ci < candidates.length; ci++) {
+                const cand = candidates[ci];
+                let excluded = false;
+                if (sp.end !== null) {
+                  let ec = element;
+                  while (ec && ec.nodeType === 1 && ec !== cand.root) {
+                    if (matchesSingleSelector(ec, sp.end, cand.root)) {
+                      excluded = true;
+                      break;
+                    }
+                    ec = ec.parentElement;
+                  }
+                }
+                if (!excluded) {
+                  collectFromText(r.declText || "", layerPrefix, cand.root, cand.prox);
+                }
               }
             } else if (sel.startsWith("@")) {
               continue;
             } else if (sel) {
-              const collectNested = (curSel, dText, nestDepth) => {
+              const collectNested = (rawCurSel, dText, nestDepth) => {
                 if (nestDepth > 12) return;
+                const curSel = (scopeRoot && /^[>+~]/.test(rawCurSel)) ? (":scope " + rawCurSel) : rawCurSel;
                 if (dText.indexOf("{") === -1) {
-                  if (matchesSelector(element, curSel, normalizedPseudo)) {
-                    matched.push({ decl: dText, layer: layerPrefix || "", spec: calcMatchedSelectorSpecificity(element, curSel, normalizedPseudo), order: seq++ });
+                  if (matchesSelector(element, curSel, normalizedPseudo, scopeRoot)) {
+                    matched.push({ decl: dText, layer: layerPrefix || "", spec: calcMatchedSelectorSpecificity(element, curSel, normalizedPseudo), prox: curProx, order: seq++ });
                   }
                   return;
                 }
@@ -47247,8 +47395,8 @@
                     ownDecls.push(sr.cssText);
                   }
                 }
-                if (ownDecls.length > 0 && matchesSelector(element, curSel, normalizedPseudo)) {
-                  matched.push({ decl: ownDecls.join(";"), layer: layerPrefix || "", spec: calcMatchedSelectorSpecificity(element, curSel, normalizedPseudo), order: seq++ });
+                if (ownDecls.length > 0 && matchesSelector(element, curSel, normalizedPseudo, scopeRoot)) {
+                  matched.push({ decl: ownDecls.join(";"), layer: layerPrefix || "", spec: calcMatchedSelectorSpecificity(element, curSel, normalizedPseudo), prox: curProx, order: seq++ });
                 }
               };
               collectNested(sel, r.declText || "", 0);
@@ -47272,7 +47420,11 @@
         const normalSorted = matched.slice().sort((x, y) => {
           const lc = cmpLayer(x.layer, y.layer);
           if (lc !== 0) return lc;
-          return x.spec !== y.spec ? x.spec - y.spec : x.order - y.order;
+          if (x.spec !== y.spec) return x.spec - y.spec;
+          const px = x.prox === undefined ? Infinity : x.prox;
+          const py = y.prox === undefined ? Infinity : y.prox;
+          if (px !== py) return py - px;
+          return x.order - y.order;
         });
         let curLayer = normalSorted[0].layer;
         let prevLayerSnapshot = hasRevertLayer ? new Map(computedMap) : null;
@@ -47288,7 +47440,11 @@
           const impSorted = matched.slice().sort((x, y) => {
             const lc = cmpLayer(y.layer, x.layer);
             if (lc !== 0) return lc;
-            return x.spec !== y.spec ? x.spec - y.spec : x.order - y.order;
+            if (x.spec !== y.spec) return x.spec - y.spec;
+            const px = x.prox === undefined ? Infinity : x.prox;
+            const py = y.prox === undefined ? Infinity : y.prox;
+            if (px !== py) return py - px;
+            return x.order - y.order;
           });
           let curImpLayer = impSorted[0].layer;
           let prevImpSnapshot = hasRevertLayer ? new Map(computedMap) : null;

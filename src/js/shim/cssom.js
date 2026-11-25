@@ -8855,6 +8855,57 @@
   markNative(CSSFontPaletteValuesRule, "CSSFontPaletteValuesRule");
   global.CSSFontPaletteValuesRule = CSSFontPaletteValuesRule;
 
+  // 5.8 CSSScopeRule
+  function CSSScopeRule() {
+    CSSGroupingRule.call(this);
+    this._type = 0;
+    this.start = null;
+    this.end = null;
+  }
+  CSSScopeRule.prototype = Object.create(CSSGroupingRule.prototype);
+  CSSScopeRule.prototype.constructor = CSSScopeRule;
+  markNative(CSSScopeRule, "CSSScopeRule");
+  global.CSSScopeRule = CSSScopeRule;
+
+  function parseScopePrelude(preludeRaw) {
+    const s = String(preludeRaw || "").trim();
+    if (!s) return { start: null, end: null, valid: true };
+    let pos = 0;
+    const skipWs = () => { while (pos < s.length && /\s/.test(s[pos])) pos++; };
+    const readParen = () => {
+      if (s[pos] !== "(") return null;
+      let d = 0, q = "";
+      const begin = pos + 1;
+      for (; pos < s.length; pos++) {
+        const c = s[pos];
+        if (q) { if (c === "\\" && pos + 1 < s.length) pos++; else if (c === q) q = ""; continue; }
+        if (c === "\"" || c === "'") q = c;
+        else if (c === "(") d++;
+        else if (c === ")") { d--; if (d === 0) { const inner = s.slice(begin, pos).trim(); pos++; return inner; } }
+      }
+      return null;
+    };
+    let start = null, end = null;
+    skipWs();
+    if (s[pos] === "(") {
+      start = readParen();
+      if (start === null) return { start: null, end: null, valid: false };
+      skipWs();
+    }
+    if (pos < s.length) {
+      const rest = s.slice(pos);
+      const toM = /^to\s*(?=\()/i.exec(rest);
+      if (!toM) return { start: null, end: null, valid: false };
+      pos += toM[0].length;
+      end = readParen();
+      if (end === null) return { start: null, end: null, valid: false };
+      skipWs();
+    }
+    if (pos < s.length) return { start: null, end: null, valid: false };
+    return { start: start, end: end, valid: true };
+  }
+  global.parseScopePrelude = parseScopePrelude;
+
   const MARGIN_BOX_NAMES = new Set([
     "top-left-corner", "top-left", "top-center", "top-right", "top-right-corner",
     "bottom-left-corner", "bottom-left", "bottom-center", "bottom-right", "bottom-right-corner",
@@ -9572,6 +9623,7 @@
       case "keyframes":
       case "-webkit-keyframes": return "keyframes";
       case "page": return "page";
+      case "scope": return "scope";
       case "charset": return "charset";
       case "counter-style": return "counter-style";
       default: return "unknown";
@@ -9825,6 +9877,37 @@
         let d = style.cssText;
         if (d && !d.endsWith(";")) d += ";";
         return "@font-face" + (d ? " { " + d + " }" : " { }");
+      };
+      return rule;
+    }
+
+    if (kind === "scope") {
+      const prelude = sel.replace(/^@scope\b/i, "").trim();
+      const sp = parseScopePrelude(prelude);
+      if (!sp.valid) return null;
+      const rule = new CSSScopeRule();
+      rule.parentRule = parentRule || null;
+      rule.parentStyleSheet = parentSheet || null;
+      rule._onMutate = onMutate || null;
+      rule.start = sp.start;
+      rule.end = sp.end;
+      const childArr = [];
+      const bodyParsed = splitStylesheetRules(parsed.declText || "");
+      for (let i = 0; i < bodyParsed.length; i++) {
+        const cr = constructRule(bodyParsed[i], parentSheet, rule, onMutate);
+        if (cr) childArr.push(cr);
+      }
+      rule.cssRules = makeRuleList(childArr);
+      rule._serialize = function () {
+        let head = "@scope";
+        if (rule.start !== null) head += " (" + rule.start + ")";
+        if (rule.end !== null) head += " to (" + rule.end + ")";
+        if (rule.cssRules.length === 0) return head + " {\n}";
+        const lines = [];
+        for (let i = 0; i < rule.cssRules.length; i++) {
+          lines.push("  " + rule.cssRules[i].cssText);
+        }
+        return head + " {\n" + lines.join("\n") + "\n}";
       };
       return rule;
     }
