@@ -416,6 +416,7 @@ pub struct CssCounterEntry {
 pub struct CssCounterStack {
     entries: [64]CssCounterEntry = [CssCounterEntry{}; 64];
     count: usize = 0;
+    quote_depth: i32 = 0;
 
     fn pushReset(*_, name: []const u8, val: i32) {
         const trimmed = std.mem.trim(u8, name, " \t\r\n");
@@ -496,7 +497,7 @@ pub fn hasDynamicPseudoContent(raw: []const u8): bool {
 pub fn resolvePseudoContentExpr(
     raw: []const u8,
     node: *const NodeData,
-    stack: *const CssCounterStack,
+    stack: *CssCounterStack,
     out_buf: []u8,
 ): usize? {
     const s = std.mem.trim(u8, raw, " \t\r\n");
@@ -562,6 +563,32 @@ pub fn resolvePseudoContentExpr(
                 std.mem.copyForwards(u8, out_buf[out_len .. out_len + take], aval[0..take]);
                 out_len += take;
             }
+            produced = true;
+        } else if (i + 10 <= s.len && std.ascii.eqlIgnoreCase(s[i .. i + 10], "open-quote")) {
+            i += 10;
+            const ch: u8 = if (@mod(stack.quote_depth, 2) == 0) '"' else '\'';
+            if (out_len < out_buf.len) {
+                out_buf[out_len] = ch;
+                out_len += 1;
+            }
+            stack.quote_depth += 1;
+            produced = true;
+        } else if (i + 11 <= s.len && std.ascii.eqlIgnoreCase(s[i .. i + 11], "close-quote")) {
+            i += 11;
+            if (stack.quote_depth > 0) stack.quote_depth -= 1;
+            const ch: u8 = if (@mod(stack.quote_depth, 2) == 0) '"' else '\'';
+            if (out_len < out_buf.len) {
+                out_buf[out_len] = ch;
+                out_len += 1;
+            }
+            produced = true;
+        } else if (i + 13 <= s.len && std.ascii.eqlIgnoreCase(s[i .. i + 13], "no-open-quote")) {
+            i += 13;
+            stack.quote_depth += 1;
+            produced = true;
+        } else if (i + 14 <= s.len && std.ascii.eqlIgnoreCase(s[i .. i + 14], "no-close-quote")) {
+            i += 14;
+            if (stack.quote_depth > 0) stack.quote_depth -= 1;
             produced = true;
         } else {
             while (i < s.len && s[i] != ' ' && s[i] != '\t' && s[i] != '"' && s[i] != '\'') : (i += 1) {}

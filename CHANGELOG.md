@@ -4477,3 +4477,6 @@
 - **Phase 843**:
   - `src/js/shim/cssom.js`: `isValidColor`/`normalizeCssSpecifiedValue`/`normalizeCssColor` 补全注释剥离、CSS 转义还原、`toFixed(8)` 精度与 `(pct/100)*255` 精确舍入。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+### Phase 844 — `contain: style` 计数器作用域隔离与 `open-quote`/`close-quote` 伪元素内容支持
+- `src/css/font_face.cp`: 为 `CssCounterStack` 新增 `quote_depth` 字段，并在 `resolvePseudoContentExpr` 中支持 `open-quote` / `close-quote` / `no-open-quote` / `no-close-quote`。
+- `src/css/cascade.cp`: 新增 `PROP_CONTAIN` 与 `ComputedStyle.contain_style` 解析 `contain: style|content|strict`，在 `resolveCountersRecursive` 对 `contain_style` 子树切换独立 `sub_stack` 隔离计数器作用域；`contain-style-*` 与 `quote-scoping-*` 34 项验证 **14/34 PASS**，`--smoke` 3/3 **PASS**。

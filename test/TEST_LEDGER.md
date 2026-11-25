@@ -2510,3 +2510,4 @@
 | Phase 841 | `@scope` (`CSSScopeRule`) CSSOM 与邻近度级联求值 | `src/js/shim/cssom.js`, `src/js/shim/window.js` | `scope-{cssom,featureless,overlapping-has,supports,...}` **9/36 PASS**; `--smoke` 3/3 PASS |
 | Phase 842 | `isValidCalcSyntax` 单位白名单与 `clamp()`/`min()`/`max()` 校验 | `src/js/shim/cssom.js` | `minmax-time-invalid` **52/52 PASS**; `--smoke` 3/3 PASS |
 | Phase 843 | RGB 注释/转义预清洗、`toFixed(8)` 与百分比舍入修复 | `src/js/shim/cssom.js` | `color-valid-rgb` (70/70 **PASS**), `color-computed-rgb` 无超时; `--smoke` 3/3 PASS |
+| Phase 844 | `contain: style` 计数器作用域隔离与 `open-quote`/`close-quote` | `src/css/font_face.cp`, `src/css/cascade.cp` | `contain-style-*`/`quote-scoping-*` **14/34 PASS**; `--smoke` 3/3 PASS |

@@ -3526,3 +3526,5 @@
 - 在 `cssom.js` 为 `isValidCalcSyntax` 补全 `VALID_CALC_UNITS`、`clamp()` 3 参数精确校验与括号闭合校验，并收紧 `opacity` 与 `transition-delay`/`duration` 的 `calc`/`min`/`max`/`clamp` 单位校验，`/css/css-values/minmax-time-invalid.html` **52/52 全绿 PASS**，`--smoke` 3/3 **PASS**。
 ### Phase 843 — RGB 注释/转义预清洗、`color(srgb ...)` 8 位精度与百分比舍入修复
 - 在 `cssom.js` 为 `isValidColor`/`normalizeCssSpecifiedValue`/`normalizeCssColor` 补全 `/* ... */` 注释剥离与 CSS 转义还原，`rgb(128 none none)` 序列化升级为 `toFixed(8)` (`0.50196078`)，并将 `2.55` 乘法改为 `/ 100 * 255` 消除 `127.499999` 舍入误差，`color-valid-rgb.html` (70/70 **PASS**)，`--smoke` 3/3 **PASS**。
+### Phase 844 — `contain: style` 计数器作用域隔离与 `open-quote`/`close-quote` 支持
+- 在 `cascade.cp` 新增 `PROP_CONTAIN` (`contain: style|content|strict`) 标志位，在 `resolveCountersRecursive` 中为 `contain_style` 元素子树分配独立 `CssCounterStack`；在 `font_face.cp` 为 `CssCounterStack` 增设 `quote_depth` 并在 `resolvePseudoContentExpr` 解析 `open-quote`/`close-quote`/`no-open-quote`/`no-close-quote`；后续待补充 `quotes` 属性解析及 `::before -> children -> ::after` 求值顺序以进一步收割 `quote-scoping-*`。

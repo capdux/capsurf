@@ -1211,7 +1211,8 @@ pub const PROP_OBJECT_POS: usize = 102;
 pub const PROP_BG_POS: usize = 103;
 pub const PROP_OBJECT_VIEW_BOX: usize = 104;
 pub const PROP_BG_REPEAT: usize = 105;
-pub const TOTAL_PROP_SLOTS: usize = 106;
+pub const PROP_CONTAIN: usize = 106;
+pub const TOTAL_PROP_SLOTS: usize = 107;
 
 pub enum ObjectViewBoxKind {
     None,
@@ -2458,6 +2459,7 @@ pub struct ComputedStyle {
     container_type: ContainerType = ContainerType.Normal;
     container_name_buf: [64]u8 = [0; 64];
     container_name_len: usize = 0;
+    contain_style: bool = false;
     overflow_visible: bool = true;
     overflow_x: OverflowMode = OverflowMode.Visible;
     overflow_y: OverflowMode = OverflowMode.Visible;
@@ -4822,6 +4824,19 @@ pub struct ComputedStyle {
             }
             return;
         }
+        if (std.ascii.eqlIgnoreCase(name, "contain")) {
+            if (_.tryClaimSlot(PROP_CONTAIN, weight)) {
+                let cs = false;
+                let cit = std.mem.tokenizeAny(u8, val, " \t\r\n");
+                while (ctok := cit.next()) {
+                    if (std.ascii.eqlIgnoreCase(ctok, "style") || std.ascii.eqlIgnoreCase(ctok, "content") || std.ascii.eqlIgnoreCase(ctok, "strict")) {
+                        cs = true;
+                    }
+                }
+                _.contain_style = cs;
+            }
+            return;
+        }
         if (std.ascii.eqlIgnoreCase(name, "container-type")) {
             if (ct := ContainerType.parse(val)) {
                 if (_.tryClaimSlot(PROP_CONTAINER_TYPE, weight)) {
@@ -5927,8 +5942,10 @@ pub struct Cascade {
         if (node_id == NULL_NODE || @as(usize, node_id) >= doc.nodes.items.len || @as(usize, node_id) >= styles.len) return;
         const node = &doc.nodes.items[@as(usize, node_id)];
         const saved_count = stack.count;
+        let is_contain_style = false;
         if (node.node_type == NodeType.Element) {
             let st = &styles[@as(usize, node_id)];
+            is_contain_style = st.contain_style;
             if (st.has_counter_reset && st.counter_reset_len > 0) {
                 stack.pushReset(st.counter_reset_name[0..st.counter_reset_len], st.counter_reset_val);
             }
@@ -5949,9 +5966,17 @@ pub struct Cascade {
             }
         }
         let ch = node.first_child;
-        while (ch != NULL_NODE && @as(usize, ch) < doc.nodes.items.len) {
-            Cascade.resolveCountersRecursive(doc, styles, ch, stack);
-            ch = doc.nodes.items[@as(usize, ch)].next_sibling;
+        if (is_contain_style) {
+            let sub_stack = CssCounterStack{};
+            while (ch != NULL_NODE && @as(usize, ch) < doc.nodes.items.len) {
+                Cascade.resolveCountersRecursive(doc, styles, ch, &sub_stack);
+                ch = doc.nodes.items[@as(usize, ch)].next_sibling;
+            }
+        } else {
+            while (ch != NULL_NODE && @as(usize, ch) < doc.nodes.items.len) {
+                Cascade.resolveCountersRecursive(doc, styles, ch, stack);
+                ch = doc.nodes.items[@as(usize, ch)].next_sibling;
+            }
         }
         stack.count = saved_count;
     }
