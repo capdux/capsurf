@@ -4520,3 +4520,6 @@
 ### Phase 857 — `display` / `position` / `visibility` / `box-sizing` / `text-align` / `word-break` / `overflow-wrap` 下沉 `cap:css`
 - `/data/dev/cp/lib/css/{text,display}.cp`: 新增并导出 `isValidCssTextAlignValue`、`isValidCssWordBreakValue`（补齐 `manual`）、`isValidCssOverflowWrapValue`、`isValidCssDisplayValue`、`isValidCssPositionValue`、`isValidCssVisibilityValue`、`isValidCssBoxSizingValue`。
 - `src/js/dom_binding.cp` & `src/js/shim/cssom.js`: 暴露并接入全部 7 个原生校验器，12 项 WPT 解析测试 **12/12 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 858 — `flex-direction` / `flex-wrap` / `align-*` / `justify-content` 下沉 `cap:css`
+- `/data/dev/cp/lib/css/{boxAlign,index}.cp`: 新增并导出 `isValidCssFlexDirectionValue`、`isValidCssFlexWrapValue`、`isValidCssAlignSelfOrItemsValue`、`isValidCssContentDistributionValue`。
+- `src/js/dom_binding.cp` & `src/js/shim/cssom.js`: 暴露并接入全部 4 个原生校验器，12 项 WPT 解析测试 **12/12 PASS**，`--smoke` 3/3 **PASS**。

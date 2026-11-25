@@ -101,6 +101,10 @@ import {
     isValidCssPositionValue,
     isValidCssVisibilityValue,
     isValidCssBoxSizingValue,
+    isValidCssFlexDirectionValue,
+    isValidCssFlexWrapValue,
+    isValidCssAlignSelfOrItemsValue,
+    isValidCssContentDistributionValue,
 } from "cap:css";
 import { LayoutTree, Rect } from "../layout/layout.cp";
 import { RUNTIME_CHUNKS } from "./runtime_source.cp";
@@ -1039,6 +1043,34 @@ fn callStrValidator1(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, pred: 
 @c fn js_capsurf_is_valid_css_box_sizing(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     * = this_val;
     return callStrValidator1(ctx, argc, argv, isValidCssBoxSizingValue);
+}
+@c fn js_capsurf_is_valid_css_flex_direction(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssFlexDirectionValue);
+}
+@c fn js_capsurf_is_valid_css_flex_wrap(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssFlexWrapValue);
+}
+@c fn js_capsurf_is_valid_css_align_self_or_items(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 1) return jsFalse();
+    const s = jsToSlice(ctx, unsafe { argv[0] });
+    defer if (s.len > 0) std.heap.page_allocator.free(s);
+    const trimmed = std.mem.trim(u8, s, " \t\r\n");
+    if (trimmed.len == 0) return jsFalse();
+    const allow_auto = if (argc >= 2) jsToBool(ctx, unsafe { argv[1] }) else false;
+    return jsBool(isValidCssAlignSelfOrItemsValue(trimmed, allow_auto));
+}
+@c fn js_capsurf_is_valid_css_content_dist(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 1) return jsFalse();
+    const s = jsToSlice(ctx, unsafe { argv[0] });
+    defer if (s.len > 0) std.heap.page_allocator.free(s);
+    const trimmed = std.mem.trim(u8, s, " \t\r\n");
+    if (trimmed.len == 0) return jsFalse();
+    const is_justify = if (argc >= 2) jsToBool(ctx, unsafe { argv[1] }) else false;
+    return jsBool(isValidCssContentDistributionValue(trimmed, is_justify));
 }
 @c fn js_capsurf_is_valid_css_len_pct(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     * = this_val;
@@ -3157,6 +3189,10 @@ pub fn mountDom(
     defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_position", js_capsurf_is_valid_css_position, 1);
     defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_visibility", js_capsurf_is_valid_css_visibility, 1);
     defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_box_sizing", js_capsurf_is_valid_css_box_sizing, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_flex_direction", js_capsurf_is_valid_css_flex_direction, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_flex_wrap", js_capsurf_is_valid_css_flex_wrap, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_align_self_or_items", js_capsurf_is_valid_css_align_self_or_items, 2);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_content_dist", js_capsurf_is_valid_css_content_dist, 2);
 
     // Assemble and evaluate modular runtime shim
     let total_len: usize = 0;

@@ -1156,6 +1156,8 @@
     if (prop === "text-align" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_text_align === "function") return globalThis.__capsurf_is_valid_css_text_align(vLower);
     if (prop === "word-break" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_word_break === "function") return globalThis.__capsurf_is_valid_css_word_break(vLower);
     if ((prop === "overflow-wrap" || prop === "word-wrap") && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_overflow_wrap === "function") return globalThis.__capsurf_is_valid_css_overflow_wrap(vLower);
+    if (prop === "flex-direction" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_flex_direction === "function") return globalThis.__capsurf_is_valid_css_flex_direction(vLower);
+    if (prop === "flex-wrap" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_flex_wrap === "function") return globalThis.__capsurf_is_valid_css_flex_wrap(vLower);
     if (allowedKeywords) {
       return allowedKeywords.indexOf(vLower) !== -1;
     }
@@ -2862,6 +2864,12 @@
         prop === "align-items" || prop === "justify-items" ||
         prop === "align-self" || prop === "justify-self" ||
         prop === "place-content" || prop === "place-items" || prop === "place-self") {
+      if ((prop === "align-content" || prop === "justify-content") && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_content_dist === "function") {
+        return globalThis.__capsurf_is_valid_css_content_dist(vLower, prop === "justify-content");
+      }
+      if ((prop === "align-items" || prop === "align-self") && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_align_self_or_items === "function") {
+        return globalThis.__capsurf_is_valid_css_align_self_or_items(vLower, prop === "align-self");
+      }
       const toks = splitCssTokens(vLower);
       if (toks.length === 0) return false;
       function consumeAlign(arr, i, p) {
