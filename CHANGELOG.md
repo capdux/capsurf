@@ -4248,3 +4248,7 @@
   - `src/js/shim/element/element.js`: 修复 `lookupPropertyValue` 与 `styleProxy.get` 对 `font` 的提前短路，补全 `font` 与 `font-variant-caps` CSS2 值联动序列化。
   - `test/wpt/wpt-expectations.json`: 收紧 `/css/css-fonts/parsing/font-shorthand-variant.html` 为 `PASS`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 782**:
+  - `src/js/shim/cssom.js`: `KNOWN_PROPS`、`KEYWORD_PROPS`、非负长度校验、`columns` 展开/序列化及 `makeRuleStyleDeclaration` 初始解析补全 `column-height` 与 `column-wrap`。
+  - `src/js/shim/window.js`: `INITIAL_VALUES` 与 `ALL_KNOWN_PROPS` 补全 `column-height` 与 `column-wrap`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

@@ -3933,8 +3933,8 @@
       "border-top-width", "border-width", "bottom", "box-decoration-break", "box-shadow",
       "box-sizing", "break-after", "break-before", "break-inside", "caption-side", "caret-color",
       "clear", "clip", "clip-path", "clip-rule", "color", "color-interpolation-filters", "color-scheme", "column-count", "column-fill",
-      "column-gap", "column-rule", "column-rule-color", "column-rule-style", "column-rule-width",
-      "column-span", "column-width", "columns", "contain", "contain-intrinsic-block-size",
+      "column-gap", "column-height", "column-rule", "column-rule-color", "column-rule-style", "column-rule-width",
+      "column-span", "column-width", "column-wrap", "columns", "contain", "contain-intrinsic-block-size",
       "contain-intrinsic-height", "contain-intrinsic-inline-size", "contain-intrinsic-size",
       "contain-intrinsic-width", "container", "container-name", "container-type", "content",
       "content-visibility", "continue", "counter-increment", "counter-reset", "counter-set", "cursor",
@@ -4573,6 +4573,7 @@
         "continue": ["normal", "discard", "collapse", "-webkit-legacy"],
         "scrollbar-width": ["auto", "thin", "none"],
         "field-sizing": ["fixed", "content"],
+        "column-wrap": ["auto", "nowrap", "wrap"],
         "content-visibility": ["visible", "auto", "hidden"],
         "overflow-anchor": ["auto", "none"],
         "scroll-snap-stop": ["normal", "always"],
@@ -5583,7 +5584,7 @@
         if (t === "auto" || /^(?:calc|min|max|clamp|var|env)\(/i.test(t)) return true;
         return /^\+?[1-9]\d*$/.test(t);
       }
-      if (prop === "column-width") {
+      if (prop === "column-width" || prop === "column-height") {
         const toks = splitCssTokens(vLower);
         if (toks.length !== 1) return false;
         const t = toks[0];
@@ -7702,7 +7703,7 @@
       "width", "height", "min-width", "min-height", "max-width", "max-height", "block-size", "inline-size", "min-block-size", "min-inline-size", "max-block-size", "max-inline-size",
       "row-gap", "column-gap", "grid-row-gap", "grid-column-gap", "border-top-width", "border-right-width", "border-bottom-width", "border-left-width",
       "outline-width", "outline-offset", "column-rule-width", "letter-spacing", "word-spacing", "border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius", "border-bottom-left-radius",
-      "perspective", "column-width", "flex-basis", "translate", "font-size", "vertical-align", "text-underline-offset", "text-decoration-thickness", "baseline-shift"
+      "perspective", "column-width", "column-height", "flex-basis", "translate", "font-size", "vertical-align", "text-underline-offset", "text-decoration-thickness", "baseline-shift"
     ]);
     const TWO_SIDE_PROPS = new Set([
       "inset-block", "inset-inline", "margin-block", "margin-inline", "padding-block", "padding-inline",
@@ -10198,7 +10199,7 @@
           const rl = rightStr.toLowerCase();
           h = (rl === "0" || rl === "+0" || rl === "-0") ? "0px" : rl;
         }
-        return [["column-width", w], ["column-count", c], ["column-height", h]];
+        return [["column-width", w], ["column-count", c], ["column-height", h], ["column-wrap", "auto"]];
       }
       if (key === "border" || key === "border-top" || key === "border-right" || key === "border-bottom" || key === "border-left") {
         const p = splitCssTokens(normV);
@@ -10485,7 +10486,7 @@
       transition: ["transition-property", "transition-duration", "transition-timing-function", "transition-delay", "transition-behavior"],
       outline: ["outline-color", "outline-style", "outline-width"],
       "column-rule": ["column-rule-width", "column-rule-style", "column-rule-color"],
-      columns: ["column-width", "column-count", "column-height"],
+      columns: ["column-width", "column-count", "column-height", "column-wrap"],
       overflow: ["overflow-x", "overflow-y"],
       gap: ["row-gap", "column-gap"],
       "grid-gap": ["row-gap", "column-gap"],
@@ -10822,6 +10823,8 @@
         const cw = vals[0] || "auto";
         const cc = vals[1] || "auto";
         const ch = vals[2] || "auto";
+        const wrap = vals[3] || "auto";
+        if (wrap !== "auto") return "";
         const left = (cw === "auto" && cc === "auto") ? "auto" : (cw === "auto" ? cc : (cc === "auto" ? cw : (cw + " " + cc)));
         return ch === "auto" ? left : (left + " / " + ch);
       }
@@ -11298,9 +11301,14 @@
           const key = rawName.startsWith("--") ? rawName : lowerName;
           if (key === "--") continue;
           if (!key.startsWith("--") && /[{}]/.test(val) && !/(?:^|[^a-z0-9_-])var\(/i.test(val)) continue;
-          if ((context === "page" || context === "margin") && (key === "margin" || key === "padding")) {
+          if (((context === "page" || context === "margin") && (key === "margin" || key === "padding")) ||
+              (context === "style" && key === "columns")) {
             const expanded = expandCssShorthand(key, val);
             if (expanded) {
+              if (data.has(key)) {
+                data.delete(key);
+                authoredOrder = authoredOrder.filter((k) => k !== key);
+              }
               for (let ei = 0; ei < expanded.length; ei++) {
                 const lhKey = expanded[ei][0];
                 if (!data.has(lhKey)) authoredOrder.push(lhKey);
@@ -48744,6 +48752,8 @@
         ["column-rule-width", "3px"],
         ["column-span", "none"],
         ["column-width", "auto"],
+        ["column-height", "auto"],
+        ["column-wrap", "auto"],
         ["margin-trim", "none"],
         ["font-size-adjust", "none"],
         ["font-synthesis", "weight style small-caps"],
@@ -49774,7 +49784,7 @@
       "box-sizing", "break-after", "break-before", "break-inside", "caption-side", "caret-color",
       "clear", "clip", "clip-path", "color", "color-interpolation-filters", "color-scheme", "column-count", "column-fill", "column-gap",
       "flood-color", "lighting-color",
-      "column-rule-color", "column-rule-style", "column-rule-width", "column-span", "column-width", "contain",
+      "column-rule-color", "column-rule-style", "column-rule-width", "column-span", "column-width", "column-height", "column-wrap", "contain",
       "contain-intrinsic-block-size", "contain-intrinsic-height", "contain-intrinsic-inline-size", "contain-intrinsic-width",
       "content", "content-visibility", "continue", "container-name", "container-type", "counter-increment", "counter-reset", "counter-set", "cursor", "direction", "display", "margin-trim",
       "clip-rule", "mask-border-outset", "mask-border-repeat", "mask-border-slice", "mask-border-source", "mask-border-width",
