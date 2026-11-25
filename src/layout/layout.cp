@@ -853,23 +853,42 @@ pub struct LayoutTree {
 
         if (style.width.isIntrinsic()) {
             const avail = if (parent_w > mh) (parent_w - mh) else 0.0;
-            if (style.width.intrinsic == IntrinsicSizeKeyword.MinContent) {
-                const mc = _.measureMinContentWidth(doc, styles, node_id, parent_w);
-                raw_w = if (mc > mh) (mc - mh) else 0.0;
-            } else if (style.width.intrinsic == IntrinsicSizeKeyword.MaxContent) {
-                const mc = _.measureIntrinsicWidth(doc, styles, node_id, parent_w);
-                raw_w = if (mc > mh) (mc - mh) else 0.0;
-            } else if (style.width.intrinsic == IntrinsicSizeKeyword.FitContent) {
-                const min_o = _.measureMinContentWidth(doc, styles, node_id, parent_w);
-                const max_o = _.measureIntrinsicWidth(doc, styles, node_id, parent_w);
-                const min_c = if (min_o > mh) (min_o - mh) else 0.0;
-                const max_c = if (max_o > mh) (max_o - mh) else 0.0;
-                raw_w = @min(@max(min_c, avail), max_c);
-            } else {
-                // Stretch / -webkit-fill-available
-                raw_w = avail;
+            let used_ratio_w = false;
+            if (rep := replaced_opt) {
+                if (rep.height > 0.0 && !style.height.is_auto && !style.height.is_none && !style.height.isIntrinsic() &&
+                    (style.width.intrinsic == IntrinsicSizeKeyword.MinContent ||
+                     style.width.intrinsic == IntrinsicSizeKeyword.MaxContent ||
+                     style.width.intrinsic == IntrinsicSizeKeyword.FitContent)) {
+                    const h_is_pct = !style.height.is_calc && style.height.length.unit == CssUnit.Percent;
+                    if (!h_is_pct || parent_h > 0.0) {
+                        const h_px = style.height.resolvePx(parent_h, font_px, root_px, vw, vh);
+                        const v_decor = box.paddingVertical() + box.borderVertical();
+                        const ch = if (style.box_sizing == BoxSizing.BorderBox) (if (h_px > v_decor) (h_px - v_decor) else 0.0) else h_px;
+                        raw_w = ch * (rep.width / rep.height);
+                        raw_is_border_box = false;
+                        used_ratio_w = true;
+                    }
+                }
             }
-            raw_is_border_box = true;
+            if (!used_ratio_w) {
+                if (style.width.intrinsic == IntrinsicSizeKeyword.MinContent) {
+                    const mc = _.measureMinContentWidth(doc, styles, node_id, parent_w);
+                    raw_w = if (mc > mh) (mc - mh) else 0.0;
+                } else if (style.width.intrinsic == IntrinsicSizeKeyword.MaxContent) {
+                    const mc = _.measureIntrinsicWidth(doc, styles, node_id, parent_w);
+                    raw_w = if (mc > mh) (mc - mh) else 0.0;
+                } else if (style.width.intrinsic == IntrinsicSizeKeyword.FitContent) {
+                    const min_o = _.measureMinContentWidth(doc, styles, node_id, parent_w);
+                    const max_o = _.measureIntrinsicWidth(doc, styles, node_id, parent_w);
+                    const min_c = if (min_o > mh) (min_o - mh) else 0.0;
+                    const max_c = if (max_o > mh) (max_o - mh) else 0.0;
+                    raw_w = @min(@max(min_c, avail), max_c);
+                } else {
+                    // Stretch / -webkit-fill-available
+                    raw_w = avail;
+                }
+                raw_is_border_box = true;
+            }
         } else if (!style.width.is_auto && !style.width.is_none) {
             if (!style.width.is_calc && style.width.length.unit == CssUnit.Ch && LayoutTree.isMonospaceFont(style)) {
                 const ch_v: f32 = @floatCast(style.width.length.value);

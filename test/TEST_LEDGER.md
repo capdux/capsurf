@@ -2491,3 +2491,4 @@
 | Phase 822 | WPT `:has()` 相对选择器与 `:scope` 祖先界限 | `src/js/shim/selector.js` | `has-argument-with-explicit-scope` (13/13 **PASS**); `--smoke` 3/3 PASS |
 | Phase 823 | WPT 任意深度相对 `:has()` 组合器链与 `querySelectorAll` | `src/js/shim/selector.js` | `has-matches-to-uninserted-elements`, `has-relative-argument` (35/35 **PASS**); `--smoke` 3/3 PASS |
 | Phase 824 | WPT 孤立节点/`documentElement` 子索引伪类与未挂载 `computedStyleMap` | `src/js/shim/selector.js`, `src/js/shim/element/element.js`, `src/js/shim/window.js` | `child-indexed-pseudo-class` (57/57 **PASS**), `get-disconnected-element` (**PASS**); `--smoke` 3/3 PASS |
+| Phase 825 | WPT 替换元素固有宽度纵横比传递与 `cap:css` 声明注释剥离 | `src/layout/layout.cp`, `/data/dev/cp/lib/css/stylesheet.cp` | `intrinsic-percent-replaced-033` (9/9 **PASS**); `--smoke` 3/3 PASS |

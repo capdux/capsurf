@@ -3488,3 +3488,5 @@
 - 在 `selector.js` 抽取 `matchesComplexParts` 与 `__HAS_ANCHOR__` 锚点匹配，`wrapQuerySelector`/`wrapQuerySelectorAll` 统一拦截 `:has(`，`has-matches-to-uninserted-elements` 与 `has-relative-argument` (35/35) 全绿 **PASS**。
 ### Phase 824 — 孤立节点/`documentElement` 子索引伪类与未挂载 `computedStyleMap`
 - 在 `selector.js`、`element.js` 将无父节点或 `document` 根元素的子索引伪类（`:first-child`/`:nth-child` 等）按 Selectors 4 规范视为 `1/1` 并打通 `document.querySelector`/`matches`，同时在 `window.js` `makeComputedStyleMap` 拦截未挂载节点返回 `undefined`，`child-indexed-pseudo-class` (57/57) 与 `get-disconnected-element` 全绿 **PASS**。
+### Phase 825 — 替换元素固有关键字宽度纵横比传递与 `cap:css` 声明注释修复
+- 在 `src/layout/layout.cp` `resolveBoxMetrics` 为具有固有纵横比的替换元素增加 `min-content`/`max-content`/`fit-content` 宽度经由可解析百分比/定长 `height` 传递的分支；同时定位并修复 `/data/dev/cp/lib/css/stylesheet.cp` 中 `splitTopLevelDecls` 与 `CssProperty.parse` 未剥离 `/* ... */` 注释导致注释内冒号抢占 `:` 分割点的问题，`/css/css-sizing/intrinsic-percent-replaced-033.html` (9/9) 全绿 **PASS**。

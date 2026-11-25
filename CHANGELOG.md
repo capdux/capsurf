@@ -4416,3 +4416,6 @@
   - `src/js/shim/element/element.js`: `proto.matches` 对子索引伪类允许回落 JS 匹配器。
   - `src/js/shim/window.js`: `makeComputedStyleMap` 对未挂载节点返回空样式。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 825**:
+  - `src/layout/layout.cp`: `resolveBoxMetrics` 支持替换元素在 `min-content`/`max-content`/`fit-content` 宽度下通过可解析 `height` 与固有纵横比传递宽度。
+  - `/data/dev/cp/lib/css/stylesheet.cp`: `splitTopLevelDecls` 与 `CssProperty.parse` 跳过/剥离 `/* ... */` 注释，修复注释内含 `:` 导致后续声明（如 `.cb { /* ... */ height: 100px; }`）失效的 `cap:css` 库 Bug。
