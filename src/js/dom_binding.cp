@@ -76,6 +76,11 @@ import {
     isValidCssFlexBasisValue,
     isValidCssGapValue,
     isValidCssAnimIterCountValue,
+    isValidCssFilterValue,
+    isValidCssBoxShadowValue,
+    isValidCssFontWeightValue,
+    isValidCssFontStretchValue,
+    isValidCssLineHeightValue,
 } from "cap:css";
 import { LayoutTree, Rect } from "../layout/layout.cp";
 import { RUNTIME_CHUNKS } from "./runtime_source.cp";
@@ -886,6 +891,26 @@ fn callStrValidator1(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, pred: 
 @c fn js_capsurf_is_valid_css_anim_iter_count(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     * = this_val;
     return callStrValidator1(ctx, argc, argv, isValidCssAnimIterCountValue);
+}
+@c fn js_capsurf_is_valid_css_filter(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssFilterValue);
+}
+@c fn js_capsurf_is_valid_css_box_shadow(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssBoxShadowValue);
+}
+@c fn js_capsurf_is_valid_css_font_weight(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssFontWeightValue);
+}
+@c fn js_capsurf_is_valid_css_font_stretch(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssFontStretchValue);
+}
+@c fn js_capsurf_is_valid_css_line_height(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssLineHeightValue);
 }
 @c fn js_capsurf_is_valid_css_len_pct(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     * = this_val;
@@ -2979,6 +3004,11 @@ pub fn mountDom(
     defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_len_pct", js_capsurf_is_valid_css_len_pct, 2);
     defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_time_list", js_capsurf_is_valid_css_time_list, 3);
     defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_gap", js_capsurf_is_valid_css_gap, 2);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_filter", js_capsurf_is_valid_css_filter, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_box_shadow", js_capsurf_is_valid_css_box_shadow, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_font_weight", js_capsurf_is_valid_css_font_weight, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_font_stretch", js_capsurf_is_valid_css_font_stretch, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_line_height", js_capsurf_is_valid_css_line_height, 1);
 
     // Assemble and evaluate modular runtime shim
     let total_len: usize = 0;

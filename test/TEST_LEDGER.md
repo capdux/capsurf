@@ -2517,3 +2517,4 @@
 | Phase 848 | `cap:css` Color 4 CSSOM 序列化下沉与 `transform`/`opacity` 数学校验 | `color.cp`, `dom_binding.cp`, `cssom.js` | `sin-cos-tan-invalid` (42/42), `minmax-number-invalid` (48/48), `exp-log-invalid`, `signs-abs-invalid` **PASS**; `--smoke` 3/3 PASS |
 | Phase 849 | 12 项 CSSOM 属性语法校验器下沉 `cap:css` 全面接线 | `cap:css`, `dom_binding.cp`, `cssom.js` | 11 项 CSS Math/Color 回归 **11/11 PASS**; `--smoke` 3/3 PASS |
 | Phase 850 | `isValidColor` / `gap` / `z-index` 接入 `cap:css` 原生校验 | `src/js/shim/cssom.js` | `clamp-integer-computed`, `color-valid-rgb`, `flex-basis-valid`, `gap-valid` 等 **8/8 PASS**; `--smoke` 3/3 PASS |
+| Phase 851 | `filter` / `box-shadow` / `font-*` / `line-height` 下沉 `cap:css` | `effects.cp`, `font.cp`, `dom_binding.cp`, `cssom.js` | `box-shadow-*`, `filter-parsing-*`, `font-weight-*` **6/6 PASS**; `--smoke` 3/3 PASS |

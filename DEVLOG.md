@@ -3540,3 +3540,5 @@
 - 将 `cssom.js` 中高频属性语法校验（`transform`/`rotate`/`scale`/`translate`/`opacity`/`color`/`z-index`/`flex-basis`/`animation-iteration-count`/`len-pct`/`time-list`/`gap`）统一收口下沉至 `cap:css` 纯 CP 零堆分配实现，通过 `dom_binding.cp` 暴露给 JS shim，大幅削减 CSSOM 层的 JS 正则校验逻辑。
 ### Phase 850 — `isValidColor` / `gap` / `z-index` 接入 `cap:css` 原生校验
 - 完成 `cssom.js` 中 `isValidColor`、`gap` 系列与 `z-index` 到 `cap:css` 的统一收口接线，并保留 `calc(NaN)` 颜色与 `z-index: clamp(none, ...)` 边缘守卫，8 项回归全绿。
+### Phase 851 — `filter` / `box-shadow` / `font-weight` / `font-stretch` / `line-height` 下沉 `cap:css` 并接线验证
+- 将视觉效果（`filter` / `backdrop-filter` / `box-shadow`）与字体排版（`font-weight` / `font-stretch` / `line-height`）校验收口至 `cap:css` 原生实现并全量通过 6 项对应 WPT 解析测试，累计已有 17 个 CSSOM 高频语法校验器完成 `cap:css` 下沉。

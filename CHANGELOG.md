@@ -4499,3 +4499,6 @@
 - `src/js/dom_binding.cp` & `src/js/shim/cssom.js`: 暴露全部 12 个 `__capsurf_is_valid_css_*` 原生校验器并接入 `cssom.js`；11 项 WPT 回归 **11/11 PASS**，`--smoke` 3/3 **PASS**。
 ### Phase 850 — `isValidColor` / `gap` / `z-index` 接入 `cap:css` 原生校验
 - `src/js/shim/cssom.js`: `isValidColor`、`gap`/`row-gap`/`column-gap` 与 `z-index` 全面接入 `__capsurf_is_valid_css_*`，8 项 WPT 回归 **8/8 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 851 — `filter` / `box-shadow` / `font-weight` / `font-stretch` / `line-height` 下沉 `cap:css` 并接线验证
+- `/data/dev/cp/lib/css/{effects,font,index}.cp`: 新增并导出 `isValidCssFilterValue`、`isValidCssBoxShadowValue`、`isValidCssFontWeightValue`、`isValidCssFontStretchValue`、`isValidCssLineHeightValue`，补全 `box-shadow` 负 spread、`filter` 空参及 `sign()`/`progress()` 支持。
+- `src/js/dom_binding.cp` & `src/js/shim/cssom.js`: 暴露并接入全部 5 个原生校验器，`box-shadow-{valid,invalid}`、`filter-parsing-{valid,invalid}`、`font-weight-{valid,invalid}` **6/6 PASS**，`--smoke` 3/3 **PASS**。

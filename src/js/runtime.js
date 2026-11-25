@@ -5810,6 +5810,9 @@
         return hasShape || hasBox;
       }
       if (prop === "font-weight") {
+        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_font_weight === "function") {
+          return globalThis.__capsurf_is_valid_css_font_weight(vLower);
+        }
         const toks = splitCssTokens(vLower);
         if (toks.length !== 1) return false;
         const t = toks[0];
@@ -5824,6 +5827,9 @@
         return n >= 1 && n <= 1000;
       }
       if (prop === "line-height") {
+        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_line_height === "function") {
+          return globalThis.__capsurf_is_valid_css_line_height(vLower);
+        }
         const toks = splitCssTokens(vLower);
         if (toks.length !== 1) return false;
         const t = toks[0];
@@ -6599,6 +6605,9 @@
         return false;
       }
       if (prop === "font-stretch" || prop === "font-width") {
+        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_font_stretch === "function") {
+          return globalThis.__capsurf_is_valid_css_font_stretch(vLower);
+        }
         const KW = new Set(["normal", "ultra-condensed", "extra-condensed", "condensed", "semi-condensed", "semi-expanded", "expanded", "extra-expanded", "ultra-expanded"]);
         const toks = splitCssTokens(vLower);
         if (toks.length !== 1) return false;
@@ -7290,6 +7299,9 @@
         return true;
       }
       if (prop === "box-shadow") {
+        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_box_shadow === "function") {
+          return globalThis.__capsurf_is_valid_css_box_shadow(trimmed);
+        }
         if (vLower === "none") return true;
         const layers = splitTopLevelComma(trimmed);
         if (layers.length === 0) return false;
@@ -8146,6 +8158,9 @@
         });
       }
       if (prop === "filter" || prop === "backdrop-filter") {
+        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_filter === "function") {
+          return globalThis.__capsurf_is_valid_css_filter(trimmed);
+        }
         if (vLower === "none") return true;
         const toks = splitCssTokens(trimmed);
         if (toks.length === 0) return false;
