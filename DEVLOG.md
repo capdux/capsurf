@@ -3663,3 +3663,5 @@
 - 修复 `serializeInlineSpecifiedValue` 未对 `grid`/`grid-template`/`grid-template-areas` 调用 `__capsurf_normalizeCssValue` 导致单引号未转双引号的问题，以及 `isFlexOrGridItem` 在 `display: contents` 向上穿透与 `display: none` 祖先检测中的 `parentEl` 引用丢失问题，4 项测试全绿。
 ### Phase 911 — `hasFontFamily` 精确匹配、`is_ratio_only` SVG 尺寸与 Grid 显式行列放置
 - 排查发现 `cascade.cp` `hasFontFamily` 使用子串查找导致 `-webkit-monospace` 误命中 `monospace`；`layout.cp` 对仅含 `viewBox` 纵横比的 SVG 在 `measureIntrinsicWidth`/`measureMinContentWidth` 中回退 `4px` 导致 `004` 失败而在 `max-content` 下未取用包含块宽度导致 `003` 失败；`layoutGridContainer` 未推进 `grid_row_start`/`grid_col_start` 导致第二行/第二列偏移为 0。修复后 4 项全绿。
+### Phase 912 — `grid` 简写行内展开与 `cssText` 折叠序列化
+- 补齐 `element.js` `setEntryInStyleMap`/`removeKeyFromStyleMap` 对 `grid` 与 `grid-template` 简写的 longhand 展开与清理，并在 `formatStyleMap` 中按 `grid` -> `grid-template` 优先顺序折叠回 `cssText`，`grid-shorthand-serialization.html` 141/141 全绿；同步在 `cssom.js` 按 CSS Grid 3 放行 `repeat(auto-fill/auto-fit)` 内的 `<intrinsic-size>`，2 项 tentative 测试全部 `FAIL→PASS`。

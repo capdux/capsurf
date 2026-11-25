@@ -4660,3 +4660,5 @@
 - `src/js/shim/cssom.js`, `src/js/shim/element/element.js`, `src/js/shim/window.js`: 放行 `subgrid repeat(auto-fit)` 校验拒绝、`flow-tolerance` `0->0px`、`target.style.grid` 双引号规范化及 `display: contents`/`none` 祖先下 `min-width/height: auto` 解析，4 项 WPT **4/4 PASS**（`flow-tolerance-valid` `FAIL→PASS`），`--smoke` 3/3 **PASS**。
 ### Phase 911 — SVG 纵横比内在尺寸、`-webkit-*` 字体族精确匹配与 Grid 显式行列放置
 - `src/css/cascade.cp`, `src/layout/layout.cp`: `hasFontFamily` 改用逗号分隔精确匹配、修复 `is_ratio_only` SVG `max-content`/内在宽度归零与 `layoutGridContainer` `grid_row_start`/`grid_col_start` 显式行列定位；通过 `cpc fix` + `cpc brief` 4 门禁，4 项 WPT **4/4 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 912 — CSS Grid `grid` 简写序列化与 `repeat(auto-fill/fit, <intrinsic>)` 全绿
+- `src/js/shim/cssom.js`, `src/js/shim/element/element.js`: 放行 `repeat(auto-fill/auto-fit)` `<intrinsic-size>` 轨道并完善行内 `grid`/`grid-template` 展开与 `cssText` 折叠序列化，3 项 WPT 全部 **FAIL→PASS**（183/183 subtests），`--smoke` 3/3 **PASS**。

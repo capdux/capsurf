@@ -1597,8 +1597,8 @@
             const rt = repBody[j];
             if (isLineNames(rt)) { if (repPrevLine) return false; repPrevLine = true; continue; }
             repPrevLine = false;
-            if (isAuto ? !isFixedSize(rt) : !isTrackSize(rt)) return false;
-            if (!isFixedSize(rt)) hasNonFixed = true;
+            if (isAuto ? (!isTrackSize(rt) || /^-?(?:\d+\.?\d*|\.\d+)fr$/i.test(rt)) : !isTrackSize(rt)) return false;
+            if (/^-?(?:\d+\.?\d*|\.\d+)fr$/i.test(rt)) hasNonFixed = true;
             repTracks++;
           }
           if (repTracks === 0) return false;
@@ -1607,7 +1607,7 @@
         }
         if (/^(?:var|env)\(/i.test(t)) { trackCount++; continue; }
         if (!isTrackSize(t)) return false;
-        if (!isFixedSize(t)) hasNonFixed = true;
+        if (/^-?(?:\d+\.?\d*|\.\d+)fr$/i.test(t)) hasNonFixed = true;
         trackCount++;
       }
       if (trackCount === 0) return false;

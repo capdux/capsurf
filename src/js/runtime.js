@@ -5550,8 +5550,8 @@
               const rt = repBody[j];
               if (isLineNames(rt)) { if (repPrevLine) return false; repPrevLine = true; continue; }
               repPrevLine = false;
-              if (isAuto ? !isFixedSize(rt) : !isTrackSize(rt)) return false;
-              if (!isFixedSize(rt)) hasNonFixed = true;
+              if (isAuto ? (!isTrackSize(rt) || /^-?(?:\d+\.?\d*|\.\d+)fr$/i.test(rt)) : !isTrackSize(rt)) return false;
+              if (/^-?(?:\d+\.?\d*|\.\d+)fr$/i.test(rt)) hasNonFixed = true;
               repTracks++;
             }
             if (repTracks === 0) return false;
@@ -5560,7 +5560,7 @@
           }
           if (/^(?:var|env)\(/i.test(t)) { trackCount++; continue; }
           if (!isTrackSize(t)) return false;
-          if (!isFixedSize(t)) hasNonFixed = true;
+          if (/^-?(?:\d+\.?\d*|\.\d+)fr$/i.test(t)) hasNonFixed = true;
           trackCount++;
         }
         if (trackCount === 0) return false;
@@ -19764,6 +19764,18 @@
         return;
       }
     }
+    if (key === "grid" || key === "grid-template") {
+      const expFn = typeof globalThis !== "undefined" && typeof globalThis.__capsurf_expandShorthand === "function" ? globalThis.__capsurf_expandShorthand : null;
+      const expanded = expFn ? expFn(key, val) : null;
+      if (expanded) {
+        map.delete(key);
+        for (let i = 0; i < expanded.length; i++) {
+          const [lh, lv] = expanded[i];
+          map.set(lh, { name: lh, value: lv, priority: pri });
+        }
+        return;
+      }
+    }
     if (key === "background") {
       const expFn = typeof globalThis !== "undefined" && typeof globalThis.__capsurf_expandShorthand === "function" ? globalThis.__capsurf_expandShorthand : null;
       const expanded = expFn ? expFn("background", val) : null;
@@ -19828,6 +19840,19 @@
       if (map.has("row-gap")) { if (!oldVal) oldVal = map.get("row-gap").value; map.delete("row-gap"); }
       if (map.has("column-gap")) { if (!oldVal) oldVal = map.get("column-gap").value; map.delete("column-gap"); }
       return oldVal;
+    }
+    if (key === "grid" || key === "grid-template") {
+      const lhs = typeof globalThis.__capsurf_shorthandLonghands === "object" && globalThis.__capsurf_shorthandLonghands[key];
+      if (lhs) {
+        if (map.has(key)) { oldVal = map.get(key).value; map.delete(key); }
+        for (let i = 0; i < lhs.length; i++) {
+          if (map.has(lhs[i])) {
+            if (!oldVal) oldVal = map.get(lhs[i]).value;
+            map.delete(lhs[i]);
+          }
+        }
+        return oldVal;
+      }
     }
     if (key === "background") {
       if (map.has("background")) { oldVal = map.get("background").value; map.delete("background"); }
@@ -19917,6 +19942,25 @@
         if (brVal) {
           brLhs.forEach((lh) => skip.add(lh));
           folded.set(brLhs[0], { name: "border-radius", value: brVal, priority: brEntries[0].priority });
+        }
+      }
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_serializeShorthand === "function") {
+        const foldShorthand = (shName, lhs) => {
+          const entries = lhs.map((lh) => map.get(lh));
+          if (!entries.every((e) => e && entries[0] && e.priority === entries[0].priority)) return false;
+          const val = globalThis.__capsurf_serializeShorthand(shName, (lh) => map.get(lh).value);
+          if (!val) return false;
+          const lhSet = new Set(lhs);
+          let firstKey = lhs[0];
+          for (const mk of map.keys()) {
+            if (lhSet.has(mk)) { firstKey = mk; break; }
+          }
+          lhs.forEach((lh) => skip.add(lh));
+          folded.set(firstKey, { name: shName, value: val, priority: entries[0].priority });
+          return true;
+        };
+        if (!foldShorthand("grid", ["grid-template-rows", "grid-template-columns", "grid-template-areas", "grid-auto-flow", "grid-auto-rows", "grid-auto-columns"])) {
+          foldShorthand("grid-template", ["grid-template-rows", "grid-template-columns", "grid-template-areas"]);
         }
       }
       for (const [k, entry] of map.entries()) {
