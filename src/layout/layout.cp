@@ -516,6 +516,12 @@ pub struct LayoutTree {
             rep.width = vb.width;
             rep.height = vb.height;
         }
+        if (style.contain_size || style.contain_inline_size) {
+            rep.width = 0.0;
+        }
+        if (style.contain_size) {
+            rep.height = 0.0;
+        }
         return rep;
     }
 
@@ -1934,6 +1940,8 @@ pub struct LayoutTree {
         } else if (width_is_definite) {
             const w = st.width.resolvePx(avail_w, fs, _.root_font_px, _.viewport_width, _.viewport_height);
             content_w = if (st.box_sizing == BoxSizing.BorderBox) (if (w > h_decor) (w - h_decor) else 0.0) else w;
+        } else if (st.contain_size || st.contain_inline_size) {
+            content_w = 0.0;
         } else if (rep := rep_opt) {
             content_w = rep.width;
         } else if (st.display.isFlex() || st.display.isWebkitBox()) {
@@ -2100,6 +2108,8 @@ pub struct LayoutTree {
         } else if (width_is_definite) {
             const w = st.width.resolvePx(avail_w, fs, _.root_font_px, _.viewport_width, _.viewport_height);
             content_w = if (st.box_sizing == BoxSizing.BorderBox) (if (w > h_decor) (w - h_decor) else 0.0) else w;
+        } else if (st.contain_size || st.contain_inline_size) {
+            content_w = 0.0;
         } else if (rep := rep_opt) {
             content_w = rep.width;
         } else if (st.display.isFlex() || st.display.isWebkitBox()) {
@@ -3799,7 +3809,8 @@ pub struct LayoutTree {
         _.boxes.items[@as(usize, parent_id)].scroll_content_width = @max(_.boxes.items[@as(usize, parent_id)].content_width, auto_w);
 
         // Shrink-to-fit auto width for inline-block, inline, float, or abspos without left+right
-        if (pstyle_blk.width.is_auto && (pstyle_blk.display.isInlineBlock() || pstyle_blk.display.isInline() || pstyle_blk.float_mode != FloatMode.None)) {
+        if (pstyle_blk.width.is_auto && !pstyle_blk.contain_size && !pstyle_blk.contain_inline_size &&
+            (pstyle_blk.display.isInlineBlock() || pstyle_blk.display.isInline() || pstyle_blk.float_mode != FloatMode.None)) {
             if (auto_w > _.boxes.items[@as(usize, parent_id)].content_width) {
                 _.boxes.items[@as(usize, parent_id)].content_width = auto_w;
             }
@@ -3815,7 +3826,7 @@ pub struct LayoutTree {
                 }
             }
             if (!is_p_rep) {
-                _.boxes.items[@as(usize, parent_id)].content_height = auto_h;
+                _.boxes.items[@as(usize, parent_id)].content_height = if (pstyle_blk.contain_size) 0.0 else auto_h;
             }
         }
     }

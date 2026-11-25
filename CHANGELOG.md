@@ -4640,3 +4640,5 @@
 - `src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/shim/element/element.js`: 新增 `isValidEnvCalls` 校验 `env()` 参数语法与括号平衡，`parseStyleMap` 与 `isValidColor` 接入校验，`substituteStr` 后通过 `CSS.supports` 实现 IACVT 回退；`syntax.tentative.html` 等 4 项 `css-env` 用例 **4/4 PASS**，`--smoke` 3/3 **PASS**。
 ### Phase 901 — `contain: layout`/`paint` 包含块、BFC 与外边距穿透折叠闭环
 - `src/css/cascade.cp`, `src/layout/layout.cp`: 解析 `contain` 全部关键字，为 `contain: layout/paint` 建立 `abs_cb_*` 与 `fixed_cb_*` 包含块、BFC 隔离及 `contain: layout` 基线抑制；补齐 `AlignItems.Baseline` 弹性行内基线对齐、BFC 跨块浮动清除追踪与非 BFC 首/末子元素外边距穿透折叠；通过 `cpc fix` + `cpc brief` 门禁，`contain-layout-dynamic-001.html` & `contain-paint-dynamic-001.html` **2/2 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 902 — `contain: size` / `inline-size` 内在尺寸归零
+- `src/layout/layout.cp`: 在 `getReplacedSizeWithStyle`、`measureIntrinsicWidth`、`measureMinContentWidth` 及 `layoutBlockChildren` shrink-to-fit / auto-height 中实现 `contain: size` / `inline-size` 内在尺寸归零；通过 `cpc fix` + `cpc brief` 门禁，`contain-size-dynamic-001.html` **PASS**，`contain-inline-size-replaced.html` 推进至 24/30 PASS，`--smoke` 3/3 **PASS**。

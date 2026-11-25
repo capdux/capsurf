@@ -3643,3 +3643,5 @@
 - 补齐 `elem.style.cssText` (`parseStyleMap`) 与 `isValidCssValue` 对 `env()` 首参 `<custom-ident>`、注释 `/**/` 及未闭合括号 `{)` 的解析期拦截，并在 `substituteStr` 后引入 `CSS.supports` 检验以在替换结果非法时正确触发 IACVT 回退至初始值，使 `syntax.tentative.html` (18/18) 全绿通过。
 ### Phase 901 — `contain: layout`/`paint` 独立格式化上下文与包含块
 - 在 `cascade.cp` 与 `layout.cp` 实装 `contain: layout/paint` 对 `position: absolute/fixed` 的包含块拦截、`establishes_bfc` 隔离、`contain_layout` 基线抑制，同时补齐 `AlignItems.Baseline` 弹性基线对齐、同 BFC 跨块级元素浮动清除与非 BFC 首/末子元素外边距穿透折叠，一次性全绿通过 `contain-layout-dynamic-001.html` 与 `contain-paint-dynamic-001.html`。
+### Phase 902 — `contain: size` / `inline-size` 尺寸遏制归零
+- 将 `contain_size` 与 `contain_inline_size` 接入替换元素内在尺寸计算、内在最小/最大宽度测量与 `layoutBlockChildren` shrink-to-fit / auto-height 路径，`contain-size-dynamic-001.html` 全绿通过，`contain-inline-size-replaced.html` 全部 `width=0` 断言通过。

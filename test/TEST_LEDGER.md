@@ -2569,3 +2569,4 @@
 | Phase 899 | `isValidLenPct` 混合单位/`anchor-size` fallback 校验 & `text-box-edge` 注册 | `cssom.js`, `window.js` | `calc-letter-spacing`, `various-values-important`, `anchor-function-zero-fallback` **3/3 PASS**; `--smoke` 3/3 PASS |
 | Phase 900 | `env()` 语法/注释/括号校验 & `substituteStr` IACVT 回退 | `cssom.js`, `window.js`, `element.js` | `syntax.tentative`, `env-parsing`, `env-fallback-substitution`, `indexed-env.tentative` **4/4 PASS**; `--smoke` 3/3 PASS |
 | Phase 901 | `contain: layout/paint` 包含块/BFC/基线抑制 & 非 BFC 外边距穿透折叠 | `cascade.cp`, `layout.cp` | `contain-layout-dynamic-001`, `contain-paint-dynamic-001` **2/2 PASS**; `--smoke` 3/3 PASS |
+| Phase 902 | `contain: size / inline-size` 内在尺寸归零 | `src/layout/layout.cp` | `contain-size-dynamic-001` **PASS** (4/4); `contain-inline-size-replaced` 24/30 PASS; `--smoke` 3/3 PASS |
