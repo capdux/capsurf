@@ -2535,3 +2535,4 @@
 | Phase 866 | `scrollbar-color` 双色序列化 & 绝对定位 `initial` 尺寸修复 | `cssom.js`, `window.js` | `scrollbar-color-parsing.html`, `css-scrollbars/inheritance.html`, `css-sizing/inheritance-002.html` **3/3 PASS**; `--smoke` 3/3 PASS |
 | Phase 867 | 替换元素百分比最小内容贡献修复（`/css/css-sizing/` 100%） | `src/layout/layout.cp` | `/css/css-sizing/` **32/32 PASS (100%)**; `--smoke` 3/3 PASS |
 | Phase 868 | `element.style` 转发 `cssText` & 后代计算样式缓存失效 | `element.js`, `cssom.js` | `content-visibility-036.html` **PASS**; `--smoke` 3/3 PASS |
+| Phase 869 | `<select><option>` `childNodes`/`options` 无限递归死循环修复 | `select.js` | 4 项 `<select>` 卡死/TIMEOUT **4/4 PASS**; `--smoke` 3/3 PASS |

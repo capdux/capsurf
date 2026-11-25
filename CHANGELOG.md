@@ -4553,3 +4553,5 @@
 ### Phase 868 — `element.style` 转发 `cssText` 与后代计算样式缓存失效修复
 - `src/js/shim/element/element.js`: `Element.prototype.style` setter 改为转发至 `this.style.cssText`；`setAttribute("style"|"class"|"id")` 同步递增 `__capsurf_domMutationEpoch`。
 - `src/js/shim/cssom.js`: `notify()` 同步递增 `__capsurf_domMutationEpoch` 失效后代 `_rawBaseCache`；`content-visibility-036.html` **PASS**，`--smoke` 3/3 **PASS**。
+### Phase 869 — 彻底消除 `<select><option>` 触发引擎卡死的 `childNodes` / `options` 无限递归
+- `src/js/shim/element/forms/select.js`: 为 `HTMLSelectElement.prototype.childNodes` getter 增加 `_inSelectChildNodes` 重入守卫，阻断 `firstChild -> ensureChildren -> childNodes -> options -> getSelectOptions -> firstChild` 死循环；4 项 Flex/Contain `<select>` TIMEOUT/卡死用例 **4/4 PASS**（497~804ms），`--smoke` 3/3 **PASS**。

@@ -526,30 +526,38 @@ function installSelectElement(global) {
       const base = baseChildNodesDesc && typeof baseChildNodesDesc.get === "function"
         ? baseChildNodesDesc.get.call(this)
         : null;
-      const arr = [];
-      if (base && typeof base.length === "number") {
-        for (let i = 0; i < base.length; i++) arr.push(base[i]);
+      if (this._inSelectChildNodes) {
+        return base;
       }
-      const opts = this.options;
-      if (!this.multiple && opts && opts.length > 0) {
-        const idx = this.selectedIndex;
-        const opt = (idx >= 0 && idx < opts.length) ? opts[idx] : opts[0];
-        const label = opt ? String(opt.text !== undefined ? opt.text : (opt.textContent || "")) : "";
-        if (label) {
-          let textNode = null;
-          if (typeof global.document === "object" && global.document && typeof global.document.createTextNode === "function") {
-            try { textNode = global.document.createTextNode(label); } catch (e) {}
-          }
-          if (!textNode) {
-            textNode = { nodeType: 3, nodeName: "#text", nodeValue: label, data: label, textContent: label };
-          }
-          arr.push(textNode);
+      this._inSelectChildNodes = true;
+      try {
+        const arr = [];
+        if (base && typeof base.length === "number") {
+          for (let i = 0; i < base.length; i++) arr.push(base[i]);
         }
+        const opts = this.options;
+        if (!this.multiple && opts && opts.length > 0) {
+          const idx = this.selectedIndex;
+          const opt = (idx >= 0 && idx < opts.length) ? opts[idx] : opts[0];
+          const label = opt ? String(opt.text !== undefined ? opt.text : (opt.textContent || "")) : "";
+          if (label) {
+            let textNode = null;
+            if (typeof global.document === "object" && global.document && typeof global.document.createTextNode === "function") {
+              try { textNode = global.document.createTextNode(label); } catch (e) {}
+            }
+            if (!textNode) {
+              textNode = { nodeType: 3, nodeName: "#text", nodeValue: label, data: label, textContent: label };
+            }
+            arr.push(textNode);
+          }
+        }
+        if (typeof global.NodeList === "function") {
+          try { return new global.NodeList(arr); } catch (e) {}
+        }
+        return arr;
+      } finally {
+        this._inSelectChildNodes = false;
       }
-      if (typeof global.NodeList === "function") {
-        try { return new global.NodeList(arr); } catch (e) {}
-      }
-      return arr;
     },
     configurable: true,
   });

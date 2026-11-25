@@ -3576,3 +3576,5 @@
 - 在 `layout.cp` `measureIntrinsicWidth` 中遵循 CSS Sizing 3 `#replaced-percentage-min-contribution`，修复 `<canvas>` 在 `width: 0px` 容器中的百分比 `width`/`max-width` 退化，`intrinsic-percent-replaced-028.html` 转绿，`/css/css-sizing/` **32/32** 全部通过。
 ### Phase 868 — 动态 `style`/`class` 修改后代计算样式缓存失效修复
 - 修复了 `cssom.js` 与 `element.js` 修改内联样式或属性后仅递增 `__capsurf_cssom_epoch` 而未递增 `__capsurf_domMutationEpoch` 导致后代元素命中陈旧 `_rawBaseCache` 的问题，`/css/css-contain/content-visibility/content-visibility-036.html` 转绿。
+### Phase 869 — `<select><option>` 无限递归卡死根因消除
+- 通过最小 CDP 复现与 GDB Thread 1 栈追踪定位 `HTMLSelectElement.prototype.childNodes` 与 `getSelectOptions` 间的循环调用，加入 `_inSelectChildNodes` 重入守卫后彻底消除 4 项跨模块（`css-flexbox`、`css-contain`）引擎卡死问题。
