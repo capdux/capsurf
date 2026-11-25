@@ -1209,7 +1209,139 @@ pub const PROP_UNICODE_BIDI: usize = 100;
 pub const PROP_OBJECT_FIT: usize = 101;
 pub const PROP_OBJECT_POS: usize = 102;
 pub const PROP_BG_POS: usize = 103;
-pub const TOTAL_PROP_SLOTS: usize = 104;
+pub const PROP_OBJECT_VIEW_BOX: usize = 104;
+pub const TOTAL_PROP_SLOTS: usize = 105;
+
+pub enum ObjectViewBoxKind {
+    None,
+    Inset,
+    Rect,
+    Xywh,
+}
+
+pub struct ObjectViewLen {
+    val: f32 = 0.0;
+    is_pct: bool = false;
+    is_auto: bool = false;
+
+    static fn parse(raw: []const u8): ObjectViewLen? {
+        const s = std.mem.trim(u8, raw, " \t\r\n");
+        if (s.len == 0) return null;
+        if (std.ascii.eqlIgnoreCase(s, "auto")) {
+            return ObjectViewLen { is_auto: true };
+        }
+        if (s[s.len - 1] == '%') {
+            const p = std.fmt.parseFloat(f32, s[0 .. s.len - 1]) catch return null;
+            return ObjectViewLen { val: p, is_pct: true };
+        }
+        const px = parseGradPxToken(s) ?? return null;
+        return ObjectViewLen { val: px };
+    }
+
+    fn resolve(ref_len: f32, auto_val: f32): f32 {
+        if (_.is_auto) return auto_val;
+        if (_.is_pct) return (_.val / 100.0) * ref_len;
+        return _.val;
+    }
+}
+
+pub struct ObjectViewBoxRect {
+    x: f32 = 0.0;
+    y: f32 = 0.0;
+    width: f32 = 0.0;
+    height: f32 = 0.0;
+}
+
+pub struct ObjectViewBox {
+    kind: ObjectViewBoxKind = ObjectViewBoxKind.None;
+    v0: ObjectViewLen = ObjectViewLen{};
+    v1: ObjectViewLen = ObjectViewLen{};
+    v2: ObjectViewLen = ObjectViewLen{};
+    v3: ObjectViewLen = ObjectViewLen{};
+
+    static fn parse(raw: []const u8): ObjectViewBox? {
+        const s = std.mem.trim(u8, raw, " \t\r\n");
+        if (s.len == 0) return null;
+        if (std.ascii.eqlIgnoreCase(s, "none")) {
+            return ObjectViewBox { kind: ObjectViewBoxKind.None };
+        }
+        const open = std.mem.indexOfScalar(u8, s, '(') ?? return null;
+        if (s[s.len - 1] != ')') return null;
+        const fn_name = std.mem.trim(u8, s[0..open], " \t\r\n");
+        const inner = std.mem.trim(u8, s[open + 1 .. s.len - 1], " \t\r\n");
+        let args: [5]ObjectViewLen = [ObjectViewLen{}, ObjectViewLen{}, ObjectViewLen{}, ObjectViewLen{}, ObjectViewLen{}];
+        let argc: usize = 0;
+        let it = std.mem.tokenizeAny(u8, inner, " ,\t\r\n");
+        while (tok := it.next()) {
+            if (argc >= 5) return null;
+            args[argc] = ObjectViewLen.parse(tok) ?? return null;
+            argc += 1;
+        }
+        if (std.ascii.eqlIgnoreCase(fn_name, "inset")) {
+            if (argc < 1 || argc > 4) return null;
+            let k: usize = 0;
+            while (k < argc) : (k += 1) {
+                if (args[k].is_auto) return null;
+            }
+            const t = args[0];
+            const r = if (argc >= 2) args[1] else t;
+            const b = if (argc >= 3) args[2] else t;
+            const l = if (argc >= 4) args[3] else r;
+            return ObjectViewBox { kind: ObjectViewBoxKind.Inset, v0: t, v1: r, v2: b, v3: l };
+        }
+        if (std.ascii.eqlIgnoreCase(fn_name, "rect")) {
+            if (argc != 4) return null;
+            return ObjectViewBox { kind: ObjectViewBoxKind.Rect, v0: args[0], v1: args[1], v2: args[2], v3: args[3] };
+        }
+        if (std.ascii.eqlIgnoreCase(fn_name, "xywh")) {
+            if (argc != 4) return null;
+            let k: usize = 0;
+            while (k < 4) : (k += 1) {
+                if (args[k].is_auto) return null;
+            }
+            if (args[2].val < 0.0 || args[3].val < 0.0) return null;
+            return ObjectViewBox { kind: ObjectViewBoxKind.Xywh, v0: args[0], v1: args[1], v2: args[2], v3: args[3] };
+        }
+        return null;
+    }
+
+    pub fn computeRect(nat_w: f32, nat_h: f32): ObjectViewBoxRect {
+        switch (_.kind) {
+            .None => return ObjectViewBoxRect { x: 0.0, y: 0.0, width: nat_w, height: nat_h },
+            .Inset => {
+                const t = _.v0.resolve(nat_h, 0.0);
+                const r = _.v1.resolve(nat_w, 0.0);
+                const b = _.v2.resolve(nat_h, 0.0);
+                const l = _.v3.resolve(nat_w, 0.0);
+                return ObjectViewBoxRect {
+                    x: l,
+                    y: t,
+                    width: @max(0.0, nat_w - l - r),
+                    height: @max(0.0, nat_h - t - b),
+                };
+            },
+            .Rect => {
+                const t = _.v0.resolve(nat_h, 0.0);
+                const r = _.v1.resolve(nat_w, nat_w);
+                const b = _.v2.resolve(nat_h, nat_h);
+                const l = _.v3.resolve(nat_w, 0.0);
+                return ObjectViewBoxRect {
+                    x: l,
+                    y: t,
+                    width: @max(0.0, r - l),
+                    height: @max(0.0, b - t),
+                };
+            },
+            .Xywh => {
+                const x = _.v0.resolve(nat_w, 0.0);
+                const y = _.v1.resolve(nat_h, 0.0);
+                const w = @max(0.0, _.v2.resolve(nat_w, 0.0));
+                const h = @max(0.0, _.v3.resolve(nat_h, 0.0));
+                return ObjectViewBoxRect { x: x, y: y, width: w, height: h };
+            },
+        }
+    }
+}
 
 pub enum ObjectFit {
     Fill,
@@ -2299,6 +2431,7 @@ pub struct ComputedStyle {
     bg_pos: ObjectPos = ObjectPos { x_pct: 0.0, x_px: 0.0, y_pct: 0.0, y_px: 0.0 };
     object_fit: ObjectFit = ObjectFit.Fill;
     object_pos: ObjectPos = ObjectPos {};
+    object_view_box: ObjectViewBox = ObjectViewBox {};
     container_type: ContainerType = ContainerType.Normal;
     container_name_buf: [64]u8 = [0; 64];
     container_name_len: usize = 0;
@@ -4471,6 +4604,14 @@ pub struct ComputedStyle {
         if (std.ascii.eqlIgnoreCase(name, "object-position")) {
             if (_.tryClaimSlot(PROP_OBJECT_POS, weight)) {
                 _.object_pos = ObjectPos.parse(val, 0.5);
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "object-view-box")) {
+            if (ovb := ObjectViewBox.parse(val)) {
+                if (_.tryClaimSlot(PROP_OBJECT_VIEW_BOX, weight)) {
+                    _.object_view_box = ovb;
+                }
             }
             return;
         }

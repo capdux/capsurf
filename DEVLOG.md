@@ -3508,3 +3508,5 @@
 - 在 `/data/dev/cp/lib/css/color.cp` 中原生实现 `color(srgb|srgb-linear|display-p3|a98-rgb|prophoto-rgb|rec2020|xyz|xyz-d65|xyz-d50)` 与 `lab()`/`lch()` 的线性化、XYZ D50/D65 色适应矩阵变换与 `none` 关键字解析，并在 `fromLab`/`fromOklab` 中对 `L <= 0` 与 `L >= 100%`（含 `0.0001%` 边界容差）执行无彩色黑白截断，`/css/css-color/` 94 项广色域 Reftest **94/94** 全绿 **PASS**，`--smoke` 3/3 **PASS**。
 ### Phase 834 — 远程 ES Module (`<script type="module">`) HTTP 加载链路打通
 - 在 `src/cdp/session.cp` `sessionModuleLoader` 中复用 `sessionHttpGetHook` 支持 `http://`/`https://` 远程模块拉取，彻底消除 `/css/css-logical/logical-{box,values}-*.html` 的 `Failed to load module` `ERROR` 阻塞（`logical-values-float-clear`、`logical-values-resize` **PASS**，`logical-box-*` 全部进入 testharness 断言），`--smoke` 3/3 **PASS**。
+### Phase 835 — 原生 `object-view-box` (`inset()`/`rect()`/`xywh()`) 布局与光栅化闭环
+- 在 `cascade.cp`、`layout.cp`、`painter.cp` 全链路实现 `object-view-box` 解析、替换元素固有尺寸裁剪 (`getReplacedSizeWithStyle`) 与子区域双线性/近邻光栅化 (`blitSubScaledRgbaClipped`)，`/css/css-images/object-view-box-*` 达成 **25/37 PASS**（含 `auto-size-relayout`、`writing-mode-canvas`、`fit-cover-*`、`rect`/`xywh`），`--smoke` 3/3 **PASS**。

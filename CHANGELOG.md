@@ -4447,3 +4447,7 @@
   - `/data/dev/cp/lib/css/color.cp`: `CssColor` 新增 `color(...)` 9 种预定义色彩空间、`lab()`、`lch()` 解析与色域转换、`none` 关键字支持及 `fromLab`/`fromOklab` 亮度极值截断。
 - **Phase 834**:
   - `src/cdp/session.cp`: `sessionModuleLoader` 复用 `sessionHttpGetHook` 支持 `http://`/`https://` 远程 ES Module 拉取与相对导入解析。
+- **Phase 835**:
+  - `src/css/cascade.cp`: 新增 `ObjectViewBox` (`inset`/`rect`/`xywh`/`none`) 与 `PROP_OBJECT_VIEW_BOX` 解析。
+  - `src/layout/layout.cp`: 新增 `getReplacedSizeWithStyle` 同步缩放替换元素固有尺寸。
+  - `src/render/painter.cp`: 新增 `blitSubScaledRgbaClipped` 并对 `<img>`/`<canvas>` 应用 `object-view-box` 裁剪采样。

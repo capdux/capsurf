@@ -9,6 +9,7 @@ import { decodeUtf8Next, isBidiFormatControl } from "../css/bidi.cp";
 import { sniffPng } from "../render/image_dims.cp";
 import {
     ComputedStyle,
+    ObjectViewBoxKind,
     CssUnit,
     Display,
     Visibility,
@@ -500,6 +501,16 @@ pub struct LayoutTree {
         return null;
     }
 
+    static fn getReplacedSizeWithStyle(node: *const NodeData, style: *const ComputedStyle): ReplacedSize? {
+        let rep = LayoutTree.getReplacedSize(node) ?? return null;
+        if (style.object_view_box.kind != ObjectViewBoxKind.None) {
+            const vb = style.object_view_box.computeRect(rep.width, rep.height);
+            rep.width = vb.width;
+            rep.height = vb.height;
+        }
+        return rep;
+    }
+
     static fn getReplacedSize(node: *const NodeData): ReplacedSize? {
         if (node.hasTag("canvas") || node.hasTag("video") || node.hasTag("iframe")) {
             let nat_w: f32 = 300.0;
@@ -842,7 +853,7 @@ pub struct LayoutTree {
         if (node_id != NULL_NODE && @as(usize, node_id) < doc.nodes.items.len) {
             const node = &doc.nodes.items[@as(usize, node_id)];
             if (node.isElement()) {
-                replaced_opt = LayoutTree.getReplacedSize(node);
+                replaced_opt = LayoutTree.getReplacedSizeWithStyle(node, style);
             }
         }
 
@@ -1887,7 +1898,7 @@ pub struct LayoutTree {
         if (width_is_definite) {
             const w = st.width.resolvePx(avail_w, fs, _.root_font_px, _.viewport_width, _.viewport_height);
             content_w = if (st.box_sizing == BoxSizing.BorderBox) (if (w > h_decor) (w - h_decor) else 0.0) else w;
-        } else if (rep := LayoutTree.getReplacedSize(node)) {
+        } else if (rep := LayoutTree.getReplacedSizeWithStyle(node, st)) {
             content_w = rep.width;
         } else if (st.display.isFlex() || st.display.isWebkitBox()) {
             const is_row = st.flex_direction.isRow();
@@ -2046,7 +2057,7 @@ pub struct LayoutTree {
         if (width_is_definite) {
             const w = st.width.resolvePx(avail_w, fs, _.root_font_px, _.viewport_width, _.viewport_height);
             content_w = if (st.box_sizing == BoxSizing.BorderBox) (if (w > h_decor) (w - h_decor) else 0.0) else w;
-        } else if (rep := LayoutTree.getReplacedSize(node)) {
+        } else if (rep := LayoutTree.getReplacedSizeWithStyle(node, st)) {
             content_w = rep.width;
         } else if (st.display.isFlex() || st.display.isWebkitBox()) {
             const is_row_nowrap = st.flex_direction.isRow() && st.flex_wrap == FlexWrap.NoWrap;
