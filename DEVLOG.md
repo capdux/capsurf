@@ -3504,3 +3504,5 @@
 - 修复 `splitStylesheetRules` 顶层 `<!--`/`-->` 剥离、`serializeCssValue`/`serializeInlineSpecifiedValue` EOF 未闭合 `url(` 补全，以及 `CSSStyleRule` 嵌套 `cssRules` 按 `allowNesting=true` 校验过滤非法嵌套规则，`/css/css-syntax/{unclosed-url-at-eof,cdc-vs-ident-tokens,invalid-nested-rules}` 3/3 全绿 **PASS**。
 ### Phase 832 — 相邻块级兄弟外边距折叠 (`margin collapsing`) 一次性清零 36 项颜色 Reftest
 - 在 `layout.cp` `layoutBlockContainer` 实现相邻块级兄弟元素正外边距折叠，并修正块间纯空白文本节点误重置 `has_prev_block_mb` 的问题，`/css/css-color/` 下 `hex-001..004`、`hsl-001..008`、`hsla-001..008`、`rgb-001..008`、`rgba-001..008` **36/36** 全绿 **PASS**，`--smoke` 3/3 **PASS**。
+### Phase 833 — `cap:css` 原生广色域色彩空间 (`color()`/`lab()`/`lch()`) 一次性通关 94 项 Reftest
+- 在 `/data/dev/cp/lib/css/color.cp` 中原生实现 `color(srgb|srgb-linear|display-p3|a98-rgb|prophoto-rgb|rec2020|xyz|xyz-d65|xyz-d50)` 与 `lab()`/`lch()` 的线性化、XYZ D50/D65 色适应矩阵变换与 `none` 关键字解析，并在 `fromLab`/`fromOklab` 中对 `L <= 0` 与 `L >= 100%`（含 `0.0001%` 边界容差）执行无彩色黑白截断，`/css/css-color/` 94 项广色域 Reftest **94/94** 全绿 **PASS**，`--smoke` 3/3 **PASS**。

@@ -2499,3 +2499,4 @@
 | Phase 830 | Grid 自动外边距与行内 `align-items` 对齐 | `src/layout/layout.cp` | `grid-*-alignment-auto-margins*` **17/23 PASS**; `--smoke` 3/3 PASS |
 | Phase 831 | CSS Syntax CDO/CDC、未闭合 `url(` 与嵌套规则恢复 | `src/js/shim/cssom.js`, `src/js/shim/element/element.js` | `unclosed-url-at-eof`, `cdc-vs-ident-tokens`, `invalid-nested-rules` 3/3 **PASS**; `--smoke` 3/3 PASS |
 | Phase 832 | 相邻块级兄弟外边距折叠 (`layoutBlockContainer`) | `src/layout/layout.cp` | `css-color/{hex,hsl,hsla,rgb,rgba}-*` **36/36 PASS**; `--smoke` 3/3 PASS |
+| Phase 833 | `cap:css` 原生广色域 `color()`/`lab()`/`lch()` 与亮度极值截断 | `/data/dev/cp/lib/css/color.cp` | `css-color/{a98rgb,lab,lch,oklab,oklch,predefined,prophoto-rgb,rec2020,srgb-linear,xyz*}` **94/94 PASS**; `--smoke` 3/3 PASS |

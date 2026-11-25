@@ -4443,3 +4443,5 @@
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
 - **Phase 832**:
   - `src/layout/layout.cp`: `layoutBlockContainer` 实现相邻块级兄弟正外边距折叠（忽略块间纯空白行内片段对折叠链的打断）。
+- **Phase 833**:
+  - `/data/dev/cp/lib/css/color.cp`: `CssColor` 新增 `color(...)` 9 种预定义色彩空间、`lab()`、`lch()` 解析与色域转换、`none` 关键字支持及 `fromLab`/`fromOklab` 亮度极值截断。
