@@ -600,6 +600,22 @@ function matchesCompoundSelector(el, compound, scopeRoot) {
         if (String(el.localName || el.tagName || "").toLowerCase() !== "slot") return false;
         if (typeof el.assignedNodes !== "function" || el.assignedNodes().length === 0) return false;
       }
+      else if (pseudo.startsWith(":has-slotted(") && pseudo.endsWith(")")) {
+        if (String(el.localName || el.tagName || "").toLowerCase() !== "slot") return false;
+        if (typeof el.assignedNodes !== "function") return false;
+        const inner = pseudo.slice(13, -1).trim();
+        if (!inner) return false;
+        const assigned = el.assignedNodes();
+        let anyMatch = false;
+        for (let ai = 0; ai < assigned.length; ai++) {
+          const an = assigned[ai];
+          if (an && an.nodeType === 1 && matchesComplexSelector(an, inner, an.getRootNode ? an.getRootNode() : scopeRoot)) {
+            anyMatch = true;
+            break;
+          }
+        }
+        if (!anyMatch) return false;
+      }
       else if (pseudo === ":first-child") { if (el.previousElementSibling) return false; }
       else if (pseudo === ":last-child") { if (el.nextElementSibling) return false; }
       else if (pseudo === ":only-child") { if (el.previousElementSibling || el.nextElementSibling) return false; }

@@ -7346,6 +7346,18 @@ function installWindow(global) {
       if (isHlPseudo) {
         collectElementOwnDeclarations(anc, ancStyleNodes, normalizedPseudo, computedMap);
       }
+      if (String(anc.localName || anc.tagName || "").toLowerCase() === "details") {
+        const directChild = ancestors[i - 1] || element;
+        if (String(directChild.localName || directChild.tagName || "").toLowerCase() !== "summary") {
+          const dcMap = new Map();
+          collectElementOwnDeclarations(anc, ancStyleNodes, "::details-content", dcMap);
+          for (const [k, v] of dcMap.entries()) {
+            if (k.startsWith("--") || INHERITED_CSS_PROPS.has(k)) {
+              computedMap.set(k, v);
+            }
+          }
+        }
+      }
     }
 
     // Own declarations (or pseudo-element declarations)

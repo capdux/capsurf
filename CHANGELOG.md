@@ -4340,3 +4340,7 @@
 - **Phase 804**:
   - `src/js/shim/window.js`: `collectElementOwnDeclarations` 新增宿主 `_shadowRoot` `:host` / `:host(...)` 规则与 `!important` 级联，并支持 `closed` ShadowRoot 插槽链。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 805**:
+  - `src/js/shim/selector.js`: 补全 `:has-slotted(...)` 函数式伪类匹配。
+  - `src/js/shim/window.js`: `collectRawComputedMap` 为 `<details>` 非 `<summary>` 子代收集 `::details-content` 继承属性。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
