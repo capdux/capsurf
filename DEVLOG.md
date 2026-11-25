@@ -3691,3 +3691,6 @@
 ### Phase 924 — 绝对定位负 `margin: auto` 与 `image-orientation` 计算值对齐
 - `position-absolute-margin-auto-001` 失败源于 `applyUsedValuesToComputedMap` 未对 `position: absolute/fixed` 且双侧 `inset` 非 `auto` 的 `margin: auto` 进行使用值求解（水平负余量按 `ltr`/`rtl` 夹紧起始侧为 `0px`、垂直方向均分负余量）。
 - `image-orientation-{from-image,none}-computed-style` 失败源于 `<img>` 在 `display: inline` 且未设 `width`/`height` 时未触发 `_lazyWidth`/`_lazyHeight`，且 `getKnownFixtureImageInfo` 缺少 `exif-orientation-*.jpg` (`100x50` 及 5–8 号旋转交换) 尺寸与 `image-orientation` 联动；补齐后两项一次通过。
+### Phase 925 — HTML5 `InColumnGroup` 补漏、`list-item` 自折叠与伪元素点击命中
+- 排查 `auto-layout-calc-width-001` 单元格宽度为 0 发现 `tree_builder.cp` `processToken` 漏掉 `.InColumnGroup` 分支导致 `<colgroup>` 后 `<tr>` 落入 `processInBody` 并被嵌套进 `<colgroup>`；补全 `processInColumnGroup` 后恢复正确表结构。
+- `inherit-overwrites` 失败源于严格模式下 `target.classList += 'target'` 触发 `classList` 缺少 `[PutForwards=value]` setter；`list-and-margin-collapse-002` 源于 `Display.parse` 漏掉 `list-item` 且空块未保留 `prev_block_mb`；`display-contents-pseudo-click-target` 通过在 `Document.prototype.elementFromPoint` 叠加 `::after`/`::before` 绝对定位框命中修复。

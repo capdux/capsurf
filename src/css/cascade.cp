@@ -539,11 +539,19 @@ pub struct Display {
         };
     }
 
+    static fn listItem(): Display {
+        return Display {
+            is_keyword: false,
+            pair: DisplayPair { outside: DisplayOutside.Block, inside: DisplayInside.Flow, is_list_item: true },
+        };
+    }
+
     static fn parse(raw: []const u8): Display? {
         const s = std.mem.trim(u8, raw, " \t\r\n");
         if (std.ascii.eqlIgnoreCase(s, "none")) return Display.none();
         if (std.ascii.eqlIgnoreCase(s, "contents")) return Display.contents();
         if (std.ascii.eqlIgnoreCase(s, "block")) return Display.block();
+        if (std.ascii.eqlIgnoreCase(s, "list-item")) return Display.listItem();
         if (std.ascii.eqlIgnoreCase(s, "flow-root")) return Display.flowRoot();
         if (std.ascii.eqlIgnoreCase(s, "inline")) return Display.inlineFlow();
         if (std.ascii.eqlIgnoreCase(s, "inline-block")) return Display.inlineBlock();
@@ -623,6 +631,10 @@ pub struct Display {
 
     fn isTableInternal(): bool {
         return _.isTableRowGroup() || _.isTableRow() || _.isTableCell() || _.isTableCaption() || _.isTableColumn();
+    }
+
+    fn isListItem(): bool {
+        return !_.is_keyword && _.pair.is_list_item;
     }
 
     fn isInline(): bool {

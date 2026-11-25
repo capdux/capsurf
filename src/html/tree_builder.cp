@@ -914,6 +914,7 @@ pub struct TreeBuilder {
             .Text => _.processText(tok),
             .InTable => _.processInTable(tok),
             .InTableBody => _.processInTableBody(tok),
+            .InColumnGroup => _.processInColumnGroup(tok),
             .InRow => _.processInRow(tok),
             .InCell => _.processInCell(tok),
             .AfterBody => _.processAfterBody(tok),
@@ -1439,6 +1440,49 @@ pub struct TreeBuilder {
             * => {},
         }
         return _.processInTable(tok);
+    }
+
+    fn processInColumnGroup(*_, tok: Token): NextTokenizerState {
+        switch (tok) {
+            .Characters => |text| {
+                if (TreeBuilder.isAllWhitespace(text)) {
+                    _.insertCharacter(text);
+                    return NextTokenizerState.Data;
+                }
+            },
+            .Comment => |comment| {
+                _.insertComment(comment);
+                return NextTokenizerState.Data;
+            },
+            .Tag => |*tag_tok| {
+                if (tag_tok.kind == TagKind.Start) {
+                    if (tag_tok.tag == HtmlTag.Col) {
+                        * = _.insertElement(tag_tok);
+                        _.popElement();
+                        return NextTokenizerState.Data;
+                    } else if (tag_tok.tag == HtmlTag.Template) {
+                        return _.processInHead(tok);
+                    }
+                } else {
+                    if (tag_tok.tag == HtmlTag.Colgroup) {
+                        if (_.currentTag() == HtmlTag.Colgroup) {
+                            * = _.popElement();
+                            _.mode = InsertionMode.InTable;
+                        }
+                        return NextTokenizerState.Data;
+                    } else if (tag_tok.tag == HtmlTag.Col) {
+                        return NextTokenizerState.Data;
+                    }
+                }
+            },
+            * => {},
+        }
+        if (_.currentTag() == HtmlTag.Colgroup) {
+            * = _.popElement();
+            _.mode = InsertionMode.InTable;
+            return _.processInTable(tok);
+        }
+        return NextTokenizerState.Data;
     }
 
     fn processInRow(*_, tok: Token): NextTokenizerState {

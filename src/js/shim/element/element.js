@@ -1101,6 +1101,10 @@ function installElementExtensions(proto) {
       }
       return this._classList;
     },
+    set: function (val) {
+      const cl = this.classList;
+      if (cl) cl.value = String(val);
+    },
     configurable: true,
   });
 

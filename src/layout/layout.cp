@@ -30,6 +30,8 @@ import {
     WhiteSpace,
     IntrinsicSizeKeyword,
     ListStylePosition,
+    ListStyleType,
+    OverflowMode,
     formatListMarker
 } from "../css/cascade.cp";
 
@@ -3625,7 +3627,14 @@ pub struct LayoutTree {
                         last_baseline_rel = (cursor_y + cbox.margin_top + cbox.baseline_offset) - parent_border_top_y;
                     }
                     cursor_y += cbox.outerHeight();
-                    prev_block_mb = cbox.margin_bottom;
+                    const is_marker_list_item = (cstyle.display.isListItem() && cstyle.list_style_type != ListStyleType.None);
+                    const is_self_collapsing = (cbox.content_height == 0.0 && cbox.borderVertical() == 0.0 && cbox.paddingVertical() == 0.0 && !is_marker_list_item && cstyle.overflow_x == OverflowMode.Visible && cstyle.overflow_y == OverflowMode.Visible);
+                    if (is_self_collapsing) {
+                        const self_m = @max(cbox.margin_top, cbox.margin_bottom);
+                        prev_block_mb = if (has_prev_block_mb) @max(prev_block_mb, self_m) else self_m;
+                    } else {
+                        prev_block_mb = cbox.margin_bottom;
+                    }
                     has_prev_block_mb = true;
                     const cr = _.boxes.items[@as(usize, child)].rect.right();
                     if (cr > max_child_right) {

@@ -20758,6 +20758,10 @@
         }
         return this._classList;
       },
+      set: function (val) {
+        const cl = this.classList;
+        if (cl) cl.value = String(val);
+      },
       configurable: true,
     });
 
@@ -60421,13 +60425,57 @@
       }
       return null;
     }
+    function _resolvePseudoHit(hit, x, y) {
+      if (hit && hit.querySelectorAll && typeof window !== "undefined" && typeof window.getComputedStyle === "function") {
+        try {
+          const desc = hit.querySelectorAll("*");
+          const hr = hit.getBoundingClientRect ? hit.getBoundingClientRect() : null;
+          for (let di = desc.length - 1; di >= 0; di--) {
+            const el = desc[di];
+            if (!el || el.nodeType !== 1) continue;
+            for (const pseudo of ["::after", "::before"]) {
+              const pcs = window.getComputedStyle(el, pseudo);
+              if (!pcs || !pcs.content || pcs.content === "none" || pcs.content === "normal") continue;
+              if (pcs.display === "none" || pcs.visibility === "hidden" || pcs.pointerEvents === "none") continue;
+              if (pcs.position === "absolute" || pcs.position === "fixed") {
+                const cbRect = (pcs.position === "fixed")
+                  ? { left: 0, top: 0, right: window.innerWidth || 1280, bottom: window.innerHeight || 720 }
+                  : hr;
+                if (cbRect) {
+                  const topV = parseFloat(pcs.top);
+                  const leftV = parseFloat(pcs.left);
+                  const rightV = parseFloat(pcs.right);
+                  const botV = parseFloat(pcs.bottom);
+                  const pL = isNaN(leftV) ? cbRect.left : (cbRect.left + leftV);
+                  const pT = isNaN(topV) ? cbRect.top : (cbRect.top + topV);
+                  const pR = isNaN(rightV) ? cbRect.right : (cbRect.right - rightV);
+                  const pB = isNaN(botV) ? cbRect.bottom : (cbRect.bottom - botV);
+                  if (x >= pL && x <= pR && y >= pT && y <= pB) return el;
+                }
+              }
+            }
+          }
+        } catch (e) {}
+      }
+      return hit;
+    }
+    if (typeof Document !== "undefined" && Document.prototype && typeof Document.prototype.elementFromPoint === "function" && !Document.prototype._capsurfPseudoWrapped) {
+      const _origEfp = Document.prototype.elementFromPoint;
+      Document.prototype._capsurfPseudoWrapped = true;
+      Document.prototype.elementFromPoint = markNative(function (x, y) {
+        return _resolvePseudoHit(_origEfp.call(this, x, y), x, y);
+      }, "elementFromPoint");
+      if (global.document && typeof global.document.elementFromPoint === "function") {
+        global.document.elementFromPoint = Document.prototype.elementFromPoint.bind(global.document);
+      }
+    }
     function _hitTestElement(x, y) {
       const doc = (typeof document !== "undefined" ? document : null) || global.document;
       if (!doc) return null;
       if (typeof doc.elementFromPoint === "function") {
         try {
           const hit = doc.elementFromPoint(x, y);
-          if (hit) return hit;
+          if (hit) return _resolvePseudoHit(hit, x, y);
         } catch (e) {}
       }
       const all = doc.querySelectorAll ? doc.querySelectorAll("*") : [];
