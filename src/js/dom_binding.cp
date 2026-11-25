@@ -81,6 +81,10 @@ import {
     isValidCssFontWeightValue,
     isValidCssFontStretchValue,
     isValidCssLineHeightValue,
+    isValidCssBorderRadiusShorthand,
+    isValidCssBorderCornerRadius,
+    isValidCssMarginShorthand,
+    isValidCssPaddingShorthand,
 } from "cap:css";
 import { LayoutTree, Rect } from "../layout/layout.cp";
 import { RUNTIME_CHUNKS } from "./runtime_source.cp";
@@ -911,6 +915,22 @@ fn callStrValidator1(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, pred: 
 @c fn js_capsurf_is_valid_css_line_height(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     * = this_val;
     return callStrValidator1(ctx, argc, argv, isValidCssLineHeightValue);
+}
+@c fn js_capsurf_is_valid_css_border_radius(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssBorderRadiusShorthand);
+}
+@c fn js_capsurf_is_valid_css_border_corner_radius(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssBorderCornerRadius);
+}
+@c fn js_capsurf_is_valid_css_margin_shorthand(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssMarginShorthand);
+}
+@c fn js_capsurf_is_valid_css_padding_shorthand(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssPaddingShorthand);
 }
 @c fn js_capsurf_is_valid_css_len_pct(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     * = this_val;
@@ -3009,6 +3029,10 @@ pub fn mountDom(
     defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_font_weight", js_capsurf_is_valid_css_font_weight, 1);
     defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_font_stretch", js_capsurf_is_valid_css_font_stretch, 1);
     defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_line_height", js_capsurf_is_valid_css_line_height, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_border_radius", js_capsurf_is_valid_css_border_radius, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_border_corner_radius", js_capsurf_is_valid_css_border_corner_radius, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_margin_shorthand", js_capsurf_is_valid_css_margin_shorthand, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_padding_shorthand", js_capsurf_is_valid_css_padding_shorthand, 1);
 
     // Assemble and evaluate modular runtime shim
     let total_len: usize = 0;

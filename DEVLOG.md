@@ -3542,3 +3542,5 @@
 - 完成 `cssom.js` 中 `isValidColor`、`gap` 系列与 `z-index` 到 `cap:css` 的统一收口接线，并保留 `calc(NaN)` 颜色与 `z-index: clamp(none, ...)` 边缘守卫，8 项回归全绿。
 ### Phase 851 — `filter` / `box-shadow` / `font-weight` / `font-stretch` / `line-height` 下沉 `cap:css` 并接线验证
 - 将视觉效果（`filter` / `backdrop-filter` / `box-shadow`）与字体排版（`font-weight` / `font-stretch` / `line-height`）校验收口至 `cap:css` 原生实现并全量通过 6 项对应 WPT 解析测试，累计已有 17 个 CSSOM 高频语法校验器完成 `cap:css` 下沉。
+### Phase 852 — `border-radius` / `margin` / `padding` 简写校验下沉 `cap:css` 并接线验证
+- 将 `border-radius`、`border-*-radius`、`margin`、`padding` 简写语法校验统一收口至 `cap:css` (`borderradius.cp` & `marginPad.cp`) 并全量通过 6 项对应 WPT 解析测试，累计已有 21 个 CSSOM 高频语法校验器完成 `cap:css` 下沉。

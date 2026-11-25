@@ -4502,3 +4502,6 @@
 ### Phase 851 — `filter` / `box-shadow` / `font-weight` / `font-stretch` / `line-height` 下沉 `cap:css` 并接线验证
 - `/data/dev/cp/lib/css/{effects,font,index}.cp`: 新增并导出 `isValidCssFilterValue`、`isValidCssBoxShadowValue`、`isValidCssFontWeightValue`、`isValidCssFontStretchValue`、`isValidCssLineHeightValue`，补全 `box-shadow` 负 spread、`filter` 空参及 `sign()`/`progress()` 支持。
 - `src/js/dom_binding.cp` & `src/js/shim/cssom.js`: 暴露并接入全部 5 个原生校验器，`box-shadow-{valid,invalid}`、`filter-parsing-{valid,invalid}`、`font-weight-{valid,invalid}` **6/6 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 852 — `border-radius` / `margin` / `padding` 简写校验下沉 `cap:css` 并接线验证
+- `/data/dev/cp/lib/css/{borderradius,marginPad,index}.cp`: 新增并导出 `isValidCssBorderRadiusShorthand`、`isValidCssBorderCornerRadius`、`isValidCssMarginShorthand`、`isValidCssPaddingShorthand`。
+- `src/js/dom_binding.cp` & `src/js/shim/cssom.js`: 暴露并接入全部 4 个原生校验器，`border-radius-{valid,invalid}`、`margin-{valid,invalid}`、`padding-{valid,invalid}` **6/6 PASS**，`--smoke` 3/3 **PASS**。

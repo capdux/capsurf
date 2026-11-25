@@ -1303,6 +1303,9 @@
       return toks.length === 1 && (toks[0] === "auto" || isValidLenPct(toks[0], true));
     }
     if (prop === "margin" || prop === "margin-block" || prop === "margin-inline") {
+      if (prop === "margin" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_margin_shorthand === "function") {
+        return globalThis.__capsurf_is_valid_css_margin_shorthand(vLower);
+      }
       const maxN = prop === "margin" ? 4 : 2;
       const toks = splitCssTokens(vLower);
       if (toks.length < 1 || toks.length > maxN) return false;
@@ -1317,6 +1320,9 @@
       return toks.length === 1 && isValidLenPct(toks[0], false);
     }
     if (prop === "padding" || prop === "padding-block" || prop === "padding-inline") {
+      if (prop === "padding" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_padding_shorthand === "function") {
+        return globalThis.__capsurf_is_valid_css_padding_shorthand(vLower);
+      }
       const maxN = prop === "padding" ? 4 : 2;
       const toks = splitCssTokens(vLower);
       if (toks.length < 1 || toks.length > maxN) return false;
@@ -1573,6 +1579,9 @@
       return true;
     }
     if (prop === "border-radius") {
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_border_radius === "function") {
+        return globalThis.__capsurf_is_valid_css_border_radius(vLower);
+      }
       let slashIdx = -1, depth = 0;
       for (let i = 0; i < vLower.length; i++) {
         const ch = vLower[i];
@@ -1597,6 +1606,9 @@
         prop === "border-bottom-right-radius" || prop === "border-bottom-left-radius" ||
         prop === "border-start-start-radius" || prop === "border-start-end-radius" ||
         prop === "border-end-start-radius" || prop === "border-end-end-radius") {
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_border_corner_radius === "function") {
+        return globalThis.__capsurf_is_valid_css_border_corner_radius(vLower);
+      }
       const toks = splitCssTokens(vLower);
       if (toks.length < 1 || toks.length > 2) return false;
       for (let i = 0; i < toks.length; i++) {
