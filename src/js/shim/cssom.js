@@ -914,6 +914,9 @@
     if (!_isValidCalcSyntax) _isValidCalcSyntax = isValidCalcSyntax;
 
     if (prop === "display") {
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_display === "function") {
+        return globalThis.__capsurf_is_valid_css_display(vLower);
+      }
       return !!canonicalizeDisplayValue(trimmed);
     }
 
@@ -1147,6 +1150,12 @@
       "scroll-snap-stop": ["normal", "always"],
     };
     const allowedKeywords = KEYWORD_CSS_PROPS[prop];
+    if (prop === "position" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_position === "function") return globalThis.__capsurf_is_valid_css_position(vLower);
+    if (prop === "visibility" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_visibility === "function") return globalThis.__capsurf_is_valid_css_visibility(vLower);
+    if (prop === "box-sizing" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_box_sizing === "function") return globalThis.__capsurf_is_valid_css_box_sizing(vLower);
+    if (prop === "text-align" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_text_align === "function") return globalThis.__capsurf_is_valid_css_text_align(vLower);
+    if (prop === "word-break" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_word_break === "function") return globalThis.__capsurf_is_valid_css_word_break(vLower);
+    if ((prop === "overflow-wrap" || prop === "word-wrap") && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_overflow_wrap === "function") return globalThis.__capsurf_is_valid_css_overflow_wrap(vLower);
     if (allowedKeywords) {
       return allowedKeywords.indexOf(vLower) !== -1;
     }

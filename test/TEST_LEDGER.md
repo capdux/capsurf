@@ -2523,3 +2523,4 @@
 | Phase 854 | `inset` / `overflow` 校验下沉 `cap:css` | `positionProp.cp`, `overflowProp.cp`, `dom_binding.cp`, `cssom.js` | `top-*`, `inset-*`, `overflow-*` **6/6 PASS**; `--smoke` 3/3 PASS |
 | Phase 855 | `background-{size,repeat}` / `mask-{size,repeat}` 校验下沉 `cap:css` | `background.cp`, `dom_binding.cp`, `cssom.js` | `background-{size,repeat}-*`, `mask-{size,repeat}-*` **8/8 PASS**; `--smoke` 3/3 PASS |
 | Phase 856 | `flex-grow` / `flex-shrink` / `order` 校验下沉 `cap:css` | `flexgrid.cp`, `dom_binding.cp`, `cssom.js` | `flex-{grow,shrink}-*`, `order-*` **6/6 PASS**; `--smoke` 3/3 PASS |
+| Phase 857 | `display`/`position`/`visibility`/`box-sizing`/`text-align`/`word-break`/`overflow-wrap` 下沉 `cap:css` | `display.cp`, `text.cp`, `dom_binding.cp`, `cssom.js` | `display-*`, `position-*`, `box-sizing-*`, `text-align-*`, `word-break-*`, `overflow-wrap-*` **12/12 PASS**; `--smoke` 3/3 PASS |

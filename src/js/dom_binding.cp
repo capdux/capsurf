@@ -94,6 +94,13 @@ import {
     isValidCssBgRepeatValue,
     isValidCssFlexNumberValue,
     isValidCssOrderValue,
+    isValidCssTextAlignValue,
+    isValidCssWordBreakValue,
+    isValidCssOverflowWrapValue,
+    isValidCssDisplayValue,
+    isValidCssPositionValue,
+    isValidCssVisibilityValue,
+    isValidCssBoxSizingValue,
 } from "cap:css";
 import { LayoutTree, Rect } from "../layout/layout.cp";
 import { RUNTIME_CHUNKS } from "./runtime_source.cp";
@@ -1004,6 +1011,34 @@ fn callStrValidator1(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, pred: 
 @c fn js_capsurf_is_valid_css_order(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     * = this_val;
     return callStrValidator1(ctx, argc, argv, isValidCssOrderValue);
+}
+@c fn js_capsurf_is_valid_css_text_align(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssTextAlignValue);
+}
+@c fn js_capsurf_is_valid_css_word_break(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssWordBreakValue);
+}
+@c fn js_capsurf_is_valid_css_overflow_wrap(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssOverflowWrapValue);
+}
+@c fn js_capsurf_is_valid_css_display(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssDisplayValue);
+}
+@c fn js_capsurf_is_valid_css_position(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssPositionValue);
+}
+@c fn js_capsurf_is_valid_css_visibility(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssVisibilityValue);
+}
+@c fn js_capsurf_is_valid_css_box_sizing(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssBoxSizingValue);
 }
 @c fn js_capsurf_is_valid_css_len_pct(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     * = this_val;
@@ -3115,6 +3150,13 @@ pub fn mountDom(
     defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_bg_repeat", js_capsurf_is_valid_css_bg_repeat, 1);
     defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_flex_number", js_capsurf_is_valid_css_flex_number, 1);
     defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_order", js_capsurf_is_valid_css_order, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_text_align", js_capsurf_is_valid_css_text_align, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_word_break", js_capsurf_is_valid_css_word_break, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_overflow_wrap", js_capsurf_is_valid_css_overflow_wrap, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_display", js_capsurf_is_valid_css_display, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_position", js_capsurf_is_valid_css_position, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_visibility", js_capsurf_is_valid_css_visibility, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_box_sizing", js_capsurf_is_valid_css_box_sizing, 1);
 
     // Assemble and evaluate modular runtime shim
     let total_len: usize = 0;
