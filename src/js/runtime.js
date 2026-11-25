@@ -41183,6 +41183,9 @@
     const effect = new KeyframeEffect(element, keyframes, options);
     const anim = new Animation(effect, globalDocTimeline);
     anim.play();
+    if (typeof globalThis !== "undefined") {
+      globalThis.__capsurf_domMutationEpoch = (globalThis.__capsurf_domMutationEpoch || 0) + 1;
+    }
     return anim;
   }
 
@@ -41211,11 +41214,14 @@
     return res;
   }
 
-  function computeAnimatedStylesForElement(element) {
+  function computeAnimatedStylesForElement(element, pseudoElt) {
     const result = {};
     if (!element) return result;
+    const wantPseudo = String(pseudoElt || "").toLowerCase();
     for (const anim of registeredAnimations) {
       if (!anim || !anim.effect || anim.effect.target !== element) continue;
+      const animPseudo = String(anim.effect.pseudoElement || "").toLowerCase();
+      if (animPseudo !== wantPseudo) continue;
       if (anim.playState === "idle") continue;
       const effect = anim.effect;
       const frames = effect.keyframes;
@@ -49592,7 +49598,19 @@
             }
           }
           if (isHlPseudo) {
-            collectElementOwnDeclarations(anc, ancStyleNodes, normalizedPseudo, computedMap);
+            const hlAncMap = new Map();
+            collectElementOwnDeclarations(anc, ancStyleNodes, normalizedPseudo, hlAncMap);
+            for (const [hk, hv] of hlAncMap.entries()) {
+              if (!hk.startsWith("--")) computedMap.set(hk, hv);
+            }
+            if (hlAncMap.has("text-shadow")) {
+              const ancUsed = new Map();
+              collectElementOwnDeclarations(anc, ancStyleNodes, "", ancUsed);
+              const ancFs = evalCssLengthExpr(ancUsed.get("font-size") || computedMap.get("font-size") || "16px", 16, 16) || 16;
+              const ancCol = global.__capsurf_normalizeSingleColor(ancUsed.get("color") || "rgb(0, 0, 0)");
+              const tshV = resolveTextShadowValue(hlAncMap.get("text-shadow"), ancFs, ancCol);
+              if (tshV) computedMap.set("text-shadow", tshV);
+            }
           }
           if (String(anc.localName || anc.tagName || "").toLowerCase() === "details") {
             const directChild = ancestors[i - 1] || element;
@@ -49689,8 +49707,8 @@
       resolveCssWideKeywordsInMap(computedMap);
 
       // Overlay active/paused Web Animations values
-      if (!normalizedPseudo && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_getAnimatedStyles === "function") {
-        const animStyles = globalThis.__capsurf_getAnimatedStyles(element);
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_getAnimatedStyles === "function") {
+        const animStyles = globalThis.__capsurf_getAnimatedStyles(element, normalizedPseudo);
         for (const k in animStyles) {
           if (Object.prototype.hasOwnProperty.call(animStyles, k)) {
             computedMap.set(k, animStyles[k]);
@@ -50092,6 +50110,47 @@
       return null;
     }
 
+    function resolveTextShadowValue(raw, fontSize, elColor) {
+      const tshRaw = String(raw || "").trim();
+      if (!tshRaw || tshRaw.toLowerCase() === "none" || tshRaw.toLowerCase() === "initial" || tshRaw.toLowerCase() === "revert" || tshRaw.toLowerCase() === "revert-layer") {
+        return "none";
+      }
+      const tshLayers = [];
+      let lCur = "", lD = 0;
+      for (let i = 0; i < tshRaw.length; i++) {
+        const ch = tshRaw[i];
+        if (ch === "(") lD++; else if (ch === ")" && lD > 0) lD--;
+        if (lD === 0 && ch === ",") { tshLayers.push(lCur.trim()); lCur = ""; }
+        else lCur += ch;
+      }
+      if (lCur.trim()) tshLayers.push(lCur.trim());
+      return tshLayers.map((layer) => {
+        const toks = [];
+        let tc = "", td = 0;
+        for (let i = 0; i < layer.length; i++) {
+          const ch = layer[i];
+          if (ch === "(") td++; else if (ch === ")" && td > 0) td--;
+          if (td === 0 && /\s/.test(ch)) { if (tc) { toks.push(tc); tc = ""; } }
+          else tc += ch;
+        }
+        if (tc) toks.push(tc);
+        let col = elColor;
+        const lens = [];
+        for (let i = 0; i < toks.length; i++) {
+          const t = toks[i];
+          if (/^[+-]?(?:\d|\.)/.test(t) || /^calc\(/i.test(t)) {
+            const px = evalCssLengthExpr(t, 0, fontSize);
+            lens.push(px !== null ? formatCssPx(px) : t);
+          } else {
+            col = (t.toLowerCase() === "currentcolor") ? elColor : global.__capsurf_normalizeSingleColor(t);
+          }
+        }
+        if (lens.length === 2) lens.push("0px");
+        if (lens.length >= 3 && /^-[\d.]+px$/.test(lens[2])) lens[2] = "0px";
+        return [col].concat(lens).join(" ");
+      }).join(", ");
+    }
+
     function applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo) {
       if (!element || element.nodeType !== 1) return;
       {
@@ -50211,6 +50270,10 @@
             computedMap.set("background-color", resolvedCol);
           } else if (hlBg) {
             computedMap.set("background-color", global.__capsurf_normalizeSingleColor(hlBg));
+          }
+          if (computedMap.has("text-shadow")) {
+            const origFs = evalCssLengthExpr(origMap.get("font-size") || "16px", 16, 16) || 16;
+            computedMap.set("text-shadow", resolveTextShadowValue(computedMap.get("text-shadow"), origFs, resolvedCol));
           }
         }
         return;

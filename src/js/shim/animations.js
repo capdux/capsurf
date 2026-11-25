@@ -768,6 +768,9 @@ function animateElement(element, keyframes, options) {
   const effect = new KeyframeEffect(element, keyframes, options);
   const anim = new Animation(effect, globalDocTimeline);
   anim.play();
+  if (typeof globalThis !== "undefined") {
+    globalThis.__capsurf_domMutationEpoch = (globalThis.__capsurf_domMutationEpoch || 0) + 1;
+  }
   return anim;
 }
 
@@ -796,11 +799,14 @@ function animationsFor(root) {
   return res;
 }
 
-function computeAnimatedStylesForElement(element) {
+function computeAnimatedStylesForElement(element, pseudoElt) {
   const result = {};
   if (!element) return result;
+  const wantPseudo = String(pseudoElt || "").toLowerCase();
   for (const anim of registeredAnimations) {
     if (!anim || !anim.effect || anim.effect.target !== element) continue;
+    const animPseudo = String(anim.effect.pseudoElement || "").toLowerCase();
+    if (animPseudo !== wantPseudo) continue;
     if (anim.playState === "idle") continue;
     const effect = anim.effect;
     const frames = effect.keyframes;

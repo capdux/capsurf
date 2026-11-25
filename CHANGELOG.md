@@ -4713,3 +4713,7 @@
 ## Phase 930: `content-visibility: hidden` 包含语义与离屏 `innerText` 完整收官
 - `src/css/cascade.cp`: 解析 `content-visibility: hidden` 并自动启用 `contain: size layout paint style`。
 - `src/js/shim/element/html-classes.js`: `innerText` getter 对被 `content-visibility` 跳过的子树返回 `""`；3 项 `content-visibility` WPT **3/3 PASS**，`--smoke` 3/3 **PASS**。
+
+## Phase 931: `min-width: stretch`、高亮伪元素 `text-shadow`/自定义属性隔离与 `pseudoElement` 动画过滤
+- `src/layout/layout.cp`: `resolveBoxMetrics` 支持 `min-width: stretch`。
+- `src/js/shim/window.js`, `src/js/shim/animations.js`: 隔离高亮伪元素 `--*` 继承、解析 `::selection` `text-shadow`（含宿主 `font-size` 变更重算）、并为 `__capsurf_getAnimatedStyles` 透传 `pseudoElement`；3 项 WPT **3/3 PASS**，`--smoke` 3/3 **PASS**。

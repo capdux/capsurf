@@ -3704,3 +3704,6 @@
 - `contain-size-multicol-as-flex-item` 失败源于 `cascade.cp` 未解析 `column-count`/`columns` 且 `layoutFlexContainer` 对 `contain: size` 子项误用 `resolveBoxMetrics` 撑满宽度 (`784`)；接入 `PROP_COLUMN_COUNT` 并在 `measureIntrinsicWidth` 返回 `(column_count - 1) * column_gap` (`100`) 后一次通过。
 ### Phase 930 — `content-visibility: hidden` 四重包含与 `innerText` 全绿
 - `cascade.cp` 补齐 `content-visibility: hidden` 后，隐式确立 `contain_size`/`contain_layout` BFC，使 `content-visibility-088` 外层高度归零、`offsetTop` 阻止外边距穿出均一次通过；同步修正 `html-classes.js` `innerText` getter 对离屏 `content-visibility: auto` 祖先返回 `""`，`content-visibility-086` 全绿。
+### Phase 931 — 高亮伪元素 `text-shadow`/自定义属性隔离与 `min-width: stretch`
+- `highlight-cascade-011` 与 `highlight-cascade-parent-style-change` 失败源于 `collectRawComputedMap` 把 `:root::selection` 的 `--*` 漏入子伪元素且 `applyUsedValuesToComputedMap` 在 `if (normalizedPseudo)` 提前返回跳过了 `text-shadow` 解析；提取 `resolveTextShadowValue` 并过滤 `--*` 后一次通过。
+- `auto-margins-1` 失败源于 `resolveBoxMetrics` 对 `min_width` 跳过了 `IntrinsicSizeKeyword.Stretch`；补齐后一次全绿。

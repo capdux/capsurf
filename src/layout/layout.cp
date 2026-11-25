@@ -989,11 +989,19 @@ pub struct LayoutTree {
         }
 
         // Min/max width constraints
-        if (!style.min_width.is_auto && !style.min_width.is_none && !style.min_width.isIntrinsic()) {
-            const min_w_raw = style.min_width.resolvePx(parent_w, font_px, root_px, vw, vh);
-            const min_w = if (style.box_sizing == BoxSizing.BorderBox) (if (min_w_raw > h_decor) (min_w_raw - h_decor) else 0.0) else min_w_raw;
-            if (box.content_width < min_w) {
-                box.content_width = min_w;
+        if (!style.min_width.is_auto && !style.min_width.is_none) {
+            if (style.min_width.intrinsic == IntrinsicSizeKeyword.Stretch) {
+                const min_w_raw = if (parent_w > mh) (parent_w - mh) else 0.0;
+                const min_w = if (min_w_raw > h_decor) (min_w_raw - h_decor) else 0.0;
+                if (box.content_width < min_w) {
+                    box.content_width = min_w;
+                }
+            } else if (!style.min_width.isIntrinsic()) {
+                const min_w_raw = style.min_width.resolvePx(parent_w, font_px, root_px, vw, vh);
+                const min_w = if (style.box_sizing == BoxSizing.BorderBox) (if (min_w_raw > h_decor) (min_w_raw - h_decor) else 0.0) else min_w_raw;
+                if (box.content_width < min_w) {
+                    box.content_width = min_w;
+                }
             }
         }
         if (!style.max_width.is_auto && !style.max_width.is_none && !style.max_width.isIntrinsic()) {
