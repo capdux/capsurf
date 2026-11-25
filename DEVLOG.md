@@ -3615,3 +3615,5 @@
 - 定位 `absolute-tables-001.html` 中 `.tbl` 已正确计算为 `38px` 但 `.cell` 仍为 `22px` 的根因：`layoutTableCore` 仅将显式宽度分配至列宽而未将显式高度分配至 `row_h`；补齐均分逻辑后 8 个子断言全部通过。
 ### Phase 887 — Flexbox 反向主轴 (`row-reverse`/`column-reverse`) 缺失补齐
 - 修复 `layoutFlexContainer` 仅判断 `isRow()` 而忽略 `RowReverse`/`ColumnReverse` 的主轴反转与 `justify-content` 镜像问题，`column-reverse-gap.html` 一次性通过。
+### Phase 888 — Flexbox `max-height` 纵轴换行与 `flex-grow` 冻结循环
+- 补全 `layoutFlexContainer` 对 `height: auto; max-height: ...` 纵轴多行换行的支持、`flex-grow` 触达 `max-height`/`max-width` 后的冻结再分配（CSS Flexbox §9.7），以及 `forced_height` 向下透传。

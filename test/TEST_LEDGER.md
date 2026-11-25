@@ -2555,3 +2555,4 @@
 | Phase 885 | `flex` `sign()`/`cqw` 展开 & `grid-area` `span`/转义修复 | `cssom.js`, `window.js` | `/css/css-flexbox/parsing/` **27/27 (100%) PASS**, `grid-area-computed` **PASS**; `--smoke` 3/3 PASS |
 | Phase 886 | 显式高度表格向行高均分扩展（`/css/css-tables/` 17/18） | `src/layout/layout.cp` | `/css/css-tables/absolute-tables-001.html` **PASS**; `--smoke` 3/3 PASS |
 | Phase 887 | Flexbox `row-reverse`/`column-reverse` 主轴反转与镜像对齐 | `src/layout/layout.cp` | `/css/css-flexbox/column-reverse-gap.html` **PASS**; `--smoke` 3/3 PASS |
+| Phase 888 | Flexbox `column` `max-height` 换行 & `flex-grow` 冻结重分配 | `src/layout/layout.cp` | `/css/css-flexbox/flex-wrap-column-grow.html` **PASS**; `--smoke` 3/3 PASS |

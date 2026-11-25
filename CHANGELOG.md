@@ -4610,3 +4610,5 @@
 - `src/layout/layout.cp`: `layoutTableCore` 在 `!tb_h.height_is_auto` 时将富余表格内容高度均分至各行 `row_h`，修复单元格 `clientHeight` 停留在固有高度（22px）而非撑满表格（38px）的问题；通过 `cpc fix` + `cpc brief` 门禁，`/css/css-tables/absolute-tables-001.html` **PASS**，`--smoke` 3/3 **PASS**。
 ### Phase 887 — Flexbox `row-reverse`/`column-reverse` 主轴反转布局
 - `src/layout/layout.cp`: `layoutFlexContainer` 增加 `RowReverse`/`ColumnReverse` 检测，镜像 `FlexStart`/`FlexEnd` 起始偏移并在各弹性行内反转子项顺序；通过 `cpc fix` + `cpc brief` 门禁，`column-reverse-gap.html` **PASS**，`--smoke` 3/3 **PASS**。
+### Phase 888 — Flexbox `column` `max-height` 换行与 `flex-grow` 冻结重分配
+- `src/layout/layout.cp`: `layoutFlexContainer` 支持 `max-height` 约束纵轴换行主轴尺寸，实现 `flex-grow` 的 `max-width`/`max-height` 冻结重分配循环，并在纵轴子项传递 `forced_height`；通过 `cpc fix` + `cpc brief` 门禁，`flex-wrap-column-grow.html` **PASS**，`--smoke` 3/3 **PASS**。

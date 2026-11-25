@@ -4031,7 +4031,11 @@ pub struct LayoutTree {
 
         const is_row = pstyle.flex_direction.isRow();
         const is_auto_main = if (is_row) pstyle.width.is_auto else pbox.height_is_auto;
-        const main_size = if (is_row) container_w else container_h;
+        let main_size = if (is_row) container_w else container_h;
+        if (!is_row && is_auto_main && !pstyle.max_height.is_auto && !pstyle.max_height.is_none && !pstyle.max_height.isIntrinsic()) {
+            const mh_px = pstyle.max_height.resolvePx(container_h, pstyle.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+            if (mh_px > 0.0) main_size = mh_px;
+        }
         const cross_size = if (is_row) container_h else container_w;
         const gap = if (is_row) pstyle.column_gap else pstyle.row_gap;
 
@@ -4194,12 +4198,44 @@ pub struct LayoutTree {
             const line_auto_main = is_auto_main && (line_count == 1);
             const free_space = if (line_auto_main) 0.0 else (main_size - total_base_main - total_gaps);
 
-            // Distribute flex-grow or flex-shrink
+            // Distribute flex-grow or flex-shrink (with max-size freeze loop for flex-grow)
             if (!line_auto_main && free_space > 0.0 && total_grow > 0.0) {
-                let i: usize = l_start;
-                while (i < l_end) : (i += 1) {
-                    const ratio = items[i].grow / total_grow;
-                    items[i].target_main = items[i].base_main + free_space * ratio;
+                let frozen: [32]bool = [false; 32];
+                let iter_g: usize = 0;
+                while (iter_g < l_count) : (iter_g += 1) {
+                    let rem_free: f32 = main_size - total_gaps;
+                    let rem_grow: f32 = 0.0;
+                    let ig: usize = l_start;
+                    while (ig < l_end) : (ig += 1) {
+                        if (frozen[ig]) {
+                            rem_free -= items[ig].target_main;
+                        } else {
+                            rem_free -= items[ig].base_main;
+                            rem_grow += items[ig].grow;
+                        }
+                    }
+                    if (rem_grow <= 0.0 || rem_free <= 0.0) break;
+                    let any_clamped = false;
+                    let i: usize = l_start;
+                    while (i < l_end) : (i += 1) {
+                        if (frozen[i]) continue;
+                        const ratio = items[i].grow / rem_grow;
+                        let tgt = items[i].base_main + rem_free * ratio;
+                        const cs = &styles[@as(usize, items[i].node_id)];
+                        if (is_row) {
+                            if (!cs.max_width.is_auto && !cs.max_width.is_none && !cs.max_width.isIntrinsic()) {
+                                const mw = cs.max_width.resolvePx(container_w, cs.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+                                if (tgt > mw) { tgt = mw; frozen[i] = true; any_clamped = true; }
+                            }
+                        } else {
+                            if (!cs.max_height.is_auto && !cs.max_height.is_none && !cs.max_height.isIntrinsic()) {
+                                const mh = cs.max_height.resolvePx(main_size, cs.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+                                if (tgt > mh) { tgt = mh; frozen[i] = true; any_clamped = true; }
+                            }
+                        }
+                        items[i].target_main = tgt;
+                    }
+                    if (!any_clamped) break;
                 }
             } else if (!line_auto_main && free_space < 0.0 && total_shrink > 0.0) {
                 let i: usize = l_start;
@@ -4311,8 +4347,11 @@ pub struct LayoutTree {
                     _.boxes.items[@as(usize, cid)].content_width = if (itm.target_main > h_decor) (itm.target_main - h_decor) else 0.0;
                 } else {
                     const v_decor = cbox.paddingVertical() + cbox.borderVertical();
-                    if (!line_auto_main && itm.target_main > v_decor) {
-                        _.boxes.items[@as(usize, cid)].content_height = itm.target_main - v_decor;
+                    if (!line_auto_main && itm.target_main > 0.0) {
+                        _.boxes.items[@as(usize, cid)].forced_height = itm.target_main;
+                        if (itm.target_main > v_decor) {
+                            _.boxes.items[@as(usize, cid)].content_height = itm.target_main - v_decor;
+                        }
                     }
                 }
 
