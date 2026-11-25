@@ -3424,3 +3424,5 @@
 - 在 `cssom.js` 新增统一辅助函数 `parseNormalizeImageSet`，实现选项语法顺序校验、`-webkit-image-set` 规范化、缺省 `1x` 补全、`type("...")` 转义与重排、以及 `calc()` 分辨率表达式求值与非法混用拦截，`/css/css-images/image-set/image-set-parsing.html` 从 26/144 跃升至 **144/144 PASS**。
 ### Phase 792 — `overlay` 属性与 `::backdrop` UA 默认样式打通
 - 在 `cssom.js` 与 `window.js` 补全 `overlay`（`none | auto` 校验与非顶层 UA `none` 夹紧）及 `::backdrop` 伪元素默认 `position: fixed; top/right/bottom/left: 0px`，`overlay-computed.html`、`overlay-invalid.html` 与 `backdrop-ua-style.html` 3/3 **PASS**。
+### Phase 793 — `::backdrop` 伪元素继承与 `dialog.showModal()` 顶层 `sticky → absolute` 打通
+- 在 `window.js` `matchesSelector` 补全 `::backdrop` 识别（使 `dialog::backdrop` 规则与 `inherit`/自定义属性继承生效），并在 `dialog.js` 维护 `_isModalDialog` 使顶层 `position: sticky` 计算为 `absolute`，`backdrop-inherit-computed.html` (4/4) 与 `sticky-dialog.html` 均 **PASS**。

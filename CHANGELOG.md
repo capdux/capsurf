@@ -4292,3 +4292,7 @@
   - `src/js/shim/cssom.js`: `KNOWN_PROPS` 与 `KEYWORD_PROPS` 补全 `overlay: none | auto`。
   - `src/js/shim/window.js`: `INITIAL_VALUES`/`ALL_KNOWN_PROPS` 补全 `overlay` 与非顶层 `none` 夹紧，并为 `::backdrop` 补全 `position: fixed; inset: 0px` UA 样式。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 793**:
+  - `src/js/shim/element/dialog.js`: `dialogShowModal`/`dialogShow`/`dialogClose` 同步维护 `_isModalDialog` 顶层标志。
+  - `src/js/shim/window.js`: `matchesSelector` 补全 `::backdrop` 伪元素识别，且顶层元素将 `position: sticky` 降级计算为 `absolute`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

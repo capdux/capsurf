@@ -26057,6 +26057,7 @@
         return;
       }
       modalDialogs.set(this, false);
+      this._isModalDialog = false;
       this.setAttribute("open", "");
     };
 
@@ -26066,6 +26067,7 @@
         throw new DOMException("The dialog is already open.", "InvalidStateError");
       }
       modalDialogs.set(this, true);
+      this._isModalDialog = true;
       this.setAttribute("open", "");
     };
 
@@ -26074,6 +26076,7 @@
       if (returnValue !== undefined) {
         this.returnValue = String(returnValue);
       }
+      this._isModalDialog = false;
       this.removeAttribute("open");
       modalDialogs.delete(this);
       const dialog = this;
@@ -45838,7 +45841,7 @@
         if (pseudoMatch) {
           let p = pseudoMatch[1].toLowerCase();
           if (p.startsWith(":") && !p.startsWith("::")) p = ":" + p;
-          if (p === "::before" || p === "::after" || p === "::first-letter" || p === "::first-line" || p === "::marker" || p === "::selection" || p === "::target-text" || p === "::search-text" || p === "::spelling-error" || p === "::grammar-error" || p.startsWith("::highlight(") || p === "::column") {
+          if (p === "::before" || p === "::after" || p === "::first-letter" || p === "::first-line" || p === "::marker" || p === "::backdrop" || p === "::selection" || p === "::target-text" || p === "::search-text" || p === "::spelling-error" || p === "::grammar-error" || p.startsWith("::highlight(") || p === "::column") {
             selPseudo = p;
             baseSel = raw.slice(0, -pseudoMatch[1].length).trim();
           }
@@ -49194,6 +49197,8 @@
       const isTopLayer = (element && element._isModalDialog) || (typeof element.matches === "function" && (() => { try { return element.matches(":popover-open"); } catch (_) { return false; } })());
       if (!isTopLayer) {
         computedMap.set("overlay", "none");
+      } else if ((computedMap.get("position") || "").trim().toLowerCase() === "sticky") {
+        computedMap.set("position", "absolute");
       }
       const evalFilterArgNum = (rawArg, isPctClamped01, isNonNeg) => {
         let s = String(rawArg || "").trim();

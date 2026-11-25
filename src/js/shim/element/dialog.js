@@ -25,6 +25,7 @@ function installDialogElement(global) {
       return;
     }
     modalDialogs.set(this, false);
+    this._isModalDialog = false;
     this.setAttribute("open", "");
   };
 
@@ -34,6 +35,7 @@ function installDialogElement(global) {
       throw new DOMException("The dialog is already open.", "InvalidStateError");
     }
     modalDialogs.set(this, true);
+    this._isModalDialog = true;
     this.setAttribute("open", "");
   };
 
@@ -42,6 +44,7 @@ function installDialogElement(global) {
     if (returnValue !== undefined) {
       this.returnValue = String(returnValue);
     }
+    this._isModalDialog = false;
     this.removeAttribute("open");
     modalDialogs.delete(this);
     const dialog = this;
