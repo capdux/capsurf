@@ -2479,3 +2479,4 @@
 | Phase 810 | WPT `grid` 简写全套 (`auto-flow`/`dense`/展开/重组) | `src/js/shim/cssom.js` | `grid-shorthand{,-valid,-invalid}` (146/146 **PASS**), `grid-row-*` (3/3), `grid-template-areas-*` (4/4); `--smoke` 3/3 PASS |
 | Phase 811 | WPT `rgb`/`hsl`/`hwb` `calc()`/`sign()` 颜色序列化 | `src/js/shim/cssom.js` | `color-valid-{hwb,hsl,rgb}` (167/167 **PASS**); `--smoke` 3/3 PASS |
 | Phase 812 | WPT `color()` 与 `lab`/`lch`/`oklab`/`oklch` 指定值序列化 | `src/js/shim/cssom.js`, `test/wpt/wpt-expectations.json` | `color-valid-color-function` (340/340 **`FAIL→PASS`**), `color-valid-lab` (150/150 **`FAIL→PASS`**); `--smoke` 3/3 PASS |
+| Phase 813 | WPT `overscroll-behavior` 简写折叠/展开与逻辑物理映射 | `src/js/shim/cssom.js`, `src/js/shim/window.js` | `overscroll-behavior-valid` (**PASS**), `overscroll-behavior-logical` (**PASS**); `--smoke` 3/3 PASS |

@@ -4480,6 +4480,10 @@
     const s = String(raw).trim();
     if (/^(?:inherit|initial|unset|revert|revert-layer)$/i.test(s)) return s.toLowerCase();
     if (key === "display") return canonicalizeDisplayValue(s) || s.toLowerCase();
+    if (key === "overscroll-behavior") {
+      const t = splitCssTokens(s.toLowerCase());
+      return (t.length === 2 && t[0] === t[1]) ? t[0] : t.join(" ");
+    }
     if (key === "font") return parseAndNormalizeFontShorthand(s) || s;
     if (key === "grid-template") { const p = parseGridTemplateShorthand(s); return p ? p.canonical : s; }
     if (key === "grid") { const p = parseGridShorthand(s); return p ? p.canonical : s; }
@@ -6501,6 +6505,12 @@
       }
       return null;
     }
+    if (key === "overscroll-behavior") {
+      const t = splitCssTokens(normV.toLowerCase());
+      if (t.length === 1) return [["overscroll-behavior-x", t[0]], ["overscroll-behavior-y", t[0]]];
+      if (t.length === 2) return [["overscroll-behavior-x", t[0]], ["overscroll-behavior-y", t[1]]];
+      return null;
+    }
     if (key === "grid-template") {
       const p = parseGridTemplateShorthand(normV);
       if (!p) return null;
@@ -7262,6 +7272,7 @@
     "grid-area": ["grid-row-start", "grid-column-start", "grid-row-end", "grid-column-end"],
     "grid-template": ["grid-template-rows", "grid-template-columns", "grid-template-areas"],
     "grid": ["grid-template-rows", "grid-template-columns", "grid-template-areas", "grid-auto-flow", "grid-auto-rows", "grid-auto-columns"],
+    "overscroll-behavior": ["overscroll-behavior-x", "overscroll-behavior-y"],
     "font-variant": ["font-variant-ligatures", "font-variant-caps", "font-variant-alternates", "font-variant-numeric", "font-variant-east-asian", "font-variant-position", "font-variant-emoji"],
     background: ["background-image", "background-position", "background-size", "background-repeat", "background-attachment", "background-origin", "background-clip", "background-color"],
     mask: ["mask-image", "mask-position", "mask-size", "mask-repeat", "mask-origin", "mask-clip", "mask-composite", "mask-mode", "mask-border-source", "mask-border-slice", "mask-border-width", "mask-border-outset", "mask-border-repeat"]
@@ -7280,6 +7291,9 @@
     }
     if (vals.length > 0 && /^(?:initial|inherit|unset|revert|revert-layer)$/i.test(vals[0]) && vals.every((v) => v.toLowerCase() === vals[0].toLowerCase())) {
       return vals[0].toLowerCase();
+    }
+    if (key === "overscroll-behavior") {
+      return vals[0] === vals[1] ? vals[0] : (vals[0] + " " + vals[1]);
     }
     if (key === "grid-template") {
       const r = vals[0], c = vals[1], a = vals[2];
@@ -7495,6 +7509,12 @@
         outLayers.push(parts.length > 0 ? parts.join(" ") : "none");
       }
       return outLayers.join(", ");
+    }
+    if (key === "overscroll-behavior") {
+      const t = splitCssTokens(normV.toLowerCase());
+      if (t.length === 1) return [["overscroll-behavior-x", t[0]], ["overscroll-behavior-y", t[0]]];
+      if (t.length === 2) return [["overscroll-behavior-x", t[0]], ["overscroll-behavior-y", t[1]]];
+      return null;
     }
     if (key === "grid-template") {
       const p = parseGridTemplateShorthand(normV);

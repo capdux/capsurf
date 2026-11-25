@@ -11114,6 +11114,20 @@ function installWindow(global) {
     }
     const fcaVal = computedMap.get("forced-color-adjust");
     {
+      const wmOb = (computedMap.get("writing-mode") || "horizontal-tb").toLowerCase();
+      const isVertOb = wmOb.startsWith("vertical") || wmOb.startsWith("sideways");
+      const obBlk = computedMap.get("overscroll-behavior-block");
+      const obInl = computedMap.get("overscroll-behavior-inline");
+      if (obBlk && obBlk !== "auto") {
+        const phyB = isVertOb ? "overscroll-behavior-x" : "overscroll-behavior-y";
+        if (!computedMap.has(phyB) || computedMap.get(phyB) === "auto") computedMap.set(phyB, obBlk);
+      }
+      if (obInl && obInl !== "auto") {
+        const phyI = isVertOb ? "overscroll-behavior-y" : "overscroll-behavior-x";
+        if (!computedMap.has(phyI) || computedMap.get(phyI) === "auto") computedMap.set(phyI, obInl);
+      }
+    }
+    {
       const dispG = (computedMap.get("display") || "block").toLowerCase();
       const isGrid = dispG === "grid" || dispG === "inline-grid";
       const fsG = evalCssLengthExpr(computedMap.get("font-size") || "16px", 16, 16) || 16;

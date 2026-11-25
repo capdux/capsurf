@@ -3464,3 +3464,5 @@
 - 在 `cssom.js` 统一 `rgb`/`hsl`/`hwb` 含未求值 `calc(...)`/`sign(...)` 通道时的规范化序列化（现代空格语法、乘子前置 `N * sign(...)`、通道裁剪与 alpha 简化），`color-valid-{hwb,hsl,rgb}` 3/3（167/167 子测试）全绿 **PASS**。
 ### Phase 812 — `color()` 与 `lab()`/`lch()`/`oklab()`/`oklch()` 指定值 `calc()`/`NaN`/精度序列化
 - 在 `cssom.js` 补全 `color(` 指定值分发与 `evalSpecCalc`（保留 `calc(NaN)`/`calc(infinity)`/`calc(...)` 包装，修正 `rad` 色相 `toPrecision(6)`），`color-valid-color-function` (340/340) 与 `color-valid-lab` (150/150) 均 **`FAIL → PASS`**。
+### Phase 813 — `overscroll-behavior` 简写折叠/展开与逻辑属性物理映射
+- 在 `cssom.js` 补全 `overscroll-behavior` 重复值折叠与 `x`/`y` 展开/重组，并在 `window.js` `applyUsedValuesToComputedMap` 允许 `overscroll-behavior-block`/`inline` 覆盖默认 `"auto"` 物理长属性，`overscroll-behavior-valid` 与 `overscroll-behavior-logical` 全绿 **PASS**。

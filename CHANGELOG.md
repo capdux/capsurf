@@ -4369,3 +4369,7 @@
   - `src/js/shim/cssom.js`: `normalizeCssSpecifiedValue` 补全 `color(` 分发；`normalizeSingleColor` 新增 `evalSpecCalc` 与 `parseH` `toPrecision(6)` 精度，修复 `color()` 与 `lab`/`lch`/`oklab`/`oklch` 序列化。
   - `test/wpt/wpt-expectations.json`: 收紧 `color-valid-color-function.html` 与 `color-valid-lab.html` 为 `PASS`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 813**:
+  - `src/js/shim/cssom.js`: 新增 `overscroll-behavior` 双值折叠、展开至 `overscroll-behavior-{x,y}` 与 `serializeExpandedShorthand("overscroll-behavior")`。
+  - `src/js/shim/window.js`: `applyUsedValuesToComputedMap` 修复 `overscroll-behavior-block`/`inline` 向物理 `x`/`y` 映射时默认 `"auto"` 覆盖问题。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
