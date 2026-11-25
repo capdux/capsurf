@@ -3698,3 +3698,5 @@
 - `writing-mode-parsing-001` 仅差 `writing-mode: foo` 未被过滤（因 `valCheckProps` 漏列 `writing-mode`）；`text-orientation-parsing-sideways-right-001` 需将旧别名 `sideways-right` 映射为 `sideways`；补齐后连同 `fixed-layout-calc-width-001` 一次 3/3 通过。
 ### Phase 927 — `className` 纪元失效、SVG 1.1 `writing-mode` 与 `text-combine-upright: digits`
 - `wm-propagation-body-computed-root` 失败源于 `element.className = ""` 未递增 `__capsurf_domMutationEpoch` 导致 `getComputedStyle` 命中旧规则缓存；`writing-mode-parsing-svg1-001` 与 `text-combine-upright-parsing-digits-001/002` 通过扩展 `cssom.js` 校验及 `window.js` 计算值规范化一次修复（`digits-002` 仅剩上游测试自身重复 `#valid_digits_calc_4_dividedby_2` 选择器）。
+### Phase 928 — 正交缩紧适应 (`orthogonal-parent-shrink-to-fit`) 16 项全绿
+- `cascade.cp` 原未解析 `writing-mode`，且 `layout.cp` 对垂直书写模式按水平文本度量宽度、同时 `flushInlineLine` 未将同行 `float: left` 宽度计入后续行内元素偏移。接入 `WritingMode` 继承、`isVertical()` 原子行内化与列宽估算、以及左浮动预遍历后，16 项 `orthogonal-parent-shrink-to-fit-001{c..x}` 一次全绿。

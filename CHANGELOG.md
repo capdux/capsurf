@@ -4702,3 +4702,6 @@
 ## Phase 927: `className` 缓存失效、SVG 1.1 `writing-mode` 与 `text-combine-upright: digits`
 - `src/js/shim/element/element.js`: `className` setter 递增 `__capsurf_domMutationEpoch`。
 - `src/js/shim/cssom.js`, `src/js/shim/window.js`: 支持 SVG 1.1 `writing-mode` 映射与 `text-combine-upright: digits [<2..4> | calc(...)]`；3 项 WPT **3/3 PASS**（另 `digits-002` 0/12->11/12），`--smoke` 3/3 **PASS**。
+
+## Phase 928: 原生 `WritingMode` 级联、正交行内缩紧度量与同行左浮动偏移
+- `src/css/cascade.cp`, `src/layout/layout.cp`: 新增 `PROP_WRITING_MODE` 继承解析、垂直书写模式正交缩紧宽度估算、以及 `flushInlineLine` 左浮动行内偏移推进；16 项 `orthogonal-parent-shrink-to-fit-001*.html` **16/16 PASS**，`--smoke` 3/3 **PASS**。

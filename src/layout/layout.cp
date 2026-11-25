@@ -32,6 +32,7 @@ import {
     ListStylePosition,
     ListStyleType,
     OverflowMode,
+    WritingMode,
     formatListMarker
 } from "../css/cascade.cp";
 
@@ -960,7 +961,7 @@ pub struct LayoutTree {
                 }
             }
             raw_is_border_box = (style.box_sizing == BoxSizing.BorderBox);
-        } else if (style.display.isInlineFlex() || style.display.isInlineBlock() || is_abs_or_fixed) {
+        } else if (style.display.isInlineFlex() || style.display.isInlineBlock() || is_abs_or_fixed || (style.display.isInline() && style.writing_mode.isVertical())) {
             // Shrink-to-fit auto width (CSS 2.1 §10.3.7 / §10.3.9 / CSS Flexbox §9)
             const avail = if (parent_w > mh) (parent_w - mh) else 0.0;
             const min_o = _.measureMinContentWidth(doc, styles, node_id, parent_w);
@@ -1880,7 +1881,7 @@ pub struct LayoutTree {
             trailing_ws_w.* = 0.0;
             return;
         }
-        if (LayoutTree.isAtomicInline(node, st)) {
+        if (LayoutTree.isAtomicInline(node, st) || st.writing_mode.isVertical()) {
             cur_w.* += _.measureIntrinsicWidth(doc, styles, node_id, avail_w);
             trailing_ws_w.* = 0.0;
             prev_ws.* = false;
@@ -2004,6 +2005,16 @@ pub struct LayoutTree {
             } else {
                 content_w = max_w;
             }
+        } else if (st.writing_mode.isVertical()) {
+            const t_len = LayoutTree.getNodeTextLength(doc, styles, node_id);
+            const char_h = if (fs > 0.0) fs else 16.0;
+            const total_h = @as(f32, @floatFromInt(t_len)) * char_h;
+            let eff_h: f32 = 0.0;
+            if (!st.height.is_auto && !st.height.is_none) {
+                eff_h = st.height.resolvePx(_.viewport_height, fs, _.root_font_px, _.viewport_width, _.viewport_height);
+            }
+            const lines: f32 = if (eff_h > 0.0 && total_h > eff_h) @ceil(total_h / eff_h) else 1.0;
+            content_w = lines * st.resolvedLineHeight();
         } else {
             let best_w: f32 = 0.0;
             let cur_w: f32 = 0.0;
@@ -3136,7 +3147,7 @@ pub struct LayoutTree {
             prev_ws.* = true;
             return;
         }
-        if (LayoutTree.isAtomicInline(node, cstyle)) {
+        if (LayoutTree.isAtomicInline(node, cstyle) || cstyle.writing_mode.isVertical()) {
             _.layoutNodeEx(doc, styles, node_id, content_x, cursor_y, content_w, content_h, content_x, cursor_y, child_h_definite);
             const cbox = &_.boxes.items[@as(usize, node_id)];
             const is_rep = node.hasTag("svg") || LayoutTree.getReplacedSize(node) != null;
@@ -3306,6 +3317,27 @@ pub struct LayoutTree {
         out_lines_used.* = @intCast(max_wrapped_lines);
         const total_line_h = if (max_wrapped_lines > 1) (@as(f32, @floatFromInt(max_wrapped_lines)) * single_line_h) else single_line_h;
 
+        // Pre-pass left floats on this line so subsequent inline items shift right
+        let float_left_w: f32 = 0.0;
+        let fi: usize = 0;
+        while (fi < line_items.len) : (fi += 1) {
+            const fit = &line_items[fi];
+            if (fit.kind == InlineItemKind.FloatItem) {
+                const fcst = &styles[@as(usize, fit.node_id)];
+                if (fcst.float_mode != FloatMode.Right) {
+                    const fx = content_x + float_left_w;
+                    _.layoutNodeEx(doc, styles, fit.node_id, fx, line_y, content_w, content_h, fx, line_y, child_h_definite);
+                    const fcbox = &_.boxes.items[@as(usize, fit.node_id)];
+                    float_left_w += fcbox.outerWidth();
+                    const fb = line_y + fcbox.outerHeight();
+                    if (fb > float_left_bottom.*) float_left_bottom.* = fb;
+                    if (fb > _.bfc_float_left_bottom) _.bfc_float_left_bottom = fb;
+                    const cr = fcbox.rect.right();
+                    if (cr > max_child_right.*) max_child_right.* = cr;
+                }
+            }
+        }
+
         // CssPosition every item on this line
         i = 0;
         while (i < line_items.len) : (i += 1) {
@@ -3317,7 +3349,7 @@ pub struct LayoutTree {
                 const text_y = line_y + baseline_y - t_asc;
                 const vis = (tst.visibility == Visibility.Visible);
                 const new_rect = Rect {
-                    x: content_x + it.line_x,
+                    x: content_x + float_left_w + it.line_x,
                     y: text_y,
                     width: it.width,
                     height: if (it.wrapped_lines > 1) (@as(f32, @floatFromInt(it.wrapped_lines)) * single_line_h) else t_nat,
@@ -3340,7 +3372,7 @@ pub struct LayoutTree {
                 } else {
                     _.boxes.items[@as(usize, it.node_id)].rect = new_rect;
                 }
-                const tr = content_x + it.line_x + it.width;
+                const tr = content_x + float_left_w + it.line_x + it.width;
                 if (tr > max_child_right.*) max_child_right.* = tr;
             } else if (it.kind == InlineItemKind.Atomic) {
                 const cst = &styles[@as(usize, it.node_id)];
@@ -3361,14 +3393,14 @@ pub struct LayoutTree {
                     const iy_top = 0.0 - (item_above + shift);
                     target_outer_y = line_y + baseline_y + iy_top;
                 }
-                const target_border_x = content_x + it.line_x + cbox.margin_left;
+                const target_border_x = content_x + float_left_w + it.line_x + cbox.margin_left;
                 const target_border_y = target_outer_y + cbox.margin_top;
                 const dx = target_border_x - it.orig_border_x;
                 const dy = target_border_y - it.orig_border_y;
                 if (dx != 0.0 || dy != 0.0) {
                     _.shiftSubtree(doc, it.node_id, dx, dy);
                 }
-                const cr = content_x + it.line_x + it.width;
+                const cr = content_x + float_left_w + it.line_x + it.width;
                 if (cr > max_child_right.*) max_child_right.* = cr;
             } else if (it.kind == InlineItemKind.AbsPos) {
                 const cst = &styles[@as(usize, it.node_id)];
@@ -3379,22 +3411,18 @@ pub struct LayoutTree {
                 }
             } else if (it.kind == InlineItemKind.FloatItem) {
                 const cst = &styles[@as(usize, it.node_id)];
-                _.layoutNodeEx(doc, styles, it.node_id, content_x, line_y, content_w, content_h, content_x, line_y, child_h_definite);
-                const cbox = &_.boxes.items[@as(usize, it.node_id)];
                 if (cst.float_mode == FloatMode.Right) {
+                    _.layoutNodeEx(doc, styles, it.node_id, content_x, line_y, content_w, content_h, content_x, line_y, child_h_definite);
+                    const cbox = &_.boxes.items[@as(usize, it.node_id)];
                     const target_x = content_x + content_w - cbox.borderBoxWidth() - cbox.margin_right;
                     const dx = target_x - (content_x + cbox.margin_left);
                     if (dx != 0.0) _.shiftSubtree(doc, it.node_id, dx, 0.0);
                     const fb = line_y + cbox.outerHeight();
                     if (fb > float_right_bottom.*) float_right_bottom.* = fb;
                     if (fb > _.bfc_float_right_bottom) _.bfc_float_right_bottom = fb;
-                } else {
-                    const fb = line_y + cbox.outerHeight();
-                    if (fb > float_left_bottom.*) float_left_bottom.* = fb;
-                    if (fb > _.bfc_float_left_bottom) _.bfc_float_left_bottom = fb;
+                    const cr = _.boxes.items[@as(usize, it.node_id)].rect.right();
+                    if (cr > max_child_right.*) max_child_right.* = cr;
                 }
-                const cr = _.boxes.items[@as(usize, it.node_id)].rect.right();
-                if (cr > max_child_right.*) max_child_right.* = cr;
             }
         }
         return total_line_h;
@@ -3846,7 +3874,7 @@ pub struct LayoutTree {
         _.boxes.items[@as(usize, parent_id)].scroll_content_width = @max(_.boxes.items[@as(usize, parent_id)].content_width, auto_w);
 
         // Shrink-to-fit auto width for inline-block, inline, float, or abspos without left+right
-        if (pstyle_blk.width.is_auto && !pstyle_blk.contain_size && !pstyle_blk.contain_inline_size &&
+        if (pstyle_blk.width.is_auto && !pstyle_blk.contain_size && !pstyle_blk.contain_inline_size && !pstyle_blk.writing_mode.isVertical() &&
             (pstyle_blk.display.isInlineBlock() || pstyle_blk.display.isInline() || pstyle_blk.float_mode != FloatMode.None)) {
             if (auto_w > _.boxes.items[@as(usize, parent_id)].content_width) {
                 _.boxes.items[@as(usize, parent_id)].content_width = auto_w;

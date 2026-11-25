@@ -1260,8 +1260,21 @@ pub const PROP_OBJECT_VIEW_BOX: usize = 104;
 pub const PROP_BG_REPEAT: usize = 105;
 pub const PROP_CONTAIN: usize = 106;
 pub const PROP_ALIGN_SELF: usize = 107;
+pub enum WritingMode {
+    HorizontalTb,
+    VerticalRl,
+    VerticalLr,
+    SidewaysRl,
+    SidewaysLr;
+
+    fn isVertical(): bool {
+        return _ != WritingMode.HorizontalTb;
+    }
+}
+
 pub const PROP_ASPECT_RATIO: usize = 108;
-pub const TOTAL_PROP_SLOTS: usize = 109;
+pub const PROP_WRITING_MODE: usize = 109;
+pub const TOTAL_PROP_SLOTS: usize = 110;
 
 pub enum ObjectViewBoxKind {
     None,
@@ -2538,6 +2551,7 @@ pub struct ComputedStyle {
     transform_tx: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
     transform_ty: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
     aspect_ratio: f32 = 0.0;
+    writing_mode: WritingMode = WritingMode.HorizontalTb;
 
     // Table & float properties
     color_scheme: ColorScheme = ColorScheme.Normal;
@@ -2799,6 +2813,7 @@ pub struct ComputedStyle {
         if (p := parent_style) {
             _.visibility = p.visibility;
             _.direction = p.direction;
+            _.writing_mode = p.writing_mode;
             _.list_style_type = p.list_style_type;
             _.list_style_position = p.list_style_position;
             if (!node.hasTag("pre")) {
@@ -4241,6 +4256,25 @@ pub struct ComputedStyle {
         if (std.ascii.eqlIgnoreCase(name, "align-self")) {
             if (aself := AlignSelf.parse(val)) {
                 if (_.tryClaimSlot(PROP_ALIGN_SELF, weight)) _.align_self = aself;
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "writing-mode")) {
+            const tr_wm = std.mem.trim(u8, val, " \t\r\n");
+            let wm_val: WritingMode? = null;
+            if (std.ascii.eqlIgnoreCase(tr_wm, "horizontal-tb") || std.ascii.eqlIgnoreCase(tr_wm, "lr") || std.ascii.eqlIgnoreCase(tr_wm, "lr-tb") || std.ascii.eqlIgnoreCase(tr_wm, "rl") || std.ascii.eqlIgnoreCase(tr_wm, "rl-tb")) {
+                wm_val = WritingMode.HorizontalTb;
+            } else if (std.ascii.eqlIgnoreCase(tr_wm, "vertical-rl") || std.ascii.eqlIgnoreCase(tr_wm, "tb") || std.ascii.eqlIgnoreCase(tr_wm, "tb-rl")) {
+                wm_val = WritingMode.VerticalRl;
+            } else if (std.ascii.eqlIgnoreCase(tr_wm, "vertical-lr")) {
+                wm_val = WritingMode.VerticalLr;
+            } else if (std.ascii.eqlIgnoreCase(tr_wm, "sideways-rl")) {
+                wm_val = WritingMode.SidewaysRl;
+            } else if (std.ascii.eqlIgnoreCase(tr_wm, "sideways-lr")) {
+                wm_val = WritingMode.SidewaysLr;
+            }
+            if (wm := wm_val) {
+                if (_.tryClaimSlot(PROP_WRITING_MODE, weight)) _.writing_mode = wm;
             }
             return;
         }
