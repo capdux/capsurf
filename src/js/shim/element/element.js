@@ -334,7 +334,8 @@ function createStyleProxy(element) {
     const skip = new Set();
     const foldPairs = [
       ["flex", ["flex-grow", "flex-shrink", "flex-basis"]],
-      ["flex-flow", ["flex-direction", "flex-wrap"]]
+      ["flex-flow", ["flex-direction", "flex-wrap"]],
+      ["gap", ["row-gap", "column-gap"]]
     ];
     const folded = new Map();
     for (let fi = 0; fi < foldPairs.length; fi++) {
@@ -469,6 +470,7 @@ function createStyleProxy(element) {
       const rg = map.get("row-gap");
       const cg = map.get("column-gap");
       if (rg && cg && rg.priority === cg.priority) {
+        if (rg.pendingVar && cg.pendingVar && rg.pendingVar === cg.pendingVar) return rg.pendingVar;
         return rg.value === cg.value ? rg.value : (rg.value + " " + cg.value);
       }
       return "";

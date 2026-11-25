@@ -12415,12 +12415,20 @@ function installWindow(global) {
       }
       const sh = getShorthandComputed(p);
       if (sh !== null) return sh;
-      if (computedMap.has(p)) return computedMap.get(p);
+      if (computedMap.has(p)) {
+        const cv = computedMap.get(p);
+        if (cv === "first baseline" && (pLow === "align-content" || pLow === "align-items" || pLow === "align-self" || pLow === "justify-items" || pLow === "justify-self")) return "baseline";
+        return cv;
+      }
       if (p.startsWith("--")) return "";
       const lower = pLow.startsWith("scroll-snap-margin") ? pLow.replace("scroll-snap-margin", "scroll-margin") : pLow;
       const shL = getShorthandComputed(lower);
       if (shL !== null) return shL;
-      if (computedMap.has(lower)) return computedMap.get(lower);
+      if (computedMap.has(lower)) {
+        const cv = computedMap.get(lower);
+        if (cv === "first baseline" && (lower === "align-content" || lower === "align-items" || lower === "align-self" || lower === "justify-items" || lower === "justify-self")) return "baseline";
+        return cv;
+      }
       if (lower === "contain") return "none";
       if (lower === "content-visibility") return "visible";
       if (lower.startsWith("contain-intrinsic-")) {

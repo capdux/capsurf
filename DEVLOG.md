@@ -3673,3 +3673,5 @@
 - 排查发现 `cascade.cp` `min_height` 默认值为 `zeroPx()` 导致未显式设置 `min-height` 时跳过 `min-height: auto` transferred size 夹紧，改用 `weights[7] == 0` 判定；`layoutFlexContainer` 原未合并 `align_self` 导致 `flex-start` 被误拉伸并传染 `child_h_definite`，且首遍 `layoutNode` 写死 `parent_h_definite=true` 使 `height: 100%` 折叠为 `0px`。修复后 3 项全绿。
 ### Phase 916 — `flex-basis: content` 与 `height: stretch` 确定性修复
 - 新增 `IntrinsicSizeKeyword.Content` 与 `LayoutBox.ignore_height_for_flex_content`，在 `column` flex 下使 `flex: 1 1 content; height: 100px` 忽略显式 `height` 作为百分比子项包含块；同步在 `resolveBoxMetrics` 对 `height: stretch` 区分 `parent_h_definite` 填充与不定父高退化 `auto`，两项测试全绿。
+### Phase 917 — `cross-fade()` `sign()` 放行与 `grid-gap` `var()`/`inherit` 序列化
+- `cssom.js` `cross-fade()` 校验误将 `sign(1em - 10000px)` 内长度单位当成顶层百分比表达式拒绝，剥离后 `evalCfPct` 立即精确算出 `49%`；`element.js` 将 `gap` 加入 `foldPairs` 并在 `lookupPropertyValue` 返回 `pendingVar` 后，`grid-gap` 全面对齐新标准别名语义。

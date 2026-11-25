@@ -4670,3 +4670,5 @@
 - `src/layout/layout.cp`: 修复 `column` flex `min-height: auto` transferred height 夹紧、按 `align_self` 计算 `eff_align` 及单行 `auto`-height 容器百分比高度子项二次重排；通过 `cpc fix` + `cpc brief` 4 门禁，3 项 `css-flexbox` WPT **3/3 PASS**，`--smoke` 3/3 **PASS**。
 ### Phase 916 — Flexbox `flex-basis: content` 与 `height: stretch` 确定性判定
 - `src/css/cascade.cp`, `src/layout/layout.cp`: 解析 `flex-basis: content` 并在 `column` 方向将 `height` 视作 `auto`，补齐 `height: stretch` 在确定/不定父高度下的布局分支；通过 `cpc fix` + `cpc brief` 4 门禁，2 项 `css-flexbox` WPT **2/2 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 917 — `cross-fade()` `sign()` 放行与 `grid-gap` 旧别名折叠
+- `src/js/shim/cssom.js`, `src/js/shim/element/element.js`, `src/js/shim/window.js`: `cross-fade()` 数学百分比校验剥离 `sign()`/`abs()`/`progress()` 内部单位，补齐 `gap` `foldPairs` CSS-wide 折叠与 `pendingVar` 返回，`legacy-gap-aliases-001.html` 与 `cross-fade-computed-value.html` **2/2 PASS**，`--smoke` 3/3 **PASS**。

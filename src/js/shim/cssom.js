@@ -4330,7 +4330,12 @@
             } else {
               const p0 = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))%$/.exec(ct[0]);
               const p1 = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))%$/.exec(ct[1]);
-              const isMathPct = (t) => /^(?:calc|min|max|clamp)\(/i.test(t) && t.includes("%") && !/(?:px|em|rem|ex|ch|vw|vh|vmin|vmax|cm|mm|q|in|pt|pc)\b/i.test(t);
+              const isMathPct = (t) => {
+                if (!/^(?:calc|min|max|clamp)\(/i.test(t) || !t.includes("%")) return false;
+                let stripped = t;
+                for (let k = 0; k < 4; k++) stripped = stripped.replace(/\b(?:sign|abs|progress)\([^()]*\)/gi, "1");
+                return !/(?:px|em|rem|ex|ch|vw|vh|vmin|vmax|cm|mm|q|in|pt|pc)\b/i.test(stripped);
+              };
               if (p0) { pctTok = parseFloat(p0[1]); imgTok = ct[1]; if (!(pctTok >= 0 && pctTok <= 100)) return false; }
               else if (p1) { pctTok = parseFloat(p1[1]); imgTok = ct[0]; if (!(pctTok >= 0 && pctTok <= 100)) return false; }
               else if (isMathPct(ct[0])) { imgTok = ct[1]; }

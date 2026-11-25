@@ -8283,7 +8283,12 @@
               } else {
                 const p0 = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))%$/.exec(ct[0]);
                 const p1 = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))%$/.exec(ct[1]);
-                const isMathPct = (t) => /^(?:calc|min|max|clamp)\(/i.test(t) && t.includes("%") && !/(?:px|em|rem|ex|ch|vw|vh|vmin|vmax|cm|mm|q|in|pt|pc)\b/i.test(t);
+                const isMathPct = (t) => {
+                  if (!/^(?:calc|min|max|clamp)\(/i.test(t) || !t.includes("%")) return false;
+                  let stripped = t;
+                  for (let k = 0; k < 4; k++) stripped = stripped.replace(/\b(?:sign|abs|progress)\([^()]*\)/gi, "1");
+                  return !/(?:px|em|rem|ex|ch|vw|vh|vmin|vmax|cm|mm|q|in|pt|pc)\b/i.test(stripped);
+                };
                 if (p0) { pctTok = parseFloat(p0[1]); imgTok = ct[1]; if (!(pctTok >= 0 && pctTok <= 100)) return false; }
                 else if (p1) { pctTok = parseFloat(p1[1]); imgTok = ct[0]; if (!(pctTok >= 0 && pctTok <= 100)) return false; }
                 else if (isMathPct(ct[0])) { imgTok = ct[1]; }
@@ -19975,7 +19980,8 @@
       const skip = new Set();
       const foldPairs = [
         ["flex", ["flex-grow", "flex-shrink", "flex-basis"]],
-        ["flex-flow", ["flex-direction", "flex-wrap"]]
+        ["flex-flow", ["flex-direction", "flex-wrap"]],
+        ["gap", ["row-gap", "column-gap"]]
       ];
       const folded = new Map();
       for (let fi = 0; fi < foldPairs.length; fi++) {
@@ -20110,6 +20116,7 @@
         const rg = map.get("row-gap");
         const cg = map.get("column-gap");
         if (rg && cg && rg.priority === cg.priority) {
+          if (rg.pendingVar && cg.pendingVar && rg.pendingVar === cg.pendingVar) return rg.pendingVar;
           return rg.value === cg.value ? rg.value : (rg.value + " " + cg.value);
         }
         return "";
@@ -54309,12 +54316,20 @@
         }
         const sh = getShorthandComputed(p);
         if (sh !== null) return sh;
-        if (computedMap.has(p)) return computedMap.get(p);
+        if (computedMap.has(p)) {
+          const cv = computedMap.get(p);
+          if (cv === "first baseline" && (pLow === "align-content" || pLow === "align-items" || pLow === "align-self" || pLow === "justify-items" || pLow === "justify-self")) return "baseline";
+          return cv;
+        }
         if (p.startsWith("--")) return "";
         const lower = pLow.startsWith("scroll-snap-margin") ? pLow.replace("scroll-snap-margin", "scroll-margin") : pLow;
         const shL = getShorthandComputed(lower);
         if (shL !== null) return shL;
-        if (computedMap.has(lower)) return computedMap.get(lower);
+        if (computedMap.has(lower)) {
+          const cv = computedMap.get(lower);
+          if (cv === "first baseline" && (lower === "align-content" || lower === "align-items" || lower === "align-self" || lower === "justify-items" || lower === "justify-self")) return "baseline";
+          return cv;
+        }
         if (lower === "contain") return "none";
         if (lower === "content-visibility") return "visible";
         if (lower.startsWith("contain-intrinsic-")) {
