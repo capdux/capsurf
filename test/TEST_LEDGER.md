@@ -2503,3 +2503,4 @@
 | Phase 834 | 远程 ES Module (`<script type="module">`) HTTP 加载 (`sessionModuleLoader`) | `src/cdp/session.cp` | 解除 16 项 `css-logical` 模块 `ERROR` 阻塞（`logical-values-{float-clear,resize}` **PASS**）; `--smoke` 3/3 PASS |
 | Phase 835 | 原生 `object-view-box` (`inset`/`rect`/`xywh`) 布局与光栅化 | `src/css/cascade.cp`, `src/layout/layout.cp`, `src/render/painter.cp` | `css-images/object-view-box-*` **25/37 PASS** (`auto-size-relayout` PASS); `--smoke` 3/3 PASS |
 | Phase 836 | SVG 矢量 `background-size` / `background-repeat` 与极端 `viewBox` 防溢出 | `src/css/cascade.cp`, `src/render/painter.cp`, `src/cdp/session.cp` | `css-backgrounds/background-size/vector/*` **205/206 PASS**; `--smoke` 3/3 PASS |
+| Phase 837 | 调色板 PNG (`PLTE`+`tRNS`, `1/2/4/8-bit`) 解码与 `paintPngBg` | `src/render/painter.cp` | `background-size-005..020` 全绿 (**35/79 PASS**); `--smoke` 3/3 PASS |

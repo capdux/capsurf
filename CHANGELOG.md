@@ -4455,3 +4455,5 @@
   - `src/css/cascade.cp`: 新增 `PROP_BG_REPEAT` 与 `background-size` (`px`/`%`/`auto`/`contain`/`cover`)、`background-repeat` 解析。
   - `src/cdp/session.cp`: `ScreenshotOptions` 透传 `doc_url`。
   - `src/render/painter.cp`: 新增 `readWptAssetLocal`、`computeBgSvgTileSize`、`paintImgSvgBg`，升级 `paintSvgContainerRef`/`paintSvgChildrenDirect` 支持非等比缩放 (`scale_x`/`scale_y`)、`<rect>` 百分比属性、零 `viewBox` 保护与极端 `viewBox` 裁剪防溢出。
+- **Phase 837**:
+  - `src/render/painter.cp`: 抽取 `computeBgTileSize`、新增 `loadBgPngBytesWithDoc` 与 `paintPngBg`；`decodePngAnyToRgba` 支持 `1/2/4/8-bit` `PLTE`+`tRNS` 调色板 PNG 解码。

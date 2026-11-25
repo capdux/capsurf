@@ -3512,3 +3512,5 @@
 - 在 `cascade.cp`、`layout.cp`、`painter.cp` 全链路实现 `object-view-box` 解析、替换元素固有尺寸裁剪 (`getReplacedSizeWithStyle`) 与子区域双线性/近邻光栅化 (`blitSubScaledRgbaClipped`)，`/css/css-images/object-view-box-*` 达成 **25/37 PASS**（含 `auto-size-relayout`、`writing-mode-canvas`、`fit-cover-*`、`rect`/`xywh`），`--smoke` 3/3 **PASS**。
 ### Phase 836 — SVG 矢量 `background-size` / `background-repeat` 与极端 `viewBox` 防溢出一次性通关 205/206
 - 打通 `cascade.cp` (`background-size` 显式长度/百分比/`auto`/`contain`/`cover` 与 `background-repeat`)、`session.cp` (`doc_url` 透传) 及 `painter.cp` (`readWptAssetLocal` + `computeBgSvgTileSize` + `paintImgSvgBg` + 非等比 SVG `preserveAspectRatio="none"` + 零/极大 `viewBox="0 0 1 2147483647"` 裁剪防 `@intFromFloat` 溢出)，`/css/css-backgrounds/background-size/vector/*` 达成 **205/206 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 837 — 调色板 PNG (`PLTE`+`tRNS`, `1/2/4/8-bit`) 解码与位图 `background-size` 平铺闭环
+- 在 `painter.cp` 中为 `decodePngAnyToRgba` 补全 `color_type == 3` (`PLTE`+`tRNS`, `1/2/4/8-bit`) 索引调色板解码，复用 `computeBgTileSize` 新增 `paintPngBg` 与 `loadBgPngBytesWithDoc` 统一驱动 WPT PNG 背景缩放与平铺，一次性打通 `background-size-005`..`020`（批次由 26/79 提升至 **35/79 PASS**），`--smoke` 3/3 **PASS**。

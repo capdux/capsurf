@@ -2165,54 +2165,20 @@ fn parseNonPctSvgDim(s: []const u8): f32? {
     return parseSvgNum(t);
 }
 
-fn computeBgSvgTileSize(
+fn computeBgTileSize(
     box_w: f32,
     box_h: f32,
-    svg_node: *const NodeData,
+    nat_w: f32,
+    nat_h: f32,
+    has_nat_w: bool,
+    has_nat_h: bool,
+    ratio: f32,
     fit: ObjectFit,
     w_kind: u8,
     w_val: f32,
     h_kind: u8,
     h_val: f32,
 ): ObjectViewBoxRect {
-    let nat_w: f32 = 0.0;
-    let nat_h: f32 = 0.0;
-    let has_nat_w = false;
-    let has_nat_h = false;
-    if (wa := svg_node.getAttribute("width")) {
-        if (wv := parseNonPctSvgDim(wa)) {
-            if (wv > 0.0) {
-                nat_w = wv;
-                has_nat_w = true;
-            }
-        }
-    }
-    if (ha := svg_node.getAttribute("height")) {
-        if (hv := parseNonPctSvgDim(ha)) {
-            if (hv > 0.0) {
-                nat_h = hv;
-                has_nat_h = true;
-            }
-        }
-    }
-    let ratio: f32 = 0.0;
-    if (has_nat_w && has_nat_h) {
-        ratio = nat_w / nat_h;
-    } else if (vb_attr := svg_node.getAttribute("viewBox")) {
-        let it = std.mem.tokenizeAny(u8, vb_attr, " ,");
-        * = it.next();
-        * = it.next();
-        const vw_o = if (s2 := it.next()) parseSvgNum(s2) else null;
-        const vh_o = if (s3 := it.next()) parseSvgNum(s3) else null;
-        if (vw_v := vw_o) {
-            if (vh_v := vh_o) {
-                if (vw_v <= 0.0 || vh_v <= 0.0) {
-                    return ObjectViewBoxRect{};
-                }
-                ratio = vw_v / vh_v;
-            }
-        }
-    }
     if (fit == ObjectFit.Contain || fit == ObjectFit.Cover) {
         const eff_ratio = if (ratio > 0.0) ratio else (if (box_h > 0.0) (box_w / box_h) else 1.0);
         if (fit == ObjectFit.Contain) {
@@ -2271,7 +2237,6 @@ fn computeBgSvgTileSize(
             out_h = nat_h;
             out_w = if (ratio > 0.0) (nat_h * ratio) else box_w;
         } else if (ratio > 0.0) {
-            // Contain within default object size (box_w, box_h)
             if (box_w <= box_h * ratio) {
                 out_w = box_w;
                 out_h = box_w / ratio;
@@ -2285,6 +2250,57 @@ fn computeBgSvgTileSize(
         }
     }
     return ObjectViewBoxRect { width: out_w, height: out_h };
+}
+
+fn computeBgSvgTileSize(
+    box_w: f32,
+    box_h: f32,
+    svg_node: *const NodeData,
+    fit: ObjectFit,
+    w_kind: u8,
+    w_val: f32,
+    h_kind: u8,
+    h_val: f32,
+): ObjectViewBoxRect {
+    let nat_w: f32 = 0.0;
+    let nat_h: f32 = 0.0;
+    let has_nat_w = false;
+    let has_nat_h = false;
+    if (wa := svg_node.getAttribute("width")) {
+        if (wv := parseNonPctSvgDim(wa)) {
+            if (wv > 0.0) {
+                nat_w = wv;
+                has_nat_w = true;
+            }
+        }
+    }
+    if (ha := svg_node.getAttribute("height")) {
+        if (hv := parseNonPctSvgDim(ha)) {
+            if (hv > 0.0) {
+                nat_h = hv;
+                has_nat_h = true;
+            }
+        }
+    }
+    let ratio: f32 = 0.0;
+    if (has_nat_w && has_nat_h) {
+        ratio = nat_w / nat_h;
+    } else if (vb_attr := svg_node.getAttribute("viewBox")) {
+        let it = std.mem.tokenizeAny(u8, vb_attr, " ,");
+        * = it.next();
+        * = it.next();
+        const vw_o = if (s2 := it.next()) parseSvgNum(s2) else null;
+        const vh_o = if (s3 := it.next()) parseSvgNum(s3) else null;
+        if (vw_v := vw_o) {
+            if (vh_v := vh_o) {
+                if (vw_v <= 0.0 || vh_v <= 0.0) {
+                    return ObjectViewBoxRect{};
+                }
+                ratio = vw_v / vh_v;
+            }
+        }
+    }
+    return computeBgTileSize(box_w, box_h, nat_w, nat_h, has_nat_w, has_nat_h, ratio, fit, w_kind, w_val, h_kind, h_val);
 }
 
 fn paintImgSvgBg(
@@ -2406,6 +2422,13 @@ pub fn loadBgPngBytes(src: []const u8, out_buf: []u8): ([]const u8)? {
     return null;
 }
 
+fn loadBgPngBytesWithDoc(src: []const u8, doc_url: []const u8, out_buf: []u8): ([]const u8)? {
+    if (res := loadBgPngBytes(src, out_buf)) return res;
+    const t = std.mem.trim(u8, src, " \t\r\n");
+    if (t.len == 0) return null;
+    return readWptAssetLocal(doc_url, t, out_buf);
+}
+
 fn readBeU32(b: []const u8, off: usize): u32 {
     if (off + 4 > b.len) return 0;
     return (@as(u32, b[off]) << 24) | (@as(u32, b[off + 1]) << 16) | (@as(u32, b[off + 2]) << 8) | @as(u32, b[off + 3]);
@@ -2432,6 +2455,9 @@ fn decodePngAnyToRgba(allocator: std.mem.Allocator, bytes: []const u8, out_w: *u
     let bit_depth: u8 = 0;
     let color_type: u8 = 0;
     let total_idat: usize = 0;
+    let palette: [768]u8 = [0; 768];
+    let palette_entries: usize = 0;
+    let trns: [256]u8 = [255; 256];
     let off: usize = 8;
     while (off + 12 <= bytes.len) {
         const clen = @as(usize, readBeU32(bytes, off));
@@ -2444,6 +2470,13 @@ fn decodePngAnyToRgba(allocator: std.mem.Allocator, bytes: []const u8, out_w: *u
             height = readBeU32(bytes, off + 12);
             bit_depth = bytes[off + 16];
             color_type = bytes[off + 17];
+        } else if (c0 == 'P' && c1 == 'L' && c2 == 'T' && c3 == 'E' && off + 8 + clen <= bytes.len) {
+            const copy_p = @min(clen, 768);
+            @memcpy(palette[0..copy_p], bytes[off + 8 .. off + 8 + copy_p]);
+            palette_entries = copy_p / 3;
+        } else if (c0 == 't' && c1 == 'R' && c2 == 'N' && c3 == 'S' && off + 8 + clen <= bytes.len) {
+            const copy_t = @min(clen, 256);
+            @memcpy(trns[0..copy_t], bytes[off + 8 .. off + 8 + copy_t]);
         } else if (c0 == 'I' && c1 == 'D' && c2 == 'A' && c3 == 'T') {
             total_idat += clen;
         } else if (c0 == 'I' && c1 == 'E' && c2 == 'N' && c3 == 'D') {
@@ -2451,13 +2484,19 @@ fn decodePngAnyToRgba(allocator: std.mem.Allocator, bytes: []const u8, out_w: *u
         }
         off += 12 + clen;
     }
-    if (width == 0 || height == 0 || total_idat == 0 || bit_depth != 8) return null;
+    if (width == 0 || height == 0 || total_idat == 0) return null;
+    if (color_type == 3) {
+        if (bit_depth != 1 && bit_depth != 2 && bit_depth != 4 && bit_depth != 8) return null;
+        if (palette_entries == 0) return null;
+    } else if (bit_depth != 8) {
+        return null;
+    }
     let bpp: usize = 0;
     if (color_type == 6) {
         bpp = 4;
     } else if (color_type == 2) {
         bpp = 3;
-    } else if (color_type == 0) {
+    } else if (color_type == 0 || color_type == 3) {
         bpp = 1;
     } else if (color_type == 4) {
         bpp = 2;
@@ -2488,7 +2527,10 @@ fn decodePngAnyToRgba(allocator: std.mem.Allocator, bytes: []const u8, out_w: *u
         off += 12 + clen;
     }
 
-    const row_bytes = @as(usize, width) * bpp;
+    const row_bytes = if (color_type == 3 && bit_depth < 8)
+        ((@as(usize, width) * @as(usize, bit_depth) + 7) / 8)
+    else
+        (@as(usize, width) * bpp);
     const raw_len = @as(usize, height) * (row_bytes + 1);
     const raw_buf = allocator.alloc(u8, raw_len) catch return null;
     defer allocator.free(raw_buf);
@@ -2558,6 +2600,28 @@ fn decodePngAnyToRgba(allocator: std.mem.Allocator, bytes: []const u8, out_w: *u
                 out_rgba[d + 1] = curr_row[s];
                 out_rgba[d + 2] = curr_row[s];
                 out_rgba[d + 3] = curr_row[s + 1];
+            } else if (color_type == 3) {
+                let idx: usize = 0;
+                if (bit_depth == 8) {
+                    idx = @as(usize, curr_row[px]);
+                } else {
+                    const bd: usize = @as(usize, bit_depth);
+                    const per_byte = 8 / bd;
+                    const shift: u3 = @intCast((per_byte - 1 - (px % per_byte)) * bd);
+                    const mask: u8 = if (bit_depth == 1) 1 else if (bit_depth == 2) 3 else 15;
+                    idx = @as(usize, (curr_row[px / per_byte] >> shift) & mask);
+                }
+                if (idx < palette_entries) {
+                    out_rgba[d] = palette[idx * 3];
+                    out_rgba[d + 1] = palette[idx * 3 + 1];
+                    out_rgba[d + 2] = palette[idx * 3 + 2];
+                    out_rgba[d + 3] = trns[idx];
+                } else {
+                    out_rgba[d] = 0;
+                    out_rgba[d + 1] = 0;
+                    out_rgba[d + 2] = 0;
+                    out_rgba[d + 3] = 0;
+                }
             } else {
                 out_rgba[d] = curr_row[s];
                 out_rgba[d + 1] = curr_row[s];
@@ -2666,10 +2730,73 @@ fn computeNodeContentRect(r: Rect, style: *const ComputedStyle, paint_style: Res
     };
 }
 
+fn paintPngBg(
+    canvas: *Canvas,
+    allocator: std.mem.Allocator,
+    src: []const u8,
+    doc_url: []const u8,
+    box_rect: Rect,
+    parent_clip: ClipRect?,
+    fit: ObjectFit,
+    pos: ObjectPos,
+    w_kind: u8,
+    w_val: f32,
+    h_kind: u8,
+    h_val: f32,
+    repeat_x: bool,
+    repeat_y: bool,
+) {
+    if (!box_rect.visible || box_rect.width <= 0.0 || box_rect.height <= 0.0 || src.len == 0) return;
+    const file_buf = allocator.alloc(u8, 65536) catch return;
+    defer allocator.free(file_buf);
+    const png_bytes = loadBgPngBytesWithDoc(src, doc_url, file_buf) ?? return;
+    if (png_bytes.len < 8) return;
+    let img_w: u32 = 0;
+    let img_h: u32 = 0;
+    const rgba = decodePngAnyToRgba(allocator, png_bytes, &img_w, &img_h) ?? return;
+    defer allocator.free(rgba);
+    if (img_w == 0 || img_h == 0 || rgba.len == 0) return;
+    const nw: f32 = @floatFromInt(img_w);
+    const nh: f32 = @floatFromInt(img_h);
+    const tile = computeBgTileSize(box_rect.width, box_rect.height, nw, nh, true, true, nw / nh, fit, w_kind, w_val, h_kind, h_val);
+    if (!std.math.isFinite(tile.width) || !std.math.isFinite(tile.height) || tile.width <= 0.0 || tile.height <= 0.0) return;
+    const clip_box = intersectBoxClip(box_rect, parent_clip);
+    const dst_w = @as(u32, @intFromFloat(@max(1.0, @round(tile.width))));
+    const dst_h = @as(u32, @intFromFloat(@max(1.0, @round(tile.height))));
+    const base_x = box_rect.x + (box_rect.width - tile.width) * pos.x_pct + pos.x_px;
+    const base_y = box_rect.y + (box_rect.height - tile.height) * pos.y_pct + pos.y_px;
+    if (!repeat_x && !repeat_y) {
+        canvas.blitScaledRgbaClipped(@as(i32, @intFromFloat(@floor(base_x))), @as(i32, @intFromFloat(@floor(base_y))), dst_w, dst_h, rgba, img_w, img_h, clip_box);
+        return;
+    }
+    let start_x = base_x;
+    if (repeat_x) {
+        while (start_x > box_rect.x) : (start_x -= tile.width) {}
+    }
+    let start_y = base_y;
+    if (repeat_y) {
+        while (start_y > box_rect.y) : (start_y -= tile.height) {}
+    }
+    let ty = start_y;
+    let y_guard: usize = 0;
+    while (ty < box_rect.y + box_rect.height && y_guard < 128) : (y_guard += 1) {
+        let tx = start_x;
+        let x_guard: usize = 0;
+        while (tx < box_rect.x + box_rect.width && x_guard < 128) : (x_guard += 1) {
+            canvas.blitScaledRgbaClipped(@as(i32, @intFromFloat(@floor(tx))), @as(i32, @intFromFloat(@floor(ty))), dst_w, dst_h, rgba, img_w, img_h, clip_box);
+            if (!repeat_x) break;
+            tx += tile.width;
+        }
+        if (!repeat_y) break;
+        ty += tile.height;
+    }
+}
+
 fn paintBackgroundImage(
     canvas: *Canvas,
     allocator: std.mem.Allocator,
     src: []const u8,
+    doc_url: []const u8,
     box_rect: Rect,
     parent_clip: ClipRect?,
     fit: ObjectFit,
@@ -2683,7 +2810,7 @@ fn paintBackgroundImage(
     }
     const file_buf = allocator.alloc(u8, 65536) catch return;
     defer allocator.free(file_buf);
-    const png_bytes_opt = loadBgPngBytes(src, file_buf);
+    const png_bytes_opt = loadBgPngBytesWithDoc(src, doc_url, file_buf);
     if (png_bytes_opt == null) return;
     const png_bytes = png_bytes_opt.?;
     if (png_bytes.len < 8) return;
@@ -3400,7 +3527,7 @@ fn paintNodeRecursive(
                 if (std.mem.startsWith(u8, bg_src, "data:image/svg+xml") || std.mem.indexOf(u8, bg_src, ".svg") != null) {
                     paintImgSvgBg(canvas, canvas.allocator, bg_src, opts.doc_url, pad_rect, active_clip, bg_fit, style.bg_pos, style.bg_size_w_kind, style.bg_size_w_val, style.bg_size_h_kind, style.bg_size_h_val, style.bg_repeat_x, style.bg_repeat_y, false);
                 } else {
-                    paintBackgroundImage(canvas, canvas.allocator, bg_src, pad_rect, active_clip, bg_fit, style.bg_pos, ObjectViewBox{});
+                    paintPngBg(canvas, canvas.allocator, bg_src, opts.doc_url, pad_rect, active_clip, bg_fit, style.bg_pos, style.bg_size_w_kind, style.bg_size_w_val, style.bg_size_h_kind, style.bg_size_h_val, style.bg_repeat_x, style.bg_repeat_y);
                 }
             }
         }
@@ -3411,7 +3538,7 @@ fn paintNodeRecursive(
                 if (std.mem.startsWith(u8, src, "data:image/svg+xml") || std.mem.indexOf(u8, src, ".svg") != null) {
                     paintImgSvgBg(canvas, canvas.allocator, src, opts.doc_url, content_rect, active_clip, style.object_fit, style.object_pos, 0, 0.0, 0, 0.0, false, false, true);
                 } else {
-                    paintBackgroundImage(canvas, canvas.allocator, src, content_rect, active_clip, style.object_fit, style.object_pos, style.object_view_box);
+                    paintBackgroundImage(canvas, canvas.allocator, src, opts.doc_url, content_rect, active_clip, style.object_fit, style.object_pos, style.object_view_box);
                 }
             }
         }
