@@ -8824,14 +8824,14 @@ function installWindow(global) {
       };
       const bsRaw = (computedMap.get("block-size") || "").trim().toLowerCase();
       if (bsRaw === "" || bsRaw === "auto" || bsRaw === "min-content" || bsRaw === "max-content") {
-        computedMap.set("block-size", formatCssPx(computeElementUsedHeightPx(element, 0)));
+        computedMap._lazyBlockSize = true;
       } else if (bsRaw) {
         const px = evalCssLengthExpr(bsRaw, getCbH(), fontSize);
         if (px !== null && isFinite(px)) computedMap.set("block-size", formatCssPx(Math.max(0, px)));
       }
       const isRaw = (computedMap.get("inline-size") || "").trim().toLowerCase();
       if (isRaw === "" || isRaw === "auto") {
-        computedMap.set("inline-size", formatCssPx(getCbW()));
+        computedMap._lazyInlineSize = true;
       } else if (isRaw === "min-content" || isRaw === "max-content") {
         const ch = element.children || [];
         let maxW = 0;
@@ -12163,6 +12163,13 @@ function installWindow(global) {
       } else if (pLow === "height" && computedMap._lazyHeight) {
         computedMap._lazyHeight = false;
         computedMap.set("height", formatCssPx(computeElementUsedHeightPx(element, 0)));
+      } else if (pLow === "block-size" && computedMap._lazyBlockSize) {
+        computedMap._lazyBlockSize = false;
+        computedMap.set("block-size", formatCssPx(computeElementUsedHeightPx(element, 0)));
+      } else if (pLow === "inline-size" && computedMap._lazyInlineSize) {
+        computedMap._lazyInlineSize = false;
+        const pEl = element.parentElement || element.parentNode;
+        computedMap.set("inline-size", formatCssPx((pEl && pEl.nodeType === 1) ? computeElementUsedWidthPx(pEl, 0) : 800));
       }
       if (pLow === "size" || pLow === "page-orientation") {
         return "";
@@ -12280,6 +12287,13 @@ function installWindow(global) {
           } else if (prop === "height" && computedMap._lazyHeight) {
             computedMap._lazyHeight = false;
             computedMap.set("height", formatCssPx(computeElementUsedHeightPx(element, 0)));
+          } else if ((prop === "block-size" || prop === "blockSize") && computedMap._lazyBlockSize) {
+            computedMap._lazyBlockSize = false;
+            computedMap.set("block-size", formatCssPx(computeElementUsedHeightPx(element, 0)));
+          } else if ((prop === "inline-size" || prop === "inlineSize") && computedMap._lazyInlineSize) {
+            computedMap._lazyInlineSize = false;
+            const pEl = element.parentElement || element.parentNode;
+            computedMap.set("inline-size", formatCssPx((pEl && pEl.nodeType === 1) ? computeElementUsedWidthPx(pEl, 0) : 800));
           }
           if (prop === "cssFloat") return computedMap.get("float") || "";
           if (computedMap.has(prop)) return computedMap.get(prop);

@@ -3590,3 +3590,5 @@
 - 修复了 `cascade.cp` 解析 `clip: rect(...)` 允许逗号与空格混用及无效声明占槽的问题，并补齐 `clip` 与 `mask-border-mode` 的初始值及 CSSOM 校验，使 `css-masking/inheritance.sub.html`（36/36）与 `clip-rect-comma-003/004` 转绿。
 ### Phase 875 — `css-logical` 解析校验与 68 项继承测试全绿
 - 修复了逗号分隔 `rgb()`/`rgba()` 混用百分比与数字未被拒绝的问题，并补齐了 18 个逻辑属性的默认初始计算值，`/css/css-logical/inheritance.html`（68/68）与颜色非法测试全部通过。
+### Phase 876 — `block-size`/`inline-size` 懒计算性能优化
+- 将 Phase 875 新增的 `block-size`/`inline-size` 空值尺寸计算改为 `_lazyBlockSize`/`_lazyInlineSize` 按需触发，避免无关 `getComputedStyle` 调用触发全树递归求值。

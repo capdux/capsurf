@@ -4572,3 +4572,5 @@
 ### Phase 875 — `rgb()` 混用百分比拦截与逻辑属性初始值全量补齐
 - `src/js/shim/cssom.js`: `isValidColor` 拦截逗号分隔 `rgb()`/`rgba()` 混用百分比与数值的非法语法。
 - `src/js/shim/window.js`: 默认计算样式表补齐 `min/max-{block,inline}-size`、`inset-{block,inline}-*`、`border-{block,inline}-*-style`、`border-*-*-radius` 共 16 个逻辑属性初始值，并补全 `block-size`/`inline-size` 空值计算；`border-{block,inline}-color-invalid.html` **PASS**、`css-logical/inheritance.html` **PASS (68/68)**，`--smoke` 3/3 **PASS**。
+### Phase 876 — `block-size`/`inline-size` 按需懒计算优化
+- `src/js/shim/window.js`: 引入 `_lazyBlockSize` 与 `_lazyInlineSize`，仅在访问 `block-size`/`inline-size` 时按需计算使用值，`css-logical/inheritance.html` 耗时由 10.9s 降至 5.2s~6.6s，`--smoke` 3/3 **PASS**。
