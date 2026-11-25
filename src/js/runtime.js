@@ -8294,7 +8294,24 @@
       };
       const combined = parseExpr();
       skipWs();
-      if (!combined || pos !== src.length) return t;
+      if (!combined || pos !== src.length) {
+        if (src[0] === "(") {
+          let d = 0, i = 0;
+          for (; i < src.length; i++) {
+            if (src[i] === "(") d++;
+            else if (src[i] === ")") { d--; if (d === 0) break; }
+          }
+          if (d === 0 && i < src.length - 1) {
+            const leftExpr = src.slice(0, i + 1);
+            const rightRest = src.slice(i + 1).trim();
+            const rm = /^\*\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)$/i.exec(rightRest);
+            if (rm) {
+              return "calc(" + Number(rm[1]) + " * " + leftExpr + ")";
+            }
+          }
+        }
+        return t;
+      }
       const entries = [];
       for (const [u, v] of combined.entries()) {
         const r = Number(v.toFixed(6));
@@ -8869,6 +8886,7 @@
         const parts = splitCssTokens(layerStr);
         for (let i = 0; i < parts.length; i++) {
           if (parts[i] === "0" || parts[i] === "+0" || parts[i] === "-0") parts[i] = "0px";
+          else if (/^calc\(/i.test(parts[i])) parts[i] = canonicalizeCalcToken(parts[i]);
         }
         if (parts.length === 1) {
           const a = parts[0].toLowerCase();

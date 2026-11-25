@@ -4393,3 +4393,6 @@
 - **Phase 818**:
   - `src/js/shim/window.js`: `resolveCssVarsAndProps` 将 `var()`/`env()` 替换产出的 CSS-wide keyword 视为计算期无效并清除；`isInheritedProp` 将 `--*` 纳入继承并支持 `unset`/`revert` 解析。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 819**:
+  - `src/js/shim/cssom.js`: `normalizePositionLayer` 对 `calc(...)` token 调用 `canonicalizeCalcToken`；`canonicalizeCalcToken` 新增 `(parenExpr) * N` 乘子前置重排。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

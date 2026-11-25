@@ -3476,3 +3476,5 @@
 - 在 `selector.js`/`element.js`/`window.js` 打通顶层 `&` 选择器校验、`matches` 根元素匹配与零特异性计算，并修正 `::marker` 初始 `content` 为 `"normal"`，`top-level-is-scope`、`top-level-parent-pseudo-specificity` 与 `marker-computed-content` 3/3 全绿 **PASS**。
 ### Phase 818 — `var()` 回退 CSS-wide keyword 无效化与 `--*` `unset`/`revert` 继承
 - 在 `window.js` `resolveCssVarsAndProps` 中将 `var()`/`env()` 替换产出的 CSS-wide keyword 按规范视为 invalid at computed-value time，同时在关键字解析阶段将 `--*` 自定义属性纳入继承支持 `unset` 与 `revert`，`revert-in-fallback` 与 `variable-definition-keywords` 2/2 全绿 **PASS**。
+### Phase 819 — `background-position` `calc()` 化简与 `(expr) * N` 乘子前置重排
+- 在 `cssom.js` `normalizePositionLayer` 中对 `calc(...)` token 调用 `canonicalizeCalcToken` 化简，并在 `canonicalizeCalcToken` 补充顶层 `(parenExpr) * N → N * (parenExpr)` 乘子重排，`calc-background-position-003` 与 `calc-serialization-002` 2/2 全绿 **PASS**。
