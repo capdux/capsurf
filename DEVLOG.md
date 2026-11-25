@@ -3696,3 +3696,5 @@
 - `inherit-overwrites` 失败源于严格模式下 `target.classList += 'target'` 触发 `classList` 缺少 `[PutForwards=value]` setter；`list-and-margin-collapse-002` 源于 `Display.parse` 漏掉 `list-item` 且空块未保留 `prev_block_mb`；`display-contents-pseudo-click-target` 通过在 `Document.prototype.elementFromPoint` 叠加 `::after`/`::before` 绝对定位框命中修复。
 ### Phase 926 — `writing-mode` 非法回退、`sideways-right` 别名与固定表格列宽
 - `writing-mode-parsing-001` 仅差 `writing-mode: foo` 未被过滤（因 `valCheckProps` 漏列 `writing-mode`）；`text-orientation-parsing-sideways-right-001` 需将旧别名 `sideways-right` 映射为 `sideways`；补齐后连同 `fixed-layout-calc-width-001` 一次 3/3 通过。
+### Phase 927 — `className` 纪元失效、SVG 1.1 `writing-mode` 与 `text-combine-upright: digits`
+- `wm-propagation-body-computed-root` 失败源于 `element.className = ""` 未递增 `__capsurf_domMutationEpoch` 导致 `getComputedStyle` 命中旧规则缓存；`writing-mode-parsing-svg1-001` 与 `text-combine-upright-parsing-digits-001/002` 通过扩展 `cssom.js` 校验及 `window.js` 计算值规范化一次修复（`digits-002` 仅剩上游测试自身重复 `#valid_digits_calc_4_dividedby_2` 选择器）。

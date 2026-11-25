@@ -4698,3 +4698,7 @@
 ## Phase 926: `writing-mode` 校验、`text-orientation: sideways-right` 规范化与固定表格列宽
 - `src/js/shim/cssom.js`, `src/js/shim/window.js`: 放行并规范化 `text-orientation: sideways-right -> sideways`，将 `writing-mode` 接入 `valCheckProps` 过滤非法声明。
 - `src/layout/layout.cp`: 固定布局表格最小宽度保底包含 `border-spacing`；3 项 WPT **3/3 PASS**，`--smoke` 3/3 **PASS**。
+
+## Phase 927: `className` 缓存失效、SVG 1.1 `writing-mode` 与 `text-combine-upright: digits`
+- `src/js/shim/element/element.js`: `className` setter 递增 `__capsurf_domMutationEpoch`。
+- `src/js/shim/cssom.js`, `src/js/shim/window.js`: 支持 SVG 1.1 `writing-mode` 映射与 `text-combine-upright: digits [<2..4> | calc(...)]`；3 项 WPT **3/3 PASS**（另 `digits-002` 0/12->11/12），`--smoke` 3/3 **PASS**。

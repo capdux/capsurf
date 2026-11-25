@@ -1258,7 +1258,10 @@
     if (prop === "user-select" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_user_select === "function") return globalThis.__capsurf_is_valid_css_user_select(vLower);
     if (prop === "resize" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_resize === "function") return globalThis.__capsurf_is_valid_css_resize(vLower);
     if (prop === "list-style-position" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_list_style_position === "function") return globalThis.__capsurf_is_valid_css_list_style_position(vLower);
-    if (prop === "writing-mode" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_writing_mode === "function") return globalThis.__capsurf_is_valid_css_writing_mode(vLower);
+    if (prop === "writing-mode") {
+      if (vLower === "lr" || vLower === "lr-tb" || vLower === "rl" || vLower === "rl-tb" || vLower === "tb" || vLower === "tb-rl") return true;
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_writing_mode === "function") return globalThis.__capsurf_is_valid_css_writing_mode(vLower);
+    }
     if (prop === "direction" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_direction === "function") return globalThis.__capsurf_is_valid_css_direction(vLower);
     if (prop === "unicode-bidi" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_unicode_bidi === "function") return globalThis.__capsurf_is_valid_css_unicode_bidi(vLower);
     if (prop === "float" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_float === "function") return globalThis.__capsurf_is_valid_css_float(vLower);
@@ -2880,7 +2883,19 @@
       return true;
     }
     if (prop === "text-combine-upright") {
-      return vLower === "none" || vLower === "all";
+      if (vLower === "none" || vLower === "all" || vLower === "digits") return true;
+      if (/^digits(?:\s+|\s*(?=\+))\+?([2-4])$/.test(vLower)) return true;
+      const cm = vLower.match(/^digits\s+calc\(([\s\S]+)\)$/);
+      if (cm) {
+        const expr = cm[1].trim();
+        if (/^[\d+\-*/().\s]+$/.test(expr)) {
+          try {
+            const val = Function("return (" + expr + ")")();
+            if (typeof val === "number" && Number.isInteger(val) && val >= 2 && val <= 4) return true;
+          } catch (_) {}
+        }
+      }
+      return false;
     }
     if (prop === "text-orientation") {
       return vLower === "mixed" || vLower === "upright" || vLower === "sideways" || vLower === "sideways-right";
@@ -4977,6 +4992,24 @@
     if (/^(?:inherit|initial|unset|revert|revert-layer)$/i.test(s)) return s.toLowerCase();
     if (key === "display") return canonicalizeDisplayValue(s) || s.toLowerCase();
     if (key === "text-orientation" && s.toLowerCase() === "sideways-right") return "sideways";
+    if (key === "writing-mode") {
+      const wl = s.toLowerCase();
+      if (wl === "lr" || wl === "lr-tb" || wl === "rl" || wl === "rl-tb") return "horizontal-tb";
+      if (wl === "tb" || wl === "tb-rl") return "vertical-rl";
+    }
+    if (key === "text-combine-upright") {
+      const tl = s.toLowerCase();
+      if (tl === "digits") return "digits 2";
+      const dm = tl.match(/^digits(?:\s+|\s*(?=\+))\+?([2-4])$/);
+      if (dm) return "digits " + dm[1];
+      const cm = tl.match(/^digits\s+calc\(([\s\S]+)\)$/);
+      if (cm && /^[\d+\-*/().\s]+$/.test(cm[1].trim())) {
+        try {
+          const val = Function("return (" + cm[1].trim() + ")")();
+          if (typeof val === "number" && Number.isInteger(val) && val >= 2 && val <= 4) return "digits " + val;
+        } catch (_) {}
+      }
+    }
     if (key === "overscroll-behavior") {
       const t = splitCssTokens(s.toLowerCase());
       return (t.length === 2 && t[0] === t[1]) ? t[0] : t.join(" ");

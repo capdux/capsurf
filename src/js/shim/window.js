@@ -10390,7 +10390,33 @@ function installWindow(global) {
         return normCol(t);
       }).join(" "));
     }
-    const wm = (computedMap.get("writing-mode") || "horizontal-tb").trim().toLowerCase();
+    let wm = (computedMap.get("writing-mode") || "horizontal-tb").trim().toLowerCase();
+    if (wm === "lr" || wm === "lr-tb" || wm === "rl" || wm === "rl-tb") {
+      wm = "horizontal-tb";
+      computedMap.set("writing-mode", wm);
+    } else if (wm === "tb" || wm === "tb-rl") {
+      wm = "vertical-rl";
+      computedMap.set("writing-mode", wm);
+    }
+    const tcuRaw = (computedMap.get("text-combine-upright") || "").trim().toLowerCase();
+    if (tcuRaw === "digits") {
+      computedMap.set("text-combine-upright", "digits 2");
+    } else if (tcuRaw.startsWith("digits")) {
+      const dm = tcuRaw.match(/^digits(?:\s+|\s*(?=\+))\+?([2-4])$/);
+      if (dm) {
+        computedMap.set("text-combine-upright", "digits " + dm[1]);
+      } else {
+        const cm = tcuRaw.match(/^digits\s+calc\(([\s\S]+)\)$/);
+        if (cm && /^[\d+\-*/().\s]+$/.test(cm[1].trim())) {
+          try {
+            const val = Function("return (" + cm[1].trim() + ")")();
+            if (typeof val === "number" && Number.isInteger(val) && val >= 2 && val <= 4) {
+              computedMap.set("text-combine-upright", "digits " + val);
+            }
+          } catch (_) {}
+        }
+      }
+    }
     if ((computedMap.get("text-orientation") || "").trim().toLowerCase() === "sideways-right") {
       computedMap.set("text-orientation", "sideways");
     }

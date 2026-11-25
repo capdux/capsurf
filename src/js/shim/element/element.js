@@ -1874,6 +1874,9 @@ function installElementExtensions(proto) {
       if (origClsSet) {
         origClsSet.call(this, v);
       }
+      if (typeof globalThis !== "undefined") {
+        globalThis.__capsurf_domMutationEpoch = (globalThis.__capsurf_domMutationEpoch || 0) + 1;
+      }
       const str = String(v);
       if (!this._attrs) this._syncAttrs();
       if (str) {
