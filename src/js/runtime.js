@@ -5193,6 +5193,9 @@
       _isValidCalcSyntax = isValidCalcSyntax;
 
       function isValidLenPct(tok, allowNegative) {
+        if (/^calc\(\s*[+-]?(?:\d+\.?\d*|\.\d+)\s*\/\s*(?:max|min)?\(?[+-]?(?:\d+\.?\d*|\.\d+)(?:px|em|rem|ex|ch|vw|vh|vmin|vmax|cm|mm|in|pt|pc)\b/i.test(tok)) {
+          return false;
+        }
         if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_len_pct === "function" &&
             !/\b(?:progress|media-progress|container-progress|calc-mix|calc-size)\(/i.test(tok)) {
           return globalThis.__capsurf_is_valid_css_len_pct(tok, !!allowNegative);
@@ -5201,9 +5204,6 @@
         if (/^(?:var|attr|anchor|anchor-size)\(/i.test(tok)) return true;
         if (/^(?:calc|min|max|clamp)\(/i.test(tok)) {
           if (!isValidCalcSyntax(tok)) return false;
-          if (/^calc\(\s*[+-]?(?:\d+\.?\d*|\.\d+)\s*\/\s*(?:max|min)?\(?[+-]?(?:\d+\.?\d*|\.\d+)(?:px|em|rem|ex|ch|vw|vh|vmin|vmax|cm|mm|in|pt|pc)\b/i.test(tok)) {
-            return false;
-          }
           if (/(?:\d|\.)(?:deg|rad|grad|turn|ms|s|hz|khz|dpi|dpcm|dppx)\b/i.test(tok)) return false;
           if (!/(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|%)/i.test(tok) && !/(?:var|env)\(/i.test(tok)) {
             return false;

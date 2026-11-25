@@ -3584,3 +3584,5 @@
 - 补齐了 `border-image-outset` EOF 未闭合括号校验及 `border-*-{style,width,radius}` 的 `initial` 默认值，`/css/css-backgrounds/` 全量 115 项功能断言均已通过（`inheritance.sub.html` 64/64 PASS）。
 ### Phase 872 — `z-index` 堆叠顺序绘制与渐变角度单位严格校验
 - 修复了 `painter.cp` `paintNodeRecursive` 未按 `z-index` 排序绘制子节点导致 `z-index: -1` 元素覆盖前置普通流元素的全局渲染缺陷，并同步修复 `BgGradient.parse` 忽略非法角度参数的问题，`/css/css-values/angle-units-001..005` 全部转绿。
+### Phase 873 — `calc()` 除数长度单位校验前置修复
+- 修复了 `cssom.js` `isValidLenPct` 下沉 `__capsurf_is_valid_css_len_pct` 时绕过 JS 侧 `calc(1 / 2px)` 除数维度拦截的问题，`/css/css-box/parsing/width-invalid.html` 转绿。

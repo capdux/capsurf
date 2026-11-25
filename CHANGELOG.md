@@ -4564,3 +4564,5 @@
 - `src/css/cascade.cp`: `BgGradient.parse` 支持 `grad`/`rad`/`turn` 并拒绝非法 color stop；`Cascade.resolve` 对根元素 `display: contents` 执行 blockify。
 - `src/render/painter.cp`: `paintNodeRecursive` 新增零分配三遍 `z-index` 堆叠顺序绘制（负 `z-index` -> 普通/0 -> 正 `z-index`）。
 - `src/js/shim/window.js`: `BLOCKIFY` 补齐 `table-*` 与 `ruby-*` 映射；`angle-units-001..005.html` **5/5 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 873 — `calc()` 除数维度校验前置拦截（`width-invalid.html` PASS）
+- `src/js/shim/cssom.js`: `isValidLenPct` 将 `calc()` 除数带长度单位检查前置到 `__capsurf_is_valid_css_len_pct` 之前；`/css/css-box/parsing/width-invalid.html` **PASS**，`--smoke` 3/3 **PASS**。
