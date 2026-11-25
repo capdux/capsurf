@@ -7626,6 +7626,12 @@ function installWindow(global) {
       globalThis.__capsurf_syncCssTransitionsAndAnimations(element, computedMap, styleNodes);
     }
 
+    if (computedMap.has("grid-template-areas") && typeof globalThis.__capsurf_normalizeCssValue === "function") {
+      const gta = computedMap.get("grid-template-areas");
+      if (gta && gta.indexOf("'") !== -1) {
+        computedMap.set("grid-template-areas", globalThis.__capsurf_normalizeCssValue("grid-template-areas", gta));
+      }
+    }
     if (computedMap.has("content")) {
       const cRaw = String(computedMap.get("content") || "").trim();
       const toks = (typeof globalThis.__capsurf_splitCssTokens === "function") ? globalThis.__capsurf_splitCssTokens(cRaw) : [cRaw];
@@ -8681,16 +8687,28 @@ function installWindow(global) {
     }
 
 
-    // min-width / min-height: auto resolves to 0px outside flex/grid parent
     const parentEl = element.parentElement || element.parentNode;
+    // min-width / min-height: auto resolves to 0px outside flex/grid parent (or when element/ancestor is display:none)
+    const selfDisp = (computedMap.get("display") || getDefaultDisplayForElement(element)).trim().toLowerCase();
     let parentDisp = "block";
-    if (parentEl && parentEl.nodeType === 1) {
-      const pMap = collectRawComputedMap(parentEl, "");
-      parentDisp = (pMap.get("display") || getDefaultDisplayForElement(parentEl)).trim().toLowerCase();
+    let curP = parentEl;
+    while (curP && curP.nodeType === 1) {
+      const pMap = collectRawComputedMap(curP, "");
+      parentDisp = (pMap.get("display") || getDefaultDisplayForElement(curP)).trim().toLowerCase();
+      if (parentDisp !== "contents") break;
+      curP = curP.parentElement || curP.parentNode;
     }
-    const isFlexOrGridItem =
-      parentDisp === "flex" || parentDisp === "inline-flex" ||
-      parentDisp === "grid" || parentDisp === "inline-grid";
+    let hasNoneAncestor = false;
+    let ancDispEl = curP;
+    while (ancDispEl && ancDispEl.nodeType === 1) {
+      const aMap = collectRawComputedMap(ancDispEl, "");
+      const aDisp = (aMap.get("display") || getDefaultDisplayForElement(ancDispEl)).trim().toLowerCase();
+      if (aDisp === "none") { hasNoneAncestor = true; break; }
+      ancDispEl = ancDispEl.parentElement || ancDispEl.parentNode;
+    }
+    const isFlexOrGridItem = selfDisp !== "none" && !hasNoneAncestor &&
+      (parentDisp === "flex" || parentDisp === "inline-flex" ||
+       parentDisp === "grid" || parentDisp === "inline-grid");
     if (!isFlexOrGridItem) {
       if ((computedMap.get("min-width") || "").trim().toLowerCase() === "auto") {
         computedMap.set("min-width", "0px");

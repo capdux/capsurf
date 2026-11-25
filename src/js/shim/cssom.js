@@ -1537,7 +1537,7 @@
             const rm = /^repeat\(\s*([^,]+)\s*,\s*(.+)\s*\)$/i.exec(t);
             if (!rm) return false;
             const cnt = rm[1].trim();
-            if (cnt !== "auto-fill" && cnt !== "auto-fit" && !/^[1-9]\d*$/.test(cnt)) return false;
+            if (cnt !== "auto-fill" && !/^[1-9]\d*$/.test(cnt)) return false;
             const sub = splitGridTokens(rm[2].trim());
             if (sub.length === 0 || !sub.every(isLineNames)) return false;
             continue;

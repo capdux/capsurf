@@ -3659,3 +3659,5 @@
 - 修复 `layout.cp` 中 `font_size_px == 0` 误回退 16px 默认字号的问题，补齐 `INHERITED_CSS_PROPS`、`expandCssShorthand("font")` 与 `CSSFontFeatureValuesRule` Map 构建，`font_feature_values_map_iteration`、`font-palette-vs-shorthand`、`font-size-zero-ligatures` 与 `font-variation-settings-inherit` 全部一次通过。
 ### Phase 909 — `@scope` 隐式 `:scope` 特异度修正
 - 区分匹配用选择器 `curSel`（带 `:scope `）与计算权重用选择器 `specSel`（原始 `> .a`），解决 `@scope (#main) { > .a }` 误计为 `(0, 2, 0)` 压过 `div:where(#main) > .a` `(0, 1, 1)` 的问题，`scope-specificity.html` 11/11 全绿。
+### Phase 910 — CSS Grid `target.style.grid` 引号规范化与 `display: none/contents` `min-auto-size` 修复
+- 修复 `serializeInlineSpecifiedValue` 未对 `grid`/`grid-template`/`grid-template-areas` 调用 `__capsurf_normalizeCssValue` 导致单引号未转双引号的问题，以及 `isFlexOrGridItem` 在 `display: contents` 向上穿透与 `display: none` 祖先检测中的 `parentEl` 引用丢失问题，4 项测试全绿。

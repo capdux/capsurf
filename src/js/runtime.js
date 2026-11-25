@@ -5490,7 +5490,7 @@
               const rm = /^repeat\(\s*([^,]+)\s*,\s*(.+)\s*\)$/i.exec(t);
               if (!rm) return false;
               const cnt = rm[1].trim();
-              if (cnt !== "auto-fill" && cnt !== "auto-fit" && !/^[1-9]\d*$/.test(cnt)) return false;
+              if (cnt !== "auto-fill" && !/^[1-9]\d*$/.test(cnt)) return false;
               const sub = splitGridTokens(rm[2].trim());
               if (sub.length === 0 || !sub.every(isLineNames)) return false;
               continue;
@@ -19709,6 +19709,11 @@
     const v = val.trim();
     if (/^url\([^)]*$/i.test(v)) return v + ")";
     if (key === "border-shape") return v.replace(/\bat\s+center\s*\)$/i, "at center center)");
+    if (key === "flow-tolerance" && (v === "0" || v === "+0" || v === "-0")) return "0px";
+    if ((key === "grid" || key === "grid-template" || key === "grid-template-areas") &&
+        typeof globalThis.__capsurf_normalizeCssValue === "function") {
+      return globalThis.__capsurf_normalizeCssValue(key, v);
+    }
     // CSS Color 4: legacy rgb()/rgba() with `none` channel serializes `none` as `0` for specified value
     if ((key === "color" || key.endsWith("-color")) && /^rgba?\s*\(/i.test(v) && /\bnone\b/i.test(v)) {
       const m = v.match(/^rgba?\(\s*([^\s,/]+)\s+([^\s,/]+)\s+([^\s,/]+)(?:\s*\/\s*([^\s)]+))?\s*\)$/i);
@@ -49419,6 +49424,12 @@
         globalThis.__capsurf_syncCssTransitionsAndAnimations(element, computedMap, styleNodes);
       }
 
+      if (computedMap.has("grid-template-areas") && typeof globalThis.__capsurf_normalizeCssValue === "function") {
+        const gta = computedMap.get("grid-template-areas");
+        if (gta && gta.indexOf("'") !== -1) {
+          computedMap.set("grid-template-areas", globalThis.__capsurf_normalizeCssValue("grid-template-areas", gta));
+        }
+      }
       if (computedMap.has("content")) {
         const cRaw = String(computedMap.get("content") || "").trim();
         const toks = (typeof globalThis.__capsurf_splitCssTokens === "function") ? globalThis.__capsurf_splitCssTokens(cRaw) : [cRaw];
@@ -50474,16 +50485,28 @@
       }
 
 
-      // min-width / min-height: auto resolves to 0px outside flex/grid parent
       const parentEl = element.parentElement || element.parentNode;
+      // min-width / min-height: auto resolves to 0px outside flex/grid parent (or when element/ancestor is display:none)
+      const selfDisp = (computedMap.get("display") || getDefaultDisplayForElement(element)).trim().toLowerCase();
       let parentDisp = "block";
-      if (parentEl && parentEl.nodeType === 1) {
-        const pMap = collectRawComputedMap(parentEl, "");
-        parentDisp = (pMap.get("display") || getDefaultDisplayForElement(parentEl)).trim().toLowerCase();
+      let curP = parentEl;
+      while (curP && curP.nodeType === 1) {
+        const pMap = collectRawComputedMap(curP, "");
+        parentDisp = (pMap.get("display") || getDefaultDisplayForElement(curP)).trim().toLowerCase();
+        if (parentDisp !== "contents") break;
+        curP = curP.parentElement || curP.parentNode;
       }
-      const isFlexOrGridItem =
-        parentDisp === "flex" || parentDisp === "inline-flex" ||
-        parentDisp === "grid" || parentDisp === "inline-grid";
+      let hasNoneAncestor = false;
+      let ancDispEl = curP;
+      while (ancDispEl && ancDispEl.nodeType === 1) {
+        const aMap = collectRawComputedMap(ancDispEl, "");
+        const aDisp = (aMap.get("display") || getDefaultDisplayForElement(ancDispEl)).trim().toLowerCase();
+        if (aDisp === "none") { hasNoneAncestor = true; break; }
+        ancDispEl = ancDispEl.parentElement || ancDispEl.parentNode;
+      }
+      const isFlexOrGridItem = selfDisp !== "none" && !hasNoneAncestor &&
+        (parentDisp === "flex" || parentDisp === "inline-flex" ||
+         parentDisp === "grid" || parentDisp === "inline-grid");
       if (!isFlexOrGridItem) {
         if ((computedMap.get("min-width") || "").trim().toLowerCase() === "auto") {
           computedMap.set("min-width", "0px");

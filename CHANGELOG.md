@@ -4656,3 +4656,5 @@
 - `src/layout/layout.cp`, `src/js/shim/window.js`, `src/js/shim/cssom.js`: 修复 `font_size_px <= 0` 文本宽度归零；补齐 `font-variation-settings`/`font-palette` 继承、`font` 简写展开与 `@font-feature-values` Map 解析；通过 `cpc fix` + `cpc brief` 门禁，4 项 WPT **4/4 PASS**，`--smoke` 3/3 **PASS**。
 ### Phase 909 — `@scope` 隐式 `:scope` 权重归零（`scope-specificity.html` 全绿）
 - `src/js/shim/window.js`: `@scope` 下隐式前置 `:scope ` 的子代/兄弟选择器在计算特异度时不计 `:scope` 伪类权重，`scope-specificity.html` **PASS** (11/11)，`--smoke` 3/3 **PASS**。
+### Phase 910 — CSS Grid 4 项快速修复全绿（`grid-important` / `subgrid` / `flow-tolerance` / `min-auto-size`）
+- `src/js/shim/cssom.js`, `src/js/shim/element/element.js`, `src/js/shim/window.js`: 放行 `subgrid repeat(auto-fit)` 校验拒绝、`flow-tolerance` `0->0px`、`target.style.grid` 双引号规范化及 `display: contents`/`none` 祖先下 `min-width/height: auto` 解析，4 项 WPT **4/4 PASS**（`flow-tolerance-valid` `FAIL→PASS`），`--smoke` 3/3 **PASS**。

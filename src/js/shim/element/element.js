@@ -120,6 +120,11 @@ function serializeInlineSpecifiedValue(key, val) {
   const v = val.trim();
   if (/^url\([^)]*$/i.test(v)) return v + ")";
   if (key === "border-shape") return v.replace(/\bat\s+center\s*\)$/i, "at center center)");
+  if (key === "flow-tolerance" && (v === "0" || v === "+0" || v === "-0")) return "0px";
+  if ((key === "grid" || key === "grid-template" || key === "grid-template-areas") &&
+      typeof globalThis.__capsurf_normalizeCssValue === "function") {
+    return globalThis.__capsurf_normalizeCssValue(key, v);
+  }
   // CSS Color 4: legacy rgb()/rgba() with `none` channel serializes `none` as `0` for specified value
   if ((key === "color" || key.endsWith("-color")) && /^rgba?\s*\(/i.test(v) && /\bnone\b/i.test(v)) {
     const m = v.match(/^rgba?\(\s*([^\s,/]+)\s+([^\s,/]+)\s+([^\s,/]+)(?:\s*\/\s*([^\s)]+))?\s*\)$/i);
