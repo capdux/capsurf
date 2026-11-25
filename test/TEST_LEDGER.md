@@ -2560,3 +2560,4 @@
 | Phase 890 | Flexbox 绝对定位子项静态位置对齐 (`layoutFlexAbsChild`) | `src/layout/layout.cp` | `/css/css-flexbox/abspos/position-absolute-015.html` **PASS**; `--smoke` 3/3 PASS |
 | Phase 891 | Flexbox `abspos` 静态位置内容盒基准修正 | `src/layout/layout.cp` | `flex-abspos-staticpos-justify-content-001` (24/24 **PASS**), `position-absolute-015` **PASS**; `--smoke` 3/3 PASS |
 | Phase 892 | `JustifyContent` `Start`/`End`/`Left`/`Right` 拆分与 `row-reverse` 对齐 | `cascade.cp`, `layout.cp` | `flex-abspos-staticpos-justify-content-001/003` (48/48 **PASS**); `--smoke` 3/3 PASS |
+| Phase 893 | Flexbox `wrap-reverse` 交叉轴静态位置镜像 | `src/layout/layout.cp` | `flex-abspos-staticpos-justify-content-001..008` **8/8 (192/192) PASS**; `--smoke` 3/3 PASS |

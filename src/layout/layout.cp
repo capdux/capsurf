@@ -4051,10 +4051,11 @@ pub struct LayoutTree {
         const rem_main = if (is_row) (container_w - mb_w) else (container_h - mb_h);
         const rem_cross = if (is_row) (container_h - mb_h) else (container_w - mb_w);
         const main_off = LayoutTree.justifyMainOffset(pstyle.justify_content, is_row, is_rev, rem_main);
+        const is_wrap_rev = (pstyle.flex_wrap == FlexWrap.WrapReverse);
         const cross_off: f32 = switch (pstyle.align_items) {
-            .FlexEnd => rem_cross,
+            .FlexStart, .Stretch => if (is_wrap_rev) rem_cross else 0.0,
+            .FlexEnd => if (is_wrap_rev) 0.0 else rem_cross,
             .Center => rem_cross / 2.0,
-            * => 0.0,
         };
         const sx = content_x + (if (is_row) main_off else cross_off);
         const sy = content_y + (if (is_row) cross_off else main_off);

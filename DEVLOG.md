@@ -3625,3 +3625,5 @@
 - 修正 `layoutFlexAbsChild` 误用 `padding-box` (`abs_cb`) 尺寸计算 `justify-content`/`align-items` 静态位置偏移的问题，改用 `content_box` (`container_w`/`container_h`) 后 `flex-abspos-staticpos-justify-content-001.html` 全量 24 项子测试通过。
 ### Phase 892 — `justify-content` 逻辑与物理关键字在 `row-reverse` 下的精确区分
 - 将 `JustifyContent` 中原先混并的 `start`/`left`/`end`/`right` 拆分为独立枚举变体，使 `flex-abspos-staticpos-justify-content-003.html`（`row-reverse`）全部 24 项子测试通过。
+### Phase 893 — `wrap-reverse` 交叉轴镜像与 `justify-content-001..008` 全绿
+- 在 `layoutFlexAbsChild` 补充 `FlexWrap.WrapReverse` 交叉轴镜像逻辑后，一次性打通 `flex-abspos-staticpos-justify-content-001..008.html` 全部 8 个文件（192 个子测试全绿）。

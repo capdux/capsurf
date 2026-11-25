@@ -4621,3 +4621,5 @@
 ### Phase 892 — `JustifyContent` `Start`/`End`/`Left`/`Right` 语义区分与 `row-reverse` 静态对齐
 - `src/css/cascade.cp`: `JustifyContent` 拆分 `Start`/`End`/`Left`/`Right` 并支持 `normal`/`stretch`。
 - `src/layout/layout.cp`: 新增 `LayoutTree.justifyMainOffset` 区分 `flex-start`/`flex-end`（受 `row-reverse` 翻转）与 `start`/`end`/`left`/`right`；通过 `cpc fix` + `cpc brief` 门禁，`flex-abspos-staticpos-justify-content-001/003` **2/2 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 893 — Flexbox `wrap-reverse` 交叉轴绝对定位静态位置镜像
+- `src/layout/layout.cp`: `layoutFlexAbsChild` 在 `FlexWrap.WrapReverse` 下镜像交叉轴 `FlexStart`/`Stretch` 与 `FlexEnd` 偏移；通过 `cpc fix` + `cpc brief` 门禁，`flex-abspos-staticpos-justify-content-001..008.html` **8/8 (192/192) PASS**，`--smoke` 3/3 **PASS**。
