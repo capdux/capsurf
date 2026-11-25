@@ -4668,3 +4668,5 @@
 - `src/js/shim/cssom.js`, `src/js/shim/window.js`: 统一接入 `border-{top,bottom,left,right,block-start,block-end,inline-start,inline-end}-radius` 的展开与计算值序列化，8 项 `-computed.html` + 8 项 `-valid.html` 共 **16/16 FAIL→PASS**，`--smoke` 3/3 **PASS**。
 ### Phase 915 — CSS Flexbox 转换最小高度、`eff_align` 与单行百分比交叉轴重排
 - `src/layout/layout.cp`: 修复 `column` flex `min-height: auto` transferred height 夹紧、按 `align_self` 计算 `eff_align` 及单行 `auto`-height 容器百分比高度子项二次重排；通过 `cpc fix` + `cpc brief` 4 门禁，3 项 `css-flexbox` WPT **3/3 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 916 — Flexbox `flex-basis: content` 与 `height: stretch` 确定性判定
+- `src/css/cascade.cp`, `src/layout/layout.cp`: 解析 `flex-basis: content` 并在 `column` 方向将 `height` 视作 `auto`，补齐 `height: stretch` 在确定/不定父高度下的布局分支；通过 `cpc fix` + `cpc brief` 4 门禁，2 项 `css-flexbox` WPT **2/2 PASS**，`--smoke` 3/3 **PASS**。

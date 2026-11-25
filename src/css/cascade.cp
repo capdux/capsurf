@@ -254,6 +254,7 @@ pub enum IntrinsicSizeKeyword {
     MaxContent,
     FitContent,
     Stretch,
+    Content,
 }
 
 pub enum BorderCollapse {
@@ -4240,7 +4241,12 @@ pub struct ComputedStyle {
             return;
         }
         if (std.ascii.eqlIgnoreCase(name, "flex-basis")) {
-            if (lpa := LengthPercentageOrAuto.parse(val)) {
+            const trimmed_fb = std.mem.trim(u8, val, " \t\r\n");
+            if (std.ascii.eqlIgnoreCase(trimmed_fb, "content")) {
+                if (_.tryClaimSlot(PROP_FLEX_BASIS, weight)) {
+                    _.flex_basis = LengthPercentageOrAuto{ is_auto: false, is_none: false, intrinsic: IntrinsicSizeKeyword.Content };
+                }
+            } else if (lpa := LengthPercentageOrAuto.parse(val)) {
                 if (_.tryClaimSlot(PROP_FLEX_BASIS, weight)) _.flex_basis = lpa;
             }
             return;
@@ -4262,9 +4268,17 @@ pub struct ComputedStyle {
                         if (fs >= 0.0) {
                             if (_.tryClaimSlot(PROP_FLEX_SHRINK, weight)) _.flex_shrink = fs;
                             if (third_tok := it.next()) {
-                                if (lpa := LengthPercentageOrAuto.parse(third_tok)) {
+                                if (std.ascii.eqlIgnoreCase(third_tok, "content")) {
+                                    if (_.tryClaimSlot(PROP_FLEX_BASIS, weight)) {
+                                        _.flex_basis = LengthPercentageOrAuto{ is_auto: false, is_none: false, intrinsic: IntrinsicSizeKeyword.Content };
+                                    }
+                                } else if (lpa := LengthPercentageOrAuto.parse(third_tok)) {
                                     if (_.tryClaimSlot(PROP_FLEX_BASIS, weight)) _.flex_basis = lpa;
                                 }
+                            }
+                        } else if (std.ascii.eqlIgnoreCase(second_tok, "content")) {
+                            if (_.tryClaimSlot(PROP_FLEX_BASIS, weight)) {
+                                _.flex_basis = LengthPercentageOrAuto{ is_auto: false, is_none: false, intrinsic: IntrinsicSizeKeyword.Content };
                             }
                         } else if (lpa := LengthPercentageOrAuto.parse(second_tok)) {
                             if (_.tryClaimSlot(PROP_FLEX_BASIS, weight)) _.flex_basis = lpa;

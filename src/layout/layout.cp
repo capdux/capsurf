@@ -105,6 +105,7 @@ pub struct LayoutBox {
     scroll_content_width: f32 = 0.0;
     scroll_content_height: f32 = 0.0;
     forced_height: f32 = -1.0;
+    ignore_height_for_flex_content: bool = false;
     baseline_offset: f32 = -1.0;
 
     fn paddingHorizontal(): f32 {
@@ -1003,19 +1004,27 @@ pub struct LayoutTree {
         // Content height calculation
         // CSS Sizing: percentage height against an indefinite (auto) parent height behaves as auto
         const height_is_indefinite_pct = (!style.height.is_auto && !style.height.is_none && style.height.length.unit == CssUnit.Percent && !parent_h_definite);
+        const height_is_stretch = (!style.height.is_auto && !style.height.is_none && style.height.intrinsic == IntrinsicSizeKeyword.Stretch);
+        const height_is_indefinite_stretch = (height_is_stretch && !parent_h_definite);
         const has_forced_h = (box.forced_height >= 0.0);
-        const effective_height_auto = !has_forced_h && (style.height.is_auto || style.height.is_none || height_is_indefinite_pct);
+        const effective_height_auto = !has_forced_h && (style.height.is_auto || style.height.is_none || height_is_indefinite_pct || height_is_indefinite_stretch || box.ignore_height_for_flex_content);
         box.height_is_auto = effective_height_auto;
         if (has_forced_h) {
             const v_decor = box.paddingVertical() + box.borderVertical();
             box.content_height = if (box.forced_height > v_decor) (box.forced_height - v_decor) else 0.0;
         } else if (!effective_height_auto) {
-            const raw_h = style.height.resolvePx(parent_h, font_px, root_px, vw, vh);
-            if (style.box_sizing == BoxSizing.BorderBox) {
+            if (height_is_stretch) {
+                const raw_h = if (parent_h > box.marginVertical()) (parent_h - box.marginVertical()) else 0.0;
                 const v_decor = box.paddingVertical() + box.borderVertical();
                 box.content_height = if (raw_h > v_decor) (raw_h - v_decor) else 0.0;
             } else {
-                box.content_height = raw_h;
+                const raw_h = style.height.resolvePx(parent_h, font_px, root_px, vw, vh);
+                if (style.box_sizing == BoxSizing.BorderBox) {
+                    const v_decor = box.paddingVertical() + box.borderVertical();
+                    box.content_height = if (raw_h > v_decor) (raw_h - v_decor) else 0.0;
+                } else {
+                    box.content_height = raw_h;
+                }
             }
             if ((style.width.is_auto || style.width.is_none)) {
                 if (rep := replaced_opt) {
@@ -4232,6 +4241,9 @@ pub struct LayoutTree {
                         abs_count += 1;
                     }
                 } else if (item_count < 32) {
+                    if (!is_row && cstyle.flex_basis.intrinsic == IntrinsicSizeKeyword.Content) {
+                        _.boxes.items[@as(usize, child)].ignore_height_for_flex_content = true;
+                    }
                     _.resolveBoxMetrics(doc, styles, child, cstyle, container_w, container_h, !pbox.height_is_auto);
                     const cbox = &_.boxes.items[@as(usize, child)];
 
@@ -4240,9 +4252,9 @@ pub struct LayoutTree {
 
                     if (is_row) {
                         // Main axis = width
-                        if (!cstyle.flex_basis.is_auto) {
+                        if (!cstyle.flex_basis.is_auto && cstyle.flex_basis.intrinsic != IntrinsicSizeKeyword.Content) {
                             base_m = cstyle.flex_basis.resolvePx(container_w, cstyle.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
-                        } else if (!cstyle.width.is_auto) {
+                        } else if (!cstyle.width.is_auto && cstyle.flex_basis.intrinsic != IntrinsicSizeKeyword.Content) {
                             base_m = cbox.borderBoxWidth();
                         } else {
                             base_m = if (cbox.borderBoxWidth() > 0.0) cbox.borderBoxWidth() else 0.0;
@@ -4254,9 +4266,9 @@ pub struct LayoutTree {
                         base_c = cbox.borderBoxHeight();
                     } else {
                         // Main axis = height
-                        if (!cstyle.flex_basis.is_auto) {
+                        if (!cstyle.flex_basis.is_auto && cstyle.flex_basis.intrinsic != IntrinsicSizeKeyword.Content) {
                             base_m = cstyle.flex_basis.resolvePx(container_h, cstyle.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
-                        } else if (!cstyle.height.is_auto) {
+                        } else if (!cstyle.height.is_auto && cstyle.flex_basis.intrinsic != IntrinsicSizeKeyword.Content) {
                             base_m = cbox.borderBoxHeight();
                         } else {
                             base_m = if (cbox.borderBoxHeight() > 0.0) cbox.borderBoxHeight() else 0.0;

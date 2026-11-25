@@ -2583,3 +2583,4 @@
 | Phase 913 | `scrollWidth`/`scrollHeight` 扣除 `clientLeft`/`clientTop` 修正 | `src/js/shim/element/element.js` | `columns-shorthand-reset-wrap`, `inheritance`, `multicol-overflow-transform-001`, `multicol-overflow-positioned-transform-001` **4/4 PASS**; `--smoke` 3/3 PASS |
 | Phase 914 | CSS Borders 4 8 个双角圆角简写展开与计算值序列化 | `cssom.js`, `window.js` | 8× `border-*-radius-computed` + 8× `border-*-radius-valid` **16/16 FAIL→PASS**; `--smoke` 3/3 PASS |
 | Phase 915 | Flexbox `min-height: auto` transferred height、`eff_align` & 单行百分比重排 | `src/layout/layout.cp` | `flex-minimum-size-003`, `position-relative-percentage-top-004`, `position-relative-percentage-top-005` **3/3 PASS**; `--smoke` 3/3 PASS |
+| Phase 916 | `flex-basis: content` 高度不定性 & `height: stretch` 确定性判定 | `cascade.cp`, `layout.cp` | `flex-basis-content-percentage-height`, `position-relative-stretch-height-001` **2/2 PASS**; `--smoke` 3/3 PASS |

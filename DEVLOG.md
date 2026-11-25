@@ -3671,3 +3671,5 @@
 - 在 `cssom.js` 与 `window.js` 通过 `TWO_CORNER_RADIUS_MAP` 统一处理 8 个物理/逻辑双角圆角简写向 4 角 `border-*-radius` longhand 的展开与 `h0 [h1] / v0 [v1]` 折叠序列化，一次扫平 8 项 `-computed.html` 与 8 项 `-valid.html`。
 ### Phase 915 — Flexbox `min-height: auto`、`align-self` 与单行确定交叉轴传播
 - 排查发现 `cascade.cp` `min_height` 默认值为 `zeroPx()` 导致未显式设置 `min-height` 时跳过 `min-height: auto` transferred size 夹紧，改用 `weights[7] == 0` 判定；`layoutFlexContainer` 原未合并 `align_self` 导致 `flex-start` 被误拉伸并传染 `child_h_definite`，且首遍 `layoutNode` 写死 `parent_h_definite=true` 使 `height: 100%` 折叠为 `0px`。修复后 3 项全绿。
+### Phase 916 — `flex-basis: content` 与 `height: stretch` 确定性修复
+- 新增 `IntrinsicSizeKeyword.Content` 与 `LayoutBox.ignore_height_for_flex_content`，在 `column` flex 下使 `flex: 1 1 content; height: 100px` 忽略显式 `height` 作为百分比子项包含块；同步在 `resolveBoxMetrics` 对 `height: stretch` 区分 `parent_h_definite` 填充与不定父高退化 `auto`，两项测试全绿。
