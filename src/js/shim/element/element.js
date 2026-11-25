@@ -2204,6 +2204,14 @@ function installElementExtensions(proto) {
     if (s.startsWith(".") && this.classList.contains(s.slice(1))) return true;
     if (s.toLowerCase() === this.localName) return true;
     const root = typeof this.getRootNode === "function" ? this.getRootNode() : (this.ownerDocument || (typeof document !== "undefined" ? document : null));
+    if (typeof matchesElementSelector === "function") {
+      try {
+        const scopeEl = (root && root.nodeType === 9) ? root.documentElement : root;
+        return matchesElementSelector(this, s, scopeEl, true);
+      } catch (e) {
+        if (e && e.name === "SyntaxError") throw e;
+      }
+    }
     if (root && typeof root.querySelectorAll === "function") {
       try {
         const matches = root.querySelectorAll(s);

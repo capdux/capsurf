@@ -7804,6 +7804,8 @@
   function splitCssDeclarations(block) {
     const parts = [];
     let depth = 0;
+    let braceDepth = 0;
+    let inAtBlock = false;
     let inQuote = null;
     let start = 0;
     for (let i = 0; i < block.length; i++) {
@@ -7818,7 +7820,18 @@
         depth++;
       } else if (c === ")") {
         depth = Math.max(0, depth - 1);
-      } else if (c === ";" && depth === 0) {
+      } else if (c === "{" && depth === 0) {
+        if (braceDepth === 0 && block.slice(start, i).trimStart().startsWith("@")) {
+          inAtBlock = true;
+        }
+        braceDepth++;
+      } else if (c === "}" && depth === 0 && braceDepth > 0) {
+        braceDepth--;
+        if (inAtBlock && braceDepth === 0) {
+          inAtBlock = false;
+          start = i + 1;
+        }
+      } else if (c === ";" && depth === 0 && braceDepth === 0) {
         parts.push(block.slice(start, i));
         start = i + 1;
       }
@@ -10580,6 +10593,7 @@
     darkgrey: "rgb(169, 169, 169)",
     lightgray: "rgb(211, 211, 211)",
     lightgrey: "rgb(211, 211, 211)",
+    lightgreen: "rgb(144, 238, 144)",
     dimgray: "rgb(105, 105, 105)",
     dimgrey: "rgb(105, 105, 105)",
     slategray: "rgb(112, 128, 144)",

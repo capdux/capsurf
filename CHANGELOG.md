@@ -4396,3 +4396,8 @@
 - **Phase 819**:
   - `src/js/shim/cssom.js`: `normalizePositionLayer` 对 `calc(...)` token 调用 `canonicalizeCalcToken`；`canonicalizeCalcToken` 新增 `(parenExpr) * N` 乘子前置重排。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 820**:
+  - `src/js/shim/cssom.js`: `splitCssDeclarations` 追踪 `@-rule { ... }` 嵌套块跳过；`NAMED_COLORS_MAP` 补全 `lightgreen: "rgb(144, 238, 144)"`。
+  - `src/js/shim/window.js`: `collectNested` 支持任意多层 CSS 嵌套规则递归展开（含 `nestDepth <= 12` 护栏）。
+  - `src/js/shim/element/element.js`: `proto.matches` 对复杂选择器直接调用 `matchesElementSelector(..., true)` 消除全树 `querySelectorAll` 回退开销。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

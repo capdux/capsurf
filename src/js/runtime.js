@@ -11699,6 +11699,8 @@
     function splitCssDeclarations(block) {
       const parts = [];
       let depth = 0;
+      let braceDepth = 0;
+      let inAtBlock = false;
       let inQuote = null;
       let start = 0;
       for (let i = 0; i < block.length; i++) {
@@ -11713,7 +11715,18 @@
           depth++;
         } else if (c === ")") {
           depth = Math.max(0, depth - 1);
-        } else if (c === ";" && depth === 0) {
+        } else if (c === "{" && depth === 0) {
+          if (braceDepth === 0 && block.slice(start, i).trimStart().startsWith("@")) {
+            inAtBlock = true;
+          }
+          braceDepth++;
+        } else if (c === "}" && depth === 0 && braceDepth > 0) {
+          braceDepth--;
+          if (inAtBlock && braceDepth === 0) {
+            inAtBlock = false;
+            start = i + 1;
+          }
+        } else if (c === ";" && depth === 0 && braceDepth === 0) {
           parts.push(block.slice(start, i));
           start = i + 1;
         }
@@ -14475,6 +14488,7 @@
       darkgrey: "rgb(169, 169, 169)",
       lightgray: "rgb(211, 211, 211)",
       lightgrey: "rgb(211, 211, 211)",
+      lightgreen: "rgb(144, 238, 144)",
       dimgray: "rgb(105, 105, 105)",
       dimgrey: "rgb(105, 105, 105)",
       slategray: "rgb(112, 128, 144)",
@@ -20567,6 +20581,14 @@
       if (s.startsWith(".") && this.classList.contains(s.slice(1))) return true;
       if (s.toLowerCase() === this.localName) return true;
       const root = typeof this.getRootNode === "function" ? this.getRootNode() : (this.ownerDocument || (typeof document !== "undefined" ? document : null));
+      if (typeof matchesElementSelector === "function") {
+        try {
+          const scopeEl = (root && root.nodeType === 9) ? root.documentElement : root;
+          return matchesElementSelector(this, s, scopeEl, true);
+        } catch (e) {
+          if (e && e.name === "SyntaxError") throw e;
+        }
+      }
       if (root && typeof root.querySelectorAll === "function") {
         try {
           const matches = root.querySelectorAll(s);
@@ -46999,8 +47021,14 @@
             } else if (sel.startsWith("@")) {
               continue;
             } else if (sel) {
-              const dText = r.declText || "";
-              if (dText.indexOf("{") !== -1) {
+              const collectNested = (curSel, dText, nestDepth) => {
+                if (nestDepth > 12) return;
+                if (dText.indexOf("{") === -1) {
+                  if (matchesSelector(element, curSel, normalizedPseudo)) {
+                    matched.push({ decl: dText, layer: layerPrefix || "", spec: calcMatchedSelectorSpecificity(element, curSel, normalizedPseudo), order: seq++ });
+                  }
+                  return;
+                }
                 const subRules = getParsedRules(dText);
                 const ownDecls = [];
                 for (let si = 0; si < subRules.length; si++) {
@@ -47008,20 +47036,19 @@
                   if (!sr) continue;
                   const sSel = String(sr.selectorText || "").trim();
                   if (sSel) {
-                    const fullSel = sSel.indexOf("&") !== -1 ? sSel.replace(/&/g, sel) : (sel + " " + sSel);
-                    if (matchesSelector(element, fullSel, normalizedPseudo)) {
-                      matched.push({ decl: sr.declText || "", layer: layerPrefix || "", spec: calcMatchedSelectorSpecificity(element, fullSel, normalizedPseudo), order: seq++ });
+                    const fullSel = sSel.indexOf("&") !== -1 ? sSel.replace(/&/g, curSel) : (curSel + " " + sSel);
+                    if ((sr.declText || "").length < dText.length) {
+                      collectNested(fullSel, sr.declText || "", nestDepth + 1);
                     }
                   } else if (sr.cssText) {
                     ownDecls.push(sr.cssText);
                   }
                 }
-                if (ownDecls.length > 0 && matchesSelector(element, sel, normalizedPseudo)) {
-                  matched.push({ decl: ownDecls.join(";"), layer: layerPrefix || "", spec: calcMatchedSelectorSpecificity(element, sel, normalizedPseudo), order: seq++ });
+                if (ownDecls.length > 0 && matchesSelector(element, curSel, normalizedPseudo)) {
+                  matched.push({ decl: ownDecls.join(";"), layer: layerPrefix || "", spec: calcMatchedSelectorSpecificity(element, curSel, normalizedPseudo), order: seq++ });
                 }
-              } else if (matchesSelector(element, sel, normalizedPseudo)) {
-                matched.push({ decl: dText, layer: layerPrefix || "", spec: calcMatchedSelectorSpecificity(element, sel, normalizedPseudo), order: seq++ });
-              }
+              };
+              collectNested(sel, r.declText || "", 0);
             }
           }
           return;

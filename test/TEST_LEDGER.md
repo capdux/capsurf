@@ -2486,3 +2486,4 @@
 | Phase 817 | WPT 顶层 `&` 选择器及 `::marker` 默认 `content` | `src/js/shim/selector.js`, `src/js/shim/element/element.js`, `src/js/shim/window.js` | `top-level-is-scope`, `top-level-parent-pseudo-specificity`, `marker-computed-content` 3/3 **PASS**; `--smoke` 3/3 PASS |
 | Phase 818 | WPT `var()` 回退 `revert` 无效化与 `--*` `unset`/`revert` | `src/js/shim/window.js` | `revert-in-fallback`, `variable-definition-keywords` 2/2 **PASS**; `--smoke` 3/3 PASS |
 | Phase 819 | WPT `background-position` `calc()` 与 `(expr) * N` 序列化 | `src/js/shim/cssom.js` | `calc-background-position-003`, `calc-serialization-002` 2/2 **PASS**; `--smoke` 3/3 PASS |
+| Phase 820 | WPT 多层 CSS 嵌套、`@-rule {}`、`O(1)` `matches` 与 `lightgreen` | `src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/shim/element/element.js` | `has-css-nesting-shared`, `at-rule-in-declaration-list` 2/2 **PASS**; `--smoke` 3/3 PASS |

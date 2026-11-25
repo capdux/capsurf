@@ -3478,3 +3478,5 @@
 - 在 `window.js` `resolveCssVarsAndProps` 中将 `var()`/`env()` 替换产出的 CSS-wide keyword 按规范视为 invalid at computed-value time，同时在关键字解析阶段将 `--*` 自定义属性纳入继承支持 `unset` 与 `revert`，`revert-in-fallback` 与 `variable-definition-keywords` 2/2 全绿 **PASS**。
 ### Phase 819 — `background-position` `calc()` 化简与 `(expr) * N` 乘子前置重排
 - 在 `cssom.js` `normalizePositionLayer` 中对 `calc(...)` token 调用 `canonicalizeCalcToken` 化简，并在 `canonicalizeCalcToken` 补充顶层 `(parenExpr) * N → N * (parenExpr)` 乘子重排，`calc-background-position-003` 与 `calc-serialization-002` 2/2 全绿 **PASS**。
+### Phase 820 — 多层 CSS 嵌套递归、`@-rule {}` 声明跳过、`O(1)` `matches` 与 `lightgreen`
+- 在 `window.js` 将 2 层 CSS 嵌套展开升级为递归 `collectNested`、`element.js` `proto.matches` 直连 `matchesElementSelector(..., true)` 消除全树扫描瓶颈、`cssom.js` 跳过声明列表中的 `@-rule {}` 块并补全 `lightgreen` 命名色，`has-css-nesting-shared` 与 `at-rule-in-declaration-list` 2/2 全绿 **PASS**。

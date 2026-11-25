@@ -6587,8 +6587,14 @@ function installWindow(global) {
           } else if (sel.startsWith("@")) {
             continue;
           } else if (sel) {
-            const dText = r.declText || "";
-            if (dText.indexOf("{") !== -1) {
+            const collectNested = (curSel, dText, nestDepth) => {
+              if (nestDepth > 12) return;
+              if (dText.indexOf("{") === -1) {
+                if (matchesSelector(element, curSel, normalizedPseudo)) {
+                  matched.push({ decl: dText, layer: layerPrefix || "", spec: calcMatchedSelectorSpecificity(element, curSel, normalizedPseudo), order: seq++ });
+                }
+                return;
+              }
               const subRules = getParsedRules(dText);
               const ownDecls = [];
               for (let si = 0; si < subRules.length; si++) {
@@ -6596,20 +6602,19 @@ function installWindow(global) {
                 if (!sr) continue;
                 const sSel = String(sr.selectorText || "").trim();
                 if (sSel) {
-                  const fullSel = sSel.indexOf("&") !== -1 ? sSel.replace(/&/g, sel) : (sel + " " + sSel);
-                  if (matchesSelector(element, fullSel, normalizedPseudo)) {
-                    matched.push({ decl: sr.declText || "", layer: layerPrefix || "", spec: calcMatchedSelectorSpecificity(element, fullSel, normalizedPseudo), order: seq++ });
+                  const fullSel = sSel.indexOf("&") !== -1 ? sSel.replace(/&/g, curSel) : (curSel + " " + sSel);
+                  if ((sr.declText || "").length < dText.length) {
+                    collectNested(fullSel, sr.declText || "", nestDepth + 1);
                   }
                 } else if (sr.cssText) {
                   ownDecls.push(sr.cssText);
                 }
               }
-              if (ownDecls.length > 0 && matchesSelector(element, sel, normalizedPseudo)) {
-                matched.push({ decl: ownDecls.join(";"), layer: layerPrefix || "", spec: calcMatchedSelectorSpecificity(element, sel, normalizedPseudo), order: seq++ });
+              if (ownDecls.length > 0 && matchesSelector(element, curSel, normalizedPseudo)) {
+                matched.push({ decl: ownDecls.join(";"), layer: layerPrefix || "", spec: calcMatchedSelectorSpecificity(element, curSel, normalizedPseudo), order: seq++ });
               }
-            } else if (matchesSelector(element, sel, normalizedPseudo)) {
-              matched.push({ decl: dText, layer: layerPrefix || "", spec: calcMatchedSelectorSpecificity(element, sel, normalizedPseudo), order: seq++ });
-            }
+            };
+            collectNested(sel, r.declText || "", 0);
           }
         }
         return;
