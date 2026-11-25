@@ -4024,6 +4024,8 @@ pub struct LayoutTree {
         aid: NodeId,
         content_x: f32,
         content_y: f32,
+        container_w: f32,
+        container_h: f32,
     ) {
         const astyle = &styles[@as(usize, aid)];
         if (astyle.position == CssPosition.Fixed) {
@@ -4035,8 +4037,8 @@ pub struct LayoutTree {
         const mb_w = abox.borderBoxWidth() + abox.marginHorizontal();
         const mb_h = abox.borderBoxHeight() + abox.marginVertical();
         const is_rev = (pstyle.flex_direction == FlexDirection.RowReverse || pstyle.flex_direction == FlexDirection.ColumnReverse);
-        const rem_main = if (is_row) (_.abs_cb_w - mb_w) else (_.abs_cb_h - mb_h);
-        const rem_cross = if (is_row) (_.abs_cb_h - mb_h) else (_.abs_cb_w - mb_w);
+        const rem_main = if (is_row) (container_w - mb_w) else (container_h - mb_h);
+        const rem_cross = if (is_row) (container_h - mb_h) else (container_w - mb_w);
         const main_off: f32 = switch (pstyle.justify_content) {
             .FlexStart, .SpaceBetween => if (is_rev) rem_main else 0.0,
             .FlexEnd => if (is_rev) 0.0 else rem_main,
@@ -4047,8 +4049,8 @@ pub struct LayoutTree {
             .Center => rem_cross / 2.0,
             * => 0.0,
         };
-        const sx = _.abs_cb_x + (if (is_row) main_off else cross_off);
-        const sy = _.abs_cb_y + (if (is_row) cross_off else main_off);
+        const sx = content_x + (if (is_row) main_off else cross_off);
+        const sy = content_y + (if (is_row) cross_off else main_off);
         _.layoutNodeEx(doc, styles, aid, _.abs_cb_x, _.abs_cb_y, _.abs_cb_w, _.abs_cb_h, sx, sy, true);
     }
 
@@ -4171,7 +4173,7 @@ pub struct LayoutTree {
             // Still lay out any out-of-flow absolute/fixed children relative to their containing block
             let ai: usize = 0;
             while (ai < abs_count) : (ai += 1) {
-                _.layoutFlexAbsChild(doc, styles, pstyle, is_row, abs_children[ai], content_x, content_y);
+                _.layoutFlexAbsChild(doc, styles, pstyle, is_row, abs_children[ai], content_x, content_y, container_w, container_h);
             }
             return;
         }
@@ -4479,7 +4481,7 @@ pub struct LayoutTree {
         if (abs_count > 0) {
             let ai: usize = 0;
             while (ai < abs_count) : (ai += 1) {
-                _.layoutFlexAbsChild(doc, styles, pstyle, is_row, abs_children[ai], content_x, content_y);
+                _.layoutFlexAbsChild(doc, styles, pstyle, is_row, abs_children[ai], content_x, content_y, container_w, container_h);
             }
         }
 
