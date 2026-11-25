@@ -1147,9 +1147,7 @@ function installElementExtensions(proto) {
       return sp;
     },
     set: function (val) {
-      if (typeof val === "string") {
-        this.setAttribute("style", val);
-      }
+      this.style.cssText = val == null ? "" : String(val);
     },
     configurable: true,
   });
@@ -1282,6 +1280,12 @@ function installElementExtensions(proto) {
       this._attrList.push(entry);
     }
     this._attrs.set(key, { name: key, value: val });
+    if (key === "style" || key === "class" || key === "id") {
+      if (typeof globalThis !== "undefined") {
+        globalThis.__capsurf_cssom_epoch = (globalThis.__capsurf_cssom_epoch || 0) + 1;
+        globalThis.__capsurf_domMutationEpoch = (globalThis.__capsurf_domMutationEpoch || 0) + 1;
+      }
+    }
     if (key.toLowerCase() === "async") {
       if (typeof globalThis !== "undefined" && globalThis.__capsurf_clearScriptForceAsync) {
         globalThis.__capsurf_clearScriptForceAsync(this);

@@ -3574,3 +3574,5 @@
 - 修复了 `cssom.js` 单色快路径截断 `scrollbar-color` 第二个颜色的问题，以及 `window.js` `getComputedStyle` Proxy 属性访问绕过 `_lazyWidth`/`_lazyHeight` 的问题，使得 `/css/css-scrollbars/` 解析与继承全绿、`/css/css-sizing/inheritance-002.html` 转绿。
 ### Phase 867 — 替换元素百分比最小内容贡献修复（`/css/css-sizing/` 达成 100%）
 - 在 `layout.cp` `measureIntrinsicWidth` 中遵循 CSS Sizing 3 `#replaced-percentage-min-contribution`，修复 `<canvas>` 在 `width: 0px` 容器中的百分比 `width`/`max-width` 退化，`intrinsic-percent-replaced-028.html` 转绿，`/css/css-sizing/` **32/32** 全部通过。
+### Phase 868 — 动态 `style`/`class` 修改后代计算样式缓存失效修复
+- 修复了 `cssom.js` 与 `element.js` 修改内联样式或属性后仅递增 `__capsurf_cssom_epoch` 而未递增 `__capsurf_domMutationEpoch` 导致后代元素命中陈旧 `_rawBaseCache` 的问题，`/css/css-contain/content-visibility/content-visibility-036.html` 转绿。

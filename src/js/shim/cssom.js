@@ -8436,6 +8436,7 @@
     function notify() {
       if (typeof globalThis !== "undefined") {
         globalThis.__capsurf_cssom_epoch = (globalThis.__capsurf_cssom_epoch || 0) + 1;
+        globalThis.__capsurf_domMutationEpoch = (globalThis.__capsurf_domMutationEpoch || 0) + 1;
       }
       if (onMutate) onMutate();
     }
