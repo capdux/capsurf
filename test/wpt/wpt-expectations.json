@@ -2172,7 +2172,7 @@
     "reason": null
   },
   "/css/css-cascade/layer-cssom-order-reverse.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": "CSSOM layer-order changes do not invalidate layered @font-face selection, so the target keeps the wrong font width."
   },
   "/css/css-cascade/parsing/all-invalid.html": {

@@ -6848,7 +6848,8 @@ function installWindow(global) {
           text = sheet._cascadeCssText || "";
         }
       } else {
-        text = (sn._sheet && sn._sheet._cascadeCssText) ? sn._sheet._cascadeCssText : (sn.textContent || "");
+        if (sn._sheet && typeof sn._sheet._syncFromOwner === "function") sn._sheet._syncFromOwner();
+        text = (sn._sheet && typeof sn._sheet._cascadeCssText === "string") ? sn._sheet._cascadeCssText : (sn.textContent || "");
       }
       if (text) {
         if (!collectRawComputedMap._sheetTexts) collectRawComputedMap._sheetTexts = [];

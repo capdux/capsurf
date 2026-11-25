@@ -3412,3 +3412,5 @@
 - 移除 `getComputedStyle` 每次调用在 `declTarget` 上批量写入 400+ 索引属性及急切构造 `propSet`/`propList` 的开销，改由 `Proxy` 按需处理数字索引、`length`、`has`、`getOwnPropertyDescriptor` 与 `ownKeys`，单次 `getComputedStyle(el).display` 从 `18.6ms` 降至 `8.25ms`。
 ### Phase 786 — `input` `:dir()` / `direction` 方向性规范化及 `/css/selectors/` 目录清零
 - 清理 `dom_binding.cp` 中与 `element.js` 冲突的 `:dir()` 覆写，补全 `Element.prototype.dir` 属性反射、`input[type=tel]` 无 `dir` 属性固定 `ltr`、以及 `text/search/tel/url/email/password/submit/reset/button/hidden` 的 `dir="auto"` 值扫描，`/css/selectors/dir-pseudo-on-input-element.html` **FAIL→PASS**，实现 `/css/selectors/` 目录 0 FAIL 清零。
+### Phase 787 — `<style>` `deleteRule` 空串级联同步修复及 `/css/css-cascade/` 目录清零
+- 修复 `window.js` `collectElementOwnDeclarations` 在读取 `<style>` 节点 `sn._sheet._cascadeCssText` 时未先调用 `_syncFromOwner()` 且将空串 `""` 误判为假值回退至旧 `textContent` 的问题，`/css/css-cascade/layer-cssom-order-reverse.html` **FAIL→PASS**，实现 `/css/css-cascade/` 目录 0 FAIL 清零。

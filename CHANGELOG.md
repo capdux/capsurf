@@ -4270,3 +4270,7 @@
   - `src/js/shim/window.js`: `applyUsedValuesToComputedMap` 在未显式指定 `direction` 时回退至 `__capsurf_getComputedDirection(element)`。
   - `test/wpt/wpt-expectations.json`: 收紧 `/css/selectors/dir-pseudo-on-input-element.html` 为 `PASS`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 787**:
+  - `src/js/shim/window.js`: `collectElementOwnDeclarations` 在读取 `<style>` 节点 `sn._sheet._cascadeCssText` 前先调用 `_syncFromOwner()`，并改用 `typeof ... === "string"` 判定以避免空串假值回退。
+  - `test/wpt/wpt-expectations.json`: 收紧 `/css/css-cascade/layer-cssom-order-reverse.html` 为 `PASS`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
