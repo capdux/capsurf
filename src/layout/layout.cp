@@ -3828,12 +3828,37 @@ pub struct LayoutTree {
                         if (si + 1 < span) item_w += col_gap;
                     }
                     const item_y = cur_y;
+                    const cell_row_h = if (@as(usize, row_count) < explicit_rows && @as(usize, row_count) < 16) row_heights[@as(usize, row_count)] else 0.0;
 
-                    // Grid item measures its content-based height (auto row)
-                    _.layoutNode(doc, styles, child, item_x, item_y, item_w, 0.0);
+                    _.layoutNodeEx(doc, styles, child, item_x, item_y, item_w, cell_row_h, item_x, item_y, cell_row_h > 0.0);
 
                     const cbox = &_.boxes.items[@as(usize, child)];
-                    const item_outer_h = cbox.outerHeight();
+                    let auto_dx: f32 = 0.0;
+                    let auto_dy: f32 = 0.0;
+                    if (cstyle.margin_left.is_auto || cstyle.margin_right.is_auto) {
+                        const free_w = @max(0.0, item_w - cbox.outerWidth());
+                        if (cstyle.margin_left.is_auto && cstyle.margin_right.is_auto) auto_dx = free_w * 0.5;
+                        else if (cstyle.margin_left.is_auto) auto_dx = free_w;
+                    }
+                    if (cell_row_h > 0.0) {
+                        if (cstyle.margin_top.is_auto || cstyle.margin_bottom.is_auto) {
+                            const free_h = @max(0.0, cell_row_h - cbox.outerHeight());
+                            if (cstyle.margin_top.is_auto && cstyle.margin_bottom.is_auto) auto_dy = free_h * 0.5;
+                            else if (cstyle.margin_top.is_auto) auto_dy = free_h;
+                        } else {
+                            const eff_align = pstyle.align_items;
+                            const free_h = @max(0.0, cell_row_h - cbox.outerHeight());
+                            if (eff_align == AlignItems.Center) {
+                                auto_dy = free_h * 0.5;
+                            } else if (eff_align == AlignItems.FlexEnd) {
+                                auto_dy = free_h;
+                            }
+                        }
+                    }
+                    if (auto_dx != 0.0 || auto_dy != 0.0) {
+                        _.shiftSubtree(doc, child, auto_dx, auto_dy);
+                    }
+                    const item_outer_h = _.boxes.items[@as(usize, child)].outerHeight();
                     if (item_outer_h > cur_row_max_h) {
                         cur_row_max_h = item_outer_h;
                     }

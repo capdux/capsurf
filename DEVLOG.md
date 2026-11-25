@@ -3498,3 +3498,5 @@
 - 在 `cascade.cp` 与 `painter.cp` 完整实现 `object-fit` (`fill`/`contain`/`cover`/`none`/`scale-down`)、`object-position`（含 3/4 token 边缘偏移语法）以及 `background-size: contain|cover` + `background-position` 绘制与裁剪，一次性通过 `/css/css-images/object-fit-*` **171/173** 项 WPT Reftest。
 ### Phase 829 — `ListStylePosition` (`inside`/`outside`)、预定义列表标记与行内预留
 - 在 `cascade.cp`、`layout.cp`、`painter.cp` 统一实现 `list-style-position: inside|outside` 继承与首行宽度预留、`DecimalLeadingZero`/`LowerRoman`/`UpperRoman`/`LowerAlpha`/`UpperAlpha` 格式化与基线对齐绘制（`--smoke` 3/3 **PASS**）。
+### Phase 830 — Grid 自动外边距 (`auto margins`) 与行内 `align-items` 居中/末端对齐
+- 在 `layout.cp` `layoutGridContainer` 传入显式行高 `cell_row_h` 并实现网格子项水平/垂直 `auto` 外边距与 `align-items: center|flex-end` 偏移对齐，`/css/css-grid/alignment/*auto-margins*` 跃升至 **17/23 PASS**（`block-axis` 9/9 全绿），`--smoke` 3/3 **PASS**。

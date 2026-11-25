@@ -2496,3 +2496,4 @@
 | Phase 827 | `getComputedStyle` 6x 提速与 `cap:css` `CssColor` 下沉/HWB 精度修复 | `src/js/shim/window.js`, `src/js/shim/cssom.js`, `/data/dev/cp/lib/css/color.cp` | `color-computed-hwb` (56/56 **PASS**), `200x cs.color` 4580ms→768ms; `--smoke` 3/3 PASS |
 | Phase 828 | 原生 `object-fit`/`object-position` 与 `background-size: contain\|cover` | `src/css/cascade.cp`, `src/render/painter.cp` | `object-fit-*` **171/173 PASS**; `--smoke` 3/3 PASS |
 | Phase 829 | `ListStylePosition` (`inside`/`outside`) 与预定义列表标记 (`formatListMarker`) | `src/css/cascade.cp`, `src/layout/layout.cp`, `src/render/painter.cp` | `formatListMarker` + `inside` 布局对齐; `--smoke` 3/3 PASS |
+| Phase 830 | Grid 自动外边距与行内 `align-items` 对齐 | `src/layout/layout.cp` | `grid-*-alignment-auto-margins*` **17/23 PASS**; `--smoke` 3/3 PASS |

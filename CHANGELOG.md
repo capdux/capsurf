@@ -4435,3 +4435,5 @@
   - `src/css/cascade.cp`: 新增 `ListStylePosition` 继承及 `list-style-position`/`list-style` 解析；扩展 `ListStyleType`（`DecimalLeadingZero`/`LowerRoman`/`LowerAlpha`/`UpperAlpha`）并实现共享 `formatListMarker`。
   - `src/layout/layout.cp`: `layoutBlockContainer` 为 `list-style-position: inside` 的 `<li>` 首行预留 `marker + " "` 行内宽度。
   - `src/render/painter.cp`: 抽取 `findFirstTextRect`，使用 `formatListMarker` 与 `0.75 * fontSize` 字号按 `inside`/`outside` 绘制列表标记。
+- **Phase 830**:
+  - `src/layout/layout.cp`: `layoutGridContainer` 传入显式行高 `cell_row_h`，支持网格子项水平/垂直 `auto` 外边距对齐与 `align-items: center|flex-end`。
