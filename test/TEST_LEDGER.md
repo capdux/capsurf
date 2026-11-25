@@ -2438,3 +2438,4 @@
 | Phase 769 | WPT `@font-face` `tech()`、`metric-overrides` 与 `font-width` 闭环 | `src/js/shim/cssom.js`, `test/wpt/wpt-expectations.json` | `font-face-src-tech` **FAIL→PASS**, `font-face-{metric-overrides,width}` **PASS** (`7,211` PASS); `--smoke` 3/3 PASS |
 | Phase 770 | WPT `/css/css-masking/parsing/` `mask-border-*` 补全与全目录 28/28 PASS | `src/js/shim/cssom.js`, `src/js/shim/window.js` | `mask-valid.sub`, `mask-computed` **PASS** (**`/css/css-masking/parsing/` 28/28 100% PASS**); `--smoke` 3/3 PASS |
 | Phase 771 | WPT `/css/css-text-decor/` 初始值 `auto` 补全（非动画 45/45 PASS） | `src/js/shim/window.js` | `text-decoration-thickness-initial`, `text-underline-offset-initial` **PASS**; `--smoke` 3/3 PASS |
+| Phase 772 | WPT `var()` 语法校验与自定义属性循环引用三色 DFS 检测 | `src/js/shim/window.js`, `src/js/shim/element/element.js`, `test/wpt/wpt-expectations.json` | `variable-cycles` (11/11 **PASS**), `var-parsing` **FAIL→PASS** (`7,212` PASS); `--smoke` 3/3 PASS |

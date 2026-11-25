@@ -17505,7 +17505,6 @@
     if (key.startsWith("--")) return key.length > 2;
     const lower = v.toLowerCase();
     if (CSS_WIDE_KEYWORDS.has(lower)) return true;
-    if (lower.indexOf("var(") !== -1) return true;
     if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_isValidCssValue === "function" && !globalThis.__capsurf_isValidCssValue(key, v)) {
       return false;
     }
@@ -45885,19 +45884,25 @@
 
     function resolveVarsInMap(computedMap) {
       const MAX_VAR_LEN = 65536;
-      function substitute(val, depth) {
-        if (typeof val !== "string" || val.indexOf("var(") === -1 || depth > 16) return val;
+      const INVALID = Symbol("var_invalid");
+      const visitingStack = [];
+      const visitingSet = new Set();
+      const resolvedCustom = new Map();
+      const cycledCustom = new Set();
+
+      function substituteStr(val, depth) {
+        if (typeof val !== "string" || val.indexOf("var(") === -1 || depth > 32) return val;
         let out = "";
         let i = 0;
         while (i < val.length) {
           const idx = val.indexOf("var(", i);
           if (idx === -1) {
             out += val.slice(i);
-            if (out.length > MAX_VAR_LEN) return null;
+            if (out.length > MAX_VAR_LEN) return INVALID;
             break;
           }
           out += val.slice(i, idx);
-          if (out.length > MAX_VAR_LEN) return null;
+          if (out.length > MAX_VAR_LEN) return INVALID;
           let d = 1;
           let j = idx + 4;
           while (j < val.length && d > 0) {
@@ -45917,24 +45922,71 @@
             }
           }
           const varName = (commaIdx === -1 ? inside : inside.slice(0, commaIdx)).trim();
-          let fallback = commaIdx === -1 ? "" : inside.slice(commaIdx + 1).trim();
+          const hasFallback = commaIdx !== -1;
+          let fallback = hasFallback ? inside.slice(commaIdx + 1).trim() : "";
           if (d > 1 && fallback) fallback += ")".repeat(d - 1);
-          let rep = computedMap.has(varName) ? computedMap.get(varName) : "";
-          if (!rep && fallback) rep = fallback;
-          if (rep && rep.indexOf("var(") !== -1) {
-            rep = substitute(rep, depth + 1);
-            if (rep === null) return null;
+
+          let rep = INVALID;
+          if (varName.startsWith("--") && computedMap.has(varName)) {
+            rep = resolveCustomProp(varName, depth + 1);
+          }
+          if (rep === INVALID || rep === "") {
+            if (hasFallback) {
+              rep = fallback.indexOf("var(") !== -1 ? substituteStr(fallback, depth + 1) : fallback;
+              if (rep === INVALID) return INVALID;
+            } else {
+              return INVALID;
+            }
           }
           out += rep;
-          if (out.length > MAX_VAR_LEN) return null;
+          if (out.length > MAX_VAR_LEN) return INVALID;
           i = j;
         }
         return out;
       }
-      for (const [k, v] of computedMap.entries()) {
-        if (typeof v === "string" && v.indexOf("var(") !== -1) {
-          const res = substitute(v, 0);
-          if (res === null) computedMap.delete(k);
+
+      function resolveCustomProp(name, depth) {
+        if (visitingSet.has(name)) {
+          const idx = visitingStack.indexOf(name);
+          if (idx !== -1) {
+            for (let ci = idx; ci < visitingStack.length; ci++) {
+              cycledCustom.add(visitingStack[ci]);
+            }
+          }
+          return INVALID;
+        }
+        if (cycledCustom.has(name)) return INVALID;
+        if (resolvedCustom.has(name)) return resolvedCustom.get(name);
+        const raw = computedMap.get(name);
+        if (typeof raw !== "string") return INVALID;
+        if (raw.indexOf("var(") === -1) {
+          resolvedCustom.set(name, raw);
+          return raw;
+        }
+        visitingStack.push(name);
+        visitingSet.add(name);
+        const res = substituteStr(raw, depth);
+        visitingStack.pop();
+        visitingSet.delete(name);
+        if (cycledCustom.has(name) || res === INVALID) {
+          cycledCustom.add(name);
+          return INVALID;
+        }
+        resolvedCustom.set(name, res);
+        return res;
+      }
+
+      for (const [k, v] of Array.from(computedMap.entries())) {
+        if (k.startsWith("--")) {
+          const res = resolveCustomProp(k, 0);
+          if (res === INVALID || cycledCustom.has(k)) computedMap.delete(k);
+          else computedMap.set(k, res);
+        }
+      }
+      for (const [k, v] of Array.from(computedMap.entries())) {
+        if (!k.startsWith("--") && typeof v === "string" && v.indexOf("var(") !== -1) {
+          const res = substituteStr(v, 0);
+          if (res === INVALID) computedMap.delete(k);
           else computedMap.set(k, res);
         }
       }

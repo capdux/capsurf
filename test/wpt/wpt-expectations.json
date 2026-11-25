@@ -7650,14 +7650,8 @@
     "reason": "T18 enrollment (css-variables): 1/5 subtests pass"
   },
   "/css/css-variables/var-parsing.html": {
-    "expected": "FAIL",
-    "corpusChange": {
-      "revision": "6efb1b12b95725c026cb1f5a451138345cfca937",
-      "kind": "outcome",
-      "from": "PASS",
-      "to": "FAIL"
-    },
-    "reason": "Upstream made five free-form var() name cases valid because name validation happens during substitution. Stylo rejects them during parsing."
+    "expected": "PASS",
+    "reason": null
   },
   "/css/css-variables/variable-animation-guaranteed-invalid.html": {
     "expected": "PASS",

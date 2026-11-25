@@ -4210,3 +4210,8 @@
 - **Phase 771**:
   - `src/js/shim/window.js`: 默认计算值表新增 `text-decoration-thickness: "auto"` 与 `text-underline-offset: "auto"`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 772**:
+  - `src/js/shim/window.js`: `resolveVarsInMap` 新增三色 DFS 自定义属性循环引用检测与次级环识别。
+  - `src/js/shim/element/element.js`: 移除 `isValidInlinePropValue` 中 `var(` 短接，走 `isValidCssValue` 完整语法校验。
+  - `test/wpt/wpt-expectations.json`: 收紧 `/css/css-variables/var-parsing.html` 为 `PASS`（`7,212` PASS）。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

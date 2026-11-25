@@ -91,7 +91,6 @@ function isValidInlinePropValue(key, val) {
   if (key.startsWith("--")) return key.length > 2;
   const lower = v.toLowerCase();
   if (CSS_WIDE_KEYWORDS.has(lower)) return true;
-  if (lower.indexOf("var(") !== -1) return true;
   if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_isValidCssValue === "function" && !globalThis.__capsurf_isValidCssValue(key, v)) {
     return false;
   }

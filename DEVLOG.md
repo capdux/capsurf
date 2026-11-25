@@ -3382,3 +3382,5 @@
 - 在 `cssom.js` `KNOWN_PROPS` 与 `window.js` `STANDARD_COMPUTED_LONGHANDS` 补齐 `mask-border-*` 与 `mask-{clip,mode,origin,position}`，`mask-valid.sub.html` 与 `mask-computed.html` 全部恢复 **PASS**，实现 `/css/css-masking/parsing/` 28/28 全绿。
 ### Phase 771 — `/css/css-text-decor/` 非动画全绿（45/45 100% PASS）
 - 在 `window.js` 默认计算值表补充 `text-decoration-thickness: "auto"` 与 `text-underline-offset: "auto"`，`text-decoration-thickness-initial.html` 与 `text-underline-offset-initial.html` 全部恢复 **PASS**。
+### Phase 772 — CSS 自定义属性循环引用检测与 `var()` 语法校验闭环
+- 在 `window.js` `resolveVarsInMap` 实现三色栈式 DFS 循环检测，解决自环/互环/嵌套次级环未标记 guaranteed-invalid 的问题（`variable-cycles.html` 11/11 全绿）；移除 `element.js` `var(` 短接漏洞，打通 `var-parsing.html`（`FAIL→PASS`，基线增至 `7,212`）。
