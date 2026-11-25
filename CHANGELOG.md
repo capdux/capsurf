@@ -4606,3 +4606,5 @@
 - `src/js/shim/window.js`: `flex` 简写展开识别 `calc()`/`sign()` 无单位数值；`grid-{row,column}-{start,end}` 将 `span <= 0` 钳位为 `span 1`。
 - `src/js/shim/cssom.js`: 含 `sign()`/`sibling-` 的 `flex-grow`/`flex-shrink` 绕过 `cap:css`；`grid-*` 属性跳过 `normalizeCssColor` 以保留 `\31 st` 转义。
 - `src/js/{runtime.js,runtime_source.cp}`: 重新打包；`flex-computed.html`（`/css/css-flexbox/parsing/` **27/27 100% PASS**）与 `grid-area-computed.html` **2/2 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 886 — 显式高度表格行高均分扩展（`absolute-tables-001` 修复）
+- `src/layout/layout.cp`: `layoutTableCore` 在 `!tb_h.height_is_auto` 时将富余表格内容高度均分至各行 `row_h`，修复单元格 `clientHeight` 停留在固有高度（22px）而非撑满表格（38px）的问题；通过 `cpc fix` + `cpc brief` 门禁，`/css/css-tables/absolute-tables-001.html` **PASS**，`--smoke` 3/3 **PASS**。

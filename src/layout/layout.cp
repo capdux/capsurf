@@ -2687,6 +2687,26 @@ pub struct LayoutTree {
             }
         }
 
+        // Distribute extra explicit table height across rows (CSS Table 3 / HTML tables)
+        if (table_id != NULL_NODE && row_count > 0) {
+            const tb_h = &_.boxes.items[@as(usize, table_id)];
+            if (!tb_h.height_is_auto) {
+                const total_v_sp = @as(f32, @floatFromInt(row_count + 1)) * v_spacing;
+                let sum_rows_h: f32 = 0.0;
+                let rh_i: usize = 0;
+                while (rh_i < row_count) : (rh_i += 1) {
+                    sum_rows_h += row_h[rh_i];
+                }
+                if (tb_h.content_height > sum_rows_h + total_v_sp) {
+                    const add_per_row = (tb_h.content_height - sum_rows_h - total_v_sp) / @as(f32, @floatFromInt(row_count));
+                    let rh_j: usize = 0;
+                    while (rh_j < row_count) : (rh_j += 1) {
+                        row_h[rh_j] += add_per_row;
+                    }
+                }
+            }
+        }
+
         // Compute row Y positions
         let row_y: [64]f32 = [0.0; 64];
         let ry_cur = grid_top_y + table_border_top + table_pad_top + v_spacing;

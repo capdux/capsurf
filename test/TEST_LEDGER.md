@@ -2553,3 +2553,4 @@
 | Phase 883 | `getTiming()` 与 `cubic-bezier()` 越界切线外推、`calc()` 时间与 `paused` 支持 | `src/js/shim/animations.js` | `cubic-bezier-timing-functions-output.html` **PASS**; `--smoke` 3/3 PASS |
 | Phase 884 | `_rawBaseCache` 焦点状态校验 & `display: grid-lanes` 支持 | `cssom.js`, `window.js` | `display-contents-focusable-001`, `display-{valid,computed}` **3/3 PASS**; `--smoke` 3/3 PASS |
 | Phase 885 | `flex` `sign()`/`cqw` 展开 & `grid-area` `span`/转义修复 | `cssom.js`, `window.js` | `/css/css-flexbox/parsing/` **27/27 (100%) PASS**, `grid-area-computed` **PASS**; `--smoke` 3/3 PASS |
+| Phase 886 | 显式高度表格向行高均分扩展（`/css/css-tables/` 17/18） | `src/layout/layout.cp` | `/css/css-tables/absolute-tables-001.html` **PASS**; `--smoke` 3/3 PASS |

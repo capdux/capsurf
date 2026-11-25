@@ -3611,3 +3611,5 @@
 - 修复 `element.focus()` 仅变更 `document.activeElement` 而未使 `element._rawBaseCache` 失效导致 `getComputedStyle(e)` 仍返回失焦样式的问题，并放行 CSS Grid 3 试验值 `grid-lanes`/`inline-grid-lanes`。
 ### Phase 885 — `flex` 简写 `sign()`/`cqw` 放行与 `grid-*` 标识符转义保留
 - 修复 `window.js` `flex` 简写展开与 `cssom.js` `valCheckProps` 拦截 `calc(10 + (sign(20cqw - 10px) * 5))` 导致回落 `"0 1 1px"` 的问题，并跳过 `grid-*` 计算值的 `normalizeCssColor` 解义，保住 `\31 st` 转义序列化。
+### Phase 886 — 表格显式高度向行高与单元格分配
+- 定位 `absolute-tables-001.html` 中 `.tbl` 已正确计算为 `38px` 但 `.cell` 仍为 `22px` 的根因：`layoutTableCore` 仅将显式宽度分配至列宽而未将显式高度分配至 `row_h`；补齐均分逻辑后 8 个子断言全部通过。
