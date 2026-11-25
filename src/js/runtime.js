@@ -3931,7 +3931,7 @@
       "border-start-end-radius", "border-start-start-radius", "border-style", "border-top",
       "border-top-color", "border-top-left-radius", "border-top-right-radius", "border-top-style",
       "border-top-width", "border-width", "bottom", "box-decoration-break", "box-shadow",
-      "box-sizing", "break-after", "break-before", "break-inside", "caption-side", "caret-color",
+      "box-sizing", "break-after", "break-before", "break-inside", "caption-side", "caret-color", "caret-shape",
       "clear", "clip", "clip-path", "clip-rule", "color", "color-interpolation-filters", "color-scheme", "column-count", "column-fill",
       "column-gap", "column-height", "column-rule", "column-rule-color", "column-rule-style", "column-rule-width",
       "column-span", "column-width", "column-wrap", "columns", "contain", "contain-intrinsic-block-size",
@@ -3961,6 +3961,7 @@
       "mask-border-outset", "mask-border-repeat", "mask-border-slice", "mask-border-source", "mask-border-width",
       "mask-clip", "mask-composite", "mask-image",
       "mask-mode", "mask-origin", "mask-position", "mask-repeat", "mask-size", "mask-type", "max-lines",
+      "nav-down", "nav-left", "nav-right", "nav-up",
       "max-block-size", "max-height", "max-inline-size", "max-width", "min-block-size",
       "min-height", "min-inline-size", "min-width", "mix-blend-mode", "object-fit",
       "object-position", "offset", "offset-anchor", "offset-distance", "offset-path",
@@ -4574,6 +4575,7 @@
         "scrollbar-width": ["auto", "thin", "none"],
         "field-sizing": ["fixed", "content"],
         "column-wrap": ["auto", "nowrap", "wrap"],
+        "caret-shape": ["auto", "bar", "block", "underscore"],
         "content-visibility": ["visible", "auto", "hidden"],
         "overflow-anchor": ["auto", "none"],
         "scroll-snap-stop": ["normal", "always"],
@@ -5583,6 +5585,15 @@
         const t = toks[0];
         if (t === "auto" || /^(?:calc|min|max|clamp|var|env)\(/i.test(t)) return true;
         return /^\+?[1-9]\d*$/.test(t);
+      }
+      if (prop === "nav-down" || prop === "nav-left" || prop === "nav-right" || prop === "nav-up") {
+        if (vLower === "auto") return true;
+        const toks = splitCssTokens(trimmed);
+        if (toks.length < 1 || toks.length > 2) return false;
+        if (!/^#[A-Za-z_\\-][A-Za-z0-9_\\-]*$/.test(toks[0])) return false;
+        if (toks.length === 1) return true;
+        const t1 = toks[1].toLowerCase();
+        return t1 === "current" || t1 === "root" || /^"(?:[^"\\]|\\.)*"$|^'(?:[^'\\]|\\.)*'$/.test(toks[1]);
       }
       if (prop === "column-width" || prop === "column-height") {
         const toks = splitCssTokens(vLower);
@@ -45863,7 +45874,7 @@
       "color", "font-size", "font-family", "font-weight", "font-style",
       "line-height", "text-align", "visibility", "direction", "white-space",
       "white-space-collapse", "text-wrap-mode", "text-wrap-style", "text-wrap",
-      "letter-spacing", "word-spacing", "cursor", "hyphenate-character", "hyphenate-limit-chars", "interactivity", "caret-color",
+      "letter-spacing", "word-spacing", "cursor", "hyphenate-character", "hyphenate-limit-chars", "interactivity", "caret-color", "caret-shape",
       "text-combine-upright", "text-orientation", "writing-mode",
       "text-emphasis-color", "text-emphasis-position", "text-emphasis-style", "text-shadow", "text-underline-position", "text-decoration-skip-ink",
       "border-collapse", "border-spacing", "caption-side", "empty-cells",
@@ -48754,6 +48765,11 @@
         ["column-width", "auto"],
         ["column-height", "auto"],
         ["column-wrap", "auto"],
+        ["caret-shape", "auto"],
+        ["nav-down", "auto"],
+        ["nav-left", "auto"],
+        ["nav-right", "auto"],
+        ["nav-up", "auto"],
         ["margin-trim", "none"],
         ["font-size-adjust", "none"],
         ["font-synthesis", "weight style small-caps"],
@@ -49781,7 +49797,7 @@
       "border-start-end-radius", "border-start-start-radius",
       "border-top-color", "border-top-left-radius", "border-top-right-radius",
       "border-top-style", "border-top-width", "bottom", "box-decoration-break", "box-shadow",
-      "box-sizing", "break-after", "break-before", "break-inside", "caption-side", "caret-color",
+      "box-sizing", "break-after", "break-before", "break-inside", "caption-side", "caret-color", "caret-shape",
       "clear", "clip", "clip-path", "color", "color-interpolation-filters", "color-scheme", "column-count", "column-fill", "column-gap",
       "flood-color", "lighting-color",
       "column-rule-color", "column-rule-style", "column-rule-width", "column-span", "column-width", "column-height", "column-wrap", "contain",
@@ -49800,7 +49816,7 @@
       "line-height", "list-style-image", "list-style-position", "list-style-type",
       "margin-block-end", "margin-block-start", "margin-bottom", "margin-inline-end", "margin-inline-start",
       "margin-left", "margin-right", "margin-top", "max-block-size", "max-height", "max-inline-size", "max-lines", "max-width",
-      "min-block-size", "min-height", "min-inline-size", "min-width", "mix-blend-mode", "object-fit", "object-position", "opacity",
+      "min-block-size", "min-height", "min-inline-size", "min-width", "mix-blend-mode", "nav-down", "nav-left", "nav-right", "nav-up", "object-fit", "object-position", "opacity",
       "order", "orphans", "outline-color", "outline-offset", "outline-style", "outline-width",
       "overscroll-behavior-block", "overscroll-behavior-inline", "overscroll-behavior-x", "overscroll-behavior-y",
       "overflow-anchor", "overflow-block", "overflow-clip-margin", "overflow-inline", "overflow-wrap", "overflow-x", "overflow-y",

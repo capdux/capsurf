@@ -4252,3 +4252,8 @@
   - `src/js/shim/cssom.js`: `KNOWN_PROPS`、`KEYWORD_PROPS`、非负长度校验、`columns` 展开/序列化及 `makeRuleStyleDeclaration` 初始解析补全 `column-height` 与 `column-wrap`。
   - `src/js/shim/window.js`: `INITIAL_VALUES` 与 `ALL_KNOWN_PROPS` 补全 `column-height` 与 `column-wrap`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 783**:
+  - `src/js/shim/cssom.js`: `KNOWN_PROPS`、`KEYWORD_PROPS` 及 `isValidCssValue` 补全 `caret-shape` 与 `nav-{down,left,right,up}`。
+  - `src/js/shim/window.js`: `INHERITED_PROPS`、`INITIAL_VALUES` 与 `ALL_KNOWN_PROPS` 补全 `caret-shape` 与 `nav-{down,left,right,up}`。
+  - `test/wpt/wpt-expectations.json`: 收紧 `/css/css-ui/inheritance.html` 为 `PASS`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

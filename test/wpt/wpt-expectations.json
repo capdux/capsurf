@@ -6035,7 +6035,7 @@
     "reason": null
   },
   "/css/css-ui/inheritance.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": null
   },
   "/css/css-ui/parsing/box-sizing-computed.html": {

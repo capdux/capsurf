@@ -3404,3 +3404,5 @@
 - 在 `window.js` `ensureLiveComputed` 中新增 `lastActiveEl` 追踪，确保焦点切换时 `getComputedStyle(el)` 实时重算 `:focus` 规则，`display-contents-focusable-001.html` 恢复 **PASS**；在 `element.js` 修复 `lookupPropertyValue` 与 `styleProxy.get` 对 `font` 简写的提前短路，使 `font-variant` 为 `small-caps` / 非 CSS2 值时 `style.font` 正确拼装或置空，`/css/css-fonts/parsing/font-shorthand-variant.html` **FAIL→PASS**。
 ### Phase 782 — `column-height` / `column-wrap` 与 `columns` `/` 简写全量打通
 - 在 `cssom.js` 与 `window.js` 中补全 `column-height`（非负长度/`auto`）与 `column-wrap`（`auto | nowrap | wrap`）注册，并在 `columns` 简写展开与 `makeRuleStyleDeclaration` 初始解析中同步重置 `column-wrap: auto`，`columns-shorthand-reset-wrap.html` 与 `columns-computed.html` (27/27) 均恢复 **PASS**。
+### Phase 783 — `caret-shape` 与 `nav-*` 空间导航属性补全及 `/css/css-ui/` 主目录清零
+- 在 `cssom.js` 与 `window.js` 中补全 `caret-shape`（可继承，初始 `auto`，支持 `auto | bar | block | underscore`）与 `nav-{down,left,right,up}`（非继承，初始 `auto`，支持 `#id [current|root|<string>]`），`/css/css-ui/inheritance.html` **FAIL→PASS**，实现 `/css/css-ui/` 主目录 0 FAIL 清零。
