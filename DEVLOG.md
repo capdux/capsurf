@@ -3599,3 +3599,5 @@
 - 解决 `rawInlineSelf` 在 `_skipInline` 路径晚于 `valCheckProps` 解析导致 `text-orientation: foo` 覆盖继承值 `upright` 的问题；同时发现 `ZERO_PX_PROPS` 在 `normalizeCssSpecifiedValue` 中提前命中 `canonicalizeCalcToken`，在 `canonicalizeCalcToken` 顶部统一补齐未闭合 `)` 后彻底修复 `calc(10px - (5% + 10%)` 的序列化与 `splitCssDeclarations` 截断问题。
 ### Phase 879 — 样式表缓存键 `sheetKey` 前缀碰撞根因修复
 - 定位 `transition-property-002.html` 中 `"all, foobar"` -> `"foobar, all"` 与 `"inherit"` -> `"initial"` 连续切换返回旧值的根因：`sheetKey` 仅拼接 `t.length + ":" + t.slice(0, 64)`，导致前 64 字符和总长度相同的 `<style>.textContent` 发生缓存键碰撞；改用 FNV-1a 全文哈希后问题彻底消除。
+### Phase 880 — `css-easing` 阶跃与贝塞尔缓动函数规范化闭环
+- 在 `cssom.js` 与 `window.js` 补齐 `step-start`/`step-end` 到 `steps(1, start)`/`steps(1)` 的规范序列化、`steps(n, end|jump-end)` 省略默认位置参数，以及 `steps(calc/sign)`、`cubic-bezier(calc/sign)` 在解析期与计算期的数值求值与边界钳位。

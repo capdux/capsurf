@@ -7296,7 +7296,7 @@
           if (t.startsWith("cubic-bezier(") && t.endsWith(")")) {
             const args = splitTopLevelComma(t.slice(13, -1));
             if (args.length !== 4) return false;
-            if (!args.every(a => isNum(a) || /^(?:calc|var|env)\(/i.test(a))) return false;
+            if (!args.every(a => isNum(a) || /^(?:calc|min|max|clamp|var|env|sign|sibling-index)\(/i.test(a))) return false;
             if (isNum(args[0]) && (Number(args[0]) < 0 || Number(args[0]) > 1)) return false;
             if (isNum(args[2]) && (Number(args[2]) < 0 || Number(args[2]) > 1)) return false;
             continue;
@@ -7304,11 +7304,26 @@
           if (t.startsWith("steps(") && t.endsWith(")")) {
             const args = splitTopLevelComma(t.slice(6, -1));
             if (args.length < 1 || args.length > 2) return false;
-            if (!/^\+?\d+$/.test(args[0])) return false;
-            const n = Number(args[0]);
             if (args.length === 2 && !STEP_POS.has(args[1])) return false;
-            if (n < (args[1] === "jump-none" ? 2 : 1)) return false;
-            continue;
+            if (/^\+?\d+$/.test(args[0])) {
+              const n = Number(args[0]);
+              if (n < (args[1] === "jump-none" ? 2 : 1)) return false;
+              continue;
+            }
+            if (/^(?:calc|min|max|clamp|var|env|sign|sibling-index)\(/i.test(args[0])) {
+              if (/^calc\(/i.test(args[0])) {
+                if (!isValidCalcSyntax(args[0])) return false;
+                const inn = args[0].slice(5, -1).trim();
+                if (/^[\d+\-*/().\s]+$/.test(inn)) {
+                  try {
+                    const v = Function("return (" + inn + ")")();
+                    if (typeof v !== "number" || !isFinite(v)) return false;
+                  } catch (_) { return false; }
+                }
+              }
+              continue;
+            }
+            return false;
           }
           if (t.startsWith("linear(") && t.endsWith(")")) {
             const inner = t.slice(7, -1).trim();
@@ -9755,6 +9770,41 @@
             return name + " " + off;
           }
           return part;
+        }).join(", ");
+      }
+      if (key === "transition-timing-function" || key === "animation-timing-function") {
+        return splitTopLevelComma(s).map((part) => {
+          const p = part.trim();
+          const pl = p.toLowerCase();
+          if (pl === "step-start") return "steps(1, start)";
+          if (pl === "step-end") return "steps(1)";
+          if (/^steps\(/i.test(pl) && pl.endsWith(")")) {
+            const args = splitTopLevelComma(p.slice(6, -1));
+            if (args.length >= 1 && args.length <= 2) {
+              let nArg = args[0].trim();
+              if (/^calc\(/i.test(nArg)) nArg = canonicalizeCalcToken(nArg);
+              else if (/^\+?\d+$/.test(nArg)) nArg = String(parseInt(nArg, 10));
+              const pos = args.length === 2 ? args[1].trim().toLowerCase() : "";
+              if (!pos || pos === "end" || pos === "jump-end") return "steps(" + nArg + ")";
+              return "steps(" + nArg + ", " + pos + ")";
+            }
+          }
+          if (/^cubic-bezier\(/i.test(pl) && pl.endsWith(")")) {
+            const args = splitTopLevelComma(p.slice(13, -1));
+            if (args.length === 4) {
+              const normArgs = args.map((a) => {
+                const t = a.trim();
+                if (/^calc\(/i.test(t)) return canonicalizeCalcToken(t);
+                if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(t)) {
+                  const n = Number(t);
+                  return String(n === 0 ? 0 : n);
+                }
+                return t;
+              });
+              return "cubic-bezier(" + normArgs.join(", ") + ")";
+            }
+          }
+          return pl;
         }).join(", ");
       }
       if (key === "transition-property") {
@@ -50933,7 +50983,76 @@
         }
       }
       for (const tfKey of ["transition-timing-function", "animation-timing-function"]) {
-        const tfRaw = computedMap.get(tfKey);
+        let tfRaw = computedMap.get(tfKey);
+        if (tfRaw && (/\b(?:step-start|step-end)\b/i.test(tfRaw) || /\b(?:steps|cubic-bezier)\(/i.test(tfRaw))) {
+          const evalTfNum = (exprStr) => {
+            let s = String(exprStr || "").trim();
+            if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(s)) return Number(s);
+            if (/^(?:calc|min|max|clamp)\(/i.test(s)) {
+              if (/sign\(/i.test(s)) s = evalSignCalls(s, element);
+              const inn = s.slice(s.indexOf("(") + 1, -1).trim();
+              if (/^[\d+\-*/().\s]+$/.test(inn)) {
+                try {
+                  const v = Function("return (" + inn + ")")();
+                  if (typeof v === "number" && isFinite(v)) return v;
+                } catch (_) {}
+              }
+            }
+            return null;
+          };
+          const tfItems = [];
+          let tfCur = "", tfD = 0;
+          for (let ti = 0; ti < tfRaw.length; ti++) {
+            const ch = tfRaw[ti];
+            if (ch === "(") tfD++;
+            else if (ch === ")") tfD--;
+            if (ch === "," && tfD === 0) { tfItems.push(tfCur.trim()); tfCur = ""; }
+            else tfCur += ch;
+          }
+          if (tfCur.trim()) tfItems.push(tfCur.trim());
+          tfRaw = tfItems.map((it) => {
+            const il = it.toLowerCase();
+            if (il === "step-start") return "steps(1, start)";
+            if (il === "step-end") return "steps(1)";
+            if (/^steps\(/i.test(il) && il.endsWith(")")) {
+              const inner = it.slice(6, -1);
+              const comma = inner.indexOf(",");
+              const nStr = (comma === -1 ? inner : inner.slice(0, comma)).trim();
+              const pos = comma === -1 ? "" : inner.slice(comma + 1).trim().toLowerCase();
+              const nv = evalTfNum(nStr);
+              if (nv !== null) {
+                const minN = pos === "jump-none" ? 2 : 1;
+                const nInt = Math.max(minN, Math.round(nv));
+                if (!pos || pos === "end" || pos === "jump-end") return "steps(" + nInt + ")";
+                return "steps(" + nInt + ", " + pos + ")";
+              }
+            } else if (/^cubic-bezier\(/i.test(il) && il.endsWith(")")) {
+              const inner = it.slice(13, -1);
+              const cArgs = [];
+              let ac = "", ad = 0;
+              for (let ai = 0; ai < inner.length; ai++) {
+                const ch = inner[ai];
+                if (ch === "(") ad++;
+                else if (ch === ")") ad--;
+                if (ch === "," && ad === 0) { cArgs.push(ac.trim()); ac = ""; }
+                else ac += ch;
+              }
+              if (ac.trim()) cArgs.push(ac.trim());
+              if (cArgs.length === 4) {
+                const outArgs = cArgs.map((a, idx) => {
+                  const v = evalTfNum(a);
+                  if (v === null) return a;
+                  let fv = v === 0 ? 0 : v;
+                  if (idx === 0 || idx === 2) fv = Math.min(1, Math.max(0, fv));
+                  return String(Number(fv.toFixed(6)));
+                });
+                return "cubic-bezier(" + outArgs.join(", ") + ")";
+              }
+            }
+            return it;
+          }).join(", ");
+          computedMap.set(tfKey, tfRaw);
+        }
         if (tfRaw && /\blinear\(/i.test(tfRaw)) {
           computedMap.set(tfKey, tfRaw.replace(/\blinear\(([^)]*)\)/gi, (_, body) => {
             const rawStops = body.split(",").map((s) => s.trim()).filter(Boolean);

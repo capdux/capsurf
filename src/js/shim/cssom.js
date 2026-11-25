@@ -3401,7 +3401,7 @@
         if (t.startsWith("cubic-bezier(") && t.endsWith(")")) {
           const args = splitTopLevelComma(t.slice(13, -1));
           if (args.length !== 4) return false;
-          if (!args.every(a => isNum(a) || /^(?:calc|var|env)\(/i.test(a))) return false;
+          if (!args.every(a => isNum(a) || /^(?:calc|min|max|clamp|var|env|sign|sibling-index)\(/i.test(a))) return false;
           if (isNum(args[0]) && (Number(args[0]) < 0 || Number(args[0]) > 1)) return false;
           if (isNum(args[2]) && (Number(args[2]) < 0 || Number(args[2]) > 1)) return false;
           continue;
@@ -3409,11 +3409,26 @@
         if (t.startsWith("steps(") && t.endsWith(")")) {
           const args = splitTopLevelComma(t.slice(6, -1));
           if (args.length < 1 || args.length > 2) return false;
-          if (!/^\+?\d+$/.test(args[0])) return false;
-          const n = Number(args[0]);
           if (args.length === 2 && !STEP_POS.has(args[1])) return false;
-          if (n < (args[1] === "jump-none" ? 2 : 1)) return false;
-          continue;
+          if (/^\+?\d+$/.test(args[0])) {
+            const n = Number(args[0]);
+            if (n < (args[1] === "jump-none" ? 2 : 1)) return false;
+            continue;
+          }
+          if (/^(?:calc|min|max|clamp|var|env|sign|sibling-index)\(/i.test(args[0])) {
+            if (/^calc\(/i.test(args[0])) {
+              if (!isValidCalcSyntax(args[0])) return false;
+              const inn = args[0].slice(5, -1).trim();
+              if (/^[\d+\-*/().\s]+$/.test(inn)) {
+                try {
+                  const v = Function("return (" + inn + ")")();
+                  if (typeof v !== "number" || !isFinite(v)) return false;
+                } catch (_) { return false; }
+              }
+            }
+            continue;
+          }
+          return false;
         }
         if (t.startsWith("linear(") && t.endsWith(")")) {
           const inner = t.slice(7, -1).trim();
@@ -5860,6 +5875,41 @@
           return name + " " + off;
         }
         return part;
+      }).join(", ");
+    }
+    if (key === "transition-timing-function" || key === "animation-timing-function") {
+      return splitTopLevelComma(s).map((part) => {
+        const p = part.trim();
+        const pl = p.toLowerCase();
+        if (pl === "step-start") return "steps(1, start)";
+        if (pl === "step-end") return "steps(1)";
+        if (/^steps\(/i.test(pl) && pl.endsWith(")")) {
+          const args = splitTopLevelComma(p.slice(6, -1));
+          if (args.length >= 1 && args.length <= 2) {
+            let nArg = args[0].trim();
+            if (/^calc\(/i.test(nArg)) nArg = canonicalizeCalcToken(nArg);
+            else if (/^\+?\d+$/.test(nArg)) nArg = String(parseInt(nArg, 10));
+            const pos = args.length === 2 ? args[1].trim().toLowerCase() : "";
+            if (!pos || pos === "end" || pos === "jump-end") return "steps(" + nArg + ")";
+            return "steps(" + nArg + ", " + pos + ")";
+          }
+        }
+        if (/^cubic-bezier\(/i.test(pl) && pl.endsWith(")")) {
+          const args = splitTopLevelComma(p.slice(13, -1));
+          if (args.length === 4) {
+            const normArgs = args.map((a) => {
+              const t = a.trim();
+              if (/^calc\(/i.test(t)) return canonicalizeCalcToken(t);
+              if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(t)) {
+                const n = Number(t);
+                return String(n === 0 ? 0 : n);
+              }
+              return t;
+            });
+            return "cubic-bezier(" + normArgs.join(", ") + ")";
+          }
+        }
+        return pl;
       }).join(", ");
     }
     if (key === "transition-property") {

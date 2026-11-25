@@ -4584,3 +4584,7 @@
 ### Phase 879 — `_rawBaseCache` `sheetKey` FNV-1a 哈希防碰撞修复
 - `src/js/shim/window.js`: 将 `collectRawComputedMap` 中 `sheetKey` 由前 64 字符切片改为 32 位 FNV-1a 全文哈希，彻底修复动态修改 `<style>.textContent` 为等长同前缀内容时的样式缓存碰撞。
 - `src/js/{runtime.js,runtime_source.cp}`: 重新打包；`/css/css-transitions/transition-property-002.html` **PASS**，`--smoke` 3/3 **PASS**。
+### Phase 880 — CSS Easing `steps()` / `cubic-bezier()` 语法规范化与 `calc()`/`sign()` 求值
+- `src/js/shim/cssom.js`: 放行 `steps()`/`cubic-bezier()` 内 `calc()`/`sign()`/`sibling-index()` 并拒绝 `calc(0/0)`；规范化 `step-start`、`step-end`、`steps(n, end|jump-end)` 与 `calc()`。
+- `src/js/shim/window.js`: `applyUsedValuesToComputedMap` 求值并钳位 `steps()`（`>=1` 或 `jump-none` 时 `>=2`）与 `cubic-bezier()`（`x1`/`x2` 钳位 `[0,1]`）。
+- `src/js/{runtime.js,runtime_source.cp}`: 重新打包；`step-timing-functions-syntax.html`、`timing-functions-syntax-computed.html`、`timing-functions-syntax-valid.html` **3/3 PASS**，`--smoke` 3/3 **PASS**。

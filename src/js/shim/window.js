@@ -9933,7 +9933,76 @@ function installWindow(global) {
       }
     }
     for (const tfKey of ["transition-timing-function", "animation-timing-function"]) {
-      const tfRaw = computedMap.get(tfKey);
+      let tfRaw = computedMap.get(tfKey);
+      if (tfRaw && (/\b(?:step-start|step-end)\b/i.test(tfRaw) || /\b(?:steps|cubic-bezier)\(/i.test(tfRaw))) {
+        const evalTfNum = (exprStr) => {
+          let s = String(exprStr || "").trim();
+          if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(s)) return Number(s);
+          if (/^(?:calc|min|max|clamp)\(/i.test(s)) {
+            if (/sign\(/i.test(s)) s = evalSignCalls(s, element);
+            const inn = s.slice(s.indexOf("(") + 1, -1).trim();
+            if (/^[\d+\-*/().\s]+$/.test(inn)) {
+              try {
+                const v = Function("return (" + inn + ")")();
+                if (typeof v === "number" && isFinite(v)) return v;
+              } catch (_) {}
+            }
+          }
+          return null;
+        };
+        const tfItems = [];
+        let tfCur = "", tfD = 0;
+        for (let ti = 0; ti < tfRaw.length; ti++) {
+          const ch = tfRaw[ti];
+          if (ch === "(") tfD++;
+          else if (ch === ")") tfD--;
+          if (ch === "," && tfD === 0) { tfItems.push(tfCur.trim()); tfCur = ""; }
+          else tfCur += ch;
+        }
+        if (tfCur.trim()) tfItems.push(tfCur.trim());
+        tfRaw = tfItems.map((it) => {
+          const il = it.toLowerCase();
+          if (il === "step-start") return "steps(1, start)";
+          if (il === "step-end") return "steps(1)";
+          if (/^steps\(/i.test(il) && il.endsWith(")")) {
+            const inner = it.slice(6, -1);
+            const comma = inner.indexOf(",");
+            const nStr = (comma === -1 ? inner : inner.slice(0, comma)).trim();
+            const pos = comma === -1 ? "" : inner.slice(comma + 1).trim().toLowerCase();
+            const nv = evalTfNum(nStr);
+            if (nv !== null) {
+              const minN = pos === "jump-none" ? 2 : 1;
+              const nInt = Math.max(minN, Math.round(nv));
+              if (!pos || pos === "end" || pos === "jump-end") return "steps(" + nInt + ")";
+              return "steps(" + nInt + ", " + pos + ")";
+            }
+          } else if (/^cubic-bezier\(/i.test(il) && il.endsWith(")")) {
+            const inner = it.slice(13, -1);
+            const cArgs = [];
+            let ac = "", ad = 0;
+            for (let ai = 0; ai < inner.length; ai++) {
+              const ch = inner[ai];
+              if (ch === "(") ad++;
+              else if (ch === ")") ad--;
+              if (ch === "," && ad === 0) { cArgs.push(ac.trim()); ac = ""; }
+              else ac += ch;
+            }
+            if (ac.trim()) cArgs.push(ac.trim());
+            if (cArgs.length === 4) {
+              const outArgs = cArgs.map((a, idx) => {
+                const v = evalTfNum(a);
+                if (v === null) return a;
+                let fv = v === 0 ? 0 : v;
+                if (idx === 0 || idx === 2) fv = Math.min(1, Math.max(0, fv));
+                return String(Number(fv.toFixed(6)));
+              });
+              return "cubic-bezier(" + outArgs.join(", ") + ")";
+            }
+          }
+          return it;
+        }).join(", ");
+        computedMap.set(tfKey, tfRaw);
+      }
       if (tfRaw && /\blinear\(/i.test(tfRaw)) {
         computedMap.set(tfKey, tfRaw.replace(/\blinear\(([^)]*)\)/gi, (_, body) => {
           const rawStops = body.split(",").map((s) => s.trim()).filter(Boolean);
