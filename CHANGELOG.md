@@ -4365,3 +4365,7 @@
 - **Phase 811**:
   - `src/js/shim/cssom.js`: `normalizeColorSpecified` 统一处理 `rgb`/`hsl`/`hwb` 含 `calc(...)`/`sign(...)` 表达式的规范化序列化。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 812**:
+  - `src/js/shim/cssom.js`: `normalizeCssSpecifiedValue` 补全 `color(` 分发；`normalizeSingleColor` 新增 `evalSpecCalc` 与 `parseH` `toPrecision(6)` 精度，修复 `color()` 与 `lab`/`lch`/`oklab`/`oklch` 序列化。
+  - `test/wpt/wpt-expectations.json`: 收紧 `color-valid-color-function.html` 与 `color-valid-lab.html` 为 `PASS`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

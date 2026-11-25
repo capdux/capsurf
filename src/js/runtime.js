@@ -9216,7 +9216,7 @@
         return toks.map((t) => {
           const tl = t.toLowerCase();
           if (tl === "auto" || tl === "currentcolor" || tl === "transparent") return tl;
-          if (tl.startsWith("#") || /^(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch)\(/i.test(tl)) return normalizeSingleColor(t);
+          if (tl.startsWith("#") || /^(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(/i.test(tl)) return normalizeSingleColor(t);
           return tl;
         }).join(" ");
       }
@@ -14576,6 +14576,19 @@
         if (isNaN(res.v)) return "0" + res.u;
         return String(res.v) + res.u;
       };
+      const evalSpecCalc = (raw) => {
+        const t = String(raw || "").trim();
+        if (!/^calc\(/i.test(t)) return null;
+        const ev = evalColorExpr(t);
+        if (ev === t) return canonCalcColor(t);
+        const body = t.slice(5, -1).trim();
+        if (/\b(?:NaN|0\s*\/\s*0)\b/i.test(body) && ev === "0") return "calc(NaN)";
+        if (ev === "Infinity") return "calc(infinity)";
+        if (ev === "-Infinity") return "calc(-infinity)";
+        const m = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)(%|deg|rad|grad|turn)?$/i.exec(ev);
+        if (m) return "calc(" + String(Number(parseFloat(m[1]).toFixed(6))) + (m[2] || "") + ")";
+        return canonCalcColor(t);
+      };
       const canonCalcColor = (t) => t.replace(/\(\s*(sign\([^()]+\))\s*\*\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:px|em|rem|%|deg|rad|grad|turn)?)\s*\)/gi, "($2 * $1)");
       const normHueDeg = (t) => {
         if (/^calc\(/i.test(t)) return canonCalcColor(t);
@@ -14739,9 +14752,11 @@
             return fmtN(v);
           };
           const parseABOrC = (raw, isChroma) => {
+            const sc = evalSpecCalc(raw);
+            if (sc !== null) return sc;
             const t = evalColorExpr(raw);
             if (t.toLowerCase() === "none") return "none";
-            if (/^calc\(/i.test(t)) return t;
+            if (/^calc\(/i.test(t)) return canonCalcColor(t);
             let v = parseFloat(t);
             if (isNaN(v)) return t;
             if (t.endsWith("%")) {
@@ -14751,27 +14766,34 @@
             return fmtN(v);
           };
           const parseH = (raw) => {
+            const sc = evalSpecCalc(raw);
+            if (sc !== null) return sc;
             const t = evalColorExpr(raw);
             if (t.toLowerCase() === "none") return "none";
-            if (/^calc\(/i.test(t)) return t;
+            if (/^calc\(/i.test(t)) return canonCalcColor(t);
             let h = parseFloat(t);
             if (isNaN(h)) return t;
             if (t.endsWith("rad")) h = h * 180 / Math.PI;
             else if (t.endsWith("grad")) h = h * 0.9;
             else if (t.endsWith("turn")) h = h * 360;
             h = ((h % 360) + 360) % 360;
-            return fmtN(h);
+            return String(Number(h.toPrecision(6)));
           };
-          const c0 = parseL(chParts[0]);
+          const scL = evalSpecCalc(chParts[0]);
+          const c0 = scL !== null ? scL : parseL(chParts[0]);
           const c1 = parseABOrC(chParts[1], isLch);
           const c2 = isLch ? parseH(chParts[2]) : parseABOrC(chParts[2], false);
           let aStr = "";
           if (slash.length === 2) {
-            const at = evalColorExpr(slash[1]);
-            if (at === "none") aStr = " / none";
+            const scA = evalSpecCalc(slash[1]);
+            if (scA !== null) aStr = " / " + scA;
             else {
-              const av = Math.max(0, Math.min(1, at.endsWith("%") ? (parseFloat(at) / 100) : parseFloat(at)));
-              if (isFinite(av) && av < 1) aStr = " / " + String(Number(av.toFixed(6)));
+              const at = evalColorExpr(slash[1]);
+              if (at === "none") aStr = " / none";
+              else {
+                const av = Math.max(0, Math.min(1, at.endsWith("%") ? (parseFloat(at) / 100) : parseFloat(at)));
+                if (isFinite(av) && av < 1) aStr = " / " + String(Number(av.toFixed(6)));
+              }
             }
           }
           return fn + "(" + c0 + " " + c1 + " " + c2 + aStr + ")";
@@ -14785,9 +14807,11 @@
           let sp = toks[0].toLowerCase();
           if (sp === "xyz") sp = "xyz-d65";
           const fmtC = (raw) => {
+            const sc = evalSpecCalc(raw);
+            if (sc !== null) return sc;
             const t = evalColorExpr(raw);
             if (t.toLowerCase() === "none") return "none";
-            if (/^calc\(/i.test(t)) return t;
+            if (/^calc\(/i.test(t)) return canonCalcColor(t);
             let v = parseFloat(t);
             if (isNaN(v)) return t;
             if (t.endsWith("%")) v = v / 100;
@@ -14796,11 +14820,15 @@
           };
           let aStr = "";
           if (slash.length === 2) {
-            const at = evalColorExpr(slash[1]);
-            if (at === "none") aStr = " / none";
+            const scA = evalSpecCalc(slash[1]);
+            if (scA !== null) aStr = " / " + scA;
             else {
-              const av = Math.max(0, Math.min(1, at.endsWith("%") ? (parseFloat(at) / 100) : parseFloat(at)));
-              if (isFinite(av) && av < 1) aStr = " / " + String(Number(av.toFixed(6)));
+              const at = evalColorExpr(slash[1]);
+              if (at === "none") aStr = " / none";
+              else {
+                const av = Math.max(0, Math.min(1, at.endsWith("%") ? (parseFloat(at) / 100) : parseFloat(at)));
+                if (isFinite(av) && av < 1) aStr = " / " + String(Number(av.toFixed(6)));
+              }
             }
           }
           return "color(" + sp + " " + fmtC(toks[1]) + " " + fmtC(toks[2]) + " " + fmtC(toks[3]) + aStr + ")";

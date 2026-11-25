@@ -3462,3 +3462,5 @@
 - 在 `cssom.js` 新增 `parseGridShorthand` 与 `SHORTHAND_EXPAND_LONGHANDS["grid"]` 实现 `grid` 简写全套解析、展开及 `dense` 规范化序列化，`grid-shorthand` (63/63)、`grid-shorthand-valid` (49/49)、`grid-shorthand-invalid` (34/34) 全绿 **PASS**（连同 `grid-row-*` 3/3 与 `grid-template-areas-*` 4/4）。
 ### Phase 811 — `rgb`/`hsl`/`hwb` 含 `calc()`/`sign()` 颜色表达式规范化序列化
 - 在 `cssom.js` 统一 `rgb`/`hsl`/`hwb` 含未求值 `calc(...)`/`sign(...)` 通道时的规范化序列化（现代空格语法、乘子前置 `N * sign(...)`、通道裁剪与 alpha 简化），`color-valid-{hwb,hsl,rgb}` 3/3（167/167 子测试）全绿 **PASS**。
+### Phase 812 — `color()` 与 `lab()`/`lch()`/`oklab()`/`oklch()` 指定值 `calc()`/`NaN`/精度序列化
+- 在 `cssom.js` 补全 `color(` 指定值分发与 `evalSpecCalc`（保留 `calc(NaN)`/`calc(infinity)`/`calc(...)` 包装，修正 `rad` 色相 `toPrecision(6)`），`color-valid-color-function` (340/340) 与 `color-valid-lab` (150/150) 均 **`FAIL → PASS`**。
