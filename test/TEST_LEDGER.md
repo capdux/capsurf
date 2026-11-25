@@ -2500,3 +2500,4 @@
 | Phase 831 | CSS Syntax CDO/CDC、未闭合 `url(` 与嵌套规则恢复 | `src/js/shim/cssom.js`, `src/js/shim/element/element.js` | `unclosed-url-at-eof`, `cdc-vs-ident-tokens`, `invalid-nested-rules` 3/3 **PASS**; `--smoke` 3/3 PASS |
 | Phase 832 | 相邻块级兄弟外边距折叠 (`layoutBlockContainer`) | `src/layout/layout.cp` | `css-color/{hex,hsl,hsla,rgb,rgba}-*` **36/36 PASS**; `--smoke` 3/3 PASS |
 | Phase 833 | `cap:css` 原生广色域 `color()`/`lab()`/`lch()` 与亮度极值截断 | `/data/dev/cp/lib/css/color.cp` | `css-color/{a98rgb,lab,lch,oklab,oklch,predefined,prophoto-rgb,rec2020,srgb-linear,xyz*}` **94/94 PASS**; `--smoke` 3/3 PASS |
+| Phase 834 | 远程 ES Module (`<script type="module">`) HTTP 加载 (`sessionModuleLoader`) | `src/cdp/session.cp` | 解除 16 项 `css-logical` 模块 `ERROR` 阻塞（`logical-values-{float-clear,resize}` **PASS**）; `--smoke` 3/3 PASS |

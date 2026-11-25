@@ -751,6 +751,14 @@ fn hasJsonExtension(url: []const u8): bool {
         }
     }
 
+    if (module_code == null && session_ptr != null && (std.mem.startsWith(u8, full_url, "http://") || std.mem.startsWith(u8, full_url, "https://"))) {
+        const fetched_len = sessionHttpGetHook(unsafe { @ptrCast(session_ptr.?) }, full_url, static_buf);
+        if (fetched_len > 0) {
+            const flen: usize = @min(@as(usize, @intCast(fetched_len)), static_buf.len - 1);
+            module_code = static_buf[0..flen];
+        }
+    }
+
     if (module_code == null) {
         let fn_to_try = MockFixtures.extractFilename(full_url);
         if (fn_to_try.len == 0) fn_to_try = MockFixtures.extractFilename(raw_name);
