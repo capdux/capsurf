@@ -22662,49 +22662,40 @@
       return { width: Math.round(maxW), height: Math.round(maxH) };
     }
 
-    Object.defineProperty(proto, "scrollHeight", {
-      get: function () {
-        if (this === document.documentElement || this === document.body) {
-          return collectRootScrollExtents(this, this === document.documentElement).height;
-        }
+    function computeElementScrollExtents(el) {
+      let maxRight = el.clientWidth;
+      let maxBottom = el.clientHeight;
+      const parentR = el.getBoundingClientRect();
+      const clientLeft = el.clientLeft || 0;
+      const clientTop = el.clientTop || 0;
+      const scrollLeft = el._scrollLeft || 0;
+      const scrollTop = el._scrollTop || 0;
+      const gcsFn = (typeof window !== "undefined" && typeof window.getComputedStyle === "function")
+        ? window.getComputedStyle
+        : null;
 
-        let maxBottom = this.clientHeight;
-        const parentR = this.getBoundingClientRect();
-        const shadow = this._shadowRoot || this.shadowRoot;
-        const shadowKids = shadow ? (shadow.children || shadow._children || shadow.childNodes || []) : [];
-        const all = (shadowKids.length > 0) ? shadowKids : (this.children || []);
-        let accumY = 0;
-        for (let i = 0; i < all.length; i++) {
-          const child = all[i];
-          if (!child || child.nodeType !== 1) continue;
-          if (isElementDisplayNone(child)) continue;
-          const cr = child.getBoundingClientRect ? child.getBoundingClientRect() : null;
-          let childH = (cr && cr.height) || 0;
-          if (!childH && child.style && child.style.height) {
-            childH = parseFloat(child.style.height) || 0;
+      function parseClipMargin(raw) {
+        const s = String(raw || "0px").trim().toLowerCase();
+        let box = "padding-box";
+        let px = 0;
+        const toks = s.split(/\s+/);
+        for (let i = 0; i < toks.length; i++) {
+          const t = toks[i];
+          if (t === "content-box" || t === "padding-box" || t === "border-box") box = t;
+          else {
+            const v = parseFloat(t);
+            if (!isNaN(v)) px = Math.max(0, v);
           }
-          let relY = (parentR && cr && cr.height > 0) ? (cr.y - parentR.y - (this.clientTop || 0) + (this._scrollTop || 0)) : accumY;
-          accumY += childH;
-          const b = relY + childH;
-          if (b > maxBottom) maxBottom = b;
         }
-        return Math.round(maxBottom);
-      },
-      configurable: true,
-    });
+        return { box: box, px: px };
+      }
 
-    Object.defineProperty(proto, "scrollWidth", {
-      get: function () {
-        if (this === document.documentElement || this === document.body) {
-          return collectRootScrollExtents(this, this === document.documentElement).width;
-        }
-
-        let maxRight = this.clientWidth;
-        const parentR = this.getBoundingClientRect();
-        const shadow = this._shadowRoot || this.shadowRoot;
+      function walk(parent, limitRight, limitBottom, isRootLevel) {
+        const shadow = parent._shadowRoot || parent.shadowRoot;
         const shadowKids = shadow ? (shadow.children || shadow._children || shadow.childNodes || []) : [];
-        const all = (shadowKids.length > 0) ? shadowKids : (this.children || []);
+        const all = (shadowKids.length > 0) ? shadowKids : (parent.children || []);
         let accumX = 0;
+        let accumY = 0;
         for (let i = 0; i < all.length; i++) {
           const child = all[i];
           if (!child || child.nodeType !== 1) continue;
@@ -22714,12 +22705,82 @@
           if (!childW && child.style && child.style.width) {
             childW = parseFloat(child.style.width) || 0;
           }
-          let relX = (parentR && cr && cr.width > 0) ? (cr.x - parentR.x - (this.clientLeft || 0) + (this._scrollLeft || 0)) : accumX;
+          let childH = (cr && cr.height) || 0;
+          if (!childH && child.style && child.style.height) {
+            childH = parseFloat(child.style.height) || 0;
+          }
+          const hasRect = !!(parentR && cr && (cr.width > 0 || cr.height > 0 || cr.x !== 0 || cr.y !== 0));
+          const relX = (hasRect && cr.width > 0) ? (cr.x - parentR.x - clientLeft + scrollLeft) : (isRootLevel ? accumX : (hasRect ? (cr.x - parentR.x - clientLeft + scrollLeft) : accumX));
+          const relY = (hasRect && cr.height > 0) ? (cr.y - parentR.y - clientTop + scrollTop) : (isRootLevel ? accumY : (hasRect ? (cr.y - parentR.y - clientTop + scrollTop) : accumY));
           accumX += childW;
-          const r = relX + childW;
+          accumY += childH;
+          let r = relX + childW;
+          let b = relY + childH;
+          if (limitRight !== null && r > limitRight) r = limitRight;
+          if (limitBottom !== null && b > limitBottom) b = limitBottom;
           if (r > maxRight) maxRight = r;
+          if (b > maxBottom) maxBottom = b;
+
+          let nextLimitRight = limitRight;
+          let nextLimitBottom = limitBottom;
+          let scrollClipsBoth = false;
+          if (gcsFn) {
+            try {
+              const cs = gcsFn(child);
+              if (cs) {
+                const ox = String(cs.overflowX || cs.overflow || "visible").trim().toLowerCase();
+                const oy = String(cs.overflowY || cs.overflow || "visible").trim().toLowerCase();
+                const isScrollClip = (v) => v === "hidden" || v === "scroll" || v === "auto";
+                if (isScrollClip(ox) && isScrollClip(oy)) scrollClipsBoth = true;
+                if (isScrollClip(ox)) {
+                  nextLimitRight = limitRight === null ? (relX + childW) : Math.min(limitRight, relX + childW);
+                } else if (ox === "clip" && parentR && cr) {
+                  const ocm = parseClipMargin(cs.overflowClipMargin);
+                  let edge = cr.right;
+                  if (ocm.box === "padding-box") edge = cr.right - getBorderWidthPx(child, "right");
+                  else if (ocm.box === "content-box") edge = cr.right - getBorderWidthPx(child, "right") - (parseFloat(cs.paddingRight) || 0);
+                  const clipR = (edge + ocm.px) - parentR.x - clientLeft + scrollLeft;
+                  nextLimitRight = limitRight === null ? clipR : Math.min(limitRight, clipR);
+                }
+                if (isScrollClip(oy)) {
+                  nextLimitBottom = limitBottom === null ? (relY + childH) : Math.min(limitBottom, relY + childH);
+                } else if (oy === "clip" && parentR && cr) {
+                  const ocm = parseClipMargin(cs.overflowClipMargin);
+                  let edge = cr.bottom;
+                  if (ocm.box === "padding-box") edge = cr.bottom - getBorderWidthPx(child, "bottom");
+                  else if (ocm.box === "content-box") edge = cr.bottom - getBorderWidthPx(child, "bottom") - (parseFloat(cs.paddingBottom) || 0);
+                  const clipB = (edge + ocm.px) - parentR.y - clientTop + scrollTop;
+                  nextLimitBottom = limitBottom === null ? clipB : Math.min(limitBottom, clipB);
+                }
+              }
+            } catch (e) {}
+          }
+          if (!scrollClipsBoth) {
+            walk(child, nextLimitRight, nextLimitBottom, false);
+          }
         }
-        return Math.round(maxRight);
+      }
+
+      walk(el, null, null, true);
+      return { width: Math.round(maxRight), height: Math.round(maxBottom) };
+    }
+
+    Object.defineProperty(proto, "scrollHeight", {
+      get: function () {
+        if (this === document.documentElement || this === document.body) {
+          return collectRootScrollExtents(this, this === document.documentElement).height;
+        }
+        return computeElementScrollExtents(this).height;
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(proto, "scrollWidth", {
+      get: function () {
+        if (this === document.documentElement || this === document.body) {
+          return collectRootScrollExtents(this, this === document.documentElement).width;
+        }
+        return computeElementScrollExtents(this).width;
       },
       configurable: true,
     });
@@ -47819,6 +47880,11 @@
         if (!isImp && impSet.has(k)) return;
         computedMap.set(k, v);
         if (isImp) impSet.add(k);
+        if (k === "overflow-x" || k === "overflow-y" || k === "overflow-block" || k === "overflow-inline") {
+          const seqMap = computedMap._ovSeq || (computedMap._ovSeq = Object.create(null));
+          computedMap._ovSeqCounter = (computedMap._ovSeqCounter || 0) + 1;
+          seqMap[k] = computedMap._ovSeqCounter;
+        }
       }
       const decls = splitCssDeclarations(declBlock);
       for (let i = 0; i < decls.length; i++) {
@@ -51419,6 +51485,32 @@
         const res = (!box || box === "padding-box") ? pxStr : (pxStr === "0px" ? box : (box + " " + pxStr));
         computedMap.set("overflow-clip-margin", res);
       }
+      // Map overflow-inline / overflow-block to physical overflow-x / overflow-y based on writing-mode
+      {
+        const wmOv = (computedMap.get("writing-mode") || "horizontal-tb").trim().toLowerCase();
+        const isVertOv = wmOv.startsWith("vertical") || wmOv.startsWith("sideways");
+        const inlinePhys = isVertOv ? "overflow-y" : "overflow-x";
+        const blockPhys = isVertOv ? "overflow-x" : "overflow-y";
+        const ovSeq = computedMap._ovSeq || null;
+        const impKeys = computedMap._importantKeys || null;
+        const applyLogicalOv = (logProp, physProp) => {
+          if (!computedMap.has(logProp)) return;
+          const logVal = computedMap.get(logProp);
+          if (!computedMap.has(physProp)) {
+            computedMap.set(physProp, logVal);
+            return;
+          }
+          const logImp = !!(impKeys && impKeys.has(logProp));
+          const physImp = !!(impKeys && impKeys.has(physProp));
+          if (logImp && !physImp) {
+            computedMap.set(physProp, logVal);
+          } else if (logImp === physImp && ovSeq && (ovSeq[logProp] || 0) > (ovSeq[physProp] || 0)) {
+            computedMap.set(physProp, logVal);
+          }
+        };
+        applyLogicalOv("overflow-inline", inlinePhys);
+        applyLogicalOv("overflow-block", blockPhys);
+      }
       // overflow-x and overflow-y resolution: visible computes to auto if one is neither visible nor clip
       let ox = (computedMap.get("overflow-x") || "visible").trim().toLowerCase();
       let oy = (computedMap.get("overflow-y") || "visible").trim().toLowerCase();
@@ -51427,6 +51519,12 @@
       if (oy === "visible" && !isVisOrClip(ox)) oy = "auto";
       computedMap.set("overflow-x", ox);
       computedMap.set("overflow-y", oy);
+      {
+        const wmOv2 = (computedMap.get("writing-mode") || "horizontal-tb").trim().toLowerCase();
+        const isVertOv2 = wmOv2.startsWith("vertical") || wmOv2.startsWith("sideways");
+        computedMap.set("overflow-inline", isVertOv2 ? oy : ox);
+        computedMap.set("overflow-block", isVertOv2 ? ox : oy);
+      }
       // align-* / justify-* canonicalization + justify-items: 'legacy' inheritance
       {
         const alignProps = ["align-content", "align-items", "align-self", "justify-items", "justify-self"];

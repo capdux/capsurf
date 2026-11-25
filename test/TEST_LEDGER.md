@@ -2590,3 +2590,4 @@
 | Phase 920 | `ex`/`vmin`/`vmax` 单位解析 & `shape-outside` `toPrecision(6)` 序列化 | `src/js/shim/window.js` | `shape-outside-polygon-004` (144/144), `shape-outside-circle-005` (52/52), `shape-outside-shape-arguments-000` **3/3 PASS**; `--smoke` 3/3 PASS |
 | Phase 921 | `path()` 相对指令、跨行 `polygon()` & `inset(round)` 插值 | `cssom.js`, `window.js`, `animations.js` | `shape-outside-shape-notation-000`, `basic-shape-interpolation`, `path-function-computed` **3/3 PASS**; `--smoke` 3/3 PASS |
 | Phase 922 | `PROP_ASPECT_RATIO` 级联与确定高度推导 | `cascade.cp`, `layout.cp` | `position-relative-aspect-ratio-001`, `position-relative-aspect-ratio-002` **2/2 PASS**; `--smoke` 3/3 PASS |
+| Phase 923 | `overflow-block`/`overflow-inline` 映射 & `computeElementScrollExtents` 裁剪/变换溢出 | `window.js`, `element.js` | `overflow-shorthand-002`, `logical-overflow-001`, `overflow-clip-scroll-size`, `scrollable-overflow-transform-005.tentative` **4/4 PASS**; `--smoke` 3/3 PASS |

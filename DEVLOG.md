@@ -3685,3 +3685,6 @@
 - 修复 `cssom.js` `isValidShape` 因 `(.*)` 不匹配 `\n` 导致多行 `polygon()` 被拒绝、`window.js` `path()` 误将 `h`/`v` 转为绝对 `H`/`V` 坐标、以及 `animations.js` 函数参数插值遇到 `round`/`at` 关键字中断的问题，三项全部通过。
 ### Phase 922 — 原生 `aspect-ratio` 确定高度传播
 - `cascade.cp` 与 `layout.cp` 原未实现 `aspect-ratio`，导致具有 `aspect-ratio: 2 / 1` 的元素在 `height: auto` 下 `height_is_auto` 为真，进而阻碍后代 `position: relative; top: 50%` 百分比偏移解析。接入 `PROP_ASPECT_RATIO` 并在 `resolveBoxMetrics` 计算确定 `content_height` 后，标准模式与 Quirks 模式两项测试一次全绿。
+### Phase 923 — `overflow-block`/`overflow-inline` 映射与嵌套溢出/变换 `scrollWidth` 修正
+- `overflow-shorthand-002` 与 `logical-overflow-001` 失败源于 `overflow-block`/`overflow-inline` 仅硬编码默认 `"visible"` 且未与 `overflow-x`/`overflow-y` 依 `writing-mode` 双向联算；在 `parseDeclarationsBlockInto` 记录 `_ovSeq` 并在 `collectRawComputedMap` 先逻辑转物理再做 `visible -> auto` 归一最后回写逻辑属性后即全绿。
+- `overflow-clip-scroll-size` 与 `scrollable-overflow-transform-005.tentative` 失败源于非根 `scrollWidth`/`scrollHeight` 仅遍历直接子元素且未考虑 `overflow: clip` + `overflow-clip-margin` 裁剪边缘；提取 `computeElementScrollExtents` 递归穿透未裁剪子孙并按 `padding-box`/`border-box`/`content-box` + `overflow-clip-margin` 夹紧后一次全绿。

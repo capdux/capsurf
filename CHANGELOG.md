@@ -4682,3 +4682,7 @@
 - `src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/shim/animations.js`: 修复跨行 `polygon()` 正则匹配、`path()` 保留相对指令序列化及 `inset(... round ...)` 关键字透传插值，`shape-outside-shape-notation-000.html`、`basic-shape-interpolation.html`、`path-function-computed.html` **3/3 PASS**，`--smoke` 3/3 **PASS**。
 ### Phase 922 — `aspect-ratio` 确定性高度推导与 `position-relative-aspect-ratio` 全绿
 - `src/css/cascade.cp`, `src/layout/layout.cp`: 新增 `PROP_ASPECT_RATIO` 级联解析并在 `resolveBoxMetrics` 推导确定高度使相对定位百分比偏移可解析；通过 `cpc fix` + `cpc brief` 4 门禁，`position-relative-aspect-ratio-001.html` 与 `002.html` **2/2 PASS**，`--smoke` 3/3 **PASS**。
+
+## Phase 923: 逻辑溢出映射、`overflow-clip-margin` 与后代变换 `scrollWidth`/`scrollHeight`
+- `src/js/shim/window.js`: 在 `collectRawComputedMap` 中按 `writing-mode` 与级联序双向解析 `overflow-block`/`overflow-inline` 与 `overflow-x`/`overflow-y`。
+- `src/js/shim/element/element.js`: 新增 `computeElementScrollExtents` 递归计算非裁剪后代变换边界与 `overflow: clip` + `overflow-clip-margin` 裁剪尺寸；4 项 `/css/css-overflow/` WPT **4/4 PASS**，`--smoke` 3/3 **PASS**。

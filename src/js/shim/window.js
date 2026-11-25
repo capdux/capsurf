@@ -5903,6 +5903,11 @@ function installWindow(global) {
       if (!isImp && impSet.has(k)) return;
       computedMap.set(k, v);
       if (isImp) impSet.add(k);
+      if (k === "overflow-x" || k === "overflow-y" || k === "overflow-block" || k === "overflow-inline") {
+        const seqMap = computedMap._ovSeq || (computedMap._ovSeq = Object.create(null));
+        computedMap._ovSeqCounter = (computedMap._ovSeqCounter || 0) + 1;
+        seqMap[k] = computedMap._ovSeqCounter;
+      }
     }
     const decls = splitCssDeclarations(declBlock);
     for (let i = 0; i < decls.length; i++) {
@@ -9503,6 +9508,32 @@ function installWindow(global) {
       const res = (!box || box === "padding-box") ? pxStr : (pxStr === "0px" ? box : (box + " " + pxStr));
       computedMap.set("overflow-clip-margin", res);
     }
+    // Map overflow-inline / overflow-block to physical overflow-x / overflow-y based on writing-mode
+    {
+      const wmOv = (computedMap.get("writing-mode") || "horizontal-tb").trim().toLowerCase();
+      const isVertOv = wmOv.startsWith("vertical") || wmOv.startsWith("sideways");
+      const inlinePhys = isVertOv ? "overflow-y" : "overflow-x";
+      const blockPhys = isVertOv ? "overflow-x" : "overflow-y";
+      const ovSeq = computedMap._ovSeq || null;
+      const impKeys = computedMap._importantKeys || null;
+      const applyLogicalOv = (logProp, physProp) => {
+        if (!computedMap.has(logProp)) return;
+        const logVal = computedMap.get(logProp);
+        if (!computedMap.has(physProp)) {
+          computedMap.set(physProp, logVal);
+          return;
+        }
+        const logImp = !!(impKeys && impKeys.has(logProp));
+        const physImp = !!(impKeys && impKeys.has(physProp));
+        if (logImp && !physImp) {
+          computedMap.set(physProp, logVal);
+        } else if (logImp === physImp && ovSeq && (ovSeq[logProp] || 0) > (ovSeq[physProp] || 0)) {
+          computedMap.set(physProp, logVal);
+        }
+      };
+      applyLogicalOv("overflow-inline", inlinePhys);
+      applyLogicalOv("overflow-block", blockPhys);
+    }
     // overflow-x and overflow-y resolution: visible computes to auto if one is neither visible nor clip
     let ox = (computedMap.get("overflow-x") || "visible").trim().toLowerCase();
     let oy = (computedMap.get("overflow-y") || "visible").trim().toLowerCase();
@@ -9511,6 +9542,12 @@ function installWindow(global) {
     if (oy === "visible" && !isVisOrClip(ox)) oy = "auto";
     computedMap.set("overflow-x", ox);
     computedMap.set("overflow-y", oy);
+    {
+      const wmOv2 = (computedMap.get("writing-mode") || "horizontal-tb").trim().toLowerCase();
+      const isVertOv2 = wmOv2.startsWith("vertical") || wmOv2.startsWith("sideways");
+      computedMap.set("overflow-inline", isVertOv2 ? oy : ox);
+      computedMap.set("overflow-block", isVertOv2 ? ox : oy);
+    }
     // align-* / justify-* canonicalization + justify-items: 'legacy' inheritance
     {
       const alignProps = ["align-content", "align-items", "align-self", "justify-items", "justify-self"];
