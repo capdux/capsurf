@@ -4054,7 +4054,17 @@
     let _isValidCalcSyntax = null;
     let _parseAndNormalizeShape = null;
     function isValidColor(val) {
-      const rawTrimmed = val.trim();
+      let rawTrimmed = val.trim();
+      if (rawTrimmed.indexOf("/*") !== -1) rawTrimmed = rawTrimmed.replace(/\/\*[\s\S]*?\*\//g, " ").trim();
+      if (rawTrimmed.indexOf("\\") !== -1) {
+        rawTrimmed = rawTrimmed.replace(/\\([0-9a-fA-F]{1,6}\s?|.)/g, function (_, esc) {
+          if (/^[0-9a-fA-F]/.test(esc)) {
+            const cp = parseInt(esc.trim(), 16);
+            return (cp > 0 && cp <= 0x10FFFF) ? String.fromCodePoint(cp) : "\uFFFD";
+          }
+          return esc;
+        });
+      }
       const v = rawTrimmed.toLowerCase();
       if (!v) return false;
       if (v === "bogus") return false;
@@ -9279,8 +9289,20 @@
         return s.trim().toLowerCase();
       }
       if (key === "color" || key === "background-color" || key === "accent-color" || key === "scrollbar-color" || key === "flood-color" || key === "lighting-color" || key === "border-color" || key === "border-top-color" || key === "border-right-color" || key === "border-bottom-color" || key === "border-left-color") {
-        if (/\blight-dark\(/i.test(s)) return s.toLowerCase();
-        const toks = splitCssTokens(s);
+        let cs = s;
+        if (cs.indexOf("/*") !== -1) cs = cs.replace(/\/\*[\s\S]*?\*\//g, " ").trim();
+        if (cs.indexOf("\\") !== -1) {
+          cs = cs.replace(/\\([0-9a-fA-F]{1,6}\s?|.)/g, function (_, esc) {
+            if (/^[0-9a-fA-F]/.test(esc)) {
+              const cp = parseInt(esc.trim(), 16);
+              return (cp > 0 && cp <= 0x10FFFF) ? String.fromCodePoint(cp) : "\uFFFD";
+            }
+            return esc;
+          });
+        }
+        if (/\blight-dark\(/i.test(cs)) return cs.toLowerCase();
+        if (/^(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(/i.test(cs)) return normalizeSingleColor(cs);
+        const toks = splitCssTokens(cs);
         return toks.map((t) => {
           const tl = t.toLowerCase();
           if (tl === "auto" || tl === "currentcolor" || tl === "transparent") return tl;
@@ -14936,14 +14958,14 @@
             const fmtRgbCh = (ev) => {
               if (/^calc\(/i.test(ev)) return canonCalcColor(ev);
               if (ev.toLowerCase() === "none") return "none";
-              const v = ev.endsWith("%") ? (parseFloat(ev) * 2.55) : parseFloat(ev);
+              const v = ev.endsWith("%") ? ((parseFloat(ev) / 100) * 255) : parseFloat(ev);
               if (!isFinite(v)) return "0";
               return String(Number(Math.max(0, Math.min(255, v)).toFixed(6)));
             };
             const aOut = evA ? normAlphaOut(slash.length === 2 ? slash[1] : chParts[3]) : "";
             return "rgb(" + fmtRgbCh(ev0) + " " + fmtRgbCh(ev1) + " " + fmtRgbCh(ev2) + aOut + ")";
           }
-          const parseCh = (t) => t.endsWith("%") ? (parseFloat(t) * 2.55) : parseFloat(t);
+          const parseCh = (t) => t.endsWith("%") ? ((parseFloat(t) / 100) * 255) : parseFloat(t);
           const r = parseCh(ev0), g = parseCh(ev1), b = parseCh(ev2);
           let a = 1;
           if (evA) a = evA.endsWith("%") ? (parseFloat(evA) / 100) : parseFloat(evA);
@@ -15206,7 +15228,17 @@
 
     function normalizeCssColor(val) {
       if (!val || typeof val !== "string") return val;
-      const trimmed = val.trim();
+      let trimmed = val.trim();
+      if (trimmed.indexOf("/*") !== -1) trimmed = trimmed.replace(/\/\*[\s\S]*?\*\//g, " ").trim();
+      if (trimmed.indexOf("\\") !== -1) {
+        trimmed = trimmed.replace(/\\([0-9a-fA-F]{1,6}\s?|.)/g, function (_, esc) {
+          if (/^[0-9a-fA-F]/.test(esc)) {
+            const cp = parseInt(esc.trim(), 16);
+            return (cp > 0 && cp <= 0x10FFFF) ? String.fromCodePoint(cp) : "\uFFFD";
+          }
+          return esc;
+        });
+      }
       // CSS Color 4: rgb()/rgba() containing `none` serializes as color(srgb ...)
       if (/^rgba?\s*\(/i.test(trimmed) && /\bnone\b/i.test(trimmed)) {
         const m = trimmed.match(/^rgba?\(\s*([^\s,/]+)\s+([^\s,/]+)\s+([^\s,/]+)(?:\s*\/\s*([^\s)]+))?\s*\)$/i);
@@ -15214,21 +15246,21 @@
           const fmtSrgb = function (c) {
             const cl = c.toLowerCase();
             if (cl === "none") return "none";
-            if (cl.endsWith("%")) return String(Number((parseFloat(cl) / 100).toFixed(6)));
-            return String(Number((parseFloat(cl) / 255).toFixed(6)));
+            if (cl.endsWith("%")) return String(Number((parseFloat(cl) / 100).toFixed(8)));
+            return String(Number((parseFloat(cl) / 255).toFixed(8)));
           };
           const r = fmtSrgb(m[1]);
           const g = fmtSrgb(m[2]);
           const b = fmtSrgb(m[3]);
           if (m[4] !== undefined) {
             const al = m[4].toLowerCase();
-            const a = al === "none" ? "none" : (al.endsWith("%") ? String(Number((parseFloat(al) / 100).toFixed(6))) : String(Number(parseFloat(al).toFixed(6))));
+            const a = al === "none" ? "none" : (al.endsWith("%") ? String(Number((parseFloat(al) / 100).toFixed(8))) : String(Number(parseFloat(al).toFixed(8))));
             if (a !== "1") return "color(srgb " + r + " " + g + " " + b + " / " + a + ")";
           }
           return "color(srgb " + r + " " + g + " " + b + ")";
         }
       }
-      let res = normalizeSingleColor(val);
+      let res = normalizeSingleColor(trimmed);
       if (res.includes("rgb(") || res.includes("rgba(")) {
         res = res.replace(/rgba?\(\s*([0-9.]+%?)\s*[, /]\s*([0-9.]+%?)\s*[, /]\s*([0-9.]+%?)(?:\s*[, /]\s*([0-9.]+%?))?\s*\)/gi, function (match, p1, p2, p3, p4) {
           const parseComp = function (p) {

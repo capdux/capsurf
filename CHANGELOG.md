@@ -4474,3 +4474,6 @@
 - **Phase 842**:
   - `src/js/shim/cssom.js`: `isValidCalcSyntax` 新增 `VALID_CALC_UNITS`、`clamp()` 三参数校验与括号闭合校验，`opacity` 与 `transition-delay`/`duration` 补全单位校验。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 843**:
+  - `src/js/shim/cssom.js`: `isValidColor`/`normalizeCssSpecifiedValue`/`normalizeCssColor` 补全注释剥离、CSS 转义还原、`toFixed(8)` 精度与 `(pct/100)*255` 精确舍入。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

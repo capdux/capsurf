@@ -3524,3 +3524,5 @@
 - 在 `cssom.js` 新增 `CSSScopeRule` 与 `parseScopePrelude`，并在 `window.js` 实现 `@scope (<start>) to (<end>)` 作用域根/下限匹配、`:scope` 传递与 `prox` 邻近度排序，`scope-cssom`、`scope-featureless`、`scope-overlapping-has`、`scope-supports` 等 **9/36 PASS**，`--smoke` 3/3 **PASS**。
 ### Phase 842 — `isValidCalcSyntax` 单位白名单与 `clamp()`/`min()`/`max()` 语法校验收紧
 - 在 `cssom.js` 为 `isValidCalcSyntax` 补全 `VALID_CALC_UNITS`、`clamp()` 3 参数精确校验与括号闭合校验，并收紧 `opacity` 与 `transition-delay`/`duration` 的 `calc`/`min`/`max`/`clamp` 单位校验，`/css/css-values/minmax-time-invalid.html` **52/52 全绿 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 843 — RGB 注释/转义预清洗、`color(srgb ...)` 8 位精度与百分比舍入修复
+- 在 `cssom.js` 为 `isValidColor`/`normalizeCssSpecifiedValue`/`normalizeCssColor` 补全 `/* ... */` 注释剥离与 CSS 转义还原，`rgb(128 none none)` 序列化升级为 `toFixed(8)` (`0.50196078`)，并将 `2.55` 乘法改为 `/ 100 * 255` 消除 `127.499999` 舍入误差，`color-valid-rgb.html` (70/70 **PASS**)，`--smoke` 3/3 **PASS**。
