@@ -1003,7 +1003,7 @@ pub struct LayoutTree {
 
         // Content height calculation
         // CSS Sizing: percentage height against an indefinite (auto) parent height behaves as auto
-        const height_is_indefinite_pct = (!style.height.is_auto && !style.height.is_none && style.height.length.unit == CssUnit.Percent && !parent_h_definite);
+        const height_is_indefinite_pct = (!style.height.is_auto && !style.height.is_none && style.height.length.unit == CssUnit.Percent && !parent_h_definite && !(is_abs_or_fixed && parent_h > 0.0));
         const height_is_stretch = (!style.height.is_auto && !style.height.is_none && style.height.intrinsic == IntrinsicSizeKeyword.Stretch);
         const height_is_indefinite_stretch = (height_is_stretch && !parent_h_definite);
         const has_forced_h = (box.forced_height >= 0.0);
@@ -1046,6 +1046,9 @@ pub struct LayoutTree {
             } else {
                 box.content_height = rep.height;
             }
+        } else if (style.aspect_ratio > 0.0 && box.content_width > 0.0) {
+            box.content_height = box.content_width / style.aspect_ratio;
+            box.height_is_auto = false;
         } else {
             box.content_height = 0.0; // Will be auto-expanded by children
         }

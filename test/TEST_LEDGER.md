@@ -2589,3 +2589,4 @@
 | Phase 919 | `shape-outside` / `clip-path` `valCheckProps` 非法声明过滤 | `src/js/shim/window.js` | 15× `css-shapes/shape-outside-invalid-*` **15/15 PASS**; `--smoke` 3/3 PASS |
 | Phase 920 | `ex`/`vmin`/`vmax` 单位解析 & `shape-outside` `toPrecision(6)` 序列化 | `src/js/shim/window.js` | `shape-outside-polygon-004` (144/144), `shape-outside-circle-005` (52/52), `shape-outside-shape-arguments-000` **3/3 PASS**; `--smoke` 3/3 PASS |
 | Phase 921 | `path()` 相对指令、跨行 `polygon()` & `inset(round)` 插值 | `cssom.js`, `window.js`, `animations.js` | `shape-outside-shape-notation-000`, `basic-shape-interpolation`, `path-function-computed` **3/3 PASS**; `--smoke` 3/3 PASS |
+| Phase 922 | `PROP_ASPECT_RATIO` 级联与确定高度推导 | `cascade.cp`, `layout.cp` | `position-relative-aspect-ratio-001`, `position-relative-aspect-ratio-002` **2/2 PASS**; `--smoke` 3/3 PASS |

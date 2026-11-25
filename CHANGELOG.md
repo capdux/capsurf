@@ -4680,3 +4680,5 @@
 - `src/js/shim/window.js`: `evalCssLengthExpr`/`evalLinLenPctTok` 补齐 `ex`/`vmin`/`vmax` 并为 `shape-outside`/`clip-path` 改用 `toPrecision(6)` 序列化，`shape-outside-polygon-004.html` (144/144)、`shape-outside-circle-005.html` (52/52)、`shape-outside-shape-arguments-000.html` **3/3 PASS**，`--smoke` 3/3 **PASS**。
 ### Phase 921 — `path()` 相对指令保留、跨行 `polygon()` 与 `inset(round)` 插值
 - `src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/shim/animations.js`: 修复跨行 `polygon()` 正则匹配、`path()` 保留相对指令序列化及 `inset(... round ...)` 关键字透传插值，`shape-outside-shape-notation-000.html`、`basic-shape-interpolation.html`、`path-function-computed.html` **3/3 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 922 — `aspect-ratio` 确定性高度推导与 `position-relative-aspect-ratio` 全绿
+- `src/css/cascade.cp`, `src/layout/layout.cp`: 新增 `PROP_ASPECT_RATIO` 级联解析并在 `resolveBoxMetrics` 推导确定高度使相对定位百分比偏移可解析；通过 `cpc fix` + `cpc brief` 4 门禁，`position-relative-aspect-ratio-001.html` 与 `002.html` **2/2 PASS**，`--smoke` 3/3 **PASS**。

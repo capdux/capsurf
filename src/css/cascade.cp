@@ -1248,7 +1248,8 @@ pub const PROP_OBJECT_VIEW_BOX: usize = 104;
 pub const PROP_BG_REPEAT: usize = 105;
 pub const PROP_CONTAIN: usize = 106;
 pub const PROP_ALIGN_SELF: usize = 107;
-pub const TOTAL_PROP_SLOTS: usize = 108;
+pub const PROP_ASPECT_RATIO: usize = 108;
+pub const TOTAL_PROP_SLOTS: usize = 109;
 
 pub enum ObjectViewBoxKind {
     None,
@@ -2524,6 +2525,7 @@ pub struct ComputedStyle {
     overflow_y: OverflowMode = OverflowMode.Visible;
     transform_tx: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
     transform_ty: LengthPercentageOrAuto = LengthPercentageOrAuto.zeroPx();
+    aspect_ratio: f32 = 0.0;
 
     // Table & float properties
     color_scheme: ColorScheme = ColorScheme.Normal;
@@ -4227,6 +4229,24 @@ pub struct ComputedStyle {
         if (std.ascii.eqlIgnoreCase(name, "align-self")) {
             if (aself := AlignSelf.parse(val)) {
                 if (_.tryClaimSlot(PROP_ALIGN_SELF, weight)) _.align_self = aself;
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "aspect-ratio")) {
+            const tr_ar = std.mem.trim(u8, val, " \t\r\n");
+            if (std.ascii.eqlIgnoreCase(tr_ar, "auto")) {
+                if (_.tryClaimSlot(PROP_ASPECT_RATIO, weight)) _.aspect_ratio = 0.0;
+            } else {
+                let it_ar = std.mem.tokenizeAny(u8, tr_ar, " \t/");
+                if (w_str := it_ar.next()) {
+                    if (!std.ascii.eqlIgnoreCase(w_str, "auto")) {
+                        const wv = std.fmt.parseFloat(f32, w_str) catch 0.0;
+                        const hv = if (h_str := it_ar.next()) (std.fmt.parseFloat(f32, h_str) catch 0.0) else 1.0;
+                        if (wv > 0.0 && hv > 0.0) {
+                            if (_.tryClaimSlot(PROP_ASPECT_RATIO, weight)) _.aspect_ratio = wv / hv;
+                        }
+                    }
+                }
             }
             return;
         }
