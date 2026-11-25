@@ -3710,3 +3710,5 @@
 ### Phase 932 — `::backdrop` Web Animations 与 `stretch` + `aspect-ratio`
 - `KeyframeEffect` 构造器原未保存 `opts.pseudoElement`，导致 `target.animate(..., { pseudoElement: "::backdrop" })` 过滤失效；补齐后 `backdrop-animate` 一次通过。
 - `aspect-ratio-1` 仅差 `height: stretch; aspect-ratio: 2 / 1` 未反推 `content_width`；在 `resolveBoxMetrics` 增加 `else if (style.aspect_ratio > 0.0 && box.content_height > 0.0)` 后 4/4 全绿。
+### Phase 933 — CSS Math 单位类型分析 (`hasInvalidCalcUnitMix`)
+- `isValidLenPct` 原在 `calc()` 前置校验前直接透传 `__capsurf_is_valid_css_len_pct`，导致 `clamp(0, 10rem, 100%)`、`min(1%, 0)`、`calc(2px * 1px)` 及 `progress(10, 0px, 10)` 未被拦截。提取 `hasInvalidCalcUnitMix` 并同时接入 `isValidCalcSyntax` 与 `isValidLenPct` 后，4 项共 116 个 subtest 一次全绿。

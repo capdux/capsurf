@@ -2600,3 +2600,4 @@
 | Phase 930 | `content-visibility: hidden` 包含语义 & 离屏 `innerText` | `cascade.cp`, `html-classes.js` | `content-visibility-086`, `content-visibility-088`, `content-visibility-hidden-offsetTop-left-width-height` **3/3 PASS**; `--smoke` 3/3 PASS |
 | Phase 931 | `min-width: stretch`、高亮伪元素 `text-shadow` & `--*` 隔离 | `layout.cp`, `animations.js`, `window.js` | `highlight-cascade-parent-style-change`, `highlight-cascade-011`, `auto-margins-1` **3/3 PASS**; `--smoke` 3/3 PASS |
 | Phase 932 | `KeyframeEffect.pseudoElement` & `stretch` + `aspect-ratio` 反推宽 | `animations.js`, `layout.cp` | `backdrop-animate`, `aspect-ratio-1` (4/4) **2/2 PASS**; `--smoke` 3/3 PASS |
+| Phase 933 | `hasInvalidCalcUnitMix` 拦截 `min`/`max`/`clamp`/`progress`/`dim*dim` | `src/js/shim/cssom.js` | `progress-invalid` (35/35), `clamp-length-invalid` (23/23), `minmax-percentage-invalid` (48/48), `calc-unit-analysis` (10/10) **4/4 PASS**; `--smoke` 3/3 PASS |

@@ -5237,8 +5237,35 @@
         return true;
       }
 
+      function hasInvalidCalcUnitMix(tok) {
+        if (/(?:\d|\.)(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|%|deg|rad|grad|turn|s|ms)\s*\*\s*[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|%|deg|rad|grad|turn|s|ms)\b/i.test(tok)) return true;
+        const mm = /^(?:min|max|clamp)\((.*)\)$/i.exec(tok);
+        if (mm) {
+          const args = splitTopLevelComma(mm[1]);
+          let hasBareZero = false, hasUnit = false;
+          for (let ai = 0; ai < args.length; ai++) {
+            const a = args[ai].trim();
+            if (/^[+-]?0(?:\.0+)?$/.test(a)) hasBareZero = true;
+            if (/(?:\d|\.)(?:(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|deg|rad|grad|turn|s|ms)\b|%)/i.test(a)) hasUnit = true;
+          }
+          if (hasBareZero && hasUnit) return true;
+        }
+        const pm = /\bprogress\(([^()]+)\)/i.exec(tok);
+        if (pm) {
+          const pargs = splitTopLevelComma(pm[1]);
+          let hasBareNum = false, hasUnit = false;
+          for (let pi = 0; pi < pargs.length; pi++) {
+            const pa = pargs[pi].trim();
+            if (/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/.test(pa)) hasBareNum = true;
+            else if (/(?:\d|\.)(?:(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|deg|rad|grad|turn|s|ms)\b|%)/i.test(pa)) hasUnit = true;
+          }
+          if (hasBareNum && hasUnit) return true;
+        }
+        return false;
+      }
+
       function isValidCalcSyntax(tok) {
-        if (/(?:\d|\.)(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|%|deg|rad|grad|turn|s|ms)\s*\*\s*[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|%|deg|rad|grad|turn|s|ms)\b/i.test(tok)) return false;
+        if (hasInvalidCalcUnitMix(tok)) return false;
         if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_math === "function" &&
             !/\b(?:progress|media-progress|container-progress|calc-mix|calc-size)\(/i.test(tok)) {
           return globalThis.__capsurf_is_valid_css_math(tok);
@@ -5387,6 +5414,9 @@
           if (bal > 0) tok = tok + ")".repeat(bal);
         }
         if (/^calc\(\s*[+-]?(?:\d+\.?\d*|\.\d+)\s*\/\s*(?:max|min)?\(?[+-]?(?:\d+\.?\d*|\.\d+)(?:px|em|rem|ex|ch|vw|vh|vmin|vmax|cm|mm|in|pt|pc)\b/i.test(tok)) {
+          return false;
+        }
+        if (/^(?:calc|min|max|clamp)\(/i.test(tok) && hasInvalidCalcUnitMix(tok)) {
           return false;
         }
         if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_len_pct === "function" &&
