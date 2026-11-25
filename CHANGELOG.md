@@ -4288,3 +4288,7 @@
 - **Phase 791**:
   - `src/js/shim/cssom.js`: 新增 `parseNormalizeImageSet`，统一完成 `image-set()` / `-webkit-image-set()` 语法校验、默认 `1x` 补全、`type(...)` 规范排序及 `calc()` 分辨率求值。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 792**:
+  - `src/js/shim/cssom.js`: `KNOWN_PROPS` 与 `KEYWORD_PROPS` 补全 `overlay: none | auto`。
+  - `src/js/shim/window.js`: `INITIAL_VALUES`/`ALL_KNOWN_PROPS` 补全 `overlay` 与非顶层 `none` 夹紧，并为 `::backdrop` 补全 `position: fixed; inset: 0px` UA 样式。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

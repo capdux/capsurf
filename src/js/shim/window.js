@@ -7317,6 +7317,11 @@ function installWindow(global) {
         const disp = (computedMap.get("display") || "").trim().toLowerCase();
         if (disp === "block math") computedMap.set("display", "block");
         else if (disp === "math" || disp === "inline math") computedMap.set("display", "inline");
+      } else if (normalizedPseudo === "::backdrop") {
+        if (!computedMap.has("position")) computedMap.set("position", "fixed");
+        for (const bp of ["top", "right", "bottom", "left"]) {
+          if (!computedMap.has(bp)) computedMap.set(bp, "0px");
+        }
       }
       if (normalizedPseudo === "::marker") {
         computedMap.set("display", "inline");
@@ -9495,6 +9500,7 @@ function installWindow(global) {
       ["image-resolution", "1dppx"],
       ["object-fit", "fill"],
       ["object-view-box", "none"],
+      ["overlay", "none"],
       ["object-position", "50% 50%"],
       ["shape-outside", "none"],
       ["shape-margin", "0px"],
@@ -9671,6 +9677,10 @@ function installWindow(global) {
     const bsftRaw = (computedMap.get("baseline-shift") || "").trim();
     if (bsftRaw && !/^(?:sub|super|top|center|bottom)$/i.test(bsftRaw)) {
       computedMap.set("baseline-shift", evalLinLenPctTok(bsftRaw));
+    }
+    const isTopLayer = (element && element._isModalDialog) || (typeof element.matches === "function" && (() => { try { return element.matches(":popover-open"); } catch (_) { return false; } })());
+    if (!isTopLayer) {
+      computedMap.set("overlay", "none");
     }
     const evalFilterArgNum = (rawArg, isPctClamped01, isNonNeg) => {
       let s = String(rawArg || "").trim();
@@ -10790,7 +10800,7 @@ function installWindow(global) {
     "margin-block-end", "margin-block-start", "margin-bottom", "margin-inline-end", "margin-inline-start",
     "margin-left", "margin-right", "margin-top", "max-block-size", "max-height", "max-inline-size", "max-lines", "max-width",
     "min-block-size", "min-height", "min-inline-size", "min-width", "mix-blend-mode", "nav-down", "nav-left", "nav-right", "nav-up", "object-fit", "object-position", "object-view-box", "opacity",
-    "order", "orphans", "outline-color", "outline-offset", "outline-style", "outline-width",
+    "order", "orphans", "outline-color", "outline-offset", "outline-style", "outline-width", "overlay",
     "overscroll-behavior-block", "overscroll-behavior-inline", "overscroll-behavior-x", "overscroll-behavior-y",
     "overflow-anchor", "overflow-block", "overflow-clip-margin", "overflow-inline", "overflow-wrap", "overflow-x", "overflow-y",
     "padding-block-end", "padding-block-start", "padding-bottom", "padding-inline-end", "padding-inline-start",

@@ -3422,3 +3422,5 @@
 - 在 `cssom.js` 中补全 `color-mix()` 与相对颜色 `from` 校验、修复 `background-image` 多层 `image()` 正则贪婪匹配，并在 `window.js` 实现 `cross-fade()` 计算值规范化（含 `calc`/`sign` 百分比 `[0%,100%]` 夹紧、`currentcolor` 与 `color-mix(in srgb, ...)`），`cross-fade-computed-value.html` (7/7) 与 `image-function-valid.html` (13/13) 均 **PASS**。
 ### Phase 791 — `image-set()` / `-webkit-image-set()` 解析校验与规范序列化全绿（144/144）
 - 在 `cssom.js` 新增统一辅助函数 `parseNormalizeImageSet`，实现选项语法顺序校验、`-webkit-image-set` 规范化、缺省 `1x` 补全、`type("...")` 转义与重排、以及 `calc()` 分辨率表达式求值与非法混用拦截，`/css/css-images/image-set/image-set-parsing.html` 从 26/144 跃升至 **144/144 PASS**。
+### Phase 792 — `overlay` 属性与 `::backdrop` UA 默认样式打通
+- 在 `cssom.js` 与 `window.js` 补全 `overlay`（`none | auto` 校验与非顶层 UA `none` 夹紧）及 `::backdrop` 伪元素默认 `position: fixed; top/right/bottom/left: 0px`，`overlay-computed.html`、`overlay-invalid.html` 与 `backdrop-ua-style.html` 3/3 **PASS**。
