@@ -4451,3 +4451,7 @@
   - `src/css/cascade.cp`: 新增 `ObjectViewBox` (`inset`/`rect`/`xywh`/`none`) 与 `PROP_OBJECT_VIEW_BOX` 解析。
   - `src/layout/layout.cp`: 新增 `getReplacedSizeWithStyle` 同步缩放替换元素固有尺寸。
   - `src/render/painter.cp`: 新增 `blitSubScaledRgbaClipped` 并对 `<img>`/`<canvas>` 应用 `object-view-box` 裁剪采样。
+- **Phase 836**:
+  - `src/css/cascade.cp`: 新增 `PROP_BG_REPEAT` 与 `background-size` (`px`/`%`/`auto`/`contain`/`cover`)、`background-repeat` 解析。
+  - `src/cdp/session.cp`: `ScreenshotOptions` 透传 `doc_url`。
+  - `src/render/painter.cp`: 新增 `readWptAssetLocal`、`computeBgSvgTileSize`、`paintImgSvgBg`，升级 `paintSvgContainerRef`/`paintSvgChildrenDirect` 支持非等比缩放 (`scale_x`/`scale_y`)、`<rect>` 百分比属性、零 `viewBox` 保护与极端 `viewBox` 裁剪防溢出。

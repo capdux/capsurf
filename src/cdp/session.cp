@@ -5199,6 +5199,7 @@ pub struct CdpPageSession {
             clip_h: clip_h,
             viewport_scroll_x: _.scroll_x,
             viewport_scroll_y: _.scroll_y,
+            doc_url: _.url,
         };
 
         if (pw := out_w) pw.* = vw;

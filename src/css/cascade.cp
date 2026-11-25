@@ -1210,7 +1210,8 @@ pub const PROP_OBJECT_FIT: usize = 101;
 pub const PROP_OBJECT_POS: usize = 102;
 pub const PROP_BG_POS: usize = 103;
 pub const PROP_OBJECT_VIEW_BOX: usize = 104;
-pub const TOTAL_PROP_SLOTS: usize = 105;
+pub const PROP_BG_REPEAT: usize = 105;
+pub const TOTAL_PROP_SLOTS: usize = 106;
 
 pub enum ObjectViewBoxKind {
     None,
@@ -2428,6 +2429,12 @@ pub struct ComputedStyle {
     bg_image_url_buf: [256]u8 = [0; 256];
     bg_image_url_len: usize = 0;
     bg_size_kw: BgSizeKeyword = BgSizeKeyword.Auto;
+    bg_size_w_kind: u8 = 0; // 0=auto, 1=px, 2=pct
+    bg_size_w_val: f32 = 0.0;
+    bg_size_h_kind: u8 = 0;
+    bg_size_h_val: f32 = 0.0;
+    bg_repeat_x: bool = true;
+    bg_repeat_y: bool = true;
     bg_pos: ObjectPos = ObjectPos { x_pct: 0.0, x_px: 0.0, y_pct: 0.0, y_px: 0.0 };
     object_fit: ObjectFit = ObjectFit.Fill;
     object_pos: ObjectPos = ObjectPos {};
@@ -4621,28 +4628,81 @@ pub struct ComputedStyle {
             }
             return;
         }
+        if (std.ascii.eqlIgnoreCase(name, "background-repeat")) {
+            if (_.tryClaimSlot(PROP_BG_REPEAT, weight)) {
+                const tr = std.mem.trim(u8, val, " \t\r\n");
+                if (std.ascii.eqlIgnoreCase(tr, "no-repeat")) {
+                    _.bg_repeat_x = false;
+                    _.bg_repeat_y = false;
+                } else if (std.ascii.eqlIgnoreCase(tr, "repeat-x")) {
+                    _.bg_repeat_x = true;
+                    _.bg_repeat_y = false;
+                } else if (std.ascii.eqlIgnoreCase(tr, "repeat-y")) {
+                    _.bg_repeat_x = false;
+                    _.bg_repeat_y = true;
+                } else if (std.ascii.eqlIgnoreCase(tr, "repeat")) {
+                    _.bg_repeat_x = true;
+                    _.bg_repeat_y = true;
+                }
+            }
+            return;
+        }
         if (std.ascii.eqlIgnoreCase(name, "background-size")) {
             if (_.tryClaimSlot(PROP_BG_SIZE, weight)) {
                 const trim_bs = std.mem.trim(u8, val, " \t\r\n");
                 if (std.ascii.eqlIgnoreCase(trim_bs, "contain")) {
                     _.bg_size_kw = BgSizeKeyword.Contain;
+                    _.bg_size_w_kind = 0;
+                    _.bg_size_h_kind = 0;
                 } else if (std.ascii.eqlIgnoreCase(trim_bs, "cover")) {
                     _.bg_size_kw = BgSizeKeyword.Cover;
+                    _.bg_size_w_kind = 0;
+                    _.bg_size_h_kind = 0;
                 } else {
                     _.bg_size_kw = BgSizeKeyword.Auto;
+                    _.bg_size_w_kind = 0;
+                    _.bg_size_w_val = 0.0;
+                    _.bg_size_h_kind = 0;
+                    _.bg_size_h_val = 0.0;
                     let sit = std.mem.tokenizeAny(u8, val, " \t\r\n");
                     if (s0 := sit.next()) {
-                        if (v0 := parseGradPxToken(s0)) {
-                            if (v0 > 0.0) {
-                                _.bg_gradient.tile_w = v0;
-                                _.bg_gradient.tile_h = v0;
+                        if (std.ascii.eqlIgnoreCase(s0, "auto")) {
+                            _.bg_size_w_kind = 0;
+                        } else if (s0.len > 0 && s0[s0.len - 1] == '%') {
+                            if (p0 := std.fmt.parseFloat(f32, s0[0 .. s0.len - 1]) catch null) {
+                                if (p0 >= 0.0) {
+                                    _.bg_size_w_kind = 2;
+                                    _.bg_size_w_val = p0;
+                                }
+                            }
+                        } else if (v0 := parseGradPxToken(s0)) {
+                            if (v0 >= 0.0) {
+                                _.bg_size_w_kind = 1;
+                                _.bg_size_w_val = v0;
+                                if (v0 > 0.0) {
+                                    _.bg_gradient.tile_w = v0;
+                                    _.bg_gradient.tile_h = v0;
+                                }
                             }
                         }
                     }
                     if (s1 := sit.next()) {
-                        if (v1 := parseGradPxToken(s1)) {
-                            if (v1 > 0.0) {
-                                _.bg_gradient.tile_h = v1;
+                        if (std.ascii.eqlIgnoreCase(s1, "auto")) {
+                            _.bg_size_h_kind = 0;
+                        } else if (s1.len > 0 && s1[s1.len - 1] == '%') {
+                            if (p1 := std.fmt.parseFloat(f32, s1[0 .. s1.len - 1]) catch null) {
+                                if (p1 >= 0.0) {
+                                    _.bg_size_h_kind = 2;
+                                    _.bg_size_h_val = p1;
+                                }
+                            }
+                        } else if (v1 := parseGradPxToken(s1)) {
+                            if (v1 >= 0.0) {
+                                _.bg_size_h_kind = 1;
+                                _.bg_size_h_val = v1;
+                                if (v1 > 0.0) {
+                                    _.bg_gradient.tile_h = v1;
+                                }
                             }
                         }
                     }
