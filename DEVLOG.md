@@ -3384,3 +3384,5 @@
 - 在 `window.js` 默认计算值表补充 `text-decoration-thickness: "auto"` 与 `text-underline-offset: "auto"`，`text-decoration-thickness-initial.html` 与 `text-underline-offset-initial.html` 全部恢复 **PASS**。
 ### Phase 772 — CSS 自定义属性循环引用检测与 `var()` 语法校验闭环
 - 在 `window.js` `resolveVarsInMap` 实现三色栈式 DFS 循环检测，解决自环/互环/嵌套次级环未标记 guaranteed-invalid 的问题（`variable-cycles.html` 11/11 全绿）；移除 `element.js` `var(` 短接漏洞，打通 `var-parsing.html`（`FAIL→PASS`，基线增至 `7,212`）。
+### Phase 773 — 含 `var()` 简写属性长写展开与重构规范化（`variable-reference-shorthands.html` 16/16 PASS）
+- 在 `element.js` 实现含 `var()` 简写的 `pendingVar` 延迟替换展开与重构规则（长写读取 `""`，部分长写被覆盖后简写返回 `""`，`!important` 优先级不被普通长写覆盖），`variable-reference-shorthands.html` **FAIL→PASS**（基线增至 `7,213`）。

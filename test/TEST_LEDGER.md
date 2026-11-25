@@ -2439,3 +2439,4 @@
 | Phase 770 | WPT `/css/css-masking/parsing/` `mask-border-*` 补全与全目录 28/28 PASS | `src/js/shim/cssom.js`, `src/js/shim/window.js` | `mask-valid.sub`, `mask-computed` **PASS** (**`/css/css-masking/parsing/` 28/28 100% PASS**); `--smoke` 3/3 PASS |
 | Phase 771 | WPT `/css/css-text-decor/` 初始值 `auto` 补全（非动画 45/45 PASS） | `src/js/shim/window.js` | `text-decoration-thickness-initial`, `text-underline-offset-initial` **PASS**; `--smoke` 3/3 PASS |
 | Phase 772 | WPT `var()` 语法校验与自定义属性循环引用三色 DFS 检测 | `src/js/shim/window.js`, `src/js/shim/element/element.js`, `test/wpt/wpt-expectations.json` | `variable-cycles` (11/11 **PASS**), `var-parsing` **FAIL→PASS** (`7,212` PASS); `--smoke` 3/3 PASS |
+| Phase 773 | WPT 含 `var()` 简写属性 `pendingVar` 展开与 `!important` 保留 | `src/js/shim/element/element.js`, `test/wpt/wpt-expectations.json` | `variable-reference-shorthands` (16/16 **FAIL→PASS**, `7,213` PASS); `--smoke` 3/3 PASS |

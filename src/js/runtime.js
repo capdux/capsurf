@@ -17683,9 +17683,15 @@
           if (v !== "") {
             if (k === "place-self" || k === "place-items" || k === "place-content") {
               if (isValidInlinePropValue(k, v)) setEntryWithShorthand(map, k, rawKey, v, pri);
-            } else if (k === "border-radius" || k === "column-rule" || k === "columns" || k === "border-color" || k === "border-style" || k === "border-width") {
+            } else if (k === "border-radius" || k === "column-rule" || k === "columns" || k === "border-color" || k === "border-style" || k === "border-width" ||
+                (v.indexOf("var(") !== -1 && (k === "margin" || k === "padding" || (typeof globalThis.__capsurf_shorthandLonghands === "object" && globalThis.__capsurf_shorthandLonghands[k])))) {
               setEntryWithShorthand(map, k, rawKey, v, pri);
-            } else setEntryInStyleMap(map, k, k === "appearance" ? "appearance" : rawKey, v, pri);
+            } else {
+              const cur = map.get(k);
+              if (!cur || cur.priority !== "important" || pri === "important") {
+                setEntryInStyleMap(map, k, k === "appearance" ? "appearance" : rawKey, v, pri);
+              }
+            }
           }
         }
       }
@@ -17775,13 +17781,24 @@
         const names = [key + "-top", key + "-right", key + "-bottom", key + "-left"];
         const vals = [];
         let pri = null;
+        let pVar = null;
+        let hasPVar = false;
+        let allPVar = true;
         for (let i = 0; i < 4; i++) {
           const e = map.get(names[i]);
           if (!e) return "";
           if (pri === null) pri = e.priority;
           else if (pri !== e.priority) return "";
+          if (e.pendingVar) {
+            hasPVar = true;
+            if (pVar === null) pVar = e.pendingVar;
+            else if (pVar !== e.pendingVar || e.pendingOwner !== key) return "";
+          } else {
+            allPVar = false;
+          }
           vals.push(e.value);
         }
+        if (hasPVar) return allPVar ? pVar : "";
         return collapseFourSideValues(vals);
       }
       if (key === "gap") {
@@ -17797,12 +17814,23 @@
           typeof globalThis.__capsurf_serializeShorthand === "function") {
         const lhs = globalThis.__capsurf_shorthandLonghands[key];
         let pri = null;
+        let pVar = null;
+        let hasPVar = false;
+        let allPVar = true;
         for (let i = 0; i < lhs.length; i++) {
           const e = map.get(lhs[i]);
           if (!e) return "";
           if (pri === null) pri = e.priority;
           else if (pri !== e.priority) return "";
+          if (e.pendingVar) {
+            hasPVar = true;
+            if (pVar === null) pVar = e.pendingVar;
+            else if (pVar !== e.pendingVar || e.pendingOwner !== key) return "";
+          } else {
+            allPVar = false;
+          }
         }
+        if (hasPVar) return allPVar ? pVar : "";
         return globalThis.__capsurf_serializeShorthand(key, (lh) => map.get(lh).value);
       }
       if (Object.prototype.hasOwnProperty.call(LEGACY_CSS_ALIASES, key)) {
@@ -17872,11 +17900,22 @@
         return;
       }
       if (!key.startsWith("--") && typeof globalThis.__capsurf_expandShorthand === "function") {
-        const expanded = globalThis.__capsurf_expandShorthand(key, normV);
+        let expanded = globalThis.__capsurf_expandShorthand(key, normV);
+        const isPendingVar = normV.indexOf("var(") !== -1;
+        if (!expanded && isPendingVar && typeof globalThis.__capsurf_shorthandLonghands === "object" && globalThis.__capsurf_shorthandLonghands[key]) {
+          expanded = globalThis.__capsurf_shorthandLonghands[key].map((lh) => [lh, ""]);
+        }
         if (expanded) {
           map.delete(key);
           for (let i = 0; i < expanded.length; i++) {
-            setEntryInStyleMap(map, expanded[i][0], expanded[i][0], expanded[i][1], pri);
+            const lh = expanded[i][0];
+            const cur = map.get(lh);
+            if (cur && cur.priority === "important" && pri !== "important") continue;
+            if (isPendingVar) {
+              map.set(lh, { name: lh, value: "", priority: pri, pendingVar: normV, pendingOwner: key });
+            } else {
+              setEntryInStyleMap(map, lh, lh, expanded[i][1], pri);
+            }
           }
           return;
         }

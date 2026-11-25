@@ -8158,8 +8158,8 @@
     "reason": "T18 enrollment (css-variables): measured PASS"
   },
   "/css/css-variables/variable-reference-shorthands.html": {
-    "expected": "FAIL",
-    "reason": "T18 enrollment (css-variables): 13/16 subtests pass"
+    "expected": "PASS",
+    "reason": null
   },
   "/css/css-variables/variable-reference-variable.html": {
     "expected": "PASS",
