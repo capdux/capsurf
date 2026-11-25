@@ -4560,3 +4560,7 @@
 ### Phase 871 — `border-image-outset` EOF 括号容错与 `border-*` 初始值补齐
 - `src/js/shim/cssom.js`: `border-image-outset` 校验支持 EOF 隐式闭合括号。
 - `src/js/shim/window.js`: 默认计算样式表补齐 `border-*-style`（`none`）与 `border-*-*-radius`（`0px`），并在 `border-*-style` 非 `none`/`hidden` 时为缺省 `border-*-width` 填充 `3px`；`border-image-outset-computed.html` **PASS**、`inheritance.sub.html` **PASS**（64/64），`--smoke` 3/3 **PASS**。
+### Phase 872 — `BgGradient` 角度单位校验与 `painter.cp` 三遍 `z-index` 堆叠顺序绘制
+- `src/css/cascade.cp`: `BgGradient.parse` 支持 `grad`/`rad`/`turn` 并拒绝非法 color stop；`Cascade.resolve` 对根元素 `display: contents` 执行 blockify。
+- `src/render/painter.cp`: `paintNodeRecursive` 新增零分配三遍 `z-index` 堆叠顺序绘制（负 `z-index` -> 普通/0 -> 正 `z-index`）。
+- `src/js/shim/window.js`: `BLOCKIFY` 补齐 `table-*` 与 `ruby-*` 映射；`angle-units-001..005.html` **5/5 PASS**，`--smoke` 3/3 **PASS**。

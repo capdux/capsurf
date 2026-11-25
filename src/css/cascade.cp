@@ -2105,6 +2105,21 @@ pub struct BgGradient {
                     bg.angle_deg = deg;
                     start_idx = 1;
                 }
+            } else if (std.ascii.endsWithIgnoreCase(it0, "grad") && it0.len > 4) {
+                if (grad := std.fmt.parseFloat(f32, it0[0 .. it0.len - 4]) catch null) {
+                    bg.angle_deg = grad * 0.9;
+                    start_idx = 1;
+                }
+            } else if (std.ascii.endsWithIgnoreCase(it0, "rad") && it0.len > 3) {
+                if (rad := std.fmt.parseFloat(f32, it0[0 .. it0.len - 3]) catch null) {
+                    bg.angle_deg = rad * (180.0 / 3.14159265358979323846);
+                    start_idx = 1;
+                }
+            } else if (std.ascii.endsWithIgnoreCase(it0, "turn") && it0.len > 4) {
+                if (turn := std.fmt.parseFloat(f32, it0[0 .. it0.len - 4]) catch null) {
+                    bg.angle_deg = turn * 360.0;
+                    start_idx = 1;
+                }
             }
         } else if (kind == BgGradientKind.Radial) {
             const it0 = items[0];
@@ -2160,6 +2175,8 @@ pub struct BgGradient {
                     has_pos: has_pos,
                 };
                 stop_idx += 1;
+            } else if (!has_pos) {
+                return null;
             }
         }
         if (stop_idx == 0) return null;
@@ -6240,6 +6257,10 @@ pub struct Cascade {
                     style.font_family_buf[0..style.font_family_len],
                     sheet.font_faces[0..sheet.font_face_count],
                 );
+            }
+
+            if (node_id_u32 == doc.root_element && style.display.isContents()) {
+                style.display = Display.block();
             }
 
             if (style.display.isWebkitBox()) {

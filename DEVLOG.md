@@ -3582,3 +3582,5 @@
 - 修复了 `collectRawComputedMap` 开启 `_skipInline` 时先展开 CSS-wide 关键字、后解析内联 `style` 导致内联 `inherit`/`initial`/`unset` 未被展开的全局缺陷，一次性打通 `/css/css-transforms/`（31/31）及 `/css/css-images/inheritance.html`。
 ### Phase 871 — `css-backgrounds` 剩余失败项全部转绿
 - 补齐了 `border-image-outset` EOF 未闭合括号校验及 `border-*-{style,width,radius}` 的 `initial` 默认值，`/css/css-backgrounds/` 全量 115 项功能断言均已通过（`inheritance.sub.html` 64/64 PASS）。
+### Phase 872 — `z-index` 堆叠顺序绘制与渐变角度单位严格校验
+- 修复了 `painter.cp` `paintNodeRecursive` 未按 `z-index` 排序绘制子节点导致 `z-index: -1` 元素覆盖前置普通流元素的全局渲染缺陷，并同步修复 `BgGradient.parse` 忽略非法角度参数的问题，`/css/css-values/angle-units-001..005` 全部转绿。

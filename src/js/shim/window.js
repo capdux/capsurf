@@ -8202,7 +8202,11 @@ function installWindow(global) {
         const BLOCKIFY = {
           "inline": "block", "inline-block": "block", "run-in": "block",
           "inline-flex": "flex", "inline-grid": "grid", "inline-grid-lanes": "grid-lanes", "inline grid-lanes": "grid-lanes", "inline-table": "table",
-          "inline list-item": "list-item", "inline flow-root list-item": "flow-root list-item"
+          "inline list-item": "list-item", "inline flow-root list-item": "flow-root list-item",
+          "table-row-group": "block", "table-header-group": "block", "table-footer-group": "block",
+          "table-row": "block", "table-column-group": "block", "table-column": "block",
+          "table-cell": "block", "table-caption": "block",
+          "ruby": "block", "ruby-base": "block", "ruby-text": "block", "ruby-base-container": "block", "ruby-text-container": "block"
         };
         if (Object.prototype.hasOwnProperty.call(BLOCKIFY, disp)) {
           disp = BLOCKIFY[disp];

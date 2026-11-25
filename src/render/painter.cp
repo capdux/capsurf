@@ -3930,10 +3930,55 @@ fn paintNodeRecursive(
         }
     }
 
-    let child = node.first_child;
-    while (child != NULL_NODE) {
-        paintNodeRecursive(canvas, doc, styles, rects, child, vw, vh, opts, child_clip, child_abs_clip, child_scroll_dx, child_scroll_dy, child_abs_scroll_dx, child_abs_scroll_dy, eff_op, child_skip_inline);
-        child = doc.nodes.items[@as(usize, child)].next_sibling;
+    let has_neg_z = false;
+    let has_pos_z = false;
+    let scan = node.first_child;
+    while (scan != NULL_NODE) {
+        if (@as(usize, scan) < styles.len) {
+            const cst = &styles[@as(usize, scan)];
+            if (cst.has_z_index && (cst.position != CssPosition.Static || cst.z_index != 0)) {
+                if (cst.z_index < 0) has_neg_z = true;
+                else if (cst.z_index > 0) has_pos_z = true;
+            }
+        }
+        scan = doc.nodes.items[@as(usize, scan)].next_sibling;
+    }
+
+    if (!has_neg_z && !has_pos_z) {
+        let child = node.first_child;
+        while (child != NULL_NODE) {
+            paintNodeRecursive(canvas, doc, styles, rects, child, vw, vh, opts, child_clip, child_abs_clip, child_scroll_dx, child_scroll_dy, child_abs_scroll_dx, child_abs_scroll_dy, eff_op, child_skip_inline);
+            child = doc.nodes.items[@as(usize, child)].next_sibling;
+        }
+    } else {
+        if (has_neg_z) {
+            let child = node.first_child;
+            while (child != NULL_NODE) {
+                if (@as(usize, child) < styles.len && styles[@as(usize, child)].has_z_index && styles[@as(usize, child)].z_index < 0) {
+                    paintNodeRecursive(canvas, doc, styles, rects, child, vw, vh, opts, child_clip, child_abs_clip, child_scroll_dx, child_scroll_dy, child_abs_scroll_dx, child_abs_scroll_dy, eff_op, child_skip_inline);
+                }
+                child = doc.nodes.items[@as(usize, child)].next_sibling;
+            }
+        }
+        {
+            let child = node.first_child;
+            while (child != NULL_NODE) {
+                const is_nz = (@as(usize, child) < styles.len && styles[@as(usize, child)].has_z_index && styles[@as(usize, child)].z_index != 0);
+                if (!is_nz) {
+                    paintNodeRecursive(canvas, doc, styles, rects, child, vw, vh, opts, child_clip, child_abs_clip, child_scroll_dx, child_scroll_dy, child_abs_scroll_dx, child_abs_scroll_dy, eff_op, child_skip_inline);
+                }
+                child = doc.nodes.items[@as(usize, child)].next_sibling;
+            }
+        }
+        if (has_pos_z) {
+            let child = node.first_child;
+            while (child != NULL_NODE) {
+                if (@as(usize, child) < styles.len && styles[@as(usize, child)].has_z_index && styles[@as(usize, child)].z_index > 0) {
+                    paintNodeRecursive(canvas, doc, styles, rects, child, vw, vh, opts, child_clip, child_abs_clip, child_scroll_dx, child_scroll_dy, child_abs_scroll_dx, child_abs_scroll_dy, eff_op, child_skip_inline);
+                }
+                child = doc.nodes.items[@as(usize, child)].next_sibling;
+            }
+        }
     }
 }
 
