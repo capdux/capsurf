@@ -4318,3 +4318,7 @@
 - **Phase 799**:
   - `src/js/shim/window.js`: `collectElementOwnDeclarations` 新增跨 Shadow DOM `::part(...)` 与 `exportparts` 级联匹配及 ShadowRoot 内 `:host::part(...)` 支持。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 800**:
+  - `src/js/shim/window.js`: `matchesSelector` 并入 `:host::part(...)` 与 `::file-selector-button` 等伪元素及隐式 `*` 匹配；`parseCssRulesInto` 支持 CSS 嵌套 `&` 展平；`collectElementOwnDeclarations` 修正跨 Shadow DOM `::part()` 普通/内联/`!important` 级联优先级。
+  - `src/js/shim/element/html-classes.js`: `processSubtreeTemplates` 递归处理嵌套声明式 `<template shadowrootmode>`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

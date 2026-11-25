@@ -4315,6 +4315,7 @@ function processSubtreeTemplates(root) {
               try { content.removeChild(ch); } catch (e) {}
               shadow.appendChild(ch);
             }
+            processSubtreeTemplates(shadow);
           }
           try {
             if (typeof tpl.remove === "function") {

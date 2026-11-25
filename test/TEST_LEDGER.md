@@ -2466,3 +2466,4 @@
 | Phase 797 | WPT `::cue` 与 `::view-transition-*` 伪元素解析补全 | `src/js/shim/selector.js` | `pseudo-elements-after-part.html` 全部 23 项解析子测试通过 (23/44 PASS); `--smoke` 3/3 PASS |
 | Phase 798 | WPT ShadowRoot `:host` DOM API 匹配与 `::slotted()` 外部树隔离 | `src/js/shim/element/element.js`, `src/js/shim/selector.js` | `slotted-matches.html` **PASS**、`host-dom-001.html` **PASS**; `--smoke` 3/3 PASS |
 | Phase 799 | WPT 跨 Shadow DOM `::part()` / `exportparts` 与 `:host::part()` 级联匹配 | `src/js/shim/window.js` | `part/{all-hosts,both-part-and-exportparts,host-part-001,invalidation-change-exportparts-forward}.html` (4/4 **PASS**); `--smoke` 3/3 PASS |
+| Phase 800 | WPT `:host::part()` 级联/嵌套、外层 `::part()` `!important` 反转与嵌套声明式 Shadow DOM | `src/js/shim/window.js`, `src/js/shim/element/html-classes.js` | `/css/css-shadow/part/` **39/41 PASS** (`host-part-002/003`, `host-part-nesting`, `multiple-scopes`, `simple-important-important`, `simple-inline` **PASS**); `--smoke` 3/3 PASS |

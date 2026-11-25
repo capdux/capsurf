@@ -3438,3 +3438,5 @@
 - 在 `element.js` 拦截 `matches()` 对 `::slotted()` 的误匹配，并在 `selector.js` 为 `ShadowRoot` 作用域内的 `querySelector`/`matches` 打通 `:host` 匹配与 `getParentOrHost` 穿透，`slotted-matches.html` 与 `host-dom-001.html` 均 **PASS**。
 ### Phase 799 — 跨 Shadow DOM `::part()` / `exportparts` 与 `:host::part()` 级联匹配
 - 在 `window.js` `collectElementOwnDeclarations` 中实现沿 `ShadowRoot.host` 向上穿透的 `::part(...)` 与 `exportparts` 映射级联匹配，并补充当前 ShadowRoot 内部 `:host::part(...)` 规则收集，`all-hosts.html`、`both-part-and-exportparts.html`、`host-part-001.html`、`invalidation-change-exportparts-forward.html` 4/4 **PASS**。
+### Phase 800 — `:host::part()` 源码序/CSS 嵌套、外层 `::part()` `!important` 反转与嵌套声明式 Shadow DOM
+- 将 `:host::part()` 并入 `matchesSelector` 正常级联与特异性比较、为 `collectFromText` 增加 `&` 嵌套规则展平、修正外层 `::part()` 与内层普通/内联/`!important` 的上下文级联反转，并在 `processSubtreeTemplates` 中递归激活嵌套 `<template shadowrootmode>`，`/css/css-shadow/part/` 达 **39/41 PASS**。

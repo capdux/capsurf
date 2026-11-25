@@ -26089,6 +26089,7 @@
                 try { content.removeChild(ch); } catch (e) {}
                 shadow.appendChild(ch);
               }
+              processSubtreeTemplates(shadow);
             }
             try {
               if (typeof tpl.remove === "function") {
@@ -45917,7 +45918,7 @@
         if (pseudoMatch) {
           let p = pseudoMatch[1].toLowerCase();
           if (p.startsWith(":") && !p.startsWith("::")) p = ":" + p;
-          if (p === "::before" || p === "::after" || p === "::first-letter" || p === "::first-line" || p === "::marker" || p === "::backdrop" || p === "::selection" || p === "::target-text" || p === "::search-text" || p === "::spelling-error" || p === "::grammar-error" || p.startsWith("::highlight(") || p === "::column") {
+          if (p === "::before" || p === "::after" || p === "::first-letter" || p === "::first-line" || p === "::marker" || p === "::backdrop" || p === "::selection" || p === "::target-text" || p === "::search-text" || p === "::spelling-error" || p === "::grammar-error" || p.startsWith("::highlight(") || p === "::column" || p === "::file-selector-button" || p === "::details-content" || p === "::placeholder" || p === "::picker-icon" || p === "::checkmark" || p === "::scroll-marker" || p === "::scroll-marker-group" || p === "::view-transition" || p.startsWith("::view-transition-group(") || p.startsWith("::view-transition-image-pair(") || p.startsWith("::view-transition-new(") || p.startsWith("::view-transition-old(")) {
             selPseudo = p;
             baseSel = raw.slice(0, -pseudoMatch[1].length).trim();
           }
@@ -45929,6 +45930,36 @@
           if (selPseudo !== "") continue;
         }
 
+        if (baseSel.indexOf("::part(") !== -1) {
+          const hm = /^(:host(?:\(([^)]*)\))?)::part\(\s*([^)]+)\s*\)(.*)$/i.exec(baseSel);
+          if (hm && element && element.nodeType === 1 && typeof element.getAttribute === "function") {
+            const elRoot = typeof element.getRootNode === "function" ? element.getRootNode() : null;
+            if (elRoot && elRoot.nodeType === 11 && elRoot.host) {
+              const rawPart = (element.getAttribute("part") || "").trim();
+              if (rawPart) {
+                const partSet = new Set(rawPart.split(/\s+/).filter(Boolean));
+                const reqParts = hm[3].trim().split(/\s+/).filter(Boolean);
+                let ok = reqParts.length > 0;
+                for (let ri = 0; ri < reqParts.length && ok; ri++) {
+                  if (!partSet.has(reqParts[ri].replace(/\\(.)/g, "$1"))) ok = false;
+                }
+                if (ok && hm[2] !== undefined) {
+                  ok = matchesSingleSelector(elRoot.host, hm[2].trim());
+                }
+                if (ok) {
+                  const tail = (hm[4] || "").trim();
+                  if (!tail || matchesSingleSelector(element, "*" + tail)) return true;
+                }
+              }
+            }
+          }
+          continue;
+        }
+
+        if (!baseSel) {
+          if (selPseudo) return true;
+          continue;
+        }
         if (matchesSingleSelector(element, baseSel)) return true;
       }
       return false;
@@ -46141,8 +46172,28 @@
             } else if (sel.startsWith("@")) {
               continue;
             } else if (sel) {
-              if (matchesSelector(element, sel, normalizedPseudo)) {
-                matched.push({ decl: r.declText || "", layer: layerPrefix || "", spec: calcMatchedSelectorSpecificity(element, sel, normalizedPseudo), order: seq++ });
+              const dText = r.declText || "";
+              if (dText.indexOf("{") !== -1) {
+                const subRules = getParsedRules(dText);
+                const ownDecls = [];
+                for (let si = 0; si < subRules.length; si++) {
+                  const sr = subRules[si];
+                  if (!sr) continue;
+                  const sSel = String(sr.selectorText || "").trim();
+                  if (sSel) {
+                    const fullSel = sSel.indexOf("&") !== -1 ? sSel.replace(/&/g, sel) : (sel + " " + sSel);
+                    if (matchesSelector(element, fullSel, normalizedPseudo)) {
+                      matched.push({ decl: sr.declText || "", layer: layerPrefix || "", spec: calcMatchedSelectorSpecificity(element, fullSel, normalizedPseudo), order: seq++ });
+                    }
+                  } else if (sr.cssText) {
+                    ownDecls.push(sr.cssText);
+                  }
+                }
+                if (ownDecls.length > 0 && matchesSelector(element, sel, normalizedPseudo)) {
+                  matched.push({ decl: ownDecls.join(";"), layer: layerPrefix || "", spec: calcMatchedSelectorSpecificity(element, sel, normalizedPseudo), order: seq++ });
+                }
+              } else if (matchesSelector(element, sel, normalizedPseudo)) {
+                matched.push({ decl: dText, layer: layerPrefix || "", spec: calcMatchedSelectorSpecificity(element, sel, normalizedPseudo), order: seq++ });
               }
             }
           }
@@ -46581,7 +46632,6 @@
             visitRules(rules);
             if (matchedDecls.length > 0) outerLayers.push(matchedDecls);
           };
-          collectMatchingPartDecls(elRoot, curHost, true);
           while (curHost && exposedParts.size > 0) {
             const curScope = typeof curHost.getRootNode === "function" ? curHost.getRootNode() : (curHost.ownerDocument || null);
             if (!curScope) break;
@@ -46610,14 +46660,39 @@
               break;
             }
           }
+          if (!normalizedPseudo) {
+            const rawInline = element.getAttribute ? element.getAttribute("style") : "";
+            if (rawInline) {
+              parseDeclarationsBlockInto(element, rawInline, targetMap, "normal");
+            }
+          }
           for (let oi = 0; oi < outerLayers.length; oi++) {
             for (let di = 0; di < outerLayers[oi].length; di++) {
               parseDeclarationsBlockInto(element, outerLayers[oi][di], targetMap, "normal");
+            }
+          }
+          const outerImpMap = new Map();
+          for (let oi = outerLayers.length - 1; oi >= 0; oi--) {
+            for (let di = 0; di < outerLayers[oi].length; di++) {
               if (outerLayers[oi][di].toLowerCase().indexOf("!important") !== -1) {
-                parseDeclarationsBlockInto(element, outerLayers[oi][di], targetMap, "important");
+                parseDeclarationsBlockInto(element, outerLayers[oi][di], outerImpMap, "important");
               }
             }
           }
+          const innerImpSet = targetMap._importantKeys || (targetMap._importantKeys = new Set());
+          for (const [ok, ov] of outerImpMap.entries()) {
+            if (!innerImpSet.has(ok)) {
+              targetMap.set(ok, ov);
+              innerImpSet.add(ok);
+            }
+          }
+          if (!normalizedPseudo) {
+            const rawInline = element.getAttribute ? element.getAttribute("style") : "";
+            if (rawInline && rawInline.toLowerCase().indexOf("!important") !== -1) {
+              parseDeclarationsBlockInto(element, rawInline, targetMap, "important");
+            }
+          }
+          return;
         }
       }
       if (!normalizedPseudo) {
