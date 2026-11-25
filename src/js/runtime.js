@@ -39734,8 +39734,20 @@
   }
 
   function solveCubicBezier(x1, y1, x2, y2, t) {
-    if (t <= 0) return 0;
-    if (t >= 1) return 1;
+    if (t === 0) return 0;
+    if (t === 1) return 1;
+    if (t < 0) {
+      let slope = 0;
+      if (x1 > 0) slope = y1 / x1;
+      else if (x1 === 0 && y1 === 0 && x2 > 0) slope = y2 / x2;
+      return slope * t;
+    }
+    if (t > 1) {
+      let slope = 0;
+      if (x2 < 1) slope = (1 - y2) / (1 - x2);
+      else if (x2 === 1 && y2 === 1 && x1 < 1) slope = (1 - y1) / (1 - x1);
+      return 1 + slope * (t - 1);
+    }
     // Solve B_x(u) = t for u in [0, 1] using Newton-Raphson + bisection fallback
     const sampleX = function (u) {
       const inv = 1 - u;
@@ -40043,6 +40055,19 @@
   }
   KeyframeEffect.prototype = Object.create(AnimationEffect.prototype);
   KeyframeEffect.prototype.constructor = KeyframeEffect;
+
+  AnimationEffect.prototype.getTiming = function () {
+    return {
+      delay: this.delay,
+      endDelay: this.endDelay,
+      fill: this.fill,
+      iterationStart: this.iterationStart,
+      iterations: this.iterations,
+      duration: this.duration,
+      direction: this.direction,
+      easing: this.easing,
+    };
+  };
 
   KeyframeEffect.prototype.getComputedTiming = function () {
     const iterDur = typeof this.duration === "number" ? this.duration : 0;
@@ -40485,11 +40510,26 @@
 
     function parseCssTimeMs(token) {
       if (typeof token !== "string") return null;
-      const m = token.trim().match(/^([+-]?(?:\d+\.?\d*|\.\d+))(ms|s)$/i);
-      if (!m) return null;
-      const val = parseFloat(m[1]);
-      if (isNaN(val)) return null;
-      return m[2].toLowerCase() === "s" ? val * 1000 : val;
+      const t = token.trim();
+      const m = t.match(/^([+-]?(?:\d+\.?\d*|\.\d+))(ms|s)$/i);
+      if (m) {
+        const val = parseFloat(m[1]);
+        if (isNaN(val)) return null;
+        return m[2].toLowerCase() === "s" ? val * 1000 : val;
+      }
+      const cm = t.match(/^calc\(\s*(.+)\s*\)$/i);
+      if (cm) {
+        const e = cm[1]
+          .replace(/([+-]?(?:\d+\.?\d*|\.\d+))ms\b/gi, "($1)")
+          .replace(/([+-]?(?:\d+\.?\d*|\.\d+))s\b/gi, "($1*1000)");
+        if (/^[\d+\-*/().\s]+$/.test(e)) {
+          try {
+            const v = Function("return (" + e + ")")();
+            if (typeof v === "number" && isFinite(v)) return v;
+          } catch (_) {}
+        }
+      }
+      return null;
     }
 
     function splitTopLevelCommas(str) {
@@ -40604,6 +40644,7 @@
           let iterations = 1;
           let direction = "normal";
           let fill = "none";
+          let playState = "running";
           let timeIdx = 0;
           for (let j = 0; j < toks.length; j++) {
             const t = toks[j];
@@ -40624,10 +40665,20 @@
             } else if (ANIM_FILLS.has(tl)) {
               fill = tl;
             } else if (ANIM_PLAY_STATES.has(tl)) {
-              // ignore play-state for now
+              playState = tl;
             } else {
               name = t;
             }
+          }
+          if (computedMap.has("animation-delay")) {
+            const dlOv = splitTopLevelCommas(String(computedMap.get("animation-delay")));
+            const dlMs = parseCssTimeMs(dlOv[i % dlOv.length]);
+            if (dlMs !== null) delayMs = dlMs;
+          }
+          if (computedMap.has("animation-play-state")) {
+            const psOv = splitTopLevelCommas(String(computedMap.get("animation-play-state")));
+            const psVal = (psOv[i % psOv.length] || "").trim().toLowerCase();
+            if (ANIM_PLAY_STATES.has(psVal)) playState = psVal;
           }
           if (name && name !== "none" && durationMs > 0) {
             specs.push({
@@ -40638,6 +40689,7 @@
               iterations: iterations,
               direction: direction,
               fill: fill,
+              playState: playState,
             });
           }
         }
@@ -40743,7 +40795,7 @@
     function evalCssAnimationStyles(anim, frames, now, baseStyles) {
       const out = {};
       if (!frames || frames.length === 0) return out;
-      const activeMs = (now - anim.startTime) - anim.delayMs;
+      const activeMs = (anim.playState === "paused" ? 0 : (now - anim.startTime)) - anim.delayMs;
       const totalMs = anim.iterations === Infinity ? Infinity : anim.durationMs * anim.iterations;
       if (activeMs < 0 && anim.fill !== "backwards" && anim.fill !== "both") return out;
       if (activeMs >= totalMs && anim.fill !== "forwards" && anim.fill !== "both") return out;
@@ -40959,6 +41011,7 @@
             iterations: sp.iterations,
             direction: sp.direction,
             fill: sp.fill,
+            playState: sp.playState || "running",
             finished: false,
             endTimer: null,
           };

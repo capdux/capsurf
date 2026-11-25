@@ -4595,3 +4595,6 @@
 ### Phase 882 — Web Animations `DocumentTimeline` 帧时间冻结与 `linear()`/`steps()` 输出外推
 - `src/js/shim/animations.js`: 冻结单轮同步任务 `DocumentTimeline.prototype.currentTime` 消除动画求值毫秒漂移；支持 `linear(...)` 缓动校验与分段线性/外推求值；移除关键帧段进度 `segT` 的 `[0,1]` 强钳位并修正 `steps()`/`step-start`/`step-end` 越界外推。
 - `src/js/{runtime.js,runtime_source.cp}`: 重新打包；`linear-timing-functions-output.html` 与 `step-timing-functions-output.html` **2/2 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 883 — `AnimationEffect.getTiming()` 与 `cubic-bezier()` 切线外推 / `paused` 动画时间求值
+- `src/js/shim/animations.js`: 补全 `AnimationEffect.prototype.getTiming()`；`solveCubicBezier` 在 `t < 0` 与 `t > 1` 按规范切线斜率外推（垂直切线回落 0）；`parseCssTimeMs` 支持 `calc()` 时间表达式；`parseAnimationSpecs` 支持 `paused` 状态与 `animation-delay` 覆盖。
+- `src/js/{runtime.js,runtime_source.cp}`: 重新打包；`cubic-bezier-timing-functions-output.html` **PASS**，`--smoke` 3/3 **PASS**。

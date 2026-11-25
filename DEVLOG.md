@@ -3605,3 +3605,5 @@
 - 消除 `window.js` 中 `linear\(([^)]*)\)` 正则遇到嵌套 `calc()`/`min()` 提前截断的缺陷，并在 `cssom.js` 补全 `linear()` stop 语法校验与 `%` `calc()` 折叠，使 `linear-timing-functions-syntax.html` 全量 35 项子测试全部通过。
 ### Phase 882 — Web Animations 帧时间一致性与越界缓动外推
 - 修复 `DocumentTimeline.currentTime` 每次读取都调用 `performance.now()` 导致同步断言出现 `0.1px` 漂移的全局时序缺陷，并打通关键帧 `segT` 越界进度传递，使 `linear()` 与 `steps()` 输出外推测试全绿。
+### Phase 883 — `solveCubicBezier` 越界切线外推与 `getTiming()` 补全
+- 修复 `solveCubicBezier` 在 `t <= 0` / `t >= 1` 直接钳位返回 `0` / `1` 的缺陷，严格按 CSS Easing 规范处理有限与垂直切线外推，并补全 `AnimationEffect.prototype.getTiming()`。
