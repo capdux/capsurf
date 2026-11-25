@@ -3474,3 +3474,5 @@
 - 在 `selector.js` 实现 `::view-transition-{group,image-pair,new,old}` 的 `<pt-name-and-class-selector>` 严格校验并放行链式 `:only-child`，4 个伪元素解析/非法用例全绿 **PASS**。
 ### Phase 817 — 顶层 `&` 选择器（`:scope`/`:root` 匹配与零特异性）及 `::marker` 默认 `content`
 - 在 `selector.js`/`element.js`/`window.js` 打通顶层 `&` 选择器校验、`matches` 根元素匹配与零特异性计算，并修正 `::marker` 初始 `content` 为 `"normal"`，`top-level-is-scope`、`top-level-parent-pseudo-specificity` 与 `marker-computed-content` 3/3 全绿 **PASS**。
+### Phase 818 — `var()` 回退 CSS-wide keyword 无效化与 `--*` `unset`/`revert` 继承
+- 在 `window.js` `resolveCssVarsAndProps` 中将 `var()`/`env()` 替换产出的 CSS-wide keyword 按规范视为 invalid at computed-value time，同时在关键字解析阶段将 `--*` 自定义属性纳入继承支持 `unset` 与 `revert`，`revert-in-fallback` 与 `variable-definition-keywords` 2/2 全绿 **PASS**。

@@ -2484,3 +2484,4 @@
 | Phase 815 | WPT `env()` `@supports`/回退替换与 `scale-parsing-computed` | `src/js/shim/cssom.js`, `src/js/shim/window.js` | `css-env/at-supports.tentative`, `css-env/env-fallback-substitution`, `scale-parsing-computed` 3/3 **PASS**; `--smoke` 3/3 PASS |
 | Phase 816 | WPT `::view-transition-*` 伪元素与 `:only-child` 校验 | `src/js/shim/selector.js` | `pseudo-elements-{valid,valid-with-classes,invalid,invalid-with-classes}` 4/4 **PASS**; `--smoke` 3/3 PASS |
 | Phase 817 | WPT 顶层 `&` 选择器及 `::marker` 默认 `content` | `src/js/shim/selector.js`, `src/js/shim/element/element.js`, `src/js/shim/window.js` | `top-level-is-scope`, `top-level-parent-pseudo-specificity`, `marker-computed-content` 3/3 **PASS**; `--smoke` 3/3 PASS |
+| Phase 818 | WPT `var()` 回退 `revert` 无效化与 `--*` `unset`/`revert` | `src/js/shim/window.js` | `revert-in-fallback`, `variable-definition-keywords` 2/2 **PASS**; `--smoke` 3/3 PASS |

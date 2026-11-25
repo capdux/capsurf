@@ -4390,3 +4390,6 @@
   - `src/js/shim/element/element.js`: `proto.matches` 对含 `&` 选择器绕过原生快路径直接调用 `matchesElementSelector`。
   - `src/js/shim/window.js`: `calcSingleSelectorSpecificity` 保持 `&` 零特异性；修正 `::marker` 默认 `content` 计算值为 `"normal"`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 818**:
+  - `src/js/shim/window.js`: `resolveCssVarsAndProps` 将 `var()`/`env()` 替换产出的 CSS-wide keyword 视为计算期无效并清除；`isInheritedProp` 将 `--*` 纳入继承并支持 `unset`/`revert` 解析。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

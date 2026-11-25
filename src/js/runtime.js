@@ -47253,17 +47253,19 @@
         return res;
       }
 
+      const CSS_WIDE_AFTER_VAR = /^(?:inherit|initial|unset|revert|revert-layer)$/i;
       for (const [k, v] of Array.from(computedMap.entries())) {
         if (k.startsWith("--")) {
+          const hadSubst = typeof v === "string" && /(?:^|[^a-z0-9_-])(?:var|env)\(/i.test(v);
           const res = resolveCustomProp(k, 0);
-          if (res === INVALID || cycledCustom.has(k)) computedMap.delete(k);
+          if (res === INVALID || cycledCustom.has(k) || (hadSubst && CSS_WIDE_AFTER_VAR.test(String(res).trim()))) computedMap.delete(k);
           else computedMap.set(k, res);
         }
       }
       for (const [k, v] of Array.from(computedMap.entries())) {
         if (!k.startsWith("--") && typeof v === "string" && /(?:^|[^a-z0-9_-])(?:var|env)\(/i.test(v)) {
           const res = substituteStr(v, 0);
-          if (res === INVALID) computedMap.delete(k);
+          if (res === INVALID || CSS_WIDE_AFTER_VAR.test(String(res).trim())) computedMap.delete(k);
           else computedMap.set(k, res);
         }
       }
@@ -47811,10 +47813,12 @@
         }
       }
 
-      // Resolve CSS-wide keywords ("inherit", "initial", "unset") across all properties
+      // Resolve CSS-wide keywords ("inherit", "initial", "unset", "revert") across all properties
+      const isInheritedProp = (prop) => prop.startsWith("--") || INHERITED_CSS_PROPS.has(prop);
       for (const [ck, cv] of Array.from(computedMap.entries())) {
         const low = String(cv || "").trim().toLowerCase();
-        if (low === "inherit" || (low === "unset" && INHERITED_CSS_PROPS.has(ck))) {
+        const inh = isInheritedProp(ck);
+        if (low === "inherit" || ((low === "unset" || low === "revert") && inh)) {
           let resolved = null;
           const inheritChain = normalizedPseudo ? [element].concat(ancestors) : ancestors;
           for (let ai = 0; ai < inheritChain.length; ai++) {
@@ -47823,15 +47827,15 @@
             if (ancMap.has(ck)) {
               const av = String(ancMap.get(ck) || "").trim();
               const alow = av.toLowerCase();
-              if (alow === "inherit" || (alow === "unset" && INHERITED_CSS_PROPS.has(ck))) continue;
-              if (alow === "initial" || alow === "unset") break;
+              if (alow === "inherit" || ((alow === "unset" || alow === "revert") && inh)) continue;
+              if (alow === "initial" || alow === "unset" || alow === "revert") break;
               resolved = av;
               break;
             }
           }
           if (resolved !== null) computedMap.set(ck, resolved);
           else computedMap.delete(ck);
-        } else if (low === "initial" || (low === "unset" && !INHERITED_CSS_PROPS.has(ck))) {
+        } else if (low === "initial" || ((low === "unset" || low === "revert") && !inh)) {
           if (ck === "display") computedMap.set("display", "inline");
           else computedMap.delete(ck);
         }
