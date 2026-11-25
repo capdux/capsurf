@@ -4612,3 +4612,5 @@
 - `src/layout/layout.cp`: `layoutFlexContainer` 增加 `RowReverse`/`ColumnReverse` 检测，镜像 `FlexStart`/`FlexEnd` 起始偏移并在各弹性行内反转子项顺序；通过 `cpc fix` + `cpc brief` 门禁，`column-reverse-gap.html` **PASS**，`--smoke` 3/3 **PASS**。
 ### Phase 888 — Flexbox `column` `max-height` 换行与 `flex-grow` 冻结重分配
 - `src/layout/layout.cp`: `layoutFlexContainer` 支持 `max-height` 约束纵轴换行主轴尺寸，实现 `flex-grow` 的 `max-width`/`max-height` 冻结重分配循环，并在纵轴子项传递 `forced_height`；通过 `cpc fix` + `cpc brief` 门禁，`flex-wrap-column-grow.html` **PASS**，`--smoke` 3/3 **PASS**。
+### Phase 889 — 多行 Flexbox `align-content: stretch` 默认行拉伸
+- `src/layout/layout.cp`: `layoutFlexContainer` 在多行弹性盒下计算 `line_cross_sizes` 并均分富余交叉轴空间，使子项在多行场景下按 `stretch` 撑满行高；通过 `cpc fix` + `cpc brief` 门禁，`flexbox-lines-must-be-stretched-by-default.html` **PASS**，`--smoke` 3/3 **PASS**。

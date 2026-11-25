@@ -3617,3 +3617,5 @@
 - 修复 `layoutFlexContainer` 仅判断 `isRow()` 而忽略 `RowReverse`/`ColumnReverse` 的主轴反转与 `justify-content` 镜像问题，`column-reverse-gap.html` 一次性通过。
 ### Phase 888 — Flexbox `max-height` 纵轴换行与 `flex-grow` 冻结循环
 - 补全 `layoutFlexContainer` 对 `height: auto; max-height: ...` 纵轴多行换行的支持、`flex-grow` 触达 `max-height`/`max-width` 后的冻结再分配（CSS Flexbox §9.7），以及 `forced_height` 向下透传。
+### Phase 889 — 多行 Flexbox 交叉轴行拉伸 (`line_cross_avail`)
+- 修复 `layoutFlexContainer` 在 `line_count > 1` 时将 `line_cross_avail` 硬编码为 `0.0` 导致 `align-content: stretch` 失效的问题，`flexbox-lines-must-be-stretched-by-default.html` 一次性通过。

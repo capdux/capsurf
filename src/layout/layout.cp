@@ -4173,6 +4173,29 @@ pub struct LayoutTree {
             }
         }
 
+        let line_cross_sizes: [32]f32 = [0.0; 32];
+        if (line_count > 1) {
+            let total_lc: f32 = 0.0;
+            let lci: usize = 0;
+            while (lci < line_count) : (lci += 1) {
+                let mx_c: f32 = 0.0;
+                let ii: usize = line_starts[lci];
+                while (ii < line_ends[lci]) : (ii += 1) {
+                    if (items[ii].base_cross > mx_c) mx_c = items[ii].base_cross;
+                }
+                line_cross_sizes[lci] = mx_c;
+                total_lc += mx_c;
+            }
+            const total_cg = @as(f32, @floatFromInt(line_count - 1)) * cross_gap;
+            if (cross_size > total_lc + total_cg) {
+                const add_c = (cross_size - total_lc - total_cg) / @as(f32, @floatFromInt(line_count));
+                let lcj: usize = 0;
+                while (lcj < line_count) : (lcj += 1) {
+                    line_cross_sizes[lcj] += add_c;
+                }
+            }
+        }
+
         let current_cross: f32 = 0.0;
         let max_used_main: f32 = 0.0;
         let li: usize = 0;
@@ -4313,7 +4336,7 @@ pub struct LayoutTree {
             // CssPosition each flex item in this line and layout its children
             let current_main = start_offset;
             let line_max_cross: f32 = 0.0;
-            const line_cross_avail = if (line_count == 1) cross_size else 0.0;
+            const line_cross_avail = if (line_count == 1) cross_size else line_cross_sizes[li];
 
             let k: usize = l_start;
             while (k < l_end) : (k += 1) {
