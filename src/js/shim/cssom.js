@@ -56,7 +56,7 @@
     "grid-row", "grid-row-end", "grid-row-gap", "grid-row-start", "grid-template",
     "grid-template-areas", "grid-template-columns", "grid-template-rows", "hanging-punctuation", "height",
     "hyphenate-character", "hyphenate-limit-chars", "hyphens", "image-orientation", "image-rendering", "image-resolution",
-    "inline-size", "inset", "inset-block", "inset-block-end", "inset-block-start",
+    "initial-letter", "inline-size", "inset", "inset-block", "inset-block-end", "inset-block-start",
     "inset-inline", "inset-inline-end", "inset-inline-start", "interactivity", "isolation", "justify-content",
     "justify-items", "justify-self", "left", "letter-spacing", "lighting-color", "line-break", "line-clamp", "line-height",
     "list-style", "list-style-image", "list-style-position", "list-style-type", "margin",
@@ -3655,6 +3655,25 @@
       }
       return true;
     }
+    if (prop === "initial-letter") {
+      if (vLower === "normal") return true;
+      const toks = splitCssTokens(trimmed);
+      if (toks.length === 0 || toks.length > 2) return false;
+      const isInitNum = (tok, mustBeInt) => {
+        if (/^(?:calc|min|max|clamp|sign)\(/i.test(tok)) return true;
+        if (mustBeInt) {
+          if (!/^[+]?\d+$/.test(tok)) return false;
+          return Number(tok) >= 1;
+        }
+        if (!/^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(tok)) return false;
+        return Number(tok) >= 1;
+      };
+      if (toks.length === 1) return isInitNum(toks[0], false);
+      const t0 = toks[0], t1 = toks[1], l0 = t0.toLowerCase(), l1 = t1.toLowerCase();
+      if (l0 === "drop" || l0 === "raise") return isInitNum(t1, false);
+      if (l1 === "drop" || l1 === "raise") return isInitNum(t0, false);
+      return isInitNum(t0, false) && isInitNum(t1, true);
+    }
     const isValidImageSet = (raw) => parseNormalizeImageSet(raw) !== null;
     if (prop === "border-image-source") {
       if (vLower === "none") return true;
@@ -5033,6 +5052,16 @@
     }
     if (key === "mask-position") {
       return s.split(",").map((l) => normalizePositionLayer(l.trim(), false)).join(", ");
+    }
+    if (key === "initial-letter") {
+      const toks = splitCssTokens(s);
+      if (toks.length === 1 && toks[0].toLowerCase() === "normal") return "normal";
+      if (toks.length === 2) {
+        const l0 = toks[0].toLowerCase(), l1 = toks[1].toLowerCase();
+        if (l0 === "drop" || l0 === "raise") return toks[1] + " " + l0;
+        if (l1 === "drop" || l1 === "raise") return toks[0] + " " + l1;
+      }
+      return s;
     }
     if (key === "perspective-origin" || key === "transform-origin" || key === "object-position") {
       return normalizePositionLayer(s, key === "transform-origin");

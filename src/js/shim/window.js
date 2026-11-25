@@ -8875,10 +8875,13 @@ function installWindow(global) {
       if (rawExpr.indexOf("sign(") === -1) return rawExpr;
       const cw = resolveContainerW(el);
       const fs = parseFloat(computedMap.get("font-size")) || 16;
+      const rootEl = el && el.ownerDocument ? el.ownerDocument.documentElement : null;
+      const rootFs = (rootEl && rootEl !== el && typeof getComputedStyle === "function") ? (parseFloat(getComputedStyle(rootEl).fontSize) || 16) : fs;
       return rawExpr.replace(/sign\(([^()]+)\)/gi, (full, inner) => {
         const rep = inner
           .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))cqw\b/gi, (_, n) => String(Number(n) * cw / 100))
           .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))px\b/gi, (_, n) => String(Number(n)))
+          .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))rem\b/gi, (_, n) => String(Number(n) * rootFs))
           .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))em\b/gi, (_, n) => String(Number(n) * fs));
         if (/^[\d+\-*/().\s]+$/.test(rep)) {
           try {
@@ -9071,6 +9074,46 @@ function installWindow(global) {
     const ctRaw = (computedMap.get("container-type") || "").trim().toLowerCase();
     if (ctRaw === "normal" || ctRaw === "initial" || ctRaw === "unset" || ctRaw === "revert" || ctRaw === "revert-layer") {
       computedMap.set("container-type", "normal");
+    }
+    const ilRaw = (computedMap.get("initial-letter") || "").trim();
+    if (ilRaw) {
+      const ilLow = ilRaw.toLowerCase();
+      if (ilLow === "normal" || ilLow === "initial" || ilLow === "unset" || ilLow === "revert" || ilLow === "revert-layer") {
+        computedMap.set("initial-letter", "normal");
+      } else {
+        const ilToks = splitCssTopLevelWhitespace(ilRaw);
+        const evalInitTok = (tk, isInt) => {
+          if (/^(?:calc|min|max|clamp|sign)\(/i.test(tk)) {
+            let expr = tk;
+            if (/sign\(/i.test(expr)) expr = evalSignCalls(expr, element);
+            const inner = expr.slice(expr.indexOf("(") + 1, -1).trim();
+            if (/^[+\-*/().\s\d]+$/.test(inner)) {
+              try {
+                const v = Function("return (" + inner + ")")();
+                if (typeof v === "number" && isFinite(v)) {
+                  const cl = Math.max(1, isInt ? Math.round(v) : v);
+                  return String(Number(cl.toFixed(6)));
+                }
+              } catch (_) {}
+            }
+          }
+          const n = Number(tk);
+          if (isFinite(n)) return String(Number(Math.max(1, isInt ? Math.round(n) : n).toFixed(6)));
+          return tk;
+        };
+        if (ilToks.length === 1) {
+          computedMap.set("initial-letter", evalInitTok(ilToks[0], false));
+        } else if (ilToks.length === 2) {
+          const l0 = ilToks[0].toLowerCase(), l1 = ilToks[1].toLowerCase();
+          if (l0 === "drop" || l0 === "raise") {
+            computedMap.set("initial-letter", evalInitTok(ilToks[1], false) + " " + l0);
+          } else if (l1 === "drop" || l1 === "raise") {
+            computedMap.set("initial-letter", evalInitTok(ilToks[0], false) + " " + l1);
+          } else {
+            computedMap.set("initial-letter", evalInitTok(ilToks[0], false) + " " + evalInitTok(ilToks[1], true));
+          }
+        }
+      }
     }
     for (const gp of ["grid-row-start", "grid-row-end", "grid-column-start", "grid-column-end"]) {
       const gRaw = (computedMap.get(gp) || "").trim();
@@ -10114,6 +10157,7 @@ function installWindow(global) {
       ["scroll-target-group", "none"],
       ["container-name", "none"],
       ["container-type", "normal"],
+      ["initial-letter", "normal"],
       ["box-decoration-break", "slice"],
       ["break-after", "auto"],
       ["break-before", "auto"],
@@ -11404,7 +11448,7 @@ function installWindow(global) {
     "flood-color", "lighting-color",
     "column-rule-color", "column-rule-style", "column-rule-width", "column-span", "column-width", "column-height", "column-wrap", "contain",
     "contain-intrinsic-block-size", "contain-intrinsic-height", "contain-intrinsic-inline-size", "contain-intrinsic-width",
-    "content", "content-visibility", "continue", "container-name", "container-type", "counter-increment", "counter-reset", "counter-set", "cursor", "direction", "display", "margin-trim",
+    "content", "content-visibility", "continue", "container-name", "container-type", "counter-increment", "counter-reset", "counter-set", "cursor", "direction", "display", "initial-letter", "margin-trim",
     "clip-rule", "mask-border-outset", "mask-border-repeat", "mask-border-slice", "mask-border-source", "mask-border-width",
     "mask-clip", "mask-composite", "mask-image", "mask-mode", "mask-origin", "mask-position", "mask-repeat", "mask-size", "mask-type",
     "empty-cells", "field-sizing", "filter", "flex-basis", "flex-direction", "flex-grow", "flex-shrink",

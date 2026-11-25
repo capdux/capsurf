@@ -3490,3 +3490,5 @@
 - 在 `selector.js`、`element.js` 将无父节点或 `document` 根元素的子索引伪类（`:first-child`/`:nth-child` 等）按 Selectors 4 规范视为 `1/1` 并打通 `document.querySelector`/`matches`，同时在 `window.js` `makeComputedStyleMap` 拦截未挂载节点返回 `undefined`，`child-indexed-pseudo-class` (57/57) 与 `get-disconnected-element` 全绿 **PASS**。
 ### Phase 825 — 替换元素固有关键字宽度纵横比传递与 `cap:css` 声明注释修复
 - 在 `src/layout/layout.cp` `resolveBoxMetrics` 为具有固有纵横比的替换元素增加 `min-content`/`max-content`/`fit-content` 宽度经由可解析百分比/定长 `height` 传递的分支；同时定位并修复 `/data/dev/cp/lib/css/stylesheet.cp` 中 `splitTopLevelDecls` 与 `CssProperty.parse` 未剥离 `/* ... */` 注释导致注释内冒号抢占 `:` 分割点的问题，`/css/css-sizing/intrinsic-percent-replaced-033.html` (9/9) 全绿 **PASS**。
+### Phase 826 — `initial-letter` 解析、序列化与 `sign()`/`calc()` 计算值全闭环
+- 在 `cssom.js` 补齐 `initial-letter` 的属性登记、合法/非法语法校验（拒收 `<1` 数值与非整数第二参数）及 `drop`/`raise` 顺序规范化；在 `window.js` 为 `evalSignCalls` 补充 `rem` 单位支持并实现 `initial-letter` 的 `calc()`/`sign()` 计算值求值，`initial-letter-{valid,invalid,computed,sign-function}` 4/4 全绿 **PASS**。

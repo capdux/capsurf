@@ -4419,3 +4419,7 @@
 - **Phase 825**:
   - `src/layout/layout.cp`: `resolveBoxMetrics` 支持替换元素在 `min-content`/`max-content`/`fit-content` 宽度下通过可解析 `height` 与固有纵横比传递宽度。
   - `/data/dev/cp/lib/css/stylesheet.cp`: `splitTopLevelDecls` 与 `CssProperty.parse` 跳过/剥离 `/* ... */` 注释，修复注释内含 `:` 导致后续声明（如 `.cb { /* ... */ height: 100px; }`）失效的 `cap:css` 库 Bug。
+- **Phase 826**:
+  - `src/js/shim/cssom.js`: 新增 `initial-letter` 属性注册、完整语法校验 (`normal | <number [1,∞]> <integer [1,∞]> | <number [1,∞]> && [ drop | raise ]?`) 与 `drop`/`raise` 后置规范化。
+  - `src/js/shim/window.js`: `evalSignCalls` 补充 `rem` 单位解析；新增 `initial-letter` 计算值 `calc()`/`sign()` 求值、初始值 `"normal"` 及 `STANDARD_COMPUTED_LONGHANDS` 注册。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
