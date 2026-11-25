@@ -3530,3 +3530,5 @@
 - 在 `cascade.cp` 新增 `PROP_CONTAIN` (`contain: style|content|strict`) 标志位，在 `resolveCountersRecursive` 中为 `contain_style` 元素子树分配独立 `CssCounterStack`；在 `font_face.cp` 为 `CssCounterStack` 增设 `quote_depth` 并在 `resolvePseudoContentExpr` 解析 `open-quote`/`close-quote`/`no-open-quote`/`no-close-quote`；后续待补充 `quotes` 属性解析及 `::before -> children -> ::after` 求值顺序以进一步收割 `quote-scoping-*`。
 ### Phase 845 — `cap:css` 原生 CSS Math Level 4 (`evalCssMathExpr`) 能力下沉
 - 将 `cap:css` (`mathFunc.cp`) 已实现的 21 种 W3C CSS Math Level 4 函数及 `pi`/`e`/`infinity`/`NaN`、角度单位 (`deg`/`rad`/`grad`/`turn`) 通过 `dom_binding.cp` `__capsurf_eval_css_math` 暴露给 JS shim，替代 `window.js` 中对 `log`/`exp`/`sin`/`cos`/`tan`/`pow`/`sqrt`/`hypot` 等的 JS 缺失分支，显著提升数学表达式求值完备性与复用度。
+### Phase 846 — `timeProps` / 反三角函数下沉 `cap:css` 与 CSSOM 顶层逗号分割修复
+- 修复 `cssom.js` 与 `window.js` 中 `split(",")` 误切 `min(1s, 2s)` 内部逗号的根因，并将时间属性数学表达式统一接入 `cap:css` `__capsurf_eval_css_math` 求值，同时消除 `acos-asin-atan-atan2-computed` 中 `evalSignCalls` TDZ 与 `atan2()` 单位缺失问题。

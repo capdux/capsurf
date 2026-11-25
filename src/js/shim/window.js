@@ -7892,7 +7892,22 @@ function installWindow(global) {
       if (u === "turn") return n * 360;
     }
     if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_eval_css_math === "function") {
-      let normAng = s.replace(/;+$/, "");
+      let normAng = s.replace(/;+$/, "").replace(/([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(px|em|rem|ex|ch|pt|pc|in|cm|mm|q|vw|vh|vmin|vmax|ms|s)\b/gi, (_, n, u) => {
+        const v = parseFloat(n);
+        const ul = u.toLowerCase();
+        if (ul === "px" || ul === "s") return String(v);
+        if (ul === "ms") return String(v / 1000);
+        if (ul === "em" || ul === "rem" || ul === "pc") return String(v * 16);
+        if (ul === "ex" || ul === "ch") return String(v * 8);
+        if (ul === "pt") return String(v * (96 / 72));
+        if (ul === "in") return String(v * 96);
+        if (ul === "cm") return String(v * (96 / 2.54));
+        if (ul === "mm") return String(v * (96 / 25.4));
+        if (ul === "q") return String(v * (96 / 101.6));
+        if (ul === "vw" || ul === "vmax") return String((v / 100) * 800);
+        if (ul === "vh" || ul === "vmin") return String((v / 100) * 600);
+        return _;
+      });
       let open = 0;
       for (let k = 0; k < normAng.length; k++) { if (normAng[k] === "(") open++; else if (normAng[k] === ")" && open > 0) open--; }
       while (open > 0) { normAng += ")"; open--; }
@@ -8949,8 +8964,13 @@ function installWindow(global) {
       return out;
     };
     const rotSignRaw = (computedMap.get("rotate") || "").trim();
-    if (rotSignRaw && /\b(?:calc|min|max|clamp|sign|abs)\(/i.test(rotSignRaw)) {
-      computedMap.set("rotate", evalCssMathInValue(rotSignRaw));
+    if (rotSignRaw && /\b(?:calc|min|max|clamp|sign|abs|sin|cos|tan|asin|acos|atan|atan2)\(/i.test(rotSignRaw)) {
+      if (/\b(?:asin|acos|atan|atan2)\(/i.test(rotSignRaw)) {
+        const deg = evalCssAngleDeg(/sign\(/i.test(rotSignRaw) ? evalSignCalls(rotSignRaw, element) : rotSignRaw);
+        if (deg !== null && isFinite(deg)) computedMap.set("rotate", String(Number(deg.toFixed(6))) + "deg");
+      } else {
+        computedMap.set("rotate", evalCssMathInValue(rotSignRaw));
+      }
     }
     if (!computedMap.has("transform") || computedMap.get("transform") === "") {
       computedMap.set("transform", "none");
@@ -9822,7 +9842,17 @@ function installWindow(global) {
       if (tv) {
         const isDur = tk.endsWith("-duration");
         let hasInvalidTime = false;
-        const items = tv.split(",").map((part) => {
+        const parts = [];
+        let pCur = "", pD = 0;
+        for (let pi = 0; pi < tv.length; pi++) {
+          const ch = tv[pi];
+          if (ch === "(") pD++;
+          else if (ch === ")" && pD > 0) pD--;
+          if (ch === "," && pD === 0) { parts.push(pCur); pCur = ""; }
+          else pCur += ch;
+        }
+        parts.push(pCur);
+        const items = parts.map((part) => {
           const p = part.trim().toLowerCase();
           if (p === "auto") return "auto";
           let sec = null;
@@ -9831,15 +9861,17 @@ function installWindow(global) {
             sec = m[2] === "ms" ? Number(m[1]) / 1000 : Number(m[1]);
           } else if (p === "0" || p === "+0" || p === "-0") {
             sec = 0;
-          } else if (/^calc\(/i.test(p)) {
-            const expr = evalSignCalls(p.slice(5, -1), element)
+          } else if (/^(?:calc|min|max|clamp|round|mod|rem|abs|sign|sin|cos|tan|asin|acos|atan|atan2|pow|sqrt|hypot|log|exp)\(/i.test(p)) {
+            let expr = evalSignCalls(p, element)
+              .replace(/;+$/, "")
               .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)ms\b/g, (_, n) => String(Number(n) / 1000))
               .replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)s\b/g, (_, n) => String(Number(n)));
-            if (/^[\d+\-*/().\s]+$/.test(expr)) {
-              try {
-                const v = Function("return (" + expr + ")")();
-                if (typeof v === "number" && isFinite(v)) sec = v;
-              } catch (_) {}
+            let open = 0;
+            for (let k = 0; k < expr.length; k++) { if (expr[k] === "(") open++; else if (expr[k] === ")" && open > 0) open--; }
+            while (open > 0) { expr += ")"; open--; }
+            if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_eval_css_math === "function") {
+              const v = globalThis.__capsurf_eval_css_math(expr);
+              if (typeof v === "number" && isFinite(v)) sec = v;
             }
           }
           if (sec !== null) {

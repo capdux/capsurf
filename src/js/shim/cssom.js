@@ -1939,7 +1939,7 @@
       return isValidLenPct(t, false);
     }
     if (prop === "background-repeat" || prop === "mask-repeat") {
-      const layers = vLower.split(",");
+      const layers = splitTopLevelComma(vLower);
       const SINGLE = new Set(["repeat-x", "repeat-y", "repeat", "space", "round", "no-repeat"]);
       const PAIR = new Set(["repeat", "space", "round", "no-repeat"]);
       for (let i = 0; i < layers.length; i++) {
@@ -1953,7 +1953,7 @@
     if (prop === "background-attachment" || prop === "background-clip" || prop === "background-origin") {
       if (prop === "background-clip") {
         const BC_SINGLE = new Set(["border-box", "padding-box", "content-box", "border-area", "text"]);
-        const layers = vLower.split(",");
+        const layers = splitTopLevelComma(vLower);
         for (let i = 0; i < layers.length; i++) {
           const toks = splitCssTokens(layers[i].trim());
           if (toks.length === 1) { if (!BC_SINGLE.has(toks[0])) return false; }
@@ -1966,7 +1966,7 @@
       const allowed = prop === "background-attachment"
         ? new Set(["scroll", "fixed", "local"])
         : new Set(["border-box", "padding-box", "content-box"]);
-      const layers = vLower.split(",");
+      const layers = splitTopLevelComma(vLower);
       for (let i = 0; i < layers.length; i++) {
         const toks = splitCssTokens(layers[i].trim());
         if (toks.length !== 1 || !allowed.has(toks[0])) return false;
@@ -2113,7 +2113,7 @@
       return true;
     }
     if (prop === "animation-iteration-count") {
-      const layers = vLower.split(",");
+      const layers = splitTopLevelComma(vLower);
       for (let i = 0; i < layers.length; i++) {
         const toks = splitCssTokens(layers[i].trim());
         if (toks.length !== 1) return false;
@@ -2126,7 +2126,7 @@
     if (prop === "animation-duration" || prop === "transition-duration" || prop === "animation-delay" || prop === "transition-delay") {
       const allowNeg = prop.endsWith("-delay");
       const allowAuto = prop === "animation-duration";
-      const layers = vLower.split(",");
+      const layers = splitTopLevelComma(vLower);
       for (let i = 0; i < layers.length; i++) {
         const toks = splitCssTokens(layers[i].trim());
         if (toks.length !== 1) return false;
@@ -2137,6 +2137,15 @@
           if (!isValidCalcSyntax(t)) return false;
           if (/(?:\d|\.)(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|%|deg|rad|grad|turn|hz|khz|dpi|dpcm|dppx)\b/i.test(t)) return false;
           if (!/(?:\d|\.)(?:ms|s)\b/i.test(t) && !/\b(?:var|env)\(/i.test(t)) return false;
+          if (/^(?:min|max|clamp)\(/i.test(t)) {
+            const inner = t.slice(t.indexOf("(") + 1, -1);
+            const args = splitTopLevelComma(inner);
+            for (let ai = 0; ai < args.length; ai++) {
+              const a = args[ai].trim();
+              if (!a) return false;
+              if (!/(?:\d|\.)(?:ms|s)\b/i.test(a) && !/\b(?:var|env)\(/i.test(a)) return false;
+            }
+          }
           continue;
         }
         const m = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)(ms|s)$/i.exec(t);
@@ -2151,7 +2160,7 @@
         : (prop === "animation-fill-mode"
           ? new Set(["none", "forwards", "backwards", "both"])
           : new Set(["running", "paused"]));
-      const layers = vLower.split(",");
+      const layers = splitTopLevelComma(vLower);
       for (let i = 0; i < layers.length; i++) {
         const toks = splitCssTokens(layers[i].trim());
         if (toks.length !== 1 || !allowed.has(toks[0])) return false;
@@ -2239,9 +2248,9 @@
       const toks = splitCssTokens(vLower);
       if (toks.length === 1 && toks[0] === "none") return true;
       const isAngle = (t) => t === "0" || t === "+0" || t === "-0" ||
-        /^(?:calc|min|max|clamp|var|env)\(/i.test(t) ||
+        /^(?:calc|min|max|clamp|round|mod|rem|abs|sign|sin|cos|tan|asin|acos|atan|atan2|pow|sqrt|hypot|log|exp|var|env)\(/i.test(t) ||
         /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?(?:deg|rad|grad|turn)$/i.test(t);
-      const isNum = (t) => /^(?:calc|min|max|clamp|var|env)\(/i.test(t) ||
+      const isNum = (t) => /^(?:calc|min|max|clamp|round|mod|rem|abs|sign|sin|cos|tan|asin|acos|atan|atan2|pow|sqrt|hypot|log|exp|var|env)\(/i.test(t) ||
         /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(t);
       if (toks.length === 1) return isAngle(toks[0]);
       if (toks.length === 2) {
@@ -2478,7 +2487,7 @@
       return isValidCssPositionTokens(toks);
     }
     if (prop === "mask-composite") {
-      const layers = vLower.split(",");
+      const layers = splitTopLevelComma(vLower);
       for (let i = 0; i < layers.length; i++) {
         const toks = splitCssTokens(layers[i].trim());
         if (toks.length !== 1 || !/^(?:add|subtract|intersect|exclude)$/.test(toks[0])) return false;
@@ -2486,7 +2495,7 @@
       return true;
     }
     if (prop === "mask-position") {
-      const layers = vLower.split(",");
+      const layers = splitTopLevelComma(vLower);
       for (let i = 0; i < layers.length; i++) {
         const toks = splitCssTokens(layers[i].trim());
         if (!isValidCssPositionTokens(toks)) return false;
@@ -2494,7 +2503,7 @@
       return true;
     }
     if (prop === "background-size" || prop === "mask-size") {
-      const layers = vLower.split(",");
+      const layers = splitTopLevelComma(vLower);
       for (let i = 0; i < layers.length; i++) {
         const toks = splitCssTokens(layers[i].trim());
         if (toks.length === 1 && (toks[0] === "cover" || toks[0] === "contain")) continue;
@@ -2520,7 +2529,7 @@
     if (prop === "background-position-x" || prop === "background-position-y") {
       const isX = prop === "background-position-x";
       const EDGES = isX ? new Set(["left", "right", "x-start", "x-end"]) : new Set(["top", "bottom", "y-start", "y-end"]);
-      const layers = vLower.split(",");
+      const layers = splitTopLevelComma(vLower);
       for (let i = 0; i < layers.length; i++) {
         const toks = splitCssTokens(layers[i].trim());
         if (toks.length === 1) {

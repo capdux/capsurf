@@ -4484,3 +4484,6 @@
 - `src/js/dom_binding.cp`: 导入 `cap:css` `evalCssMathExpr` 并注册 `__capsurf_eval_css_math`，提供零堆分配原生 CSS Math Level 4 求值。
 - `src/js/shim/window.js`: 在 `evalCssLengthExpr`、`evalCssAngleDeg`、`z-index`、`scale` 路由至 `__capsurf_eval_css_math` 并补全末尾分号剥离与未闭合括号补全。
 - `src/js/shim/cssom.js`: 为 `scale` 校验放行全部 21 种 CSS Math Level 4 函数与嵌套 `sibling-index()` 三角角度单位；`exp-log-compute` / `sin-cos-tan-computed` / `minmax-angle-computed` 等 **7/7 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 846 — `timeProps` / 反三角函数下沉 `cap:css` 与 CSSOM 顶层逗号分割修复
+- `src/js/shim/window.js`: `timeProps` 路由至 `__capsurf_eval_css_math` 并改用括号深度感知逗号分割；`evalCssAngleDeg` 补齐长度/时间/视口单位归一化；修复 `rotSignRaw` 处 `evalSignCalls` TDZ。
+- `src/js/shim/cssom.js`: `vLower.split(",")` 全量替换为 `splitTopLevelComma`，`rotate` 放行全部 21 种数学函数，`animation`/`transition` 时间函数补齐逐参单位校验；`minmax-time-computed` (24/24) 与 `minmax-time-invalid` (52/52) **PASS**，`acos-asin-atan-atan2-computed` **51/52**，`--smoke` 3/3 **PASS**。
