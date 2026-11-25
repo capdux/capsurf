@@ -5,7 +5,7 @@ const FUNC_SELECTOR_PSEUDOS = new Set([":not", ":is", ":where", ":has", "::slott
 const REQUIRED_FUNC_PSEUDOS = new Set([
   ":not", ":is", ":where", ":has", ":state", ":lang", ":dir", ":host-context",
   ":nth-child", ":nth-last-child", ":nth-of-type", ":nth-last-of-type",
-  "::slotted", "::part", "::scroll-button"
+  "::slotted", "::part", "::scroll-button", "::picker"
 ]);
 const NON_EMPTY_FUNC_PSEUDOS = new Set([":not", ":has", ":state", ":host-context", "::slotted", "::part", ":lang", ":dir"]);
 const KNOWN_PSEUDO_CLASSES = new Set([
@@ -28,7 +28,7 @@ const KNOWN_PSEUDO_ELEMENTS = new Set([
   "::marker", "::placeholder", "::backdrop", "::slotted", "::part",
   "::file-selector-button", "::target-text", "::spelling-error", "::grammar-error",
   "::highlight", "::search-text", "::view-transition", "::details-content",
-  "::column", "::scroll-marker", "::scroll-button"
+  "::column", "::scroll-marker", "::scroll-button", "::picker", "::picker-icon"
 ]);
 
 function splitTopLevelSelectorList(str) {
@@ -167,6 +167,13 @@ function canonicalizeComplexSelector(raw, inHas, inFunc) {
         )) || (!isDouble && lastPseudoEl === "::scroll-button" && (
           pName === ":focus" || pName === ":disabled" || pName === ":enabled" ||
           pName === ":hover" || pName === ":active" || pName === ":focus-visible" || pName === ":focus-within"
+        )) || (lastPseudoEl === "::slotted" && (
+          (isDouble && (
+            pName === "::before" || pName === "::after" || pName === "::details-content" ||
+            pName === "::file-selector-button" || pName === "::placeholder" || pName === "::marker" ||
+            pName === "::picker" || pName === "::picker-icon" || pName === "::backdrop"
+          )) ||
+          (!isDouble && (pName === ":is" || pName === ":where"))
         ));
         if (!allowChain) return null;
       }
@@ -198,6 +205,7 @@ function canonicalizeComplexSelector(raw, inHas, inFunc) {
           if (sub === null || /[\s>+~]/.test(sub.replace(/\[[^\]]*\]/g, "").replace(/\([^)]*\)/g, ""))) return null;
           out += "::slotted(" + sub + ")";
           seenTerminalPseudoEl = true;
+          lastPseudoEl = "::slotted";
         } else if (pName === ":host" || pName === ":host-context") {
           const sub = canonicalizeComplexSelector(inner, false, true);
           if (sub === null || /[\s>+~]/.test(sub.replace(/\[[^\]]*\]/g, ""))) return null;
@@ -210,7 +218,8 @@ function canonicalizeComplexSelector(raw, inHas, inFunc) {
             if (!items) return null;
             const kept = [];
             for (let ii = 0; ii < items.length; ii++) {
-              const c = canonicalizeComplexSelector(items[ii], inHas, true);
+              const allowPseudo = (lastPseudoEl === "::slotted" && pName === ":where" && /^::(?:before|after|marker|placeholder|file-selector-button|details-content|picker-icon|backdrop)$/i.test(items[ii].trim()));
+              const c = canonicalizeComplexSelector(items[ii], inHas, !allowPseudo);
               if (c !== null) kept.push(c);
             }
             out += pName + "(" + kept.join(", ") + ")";

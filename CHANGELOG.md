@@ -4300,3 +4300,7 @@
   - `src/js/shim/cssom.js`: `CSSStyleSheet.prototype.title` 改为只读 getter。
   - `src/js/shim/selector.js`: `REQUIRED_FUNC_PSEUDOS` 与 `NON_EMPTY_FUNC_PSEUDOS` 补充 `:host-context`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 795**:
+  - `src/js/shim/selector.js`: 补全 `::picker`/`::picker-icon`、`::slotted()` 后接 tree-abiding 伪元素与 `:is()`/`:where()` 校验及 `:where(::before)` 保留。
+  - `src/js/shim/cssom.js`: `selectorSupported` 在 `CSS.supports("selector(...)")` 严格模式下拦截 `::slotted(...):is/:where`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

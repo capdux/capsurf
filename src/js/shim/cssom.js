@@ -7152,6 +7152,7 @@
 
   function selectorSupported(selector) {
     if (typeof selector !== "string") return false;
+    if (/::slotted\([\s\S]*\)\s*:(?:is|where)\(/i.test(selector)) return false;
     if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_canonicalizeSelector === "function") {
       return globalThis.__capsurf_canonicalizeSelector(selector, false) !== null;
     }
