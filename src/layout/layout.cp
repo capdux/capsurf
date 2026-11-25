@@ -1042,6 +1042,8 @@ pub struct LayoutTree {
                     if (rep.width > 0.0 && rep.height > 0.0 && box.content_height > 0.0) {
                         box.content_width = box.content_height * (rep.width / rep.height);
                     }
+                } else if (style.aspect_ratio > 0.0 && box.content_height > 0.0) {
+                    box.content_width = box.content_height * style.aspect_ratio;
                 }
             }
         } else if (is_abs_or_fixed && !style.top.is_auto && !style.top.is_none && !style.bottom.is_auto && !style.bottom.is_none) {
@@ -4627,7 +4629,7 @@ pub struct LayoutTree {
 
                 if (eff_align == .Stretch && line_cross_avail > 0.0) {
                     itm.target_cross = line_cross_avail;
-                    if (is_row && cstyle_al.height.is_auto) {
+                    if (is_row && (cstyle_al.height.is_auto || cstyle_al.height.intrinsic == IntrinsicSizeKeyword.Stretch)) {
                         _.boxes.items[@as(usize, cid)].forced_height = line_cross_avail;
                     }
                 }

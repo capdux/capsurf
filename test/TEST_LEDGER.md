@@ -2599,3 +2599,4 @@
 | Phase 929 | `PROP_COLUMN_COUNT`、`contain: size` 弹性主轴 & `content-visibility` 文本过滤 | `cascade.cp`, `layout.cp`, `html-classes.js` | `orthogonal-parent-shrink-to-fit-002` (12/12), `contain-size-multicol-as-flex-item` **2/2 PASS**; `--smoke` 3/3 PASS |
 | Phase 930 | `content-visibility: hidden` 包含语义 & 离屏 `innerText` | `cascade.cp`, `html-classes.js` | `content-visibility-086`, `content-visibility-088`, `content-visibility-hidden-offsetTop-left-width-height` **3/3 PASS**; `--smoke` 3/3 PASS |
 | Phase 931 | `min-width: stretch`、高亮伪元素 `text-shadow` & `--*` 隔离 | `layout.cp`, `animations.js`, `window.js` | `highlight-cascade-parent-style-change`, `highlight-cascade-011`, `auto-margins-1` **3/3 PASS**; `--smoke` 3/3 PASS |
+| Phase 932 | `KeyframeEffect.pseudoElement` & `stretch` + `aspect-ratio` 反推宽 | `animations.js`, `layout.cp` | `backdrop-animate`, `aspect-ratio-1` (4/4) **2/2 PASS**; `--smoke` 3/3 PASS |

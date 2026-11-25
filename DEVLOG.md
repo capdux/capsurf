@@ -3707,3 +3707,6 @@
 ### Phase 931 — 高亮伪元素 `text-shadow`/自定义属性隔离与 `min-width: stretch`
 - `highlight-cascade-011` 与 `highlight-cascade-parent-style-change` 失败源于 `collectRawComputedMap` 把 `:root::selection` 的 `--*` 漏入子伪元素且 `applyUsedValuesToComputedMap` 在 `if (normalizedPseudo)` 提前返回跳过了 `text-shadow` 解析；提取 `resolveTextShadowValue` 并过滤 `--*` 后一次通过。
 - `auto-margins-1` 失败源于 `resolveBoxMetrics` 对 `min_width` 跳过了 `IntrinsicSizeKeyword.Stretch`；补齐后一次全绿。
+### Phase 932 — `::backdrop` Web Animations 与 `stretch` + `aspect-ratio`
+- `KeyframeEffect` 构造器原未保存 `opts.pseudoElement`，导致 `target.animate(..., { pseudoElement: "::backdrop" })` 过滤失效；补齐后 `backdrop-animate` 一次通过。
+- `aspect-ratio-1` 仅差 `height: stretch; aspect-ratio: 2 / 1` 未反推 `content_width`；在 `resolveBoxMetrics` 增加 `else if (style.aspect_ratio > 0.0 && box.content_height > 0.0)` 后 4/4 全绿。

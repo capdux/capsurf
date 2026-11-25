@@ -482,6 +482,7 @@ function KeyframeEffect(target, keyframes, options) {
   this.duration = duration;
   this.direction = direction;
   this.easing = easing;
+  this.pseudoElement = opts.pseudoElement != null ? String(opts.pseudoElement) : null;
 }
 KeyframeEffect.prototype = Object.create(AnimationEffect.prototype);
 KeyframeEffect.prototype.constructor = KeyframeEffect;
