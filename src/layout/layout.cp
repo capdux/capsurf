@@ -871,7 +871,12 @@ pub struct LayoutTree {
             }
             raw_is_border_box = true;
         } else if (!style.width.is_auto && !style.width.is_none) {
-            raw_w = style.width.resolvePx(parent_w, font_px, root_px, vw, vh);
+            if (!style.width.is_calc && style.width.length.unit == CssUnit.Ch && LayoutTree.isMonospaceFont(style)) {
+                const ch_v: f32 = @floatCast(style.width.length.value);
+                raw_w = ch_v * font_px * 0.60;
+            } else {
+                raw_w = style.width.resolvePx(parent_w, font_px, root_px, vw, vh);
+            }
             raw_is_border_box = (style.box_sizing == BoxSizing.BorderBox);
         } else if (is_abs_or_fixed && !style.left.is_auto && !style.left.is_none && !style.right.is_auto && !style.right.is_none) {
             const l_px = style.left.resolvePx(parent_w, font_px, root_px, vw, vh);

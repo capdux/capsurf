@@ -7352,7 +7352,18 @@ function installWindow(global) {
     } else {
       const ziRaw = String(computedMap.get("z-index") || "").trim();
       if (/^(?:calc|min|max|clamp)\s*\(/i.test(ziRaw)) {
-        const ziNum = typeof evalCssLengthExpr === "function" ? evalCssLengthExpr(ziRaw, 0, 16) : null;
+        let ziNum = null;
+        const clampM = /^clamp\(\s*([^,]+)\s*,\s*([^,]+)\s*,\s*([^,)]+)\s*\)$/i.exec(ziRaw);
+        if (clampM) {
+          const a0 = clampM[1].trim().toLowerCase() === "none" ? -Infinity : evalCssLengthExpr(clampM[1].trim(), 0, 16);
+          const a1 = evalCssLengthExpr(clampM[2].trim(), 0, 16);
+          const a2 = clampM[3].trim().toLowerCase() === "none" ? Infinity : evalCssLengthExpr(clampM[3].trim(), 0, 16);
+          if (a0 !== null && a1 !== null && a2 !== null && !isNaN(a0) && !isNaN(a1) && !isNaN(a2)) {
+            ziNum = Math.max(a0, Math.min(a1, a2));
+          }
+        } else if (typeof evalCssLengthExpr === "function") {
+          ziNum = evalCssLengthExpr(ziRaw, 0, 16);
+        }
         if (ziNum !== null && isFinite(ziNum)) {
           computedMap.set("z-index", String(Math.round(ziNum)));
         }

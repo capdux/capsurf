@@ -1021,7 +1021,7 @@
       if (/^[+-]?\d+$/.test(t)) return true;
       if (/^(?:var|env)\(/i.test(t)) return true;
       if (/^(?:calc|min|max|clamp)\(/i.test(t) && isValidCalcSyntax(t)) {
-        return !/[%a-z]/i.test(t.replace(/\b(?:calc|min|max|clamp|round|mod|rem|abs|sign|e|pi|infinity|nan)\b/gi, ""));
+        return !/[%a-z]/i.test(t.replace(/\b(?:calc|min|max|clamp|round|mod|rem|abs|sign|e|pi|infinity|nan|none)\b/gi, ""));
       }
       return false;
     }

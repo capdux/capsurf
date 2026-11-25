@@ -4221,3 +4221,8 @@
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
 - **Phase 774**:
   - `src/js/dom_binding.cp`: 引入 `cap:css` `SupportsTree`/`SupportsKind`，实现 Kleene 三值逻辑求值器 `evalSupportsNodeTri` 并暴露 `__capsurf_eval_supports`。
+- **Phase 775**:
+  - `src/layout/layout.cp`: `resolveBoxMetrics` 对 `monospace` 字体的 `CssUnit.Ch` 宽度按 `0.60 * font_px` 计算。
+  - `src/js/shim/cssom.js`: `z-index` `calc`/`clamp` 校验允许 `none` 边界关键字。
+  - `src/js/shim/window.js`: `z-index` 计算值求值支持 `clamp(none, v, max)` / `clamp(min, v, none)`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

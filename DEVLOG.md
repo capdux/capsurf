@@ -3388,3 +3388,5 @@
 - 在 `element.js` 实现含 `var()` 简写的 `pendingVar` 延迟替换展开与重构规则（长写读取 `""`，部分长写被覆盖后简写返回 `""`，`!important` 优先级不被普通长写覆盖），`variable-reference-shorthands.html` **FAIL→PASS**（基线增至 `7,213`）。
 ### Phase 774 — 二八分层 CSS 原生下沉 Batch 3：`SupportsTree` Kleene 三值桥接
 - 在 `dom_binding.cp` 基于 `cap:css` `SupportsTree`/`SupportsKind` 实现 Kleene 三值逻辑原生求值并暴露 `__capsurf_eval_supports`；验证对比表明高频细粒度 `CSS.supports` 保持 JS 零跨界求值更优（`CSS-supports-CSSStyleDeclaration.html` 568ms PASS），`--smoke` 3/3 PASS。
+### Phase 775 — `clamp(none, ...)` 整数求值与等宽 `ch` 度量对齐
+- 补全 `z-index` 中 `clamp(none, ...)` 单侧无穷边界校验与求值（`clamp-integer-computed.html` 6/6 全绿），并在 `layout.cp` 对 `monospace` 字体 `ch` 宽度按 `0.60 * font_px` 解析（`bidi-line-break-001.html` 保持 **PASS**）。
