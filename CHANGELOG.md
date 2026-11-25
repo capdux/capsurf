@@ -4497,3 +4497,5 @@
 ### Phase 849 — 12 项 CSSOM 属性语法校验器全面下沉 `cap:css` 并接线验证
 - `/data/dev/cp/lib/css/{transform,transition,length,color,layoutctrl,index}.cp`: 新增并导出 `isValidCssTransformValue`、`isValidCssRotateValue`、`isValidCssScaleValue`、`isValidCssTimeListValue`、`isValidCssLenPct`、`isValidCssTranslateValue`、`isValidCssOpacityValue`、`isValidCssColorSyntax`、`isValidCssZIndexValue`、`isValidCssFlexBasisValue`、`isValidCssGapValue`、`isValidCssAnimIterCountValue`。
 - `src/js/dom_binding.cp` & `src/js/shim/cssom.js`: 暴露全部 12 个 `__capsurf_is_valid_css_*` 原生校验器并接入 `cssom.js`；11 项 WPT 回归 **11/11 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 850 — `isValidColor` / `gap` / `z-index` 接入 `cap:css` 原生校验
+- `src/js/shim/cssom.js`: `isValidColor`、`gap`/`row-gap`/`column-gap` 与 `z-index` 全面接入 `__capsurf_is_valid_css_*`，8 项 WPT 回归 **8/8 PASS**，`--smoke` 3/3 **PASS**。

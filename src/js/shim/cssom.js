@@ -159,6 +159,10 @@
   let _isValidCalcSyntax = null;
   let _parseAndNormalizeShape = null;
   function isValidColor(val) {
+    if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_color === "function" &&
+        !/\b(?:from|contrast-color|device-cmyk|calc)\b/i.test(val)) {
+      return globalThis.__capsurf_is_valid_css_color(val);
+    }
     let rawTrimmed = val.trim();
     if (rawTrimmed.indexOf("/*") !== -1) rawTrimmed = rawTrimmed.replace(/\/\*[\s\S]*?\*\//g, " ").trim();
     if (rawTrimmed.indexOf("\\") !== -1) {
@@ -2024,6 +2028,9 @@
     }
     if (prop === "row-gap" || prop === "column-gap" || prop === "grid-row-gap" || prop === "grid-column-gap" || prop === "gap" || prop === "grid-gap") {
       const maxN = (prop === "gap" || prop === "grid-gap") ? 2 : 1;
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_gap === "function") {
+        return globalThis.__capsurf_is_valid_css_gap(vLower, maxN);
+      }
       const toks = splitCssTokens(vLower);
       if (toks.length < 1 || toks.length > maxN) return false;
       for (let i = 0; i < toks.length; i++) {
@@ -2043,6 +2050,10 @@
       return true;
     }
     if (prop === "z-index") {
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_z_index === "function" &&
+          !/\bclamp\([^)]*\bnone\b/i.test(vLower)) {
+        return globalThis.__capsurf_is_valid_css_z_index(vLower);
+      }
       const toks = splitCssTokens(vLower);
       if (toks.length !== 1) return false;
       const t = toks[0];

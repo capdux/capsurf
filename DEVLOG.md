@@ -3538,3 +3538,5 @@
 - 在 `cap:css` (`color.cp`) 完成 CSS Color 4 `lab`/`lch`/`oklab`/`oklch`/`color(...)`、`none` 缺省分量、`/*...*/` 注释与 `calc()` 解析序列化并接入 `dom_binding.cp`；同步收紧 `cssom.js` 中 `transform` 与 `opacity` 的数学函数语法与单位校验，批量收割 `sin-cos-tan-invalid` 与 `minmax-number-invalid`。
 ### Phase 849 — 12 项 CSSOM 属性语法校验器全面下沉 `cap:css` 并接线验证
 - 将 `cssom.js` 中高频属性语法校验（`transform`/`rotate`/`scale`/`translate`/`opacity`/`color`/`z-index`/`flex-basis`/`animation-iteration-count`/`len-pct`/`time-list`/`gap`）统一收口下沉至 `cap:css` 纯 CP 零堆分配实现，通过 `dom_binding.cp` 暴露给 JS shim，大幅削减 CSSOM 层的 JS 正则校验逻辑。
+### Phase 850 — `isValidColor` / `gap` / `z-index` 接入 `cap:css` 原生校验
+- 完成 `cssom.js` 中 `isValidColor`、`gap` 系列与 `z-index` 到 `cap:css` 的统一收口接线，并保留 `calc(NaN)` 颜色与 `z-index: clamp(none, ...)` 边缘守卫，8 项回归全绿。
