@@ -6764,7 +6764,7 @@ function installWindow(global) {
     "ruby-align", "ruby-position", "ruby-merge", "ruby-overhang",
     "list-style-image", "list-style-position", "list-style-type",
     "font-feature-settings", "font-kerning", "font-stretch", "font-width", "font-variant",
-    "font-language-override", "font-optical-sizing", "font-variant-emoji", "font-variant-position",
+    "font-language-override", "font-optical-sizing", "font-palette", "font-variant-emoji", "font-variant-position", "font-variation-settings",
     "hanging-punctuation", "hyphens", "line-break", "overflow-wrap", "tab-size",
     "text-align-all", "text-align-last", "text-fit", "text-indent", "text-justify",
     "text-transform", "word-break", "word-wrap", "clip-rule", "orphans", "widows", "quotes", "block-ellipsis",

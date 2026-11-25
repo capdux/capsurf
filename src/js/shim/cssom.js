@@ -7519,6 +7519,39 @@
       }
       return [["text-wrap-mode", m], ["text-wrap-style", st]];
     }
+    if (key === "font") {
+      const normF = parseAndNormalizeFontShorthand(normV);
+      if (!normF) return null;
+      const ft = splitCssTokens(normF);
+      let fi = 0, fSt = "normal", fVar = "normal", fWt = "normal", fStr = "normal";
+      const F_STRETCH = new Set(["ultra-condensed","extra-condensed","condensed","semi-condensed","semi-expanded","expanded","extra-expanded","ultra-expanded"]);
+      while (fi < ft.length) {
+        const fl = ft[fi].toLowerCase();
+        if (fl === "italic" || fl === "oblique") {
+          fSt = fl; fi++;
+          if (fl === "oblique" && fi < ft.length && /^-?(?:\d|\.)/.test(ft[fi])) { fSt += " " + ft[fi]; fi++; }
+          continue;
+        }
+        if (fl === "small-caps") { fVar = "small-caps"; fi++; continue; }
+        if (fl === "bold" || fl === "bolder" || fl === "lighter" || /^\d+(?:\.\d+)?$/.test(fl)) { fWt = fl; fi++; continue; }
+        if (F_STRETCH.has(fl)) { fStr = fl; fi++; continue; }
+        break;
+      }
+      if (fi >= ft.length) return null;
+      let fSz = ft[fi++], fLh = "normal";
+      if (fSz.includes("/") && !fSz.startsWith("calc(")) {
+        const sp = fSz.split("/"); fSz = sp[0]; fLh = sp[1] || "normal";
+      } else if (fi < ft.length && ft[fi] === "/") {
+        fi++;
+        if (fi < ft.length) fLh = ft[fi++];
+      }
+      if (fi >= ft.length) return null;
+      const fFam = ft.slice(fi).join(" ");
+      return [
+        ["font-style", fSt], ["font-variant-caps", fVar], ["font-weight", fWt],
+        ["font-stretch", fStr], ["font-size", fSz], ["line-height", fLh], ["font-family", fFam]
+      ];
+    }
     if (key === "columns") {
       const slashIdx = normV.indexOf("/");
       const leftStr = slashIdx === -1 ? normV : normV.slice(0, slashIdx);
@@ -8240,6 +8273,39 @@
       const cst = vals[1] === "none" && (cw || vals[2].toLowerCase() !== "currentcolor") ? "" : vals[1];
       const cc = vals[2].toLowerCase() === "currentcolor" ? "" : vals[2];
       return [cw, cst, cc].filter(Boolean).join(" ") || "medium";
+    }
+    if (key === "font") {
+      const normF = parseAndNormalizeFontShorthand(normV);
+      if (!normF) return null;
+      const ft = splitCssTokens(normF);
+      let fi = 0, fSt = "normal", fVar = "normal", fWt = "normal", fStr = "normal";
+      const F_STRETCH = new Set(["ultra-condensed","extra-condensed","condensed","semi-condensed","semi-expanded","expanded","extra-expanded","ultra-expanded"]);
+      while (fi < ft.length) {
+        const fl = ft[fi].toLowerCase();
+        if (fl === "italic" || fl === "oblique") {
+          fSt = fl; fi++;
+          if (fl === "oblique" && fi < ft.length && /^-?(?:\d|\.)/.test(ft[fi])) { fSt += " " + ft[fi]; fi++; }
+          continue;
+        }
+        if (fl === "small-caps") { fVar = "small-caps"; fi++; continue; }
+        if (fl === "bold" || fl === "bolder" || fl === "lighter" || /^\d+(?:\.\d+)?$/.test(fl)) { fWt = fl; fi++; continue; }
+        if (F_STRETCH.has(fl)) { fStr = fl; fi++; continue; }
+        break;
+      }
+      if (fi >= ft.length) return null;
+      let fSz = ft[fi++], fLh = "normal";
+      if (fSz.includes("/") && !fSz.startsWith("calc(")) {
+        const sp = fSz.split("/"); fSz = sp[0]; fLh = sp[1] || "normal";
+      } else if (fi < ft.length && ft[fi] === "/") {
+        fi++;
+        if (fi < ft.length) fLh = ft[fi++];
+      }
+      if (fi >= ft.length) return null;
+      const fFam = ft.slice(fi).join(" ");
+      return [
+        ["font-style", fSt], ["font-variant-caps", fVar], ["font-weight", fWt],
+        ["font-stretch", fStr], ["font-size", fSz], ["line-height", fLh], ["font-family", fFam]
+      ];
     }
     if (key === "columns") {
       const cw = vals[0] || "auto";
@@ -10281,6 +10347,43 @@
     if (kind === "style") {
       validateSelectorOrThrow(parsed.selectorText);
     }
+    if (kind === "font-feature-values") {
+      const fam = sel.replace(/^@font-feature-values/i, "").trim();
+      const rule = new CSSFontFeatureValuesRule();
+      rule.parentRule = parentRule || null;
+      rule.parentStyleSheet = parentSheet || null;
+      rule.fontFamily = fam;
+      const mapNames = ["annotation", "ornaments", "stylistic", "swash", "characterVariant", "styleset"];
+      const byTag = {
+        annotation: "annotation", ornaments: "ornaments", stylistic: "stylistic",
+        swash: "swash", "character-variant": "characterVariant", styleset: "styleset"
+      };
+      for (let mi = 0; mi < mapNames.length; mi++) {
+        rule[mapNames[mi]] = new Map();
+      }
+      const subBlocks = splitStylesheetRules(parsed.declText || "");
+      for (let si = 0; si < subBlocks.length; si++) {
+        const sb = subBlocks[si];
+        const tag = String(sb.selectorText || "").trim().replace(/^@/, "").toLowerCase();
+        const propName = byTag[tag];
+        if (!propName) continue;
+        const targetMap = rule[propName];
+        const decls = splitCssDeclarations(sb.declText || "");
+        for (let di = 0; di < decls.length; di++) {
+          const d = decls[di].trim();
+          const col = d.indexOf(":");
+          if (col <= 0) continue;
+          const k = d.slice(0, col).trim();
+          const vals = d.slice(col + 1).trim().split(/\s+/).map(Number).filter((n) => Number.isInteger(n) && n >= 0);
+          if (k && vals.length > 0) targetMap.set(k, vals);
+        }
+      }
+      rule._serialize = function () {
+        return "@font-feature-values " + rule.fontFamily + " {\n}";
+      };
+      return rule;
+    }
+
     if (kind === "layer-block" || kind === "layer-statement") {
       if (!parseLayerRule(parsed, kind)) {
         throw new DOMException("Failed to parse CSS rule: invalid @layer rule", "SyntaxError");
@@ -10713,6 +10816,43 @@
       rule._serialize = function () {
         const inner = rule.cssRules.map((r) => r.cssText).join("\n  ");
         return "@keyframes " + rule.name + (inner ? " {\n  " + inner + "\n}" : " {\n}");
+      };
+      return rule;
+    }
+
+    if (kind === "font-feature-values") {
+      const fam = sel.replace(/^@font-feature-values/i, "").trim();
+      const rule = new CSSFontFeatureValuesRule();
+      rule.parentRule = parentRule || null;
+      rule.parentStyleSheet = parentSheet || null;
+      rule.fontFamily = fam;
+      const mapNames = ["annotation", "ornaments", "stylistic", "swash", "characterVariant", "styleset"];
+      const byTag = {
+        annotation: "annotation", ornaments: "ornaments", stylistic: "stylistic",
+        swash: "swash", "character-variant": "characterVariant", styleset: "styleset"
+      };
+      for (let mi = 0; mi < mapNames.length; mi++) {
+        rule[mapNames[mi]] = new Map();
+      }
+      const subBlocks = splitStylesheetRules(parsed.declText || "");
+      for (let si = 0; si < subBlocks.length; si++) {
+        const sb = subBlocks[si];
+        const tag = String(sb.selectorText || "").trim().replace(/^@/, "").toLowerCase();
+        const propName = byTag[tag];
+        if (!propName) continue;
+        const targetMap = rule[propName];
+        const decls = splitCssDeclarations(sb.declText || "");
+        for (let di = 0; di < decls.length; di++) {
+          const d = decls[di].trim();
+          const col = d.indexOf(":");
+          if (col <= 0) continue;
+          const k = d.slice(0, col).trim();
+          const vals = d.slice(col + 1).trim().split(/\s+/).map(Number).filter((n) => Number.isInteger(n) && n >= 0);
+          if (k && vals.length > 0) targetMap.set(k, vals);
+        }
+      }
+      rule._serialize = function () {
+        return "@font-feature-values " + rule.fontFamily + " {\n}";
       };
       return rule;
     }

@@ -1651,7 +1651,8 @@ pub struct LayoutTree {
     }
 
     static fn spaceWidth(st: *const ComputedStyle): f32 {
-        const base_sz = if (st.font_size_px > 0.0) st.font_size_px else 16.0;
+        if (st.font_size_px <= 0.0) return 0.0;
+        const base_sz = st.font_size_px;
         const wf_ratio = st.webfont.advanceRatioForCodepoint(@as(u32, ' '));
         if (wf_ratio > 0.0) return base_sz * wf_ratio * LayoutTree.weightWidthScale(st);
         if (LayoutTree.isMonospaceFont(st)) return base_sz * 0.60;
@@ -1659,7 +1660,8 @@ pub struct LayoutTree {
     }
 
     static fn charWidthForStyle(ch: u8, st: *const ComputedStyle): f32 {
-        const base_sz = if (st.font_size_px > 0.0) st.font_size_px else 16.0;
+        if (st.font_size_px <= 0.0) return 0.0;
+        const base_sz = st.font_size_px;
         const wf_ratio = st.webfont.advanceRatioForCodepoint(@as(u32, ch));
         if (wf_ratio > 0.0) return base_sz * wf_ratio * LayoutTree.weightWidthScale(st);
         if (LayoutTree.isMonospaceFont(st)) return base_sz * 0.60;
@@ -1680,6 +1682,7 @@ pub struct LayoutTree {
     }
 
     static fn measureTextSegmentWithTabs(seg: []const u8, st: *const ComputedStyle, start_x: f32): f32 {
+        if (st.font_size_px <= 0.0) return 0.0;
         const sp_w = LayoutTree.spaceWidth(st);
         let cur_x = start_x;
         let ti: usize = 0;

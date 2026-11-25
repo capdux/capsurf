@@ -3655,3 +3655,5 @@
 - 修复 `TransitionEvent` 缺少 `type` 参数抛 `TypeError`、`propertyName`/`pseudoElement` 强制转字符串、`elapsedTime` 有限浮点数校验及 `Event` 继承原型链，并接入 `@starting-style` 块级规则与空前导符检验，`transitionevent-interface.html` 与 `starting-style-parsing.html` 一次全绿。
 ### Phase 907 — `css-animations` 3 项快速回归全绿闭环
 - 复用 Phase 906 的 WebIDL 构造规范补全 `AnimationEvent`，在 `CSSKeyframesRule` 拦截 `-10%`/`120%` 非法关键帧选择器，并在 `window.js` `timeProps` 解析分支联动 `animation-timeline == "auto"` 将 `animation-duration: auto` 计算为 `0s`，三项测试一次全绿。
+### Phase 908 — `css-fonts` 4 项快速回归全绿闭环
+- 修复 `layout.cp` 中 `font_size_px == 0` 误回退 16px 默认字号的问题，补齐 `INHERITED_CSS_PROPS`、`expandCssShorthand("font")` 与 `CSSFontFeatureValuesRule` Map 构建，`font_feature_values_map_iteration`、`font-palette-vs-shorthand`、`font-size-zero-ligatures` 与 `font-variation-settings-inherit` 全部一次通过。
