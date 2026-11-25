@@ -4538,3 +4538,6 @@
 ### Phase 863 — 原生 CSS 变量多段 `var()` 替换、`!important` 级联优先序与计算值失效回退
 - `/data/dev/cp/lib/css/stylesheet.cp`: 保留 `--b: ;` 纯空白自定义属性值。
 - `src/css/cascade.cp`: 新增 `resolveVarExprBuf` 支持多段/相邻 `var()` 替换与语法校验，`Cascade.resolve` 两遍级联确保 `--*`（含 `!important`）先于常规属性求值，`color` 计算值失效时回退 `inherited_color`；`variable-reference-01..11,13..15` **14/14 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 864 — CSS 转义自定义属性、EOF 隐式闭合 `var()`/规则块、重复 `!important` 拒绝与自引用循环检测
+- `/data/dev/cp/lib/css/stylesheet.cp`: `CssProperty.parse` 拒绝重复 `!important`；`CssStylesheetParser.parseRule` / `parseStylesheet` 支持 EOF 隐式闭合未闭合 `{` 规则块。
+- `src/css/cascade.cp`: 新增 `unescapeCssIdentBuf` / `eqlCssCustomPropName`（含孤立代理项 `U+FFFD` 规范化）、`stripCssCommentsBuf`、`customPropHasCycle`，并完善 `resolveVarExprBuf` 对 EOF 未闭合 `var(` 与自引用循环的处理；`variable-reference-21,23..30,39` **10/10 PASS**，`--smoke` 3/3 **PASS**。

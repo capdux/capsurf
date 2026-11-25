@@ -3566,3 +3566,5 @@
 - 将 `contain`/`content-visibility`/`isolation`/`mix-blend-mode` 校验收口至 `cap:css` (`containProp.cp`) 并全量通过 6 项对应 WPT 解析测试，累计已有 **57 个** CSSOM 高频语法校验/求值/序列化入口完成 `cap:css` 下沉。
 ### Phase 863 — 原生 CSS 变量多段 `var()` 替换、`!important` 级联优先序与计算值失效回退
 - 攻克 `/css/css-variables/` 大规模同源失败聚类：修复 `stylesheet.cp` 纯空白自定义属性丢弃、`cascade.cp` 单值 `var()` 限制、相邻 `var()` 拼接、`--* !important` 滞后覆盖及 `color` 计算值失效回退 `inherited_color`，`variable-reference` 批量转绿。
+### Phase 864 — CSS 变量转义标识符、EOF 隐式闭合与循环依赖检测
+- 在 `cascade.cp` 与 `cap:css` (`stylesheet.cp`) 中补齐 CSS Syntax Level 3 EOF 隐式闭合（未闭合规则块 `{`、`var(` 与 `/*` 注释）、十六进制转义与孤立代理项 `U+FFFD` 映射、重复 `!important` 语法拒绝及 `var()` 自引用循环检测。

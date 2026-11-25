@@ -2944,10 +2944,68 @@ pub struct ComputedStyle {
         return std.fmt.bufPrint(buf, "rgba({d}, {d}, {d}, {d:.2})", .{ _.accent_color.r, _.accent_color.g, _.accent_color.b, a_f }) catch "auto";
     }
 
+    static fn unescapeCssIdentBuf(raw: []const u8, out: []u8): []const u8 {
+        if (std.mem.indexOfScalar(u8, raw, '\\') == null) {
+            const take = @min(raw.len, out.len);
+            @memcpy(out[0..take], raw[0..take]);
+            return out[0..take];
+        }
+        let i: usize = 0;
+        let len: usize = 0;
+        while (i < raw.len && len < out.len) {
+            if (raw[i] == '\\' && i + 1 < raw.len) {
+                i += 1;
+                const c = raw[i];
+                const is_hex = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+                if (is_hex) {
+                    let cp: u32 = 0;
+                    let digits: usize = 0;
+                    while (i < raw.len && digits < 6) : (digits += 1) {
+                        const h = raw[i];
+                        let d: u32 = 0;
+                        if (h >= '0' && h <= '9') d = @as(u32, h - '0');
+                        else if (h >= 'a' && h <= 'f') d = @as(u32, h - 'a' + 10);
+                        else if (h >= 'A' && h <= 'F') d = @as(u32, h - 'A' + 10);
+                        else break;
+                        cp = (cp << 4) | d;
+                        i += 1;
+                    }
+                    if (i < raw.len && (raw[i] == ' ' || raw[i] == '\t' || raw[i] == '\r' || raw[i] == '\n')) {
+                        i += 1;
+                    }
+                    if (cp == 0 || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF)) cp = 0xFFFD;
+                    let utf8_buf: [4]u8 = undefined;
+                    const ulen = std.unicode.utf8Encode(@as(u21, @intCast(cp)), &utf8_buf) catch 0;
+                    const take = @min(ulen, out.len - len);
+                    @memcpy(out[len .. len + take], utf8_buf[0..take]);
+                    len += take;
+                } else {
+                    out[len] = c;
+                    len += 1;
+                    i += 1;
+                }
+            } else {
+                out[len] = raw[i];
+                len += 1;
+                i += 1;
+            }
+        }
+        return out[0..len];
+    }
+
+    static fn eqlCssCustomPropName(a: []const u8, b: []const u8): bool {
+        if (std.mem.indexOfScalar(u8, a, '\\') == null && std.mem.indexOfScalar(u8, b, '\\') == null) {
+            return std.mem.eql(u8, a, b);
+        }
+        let ba: [128]u8 = undefined;
+        let bb: [128]u8 = undefined;
+        return std.mem.eql(u8, ComputedStyle.unescapeCssIdentBuf(a, &ba), ComputedStyle.unescapeCssIdentBuf(b, &bb));
+    }
+
     fn setCustomProp(*_, name: []const u8, value: []const u8, weight: u64) {
         let i: usize = 0;
         while (i < _.custom_prop_count) : (i += 1) {
-            if (std.mem.eql(u8, _.custom_props[i].name, name)) {
+            if (ComputedStyle.eqlCssCustomPropName(_.custom_props[i].name, name)) {
                 if (weight >= _.custom_props[i].weight) {
                     _.custom_props[i].value = value;
                     _.custom_props[i].weight = weight;
@@ -2968,7 +3026,7 @@ pub struct ComputedStyle {
     fn getCustomProp(name: []const u8): ([]const u8)? {
         let i: usize = 0;
         while (i < _.custom_prop_count) : (i += 1) {
-            if (std.mem.eql(u8, _.custom_props[i].name, name)) {
+            if (ComputedStyle.eqlCssCustomPropName(_.custom_props[i].name, name)) {
                 return _.custom_props[i].value;
             }
         }
@@ -2980,6 +3038,81 @@ pub struct ComputedStyle {
         let i: usize = 0;
         while (i + 4 <= raw.len) : (i += 1) {
             if (std.ascii.eqlIgnoreCase(raw[i .. i + 4], "var(")) return true;
+        }
+        return false;
+    }
+
+    static fn stripCssCommentsBuf(raw: []const u8, out: []u8): []const u8 {
+        if (std.mem.indexOf(u8, raw, "/*") == null) {
+            const take = @min(raw.len, out.len);
+            @memcpy(out[0..take], raw[0..take]);
+            return out[0..take];
+        }
+        let i: usize = 0;
+        let len: usize = 0;
+        let in_sq = false;
+        let in_dq = false;
+        while (i < raw.len && len < out.len) {
+            const c = raw[i];
+            if (in_sq) {
+                out[len] = c;
+                len += 1;
+                if (c == '\\' && i + 1 < raw.len && len < out.len) {
+                    i += 1;
+                    out[len] = raw[i];
+                    len += 1;
+                } else if (c == '\'') {
+                    in_sq = false;
+                }
+                i += 1;
+                continue;
+            }
+            if (in_dq) {
+                out[len] = c;
+                len += 1;
+                if (c == '\\' && i + 1 < raw.len && len < out.len) {
+                    i += 1;
+                    out[len] = raw[i];
+                    len += 1;
+                } else if (c == '"') {
+                    in_dq = false;
+                }
+                i += 1;
+                continue;
+            }
+            if (c == '\'') { in_sq = true; out[len] = c; len += 1; i += 1; continue; }
+            if (c == '"') { in_dq = true; out[len] = c; len += 1; i += 1; continue; }
+            if (c == '/' && i + 1 < raw.len && raw[i + 1] == '*') {
+                i += 2;
+                while (i + 1 < raw.len) : (i += 1) {
+                    if (raw[i] == '*' && raw[i + 1] == '/') {
+                        i += 2;
+                        break;
+                    }
+                }
+                if (i + 1 >= raw.len) i = raw.len;
+                continue;
+            }
+            out[len] = c;
+            len += 1;
+            i += 1;
+        }
+        return out[0..len];
+    }
+
+    fn customPropHasCycle(target_name: []const u8, depth: u32): bool {
+        if (depth >= 8) return true;
+        const val = _.getCustomProp(target_name) ?? return false;
+        if (!ComputedStyle.hasVarCallIgnoreCase(val)) return false;
+        let i: usize = 0;
+        while (i + 4 <= val.len) : (i += 1) {
+            if (std.ascii.eqlIgnoreCase(val[i .. i + 4], "var(")) {
+                let k: usize = i + 4;
+                while (k < val.len && val[k] != ',' && val[k] != ')') : (k += 1) {}
+                const dep_name = std.mem.trim(u8, val[i + 4 .. k], " \t\r\n");
+                if (ComputedStyle.eqlCssCustomPropName(dep_name, target_name)) return true;
+                if (_.customPropHasCycle(dep_name, depth + 1)) return true;
+            }
         }
         return false;
     }
@@ -2997,8 +3130,8 @@ pub struct ComputedStyle {
         }
         let work_a: [1024]u8 = undefined;
         let work_b: [1024]u8 = undefined;
-        let cur_len: usize = @min(raw.len, work_a.len);
-        @memcpy(work_a[0..cur_len], raw[0..cur_len]);
+        const stripped = ComputedStyle.stripCssCommentsBuf(raw, &work_a);
+        let cur_len: usize = stripped.len;
         let use_a = true;
         let pass: u32 = 0;
         while (pass < 8) : (pass += 1) {
@@ -3030,11 +3163,23 @@ pub struct ComputedStyle {
                         if (c == '(') depth += 1;
                         else if (c == ')') depth -= 1;
                     }
-                    if (depth != 0) {
-                        syntax_invalid.* = true;
-                        return "";
+                    let closed_buf: [1024]u8 = undefined;
+                    let inner: []const u8 = "";
+                    if (depth == 0) {
+                        inner = cur[i + 4 .. j - 1];
+                    } else {
+                        // CSS Syntax Level 3: EOF implicitly closes open var( functions
+                        const raw_inner = cur[i + 4 .. cur.len];
+                        const take_in = @min(raw_inner.len, closed_buf.len - 8);
+                        @memcpy(closed_buf[0..take_in], raw_inner[0..take_in]);
+                        let clen: usize = take_in;
+                        let extra: i32 = 1;
+                        while (extra < depth && clen < closed_buf.len) : (extra += 1) {
+                            closed_buf[clen] = ')';
+                            clen += 1;
+                        }
+                        inner = closed_buf[0..clen];
                     }
-                    const inner = cur[i + 4 .. j - 1];
                     if (!ComputedStyle.isValidVarCall(inner)) {
                         syntax_invalid.* = true;
                         return "";
@@ -3065,13 +3210,20 @@ pub struct ComputedStyle {
                     }
                     const var_name = std.mem.trim(u8, if (comma_idx != null) inner[0..comma_idx.?] else inner, " \t\r\n");
                     let sub_val: []const u8 = "";
+                    let have_val = false;
                     if (resolved := _.getCustomProp(var_name)) {
-                        sub_val = resolved;
-                    } else if (comma_idx != null) {
-                        sub_val = inner[comma_idx.? + 1 ..];
-                    } else {
-                        computed_invalid.* = true;
-                        return "";
+                        if (!_.customPropHasCycle(var_name, 0)) {
+                            sub_val = resolved;
+                            have_val = true;
+                        }
+                    }
+                    if (!have_val) {
+                        if (comma_idx != null) {
+                            sub_val = inner[comma_idx.? + 1 ..];
+                        } else {
+                            computed_invalid.* = true;
+                            return "";
+                        }
                     }
                     const take = @min(sub_val.len, dst.len - out_len);
                     @memcpy(dst[out_len .. out_len + take], sub_val[0..take]);
@@ -3095,6 +3247,10 @@ pub struct ComputedStyle {
             if (!replaced) break;
         }
         const final_slice = if (use_a) work_a[0..cur_len] else work_b[0..cur_len];
+        if (ComputedStyle.hasVarCallIgnoreCase(final_slice)) {
+            computed_invalid.* = true;
+            return "";
+        }
         const trimmed = std.mem.trim(u8, final_slice, " \t\r\n");
         const take_out = @min(trimmed.len, out_buf.len);
         @memcpy(out_buf[0..take_out], trimmed[0..take_out]);
