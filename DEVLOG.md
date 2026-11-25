@@ -3380,3 +3380,5 @@
 - 修复 `cssom.js` 中 `@font-face` `tech()` 大小写规范化、`ascent/descent/line-gap-override` 非负百分比校验、以及 `font-width`/`font-stretch` 别名映射，3 项全绿（`font-face-src-tech.html` `FAIL→PASS`，基线增至 `7,211`）。
 ### Phase 770 — `/css/css-masking/parsing/` 全目录 28/28 (100% PASS) 达成
 - 在 `cssom.js` `KNOWN_PROPS` 与 `window.js` `STANDARD_COMPUTED_LONGHANDS` 补齐 `mask-border-*` 与 `mask-{clip,mode,origin,position}`，`mask-valid.sub.html` 与 `mask-computed.html` 全部恢复 **PASS**，实现 `/css/css-masking/parsing/` 28/28 全绿。
+### Phase 771 — `/css/css-text-decor/` 非动画全绿（45/45 100% PASS）
+- 在 `window.js` 默认计算值表补充 `text-decoration-thickness: "auto"` 与 `text-underline-offset: "auto"`，`text-decoration-thickness-initial.html` 与 `text-underline-offset-initial.html` 全部恢复 **PASS**。

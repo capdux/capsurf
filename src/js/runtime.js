@@ -48665,6 +48665,8 @@
         ["text-indent", "0px"],
         ["text-justify", "auto"],
         ["text-transform", "none"],
+        ["text-decoration-thickness", "auto"],
+        ["text-underline-offset", "auto"],
         ["text-wrap-mode", "wrap"],
         ["text-wrap-style", "auto"],
         ["white-space-collapse", "collapse"],

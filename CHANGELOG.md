@@ -4207,3 +4207,6 @@
   - `src/js/shim/cssom.js`: `KNOWN_PROPS` 补全 `mask-border-{outset,repeat,slice,source,width}`。
   - `src/js/shim/window.js`: `STANDARD_COMPUTED_LONGHANDS` 补全 `mask-border-*` 与 `mask-{clip,mode,origin,position}`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 771**:
+  - `src/js/shim/window.js`: 默认计算值表新增 `text-decoration-thickness: "auto"` 与 `text-underline-offset: "auto"`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
