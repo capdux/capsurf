@@ -7419,7 +7419,11 @@ function installWindow(global) {
         const sn = styleNodes[si];
         if (!sn) continue;
         const t = (sn._sheet && typeof sn._sheet._cascadeCssText === "string") ? sn._sheet._cascadeCssText : (sn.textContent || "");
-        sheetKey += t.length + ":" + t.slice(0, 64) + "|";
+        let h = 2166136261;
+        for (let hi = 0; hi < t.length; hi++) {
+          h = ((h ^ t.charCodeAt(hi)) * 16777619) >>> 0;
+        }
+        sheetKey += t.length + ":" + h.toString(36) + "|";
       }
       const bCache = element._rawBaseCache;
       if (bCache && bCache.domEpoch === curDomEpoch && bCache.sheetKey === sheetKey) {

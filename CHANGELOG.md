@@ -4581,3 +4581,6 @@
 - `src/js/shim/window.js`: `_skipInline` 合入 `rawInlineSelf` 后二次校验 `valCheckProps` 回滚非法内联值；`letter-spacing`/`word-spacing` `calc()` 求值补齐 EOF 未闭合括号。
 - `src/js/shim/cssom.js`: `SUPPORTED_CSS_PROPERTIES` 补充 `text-align-all`；`isValidLenPct` 与 `canonicalizeCalcToken` 为 `calc(`/`min(`/`max(`/`clamp(` 自动补齐 EOF 未闭合括号。
 - `src/js/{runtime.js,runtime_source.cp}`: 重新打包；`text-orientation-parsing-001.html`、`letter-spacing-computed.html`、`word-spacing-computed.html`、`css-text/inheritance.html` **4/4 PASS**（`/css/css-writing-modes/` **20/20 100% PASS**），`--smoke` 3/3 **PASS**。
+### Phase 879 — `_rawBaseCache` `sheetKey` FNV-1a 哈希防碰撞修复
+- `src/js/shim/window.js`: 将 `collectRawComputedMap` 中 `sheetKey` 由前 64 字符切片改为 32 位 FNV-1a 全文哈希，彻底修复动态修改 `<style>.textContent` 为等长同前缀内容时的样式缓存碰撞。
+- `src/js/{runtime.js,runtime_source.cp}`: 重新打包；`/css/css-transitions/transition-property-002.html` **PASS**，`--smoke` 3/3 **PASS**。

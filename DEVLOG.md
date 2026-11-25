@@ -3597,3 +3597,5 @@
 - 定位 `getComputedStyle(d).animationName` 丢失 `multi\ word\ string` 反斜杠转义的根因：`wrapComputedStyleDecl` 对所有非自定义属性无条件调用 `normalizeCssColor()`，其内部反斜杠解义将 `\ ` 剥离；跳过 `animation-name` 等标识符/字符串属性后全量 27 项子测试通过。
 ### Phase 878 — `valCheckProps` 内联二次校验与 `calc()` EOF 括号闭合
 - 解决 `rawInlineSelf` 在 `_skipInline` 路径晚于 `valCheckProps` 解析导致 `text-orientation: foo` 覆盖继承值 `upright` 的问题；同时发现 `ZERO_PX_PROPS` 在 `normalizeCssSpecifiedValue` 中提前命中 `canonicalizeCalcToken`，在 `canonicalizeCalcToken` 顶部统一补齐未闭合 `)` 后彻底修复 `calc(10px - (5% + 10%)` 的序列化与 `splitCssDeclarations` 截断问题。
+### Phase 879 — 样式表缓存键 `sheetKey` 前缀碰撞根因修复
+- 定位 `transition-property-002.html` 中 `"all, foobar"` -> `"foobar, all"` 与 `"inherit"` -> `"initial"` 连续切换返回旧值的根因：`sheetKey` 仅拼接 `t.length + ":" + t.slice(0, 64)`，导致前 64 字符和总长度相同的 `<style>.textContent` 发生缓存键碰撞；改用 FNV-1a 全文哈希后问题彻底消除。
