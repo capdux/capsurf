@@ -88,6 +88,8 @@ import {
     isValidCssBorderWidthValue,
     isValidCssBorderStyleValue,
     isValidCssOutlineStyleValue,
+    isValidCssInsetValue,
+    isValidCssOverflowValue,
 } from "cap:css";
 import { LayoutTree, Rect } from "../layout/layout.cp";
 import { RUNTIME_CHUNKS } from "./runtime_source.cp";
@@ -960,6 +962,28 @@ fn callStrValidator1(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, pred: 
     let max_toks: i32 = 1;
     if (argc >= 2) * = JS_ToInt32(ctx, &max_toks, unsafe { argv[1] });
     return jsBool(isValidCssBorderStyleValue(trimmed, if (max_toks >= 4) 4 else if (max_toks >= 2) 2 else 1));
+}
+@c fn js_capsurf_is_valid_css_inset(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 1) return jsFalse();
+    const s = jsToSlice(ctx, unsafe { argv[0] });
+    defer if (s.len > 0) std.heap.page_allocator.free(s);
+    const trimmed = std.mem.trim(u8, s, " \t\r\n");
+    if (trimmed.len == 0) return jsFalse();
+    let max_toks: i32 = 1;
+    if (argc >= 2) * = JS_ToInt32(ctx, &max_toks, unsafe { argv[1] });
+    return jsBool(isValidCssInsetValue(trimmed, if (max_toks >= 4) 4 else if (max_toks >= 2) 2 else 1));
+}
+@c fn js_capsurf_is_valid_css_overflow(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 1) return jsFalse();
+    const s = jsToSlice(ctx, unsafe { argv[0] });
+    defer if (s.len > 0) std.heap.page_allocator.free(s);
+    const trimmed = std.mem.trim(u8, s, " \t\r\n");
+    if (trimmed.len == 0) return jsFalse();
+    let max_toks: i32 = 1;
+    if (argc >= 2) * = JS_ToInt32(ctx, &max_toks, unsafe { argv[1] });
+    return jsBool(isValidCssOverflowValue(trimmed, if (max_toks >= 2) 2 else 1));
 }
 @c fn js_capsurf_is_valid_css_len_pct(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     * = this_val;
@@ -3065,6 +3089,8 @@ pub fn mountDom(
     defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_outline_style", js_capsurf_is_valid_css_outline_style, 1);
     defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_border_width", js_capsurf_is_valid_css_border_width, 2);
     defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_border_style", js_capsurf_is_valid_css_border_style, 2);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_inset", js_capsurf_is_valid_css_inset, 2);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_overflow", js_capsurf_is_valid_css_overflow, 2);
 
     // Assemble and evaluate modular runtime shim
     let total_len: usize = 0;

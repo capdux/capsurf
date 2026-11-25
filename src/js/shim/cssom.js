@@ -1151,6 +1151,9 @@
       return allowedKeywords.indexOf(vLower) !== -1;
     }
     if (prop === "overflow") {
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_overflow === "function") {
+        return globalThis.__capsurf_is_valid_css_overflow(vLower, 2);
+      }
       const parts = vLower.split(/\s+/);
       if (parts.length < 1 || parts.length > 2) return false;
       const ov = ["visible", "hidden", "clip", "scroll", "auto"];
@@ -2072,6 +2075,9 @@
         prop === "inset-block-start" || prop === "inset-block-end" || prop === "inset-inline-start" || prop === "inset-inline-end" ||
         prop === "inset" || prop === "inset-block" || prop === "inset-inline") {
       const maxN = prop === "inset" ? 4 : ((prop === "inset-block" || prop === "inset-inline") ? 2 : 1);
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_inset === "function") {
+        return globalThis.__capsurf_is_valid_css_inset(vLower, maxN);
+      }
       const toks = splitCssTokens(vLower);
       if (toks.length < 1 || toks.length > maxN) return false;
       for (let i = 0; i < toks.length; i++) {

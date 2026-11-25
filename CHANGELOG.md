@@ -4508,3 +4508,6 @@
 ### Phase 853 — `border-width` / `border-style` / `outline-width` / `outline-style` 下沉 `cap:css` 并接线验证
 - `/data/dev/cp/lib/css/{border,outline,index}.cp`: 新增并导出 `isValidCssBorderWidthValue`、`isValidCssBorderStyleValue`、`isValidCssOutlineStyleValue`。
 - `src/js/dom_binding.cp` & `src/js/shim/cssom.js`: 暴露并接入全部 3 个原生校验器，`border-{width,style}-{valid,invalid}` 与 `outline-{width,style}-{valid,invalid}` **8/8 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 854 — `inset` / `overflow` 校验下沉 `cap:css` 并接线验证
+- `/data/dev/cp/lib/css/{positionProp,overflowProp,index}.cp`: 新增并导出 `isValidCssInsetValue`、`isValidCssOverflowValue`。
+- `src/js/dom_binding.cp` & `src/js/shim/cssom.js`: 暴露并接入全部 2 个原生校验器，`top-{valid,invalid}`、`inset-{valid,invalid}`、`overflow-{valid,invalid}` **6/6 PASS**，`--smoke` 3/3 **PASS**。

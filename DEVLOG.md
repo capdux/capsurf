@@ -3546,3 +3546,5 @@
 - 将 `border-radius`、`border-*-radius`、`margin`、`padding` 简写语法校验统一收口至 `cap:css` (`borderradius.cp` & `marginPad.cp`) 并全量通过 6 项对应 WPT 解析测试，累计已有 21 个 CSSOM 高频语法校验器完成 `cap:css` 下沉。
 ### Phase 853 — `border-width` / `border-style` / `outline-width` / `outline-style` 下沉 `cap:css` 并接线验证
 - 将 `border-width`/`border-style`/`outline-width`/`outline-style` 校验收口至 `cap:css` (`border.cp` & `outline.cp`) 并全量通过 8 项对应 WPT 解析测试，累计已有 24 个 CSSOM 高频语法校验/求值/序列化入口完成 `cap:css` 下沉。
+### Phase 854 — `inset` / `overflow` 校验下沉 `cap:css` 并接线验证
+- 将 `top`/`right`/`bottom`/`left`/`inset*` 与 `overflow` 校验收口至 `cap:css` (`positionProp.cp` & `overflowProp.cp`) 并全量通过 6 项对应 WPT 解析测试，累计已有 26 个 CSSOM 高频语法校验/求值/序列化入口完成 `cap:css` 下沉。
