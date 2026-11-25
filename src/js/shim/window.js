@@ -7662,6 +7662,24 @@ function installWindow(global) {
       return resolveUnitPx(parseFloat(simple[1]), (simple[2] || "").toLowerCase());
     }
 
+    // Offload CSS Math Level 4 expressions (round/mod/rem/trig/exp/log/pow/sqrt/hypot/constants) to native cap:css
+    if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_eval_css_math === "function" &&
+        (/\b(?:round|mod|rem|sin|cos|tan|asin|acos|atan|atan2|pow|sqrt|hypot|log|exp|pi|infinity|nan)\b|\be\b/i.test(s))) {
+      let hasUnresolvedUnit = false;
+      let norm = s.replace(/;+$/, "").replace(/([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(px|%|em|rem|pt|pc|in|cm|mm|q|vw|vh|ch|lh|cqw|cqi|cqh|cqb)\b/gi, (m, n, u) => {
+        const px = resolveUnitPx(parseFloat(n), u.toLowerCase());
+        if (px === null) { hasUnresolvedUnit = true; return m; }
+        return String(px);
+      });
+      if (!hasUnresolvedUnit) {
+        let open = 0;
+        for (let k = 0; k < norm.length; k++) { if (norm[k] === "(") open++; else if (norm[k] === ")" && open > 0) open--; }
+        while (open > 0) { norm += ")"; open--; }
+        const nativeRes = globalThis.__capsurf_eval_css_math(norm);
+        if (typeof nativeRes === "number") return nativeRes;
+      }
+    }
+
     // Recursive descent parser for calc(), min(), max(), clamp()
     let pos = 0;
     const len = s.length;
@@ -7873,6 +7891,14 @@ function installWindow(global) {
       if (u === "rad") return n * (180 / Math.PI);
       if (u === "turn") return n * 360;
     }
+    if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_eval_css_math === "function") {
+      let normAng = s.replace(/;+$/, "");
+      let open = 0;
+      for (let k = 0; k < normAng.length; k++) { if (normAng[k] === "(") open++; else if (normAng[k] === ")" && open > 0) open--; }
+      while (open > 0) { normAng += ")"; open--; }
+      const rad = globalThis.__capsurf_eval_css_math(normAng);
+      if (typeof rad === "number") return rad * (180 / Math.PI);
+    }
     const fnMatch = s.match(/^(hypot|abs|min|max|calc)\((.+)\)$/);
     if (fnMatch) {
       const fn = fnMatch[1];
@@ -8049,7 +8075,7 @@ function installWindow(global) {
       computedMap.set("z-index", "auto");
     } else {
       const ziRaw = String(computedMap.get("z-index") || "").trim();
-      if (/^(?:calc|min|max|clamp)\s*\(/i.test(ziRaw)) {
+      if (/^(?:calc|min|max|clamp|round|mod|rem|abs|sign|sin|cos|tan|asin|acos|atan|atan2|pow|sqrt|hypot|log|exp)\s*\(/i.test(ziRaw)) {
         let ziNum = null;
         const clampM = /^clamp\(\s*([^,]+)\s*,\s*([^,]+)\s*,\s*([^,)]+)\s*\)$/i.exec(ziRaw);
         if (clampM) {
@@ -9595,7 +9621,7 @@ function installWindow(global) {
         if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(tok)) return Number(tok);
         const pm = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)%$/i.exec(tok);
         if (pm) return Number(pm[1]) / 100;
-        if (/^calc\(/i.test(tok)) {
+        if (/^(?:calc|min|max|clamp|round|mod|rem|abs|sign|sin|cos|tan|asin|acos|atan|atan2|pow|sqrt|hypot|log|exp)\s*\(/i.test(tok)) {
           let norm = tok.replace(/;+$/, "").replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))%/g, (_, n) => String(Number(n) / 100));
           let open = 0;
           for (let k = 0; k < norm.length; k++) {

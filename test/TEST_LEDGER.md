@@ -2511,3 +2511,4 @@
 | Phase 842 | `isValidCalcSyntax` 单位白名单与 `clamp()`/`min()`/`max()` 校验 | `src/js/shim/cssom.js` | `minmax-time-invalid` **52/52 PASS**; `--smoke` 3/3 PASS |
 | Phase 843 | RGB 注释/转义预清洗、`toFixed(8)` 与百分比舍入修复 | `src/js/shim/cssom.js` | `color-valid-rgb` (70/70 **PASS**), `color-computed-rgb` 无超时; `--smoke` 3/3 PASS |
 | Phase 844 | `contain: style` 计数器作用域隔离与 `open-quote`/`close-quote` | `src/css/font_face.cp`, `src/css/cascade.cp` | `contain-style-*`/`quote-scoping-*` **14/34 PASS**; `--smoke` 3/3 PASS |
+| Phase 845 | `cap:css` 原生 CSS Math Level 4 (`evalCssMathExpr`) 下沉 | `src/js/dom_binding.cp`, `src/js/shim/window.js`, `src/js/shim/cssom.js` | `exp-log-compute`, `sin-cos-tan-computed`, `minmax-angle-computed` **7/7 PASS**; `--smoke` 3/3 PASS |

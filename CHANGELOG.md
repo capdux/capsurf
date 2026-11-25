@@ -4480,3 +4480,7 @@
 ### Phase 844 — `contain: style` 计数器作用域隔离与 `open-quote`/`close-quote` 伪元素内容支持
 - `src/css/font_face.cp`: 为 `CssCounterStack` 新增 `quote_depth` 字段，并在 `resolvePseudoContentExpr` 中支持 `open-quote` / `close-quote` / `no-open-quote` / `no-close-quote`。
 - `src/css/cascade.cp`: 新增 `PROP_CONTAIN` 与 `ComputedStyle.contain_style` 解析 `contain: style|content|strict`，在 `resolveCountersRecursive` 对 `contain_style` 子树切换独立 `sub_stack` 隔离计数器作用域；`contain-style-*` 与 `quote-scoping-*` 34 项验证 **14/34 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 845 — `cap:css` 原生 CSS Math Level 4 (`evalCssMathExpr`) 能力下沉
+- `src/js/dom_binding.cp`: 导入 `cap:css` `evalCssMathExpr` 并注册 `__capsurf_eval_css_math`，提供零堆分配原生 CSS Math Level 4 求值。
+- `src/js/shim/window.js`: 在 `evalCssLengthExpr`、`evalCssAngleDeg`、`z-index`、`scale` 路由至 `__capsurf_eval_css_math` 并补全末尾分号剥离与未闭合括号补全。
+- `src/js/shim/cssom.js`: 为 `scale` 校验放行全部 21 种 CSS Math Level 4 函数与嵌套 `sibling-index()` 三角角度单位；`exp-log-compute` / `sin-cos-tan-computed` / `minmax-angle-computed` 等 **7/7 PASS**，`--smoke` 3/3 **PASS**。

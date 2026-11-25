@@ -55,7 +55,7 @@ import {
 import { Document, NodeId, NULL_NODE, NodeType } from "../dom/dom.cp";
 import { Matcher } from "../css/matcher.cp";
 import { StyleSheet, Cascade, ComputedStyle, CssPosition } from "../css/cascade.cp";
-import { MediaQueryList, MediaEnv, MediaType, CssColor, SupportsTree, SupportsKind } from "cap:css";
+import { MediaQueryList, MediaEnv, MediaType, CssColor, SupportsTree, SupportsKind, evalCssMathExpr } from "cap:css";
 import { LayoutTree, Rect } from "../layout/layout.cp";
 import { RUNTIME_CHUNKS } from "./runtime_source.cp";
 import { MockFixtures } from "../net/mock_fixtures.cp";
@@ -789,6 +789,22 @@ fn linkMediaMatchesScreen(media_raw: []const u8): bool {
         if (formatted.len > 0) return jsNewString(ctx, formatted);
     }
     return jsNull();
+}
+
+@c fn js_capsurf_eval_css_math(
+    ctx: *JSContext,
+    this_val: JSValue,
+    argc: i32,
+    argv: [*]const JSValue!,
+): JSValue {
+    * = this_val;
+    if (argc < 1) return jsNull();
+    const expr_slice = jsToSlice(ctx, unsafe { argv[0] });
+    defer if (expr_slice.len > 0) std.heap.page_allocator.free(expr_slice);
+    const trimmed = std.mem.trim(u8, expr_slice, " \t\r\n");
+    if (trimmed.len == 0) return jsNull();
+    const val = evalCssMathExpr(trimmed) catch return jsNull();
+    return jsFloat(val);
 }
 
 fn evalSupportsNodeTri(
@@ -2836,6 +2852,7 @@ pub fn mountDom(
     defineMethod(raw_ctx, global_obj, "__capsurf_eval_media_query", js_capsurf_eval_media_query, 4);
     defineMethod(raw_ctx, global_obj, "__capsurf_parse_color", js_capsurf_parse_color, 1);
     defineMethod(raw_ctx, global_obj, "__capsurf_eval_supports", js_capsurf_eval_supports, 3);
+    defineMethod(raw_ctx, global_obj, "__capsurf_eval_css_math", js_capsurf_eval_css_math, 1);
 
     // Assemble and evaluate modular runtime shim
     let total_len: usize = 0;

@@ -2261,8 +2261,11 @@
       for (let i = 0; i < toks.length; i++) {
         const t = toks[i];
         if (/^(?:var|env)\(/i.test(t)) continue;
-        if (/^(?:calc|min|max|clamp)\(/i.test(t)) {
-          const stripped = t.replace(/\b(?:sign|progress)\([^()]+\)/gi, "");
+        if (/^(?:calc|min|max|clamp|round|mod|rem|sin|cos|tan|asin|acos|atan|atan2|pow|sqrt|hypot|log|exp|abs|sign)\(/i.test(t)) {
+          const stripped = t
+            .replace(/\b(?:sibling-index|sibling-count)\(\)/gi, "1")
+            .replace(/\b(?:sign|progress|sin|cos|tan|asin|acos|atan|atan2)\([^()]+\)/gi, "")
+            .replace(/\b(?:sin|cos|tan)\([^()]+\)/gi, "");
           if (/(?:\d|\.)(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|deg|rad|grad|turn|ms|s|hz|khz|dpi|dpcm|dppx)\b/i.test(stripped)) return false;
           continue;
         }
