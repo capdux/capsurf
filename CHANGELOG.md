@@ -4650,3 +4650,5 @@
 - `src/js/shim/cssom.js`, `src/js/shim/window.js`: `tab-size` 剥离 `sign()`/`abs()` 后检测单位；`transform` 前置校验 `translate*()` 参数；`translate` 计算值解析 `em`/`rem` 并按 `%` 在 `px` 前规范排序；`tab-size-computed`、`translate-getComputedStyle`、`transform_translate_{invalid,max,min}` **5/5 PASS**，`--smoke` 3/3 **PASS**。
 ### Phase 906 — `TransitionEvent` WebIDL 合规与 `@starting-style` 解析全绿
 - `src/js/shim/cssom.js`, `src/js/shim/events/event.js`, `src/js/shim/index.js`: 实现 `@starting-style` 解析校验与序列化；补齐 `TransitionEvent` WebIDL 构造/原型链/属性枚举与有限 `double` 校验；`transitionevent-interface.html` (42/42) 与 `starting-style-parsing.html` (5/5) **2/2 PASS**，`idlharness.html` 推进至 48/64 PASS，`--smoke` 3/3 **PASS**。
+### Phase 907 — `AnimationEvent` WebIDL、`@keyframes` 范围校验与 `animation-duration: auto` 全绿
+- `src/js/shim/events/event.js`, `src/js/shim/index.js`, `src/js/shim/cssom.js`, `src/js/shim/window.js`: 补齐 `AnimationEvent` WebIDL 构造/原型/有限 `double` 校验；拒绝 `@keyframes` 中超出 `[0%, 100%]` 的选择器；单一 `animation-timeline: auto` 下将 `animation-duration: auto` 解析为 `0s`；3 项 WPT **3/3 PASS**，`--smoke` 3/3 **PASS**。

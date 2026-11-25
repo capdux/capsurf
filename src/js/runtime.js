@@ -1814,17 +1814,46 @@
     });
   });
 
-  function AnimationEvent(type, options) {
-    Event.call(this, type, options);
-    const opts = (options !== null && typeof options === "object") ? options : {};
+  function AnimationEvent(type, eventInitDict = {}) {
+    if (arguments.length < 1) {
+      throw new TypeError("Failed to construct 'AnimationEvent': 1 argument required, but only 0 present.");
+    }
+    const opts = (eventInitDict !== null && eventInitDict !== undefined && typeof eventInitDict === "object")
+      ? eventInitDict
+      : (eventInitDict === undefined || eventInitDict === null ? {} : (() => { throw new TypeError("Failed to construct 'AnimationEvent': parameter 2 ('eventInitDict') is not an object."); })());
+    let et = 0;
+    if (opts.elapsedTime !== undefined) {
+      et = Number(opts.elapsedTime);
+      if (!Number.isFinite(et)) {
+        throw new TypeError("Failed to construct 'AnimationEvent': The provided double value is non-finite.");
+      }
+    }
+    Event.call(this, type, opts);
     _animationEventState.set(this, {
-      animationName: opts.animationName != null ? String(opts.animationName) : "",
-      elapsedTime: typeof opts.elapsedTime === "number" ? opts.elapsedTime : 0,
-      pseudoElement: opts.pseudoElement != null ? String(opts.pseudoElement) : "",
+      animationName: opts.animationName !== undefined ? String(opts.animationName) : "",
+      elapsedTime: et,
+      pseudoElement: opts.pseudoElement !== undefined ? String(opts.pseudoElement) : "",
     });
   }
-  AnimationEvent.prototype = Object.create(Event.prototype);
-  AnimationEvent.prototype.constructor = AnimationEvent;
+  Object.setPrototypeOf(AnimationEvent, Event);
+  Object.defineProperty(AnimationEvent, "prototype", {
+    value: Object.create(Event.prototype),
+    writable: false,
+    enumerable: false,
+    configurable: false,
+  });
+  Object.defineProperty(AnimationEvent.prototype, "constructor", {
+    value: AnimationEvent,
+    writable: true,
+    enumerable: false,
+    configurable: true,
+  });
+  Object.defineProperty(AnimationEvent.prototype, Symbol.toStringTag, {
+    value: "AnimationEvent",
+    writable: false,
+    enumerable: false,
+    configurable: true,
+  });
   markNative(AnimationEvent, "AnimationEvent");
   ["animationName", "elapsedTime", "pseudoElement"].forEach(function (prop) {
     Object.defineProperty(AnimationEvent.prototype, prop, {
@@ -1833,7 +1862,7 @@
         if (!s) throw new TypeError("Illegal invocation");
         return s[prop];
       },
-      enumerable: false,
+      enumerable: true,
       configurable: true,
     });
   });
@@ -14606,10 +14635,25 @@
         for (let i = 0; i < children.length; i++) {
           const p = children[i];
           if (!p.selectorText) continue;
+          const kfSel = p.selectorText.trim();
+          let validKf = true;
+          const kfParts = splitTopLevelComma(kfSel);
+          for (let ki = 0; ki < kfParts.length && validKf; ki++) {
+            const toks = splitCssTokens(kfParts[ki]);
+            if (toks.length === 0) { validKf = false; break; }
+            for (let ti = 0; ti < toks.length; ti++) {
+              const pm = /^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)%$/i.exec(toks[ti]);
+              if (pm) {
+                const pct = Number(pm[1]);
+                if (!(pct >= 0 && pct <= 100)) { validKf = false; break; }
+              }
+            }
+          }
+          if (!validKf) continue;
           const kf = new CSSKeyframeRule();
           kf.parentRule = rule;
           kf.parentStyleSheet = parentSheet || null;
-          kf.keyText = p.selectorText.trim();
+          kf.keyText = kfSel;
           const style = makeRuleStyleDeclaration(p.declText || "", "keyframe", null, onMutate);
           style._parentRule = kf;
           kf.style = style;
@@ -51536,7 +51580,13 @@
           parts.push(pCur);
           const items = parts.map((part) => {
             const p = part.trim().toLowerCase();
-            if (p === "auto") return "auto";
+            if (p === "auto") {
+              if (tk === "animation-duration") {
+                const tlRaw = (computedMap.get("animation-timeline") || "auto").trim().toLowerCase();
+                if (tlRaw === "auto") return "0s";
+              }
+              return "auto";
+            }
             let sec = null;
             const m = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)(ms|s)$/.exec(p);
             if (m) {
@@ -62294,7 +62344,7 @@
     global.PopStateEvent = PopStateEvent;
     global.PageTransitionEvent = PageTransitionEvent;
     Object.defineProperty(global, "TransitionEvent", { value: TransitionEvent, writable: true, enumerable: false, configurable: true });
-    global.AnimationEvent = AnimationEvent;
+    Object.defineProperty(global, "AnimationEvent", { value: AnimationEvent, writable: true, enumerable: false, configurable: true });
     global.BeforeUnloadEvent = BeforeUnloadEvent;
 
     if (typeof globalThis !== "undefined") {
@@ -62325,7 +62375,7 @@
       globalThis.PopStateEvent = PopStateEvent;
       globalThis.PageTransitionEvent = PageTransitionEvent;
       Object.defineProperty(globalThis, "TransitionEvent", { value: TransitionEvent, writable: true, enumerable: false, configurable: true });
-      globalThis.AnimationEvent = AnimationEvent;
+      Object.defineProperty(globalThis, "AnimationEvent", { value: AnimationEvent, writable: true, enumerable: false, configurable: true });
       globalThis.BeforeUnloadEvent = BeforeUnloadEvent;
     }
 

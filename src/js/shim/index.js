@@ -109,7 +109,7 @@ function installShim(global) {
   global.PopStateEvent = PopStateEvent;
   global.PageTransitionEvent = PageTransitionEvent;
   Object.defineProperty(global, "TransitionEvent", { value: TransitionEvent, writable: true, enumerable: false, configurable: true });
-  global.AnimationEvent = AnimationEvent;
+  Object.defineProperty(global, "AnimationEvent", { value: AnimationEvent, writable: true, enumerable: false, configurable: true });
   global.BeforeUnloadEvent = BeforeUnloadEvent;
 
   if (typeof globalThis !== "undefined") {
@@ -140,7 +140,7 @@ function installShim(global) {
     globalThis.PopStateEvent = PopStateEvent;
     globalThis.PageTransitionEvent = PageTransitionEvent;
     Object.defineProperty(globalThis, "TransitionEvent", { value: TransitionEvent, writable: true, enumerable: false, configurable: true });
-    globalThis.AnimationEvent = AnimationEvent;
+    Object.defineProperty(globalThis, "AnimationEvent", { value: AnimationEvent, writable: true, enumerable: false, configurable: true });
     globalThis.BeforeUnloadEvent = BeforeUnloadEvent;
   }
 

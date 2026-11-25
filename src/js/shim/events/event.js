@@ -1389,17 +1389,46 @@ markNative(TransitionEvent, "TransitionEvent");
   });
 });
 
-function AnimationEvent(type, options) {
-  Event.call(this, type, options);
-  const opts = (options !== null && typeof options === "object") ? options : {};
+function AnimationEvent(type, eventInitDict = {}) {
+  if (arguments.length < 1) {
+    throw new TypeError("Failed to construct 'AnimationEvent': 1 argument required, but only 0 present.");
+  }
+  const opts = (eventInitDict !== null && eventInitDict !== undefined && typeof eventInitDict === "object")
+    ? eventInitDict
+    : (eventInitDict === undefined || eventInitDict === null ? {} : (() => { throw new TypeError("Failed to construct 'AnimationEvent': parameter 2 ('eventInitDict') is not an object."); })());
+  let et = 0;
+  if (opts.elapsedTime !== undefined) {
+    et = Number(opts.elapsedTime);
+    if (!Number.isFinite(et)) {
+      throw new TypeError("Failed to construct 'AnimationEvent': The provided double value is non-finite.");
+    }
+  }
+  Event.call(this, type, opts);
   _animationEventState.set(this, {
-    animationName: opts.animationName != null ? String(opts.animationName) : "",
-    elapsedTime: typeof opts.elapsedTime === "number" ? opts.elapsedTime : 0,
-    pseudoElement: opts.pseudoElement != null ? String(opts.pseudoElement) : "",
+    animationName: opts.animationName !== undefined ? String(opts.animationName) : "",
+    elapsedTime: et,
+    pseudoElement: opts.pseudoElement !== undefined ? String(opts.pseudoElement) : "",
   });
 }
-AnimationEvent.prototype = Object.create(Event.prototype);
-AnimationEvent.prototype.constructor = AnimationEvent;
+Object.setPrototypeOf(AnimationEvent, Event);
+Object.defineProperty(AnimationEvent, "prototype", {
+  value: Object.create(Event.prototype),
+  writable: false,
+  enumerable: false,
+  configurable: false,
+});
+Object.defineProperty(AnimationEvent.prototype, "constructor", {
+  value: AnimationEvent,
+  writable: true,
+  enumerable: false,
+  configurable: true,
+});
+Object.defineProperty(AnimationEvent.prototype, Symbol.toStringTag, {
+  value: "AnimationEvent",
+  writable: false,
+  enumerable: false,
+  configurable: true,
+});
 markNative(AnimationEvent, "AnimationEvent");
 ["animationName", "elapsedTime", "pseudoElement"].forEach(function (prop) {
   Object.defineProperty(AnimationEvent.prototype, prop, {
@@ -1408,7 +1437,7 @@ markNative(AnimationEvent, "AnimationEvent");
       if (!s) throw new TypeError("Illegal invocation");
       return s[prop];
     },
-    enumerable: false,
+    enumerable: true,
     configurable: true,
   });
 });

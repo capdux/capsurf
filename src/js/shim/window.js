@@ -9927,7 +9927,13 @@ function installWindow(global) {
         parts.push(pCur);
         const items = parts.map((part) => {
           const p = part.trim().toLowerCase();
-          if (p === "auto") return "auto";
+          if (p === "auto") {
+            if (tk === "animation-duration") {
+              const tlRaw = (computedMap.get("animation-timeline") || "auto").trim().toLowerCase();
+              if (tlRaw === "auto") return "0s";
+            }
+            return "auto";
+          }
           let sec = null;
           const m = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)(ms|s)$/.exec(p);
           if (m) {

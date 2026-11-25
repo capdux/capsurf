@@ -10682,10 +10682,25 @@
       for (let i = 0; i < children.length; i++) {
         const p = children[i];
         if (!p.selectorText) continue;
+        const kfSel = p.selectorText.trim();
+        let validKf = true;
+        const kfParts = splitTopLevelComma(kfSel);
+        for (let ki = 0; ki < kfParts.length && validKf; ki++) {
+          const toks = splitCssTokens(kfParts[ki]);
+          if (toks.length === 0) { validKf = false; break; }
+          for (let ti = 0; ti < toks.length; ti++) {
+            const pm = /^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)%$/i.exec(toks[ti]);
+            if (pm) {
+              const pct = Number(pm[1]);
+              if (!(pct >= 0 && pct <= 100)) { validKf = false; break; }
+            }
+          }
+        }
+        if (!validKf) continue;
         const kf = new CSSKeyframeRule();
         kf.parentRule = rule;
         kf.parentStyleSheet = parentSheet || null;
-        kf.keyText = p.selectorText.trim();
+        kf.keyText = kfSel;
         const style = makeRuleStyleDeclaration(p.declText || "", "keyframe", null, onMutate);
         style._parentRule = kf;
         kf.style = style;

@@ -3653,3 +3653,5 @@
 - 修复 `tab-size` 误将 `sign(2cqw - 10px)` 判定为混合长度单位的问题，并在 `transform` 校验入口拦截 `translate(null/INFINITE)` 非法参数，同时在 `window.js` `translate` 计算路径展开 `em`/`rem` 并按 `% + px` 排序，5 项测试一次全绿。
 ### Phase 906 — `TransitionEvent` 与 `@starting-style` 解析闭环
 - 修复 `TransitionEvent` 缺少 `type` 参数抛 `TypeError`、`propertyName`/`pseudoElement` 强制转字符串、`elapsedTime` 有限浮点数校验及 `Event` 继承原型链，并接入 `@starting-style` 块级规则与空前导符检验，`transitionevent-interface.html` 与 `starting-style-parsing.html` 一次全绿。
+### Phase 907 — `css-animations` 3 项快速回归全绿闭环
+- 复用 Phase 906 的 WebIDL 构造规范补全 `AnimationEvent`，在 `CSSKeyframesRule` 拦截 `-10%`/`120%` 非法关键帧选择器，并在 `window.js` `timeProps` 解析分支联动 `animation-timeline == "auto"` 将 `animation-duration: auto` 计算为 `0s`，三项测试一次全绿。
