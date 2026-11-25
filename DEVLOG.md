@@ -3661,3 +3661,5 @@
 - 区分匹配用选择器 `curSel`（带 `:scope `）与计算权重用选择器 `specSel`（原始 `> .a`），解决 `@scope (#main) { > .a }` 误计为 `(0, 2, 0)` 压过 `div:where(#main) > .a` `(0, 1, 1)` 的问题，`scope-specificity.html` 11/11 全绿。
 ### Phase 910 — CSS Grid `target.style.grid` 引号规范化与 `display: none/contents` `min-auto-size` 修复
 - 修复 `serializeInlineSpecifiedValue` 未对 `grid`/`grid-template`/`grid-template-areas` 调用 `__capsurf_normalizeCssValue` 导致单引号未转双引号的问题，以及 `isFlexOrGridItem` 在 `display: contents` 向上穿透与 `display: none` 祖先检测中的 `parentEl` 引用丢失问题，4 项测试全绿。
+### Phase 911 — `hasFontFamily` 精确匹配、`is_ratio_only` SVG 尺寸与 Grid 显式行列放置
+- 排查发现 `cascade.cp` `hasFontFamily` 使用子串查找导致 `-webkit-monospace` 误命中 `monospace`；`layout.cp` 对仅含 `viewBox` 纵横比的 SVG 在 `measureIntrinsicWidth`/`measureMinContentWidth` 中回退 `4px` 导致 `004` 失败而在 `max-content` 下未取用包含块宽度导致 `003` 失败；`layoutGridContainer` 未推进 `grid_row_start`/`grid_col_start` 导致第二行/第二列偏移为 0。修复后 4 项全绿。

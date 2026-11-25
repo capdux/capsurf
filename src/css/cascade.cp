@@ -2861,20 +2861,12 @@ pub struct ComputedStyle {
     fn hasFontFamily(name: []const u8): bool {
         if (_.font_family_len == 0) return false;
         const ff = _.font_family_buf[0.._.font_family_len];
-        if (std.mem.indexOf(u8, ff, name) != null) return true;
-        let lower_ff_buf: [64]u8 = undefined;
-        const copy_len = @min(ff.len, lower_ff_buf.len);
-        let i: usize = 0;
-        while (i < copy_len) : (i += 1) {
-            lower_ff_buf[i] = std.ascii.toLower(ff[i]);
+        let it = std.mem.splitScalar(u8, ff, ',');
+        while (tok := it.next()) {
+            const trimmed = std.mem.trim(u8, tok, " \t\r\n'\"");
+            if (std.ascii.eqlIgnoreCase(trimmed, name)) return true;
         }
-        let lower_name_buf: [32]u8 = undefined;
-        const name_len = @min(name.len, lower_name_buf.len);
-        let j: usize = 0;
-        while (j < name_len) : (j += 1) {
-            lower_name_buf[j] = std.ascii.toLower(name[j]);
-        }
-        return std.mem.indexOf(u8, lower_ff_buf[0..copy_len], lower_name_buf[0..name_len]) != null;
+        return false;
     }
 
     fn tryClaimSlot(*_, slot: usize, weight: u64): bool {

@@ -4658,3 +4658,5 @@
 - `src/js/shim/window.js`: `@scope` 下隐式前置 `:scope ` 的子代/兄弟选择器在计算特异度时不计 `:scope` 伪类权重，`scope-specificity.html` **PASS** (11/11)，`--smoke` 3/3 **PASS**。
 ### Phase 910 — CSS Grid 4 项快速修复全绿（`grid-important` / `subgrid` / `flow-tolerance` / `min-auto-size`）
 - `src/js/shim/cssom.js`, `src/js/shim/element/element.js`, `src/js/shim/window.js`: 放行 `subgrid repeat(auto-fit)` 校验拒绝、`flow-tolerance` `0->0px`、`target.style.grid` 双引号规范化及 `display: contents`/`none` 祖先下 `min-width/height: auto` 解析，4 项 WPT **4/4 PASS**（`flow-tolerance-valid` `FAIL→PASS`），`--smoke` 3/3 **PASS**。
+### Phase 911 — SVG 纵横比内在尺寸、`-webkit-*` 字体族精确匹配与 Grid 显式行列放置
+- `src/css/cascade.cp`, `src/layout/layout.cp`: `hasFontFamily` 改用逗号分隔精确匹配、修复 `is_ratio_only` SVG `max-content`/内在宽度归零与 `layoutGridContainer` `grid_row_start`/`grid_col_start` 显式行列定位；通过 `cpc fix` + `cpc brief` 4 门禁，4 项 WPT **4/4 PASS**，`--smoke` 3/3 **PASS**。

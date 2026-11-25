@@ -899,6 +899,14 @@ pub struct LayoutTree {
                         raw_is_border_box = false;
                         used_ratio_w = true;
                     }
+                } else if (rep.is_ratio_only && (style.height.is_auto || style.height.is_none)) {
+                    if (style.width.intrinsic == IntrinsicSizeKeyword.MaxContent ||
+                        style.width.intrinsic == IntrinsicSizeKeyword.FitContent ||
+                        style.width.intrinsic == IntrinsicSizeKeyword.Stretch) {
+                        raw_w = avail;
+                        raw_is_border_box = false;
+                        used_ratio_w = true;
+                    }
                 }
             }
             if (!used_ratio_w) {
@@ -937,11 +945,7 @@ pub struct LayoutTree {
         } else if (rep := replaced_opt) {
             if (rep.is_ratio_only) {
                 const avail = parent_w - mh;
-                if (avail > 0.0) {
-                    raw_w = avail;
-                } else {
-                    raw_w = rep.width;
-                }
+                raw_w = if (avail > 0.0) avail else 0.0;
             } else if (rep.is_authored) {
                 raw_w = rep.width;
             } else {
@@ -1946,7 +1950,7 @@ pub struct LayoutTree {
         } else if (st.contain_size || st.contain_inline_size) {
             content_w = 0.0;
         } else if (rep := rep_opt) {
-            content_w = rep.width;
+            content_w = if (rep.is_ratio_only) 0.0 else rep.width;
         } else if (st.display.isFlex() || st.display.isWebkitBox()) {
             const is_row = st.flex_direction.isRow();
             let sum_w: f32 = 0.0;
@@ -2114,7 +2118,7 @@ pub struct LayoutTree {
         } else if (st.contain_size || st.contain_inline_size) {
             content_w = 0.0;
         } else if (rep := rep_opt) {
-            content_w = rep.width;
+            content_w = if (rep.is_ratio_only) 0.0 else rep.width;
         } else if (st.display.isFlex() || st.display.isWebkitBox()) {
             const is_row_nowrap = st.flex_direction.isRow() && st.flex_wrap == FlexWrap.NoWrap;
             let sum_w: f32 = 0.0;
@@ -3938,6 +3942,34 @@ pub struct LayoutTree {
                 } else {
                     const span_raw = if (cstyle.grid_col_span > 0) cstyle.grid_col_span else 1;
                     const span = if (span_raw > cols) cols else span_raw;
+
+                    if (cstyle.grid_row_start > 0) {
+                        const target_row: u32 = @intCast(cstyle.grid_row_start - 1);
+                        while (row_count < target_row) {
+                            const r_idx: usize = @as(usize, row_count);
+                            const r_h = if (r_idx < 16 && row_heights[r_idx] > 0.0) row_heights[r_idx] else cur_row_max_h;
+                            cur_y += r_h + row_gap;
+                            cur_col = 0;
+                            cur_row_max_h = 0.0;
+                            row_count += 1;
+                        }
+                    }
+
+                    if (cstyle.grid_col_start > 0) {
+                        const target_col: u32 = @intCast(cstyle.grid_col_start - 1);
+                        if (target_col < cols) {
+                            if (cur_col > target_col) {
+                                if (@as(usize, row_count) < 16 && cur_row_max_h > row_heights[@as(usize, row_count)]) {
+                                    row_heights[@as(usize, row_count)] = cur_row_max_h;
+                                }
+                                const adv_h = if (@as(usize, row_count) < 16) row_heights[@as(usize, row_count)] else cur_row_max_h;
+                                cur_y += adv_h + row_gap;
+                                cur_row_max_h = 0.0;
+                                row_count += 1;
+                            }
+                            cur_col = target_col;
+                        }
+                    }
 
                     // If item does not fit in current row, advance to next row
                     if (cur_col + span > cols && cur_col > 0) {
