@@ -4069,11 +4069,14 @@ pub struct LayoutTree {
             },
             * => astyle.align_self,
         };
+        const is_self_rtl = (!is_row && astyle.direction == Direction.Rtl);
         const cross_off: f32 = switch (eff_align) {
             .Auto, .FlexStart, .Stretch => if (is_cross_rev) rem_cross else 0.0,
             .FlexEnd => if (is_cross_rev) 0.0 else rem_cross,
             .Start => if (is_cross_rtl) rem_cross else 0.0,
             .End => if (is_cross_rtl) 0.0 else rem_cross,
+            .SelfStart => if (is_self_rtl) rem_cross else 0.0,
+            .SelfEnd => if (is_self_rtl) 0.0 else rem_cross,
             .Center => rem_cross / 2.0,
         };
         const sx = content_x + (if (is_row) main_off else cross_off);

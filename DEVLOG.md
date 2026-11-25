@@ -3633,3 +3633,5 @@
 - 修正 `AlignSelf.parse` 将 `baseline`/`last baseline` 归入 `FlexStart`/`FlexEnd` 导致在 `wrap-reverse` 容器中被镜像翻转的缺陷，改归 `Start`/`End` 后 `align-self-001..008.html` 全部 8 个文件 192 项子测试全绿。
 ### Phase 896 — RTL 弹性盒绝对定位静态位置支持
 - 在 `layoutFlexAbsChild` 与 `justifyMainOffset` 补全 `Direction.Rtl` 对 `flex-start`/`flex-end`/`start`/`end` 的主轴与交叉轴镜像处理，`align-content-001` 与 5 项 RTL 静态位置测试（共 144 项子测试）一次通过。
+### Phase 897 — `self-start`/`self-end` 自身书写方向与 `flex-abspos-staticpos` 全绿收官
+- 区分 `start`/`end`（参考弹性容器 `pstyle.direction`）与 `self-start`/`self-end`（参考子元素 `astyle.direction`），攻克 `flex-abspos-staticpos-align-self-rtl-004.html`，实现全套 23 个 `flex-abspos-staticpos-*` 测试（552 个子断言）100% 通过。

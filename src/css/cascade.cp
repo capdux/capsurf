@@ -775,6 +775,8 @@ pub enum AlignSelf {
     FlexEnd,
     Start,
     End,
+    SelfStart,
+    SelfEnd,
     Center,
 
     static fn parse(raw: []const u8): AlignSelf? {
@@ -783,8 +785,10 @@ pub enum AlignSelf {
         if (std.ascii.eqlIgnoreCase(s, "stretch") || std.ascii.eqlIgnoreCase(s, "normal")) return AlignSelf.Stretch;
         if (std.ascii.eqlIgnoreCase(s, "flex-start")) return AlignSelf.FlexStart;
         if (std.ascii.eqlIgnoreCase(s, "flex-end")) return AlignSelf.FlexEnd;
-        if (std.ascii.eqlIgnoreCase(s, "start") || std.ascii.eqlIgnoreCase(s, "self-start") || std.ascii.eqlIgnoreCase(s, "baseline") || std.ascii.eqlIgnoreCase(s, "first baseline")) return AlignSelf.Start;
-        if (std.ascii.eqlIgnoreCase(s, "end") || std.ascii.eqlIgnoreCase(s, "self-end") || std.ascii.eqlIgnoreCase(s, "last baseline")) return AlignSelf.End;
+        if (std.ascii.eqlIgnoreCase(s, "start") || std.ascii.eqlIgnoreCase(s, "baseline") || std.ascii.eqlIgnoreCase(s, "first baseline")) return AlignSelf.Start;
+        if (std.ascii.eqlIgnoreCase(s, "end") || std.ascii.eqlIgnoreCase(s, "last baseline")) return AlignSelf.End;
+        if (std.ascii.eqlIgnoreCase(s, "self-start")) return AlignSelf.SelfStart;
+        if (std.ascii.eqlIgnoreCase(s, "self-end")) return AlignSelf.SelfEnd;
         if (std.ascii.eqlIgnoreCase(s, "center")) return AlignSelf.Center;
         return null;
     }
