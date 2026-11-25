@@ -47865,7 +47865,7 @@
           computedMap.set("justify-items", resolvedJi);
         }
       }
-      const nonNegLenProps = ["column-width", "column-height", "perspective", "row-gap", "column-gap", "min-width", "max-width", "min-height", "max-height", "flex-basis", "scroll-margin-top", "scroll-margin-right", "scroll-margin-bottom", "scroll-margin-left"];
+      const nonNegLenProps = ["column-width", "column-height", "perspective", "row-gap", "column-gap", "min-width", "max-width", "min-height", "max-height", "flex-basis"];
       for (let i = 0; i < nonNegLenProps.length; i++) {
         const nk = nonNegLenProps[i];
         let nv = (computedMap.get(nk) || "").trim().toLowerCase();

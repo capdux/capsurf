@@ -2442,3 +2442,4 @@
 | Phase 773 | WPT 含 `var()` 简写属性 `pendingVar` 展开与 `!important` 保留 | `src/js/shim/element/element.js`, `test/wpt/wpt-expectations.json` | `variable-reference-shorthands` (16/16 **FAIL→PASS**, `7,213` PASS); `--smoke` 3/3 PASS |
 | Phase 774 | 二八分层 CSS 下沉 Batch 3：`SupportsTree` Kleene 三值原生桥接 | `src/js/dom_binding.cp` | `CSS-supports-CSSStyleDeclaration`, `user-modify-03` **PASS**; `cpc brief` PASS; `--smoke` 3/3 PASS |
 | Phase 775 | WPT `clamp(none, ...)` 整数求值与 `monospace` `ch` 度量对齐 | `src/layout/layout.cp`, `src/js/shim/cssom.js`, `src/js/shim/window.js` | `clamp-integer-computed` (6/6 **PASS**), `bidi-line-break-001` **PASS**; `--smoke` 3/3 PASS |
+| Phase 776 | WPT `/css/css-scroll-snap/parsing/` 负值 `scroll-margin` 计算（25/25 PASS） | `src/js/shim/window.js` | `scroll-margin-computed` **PASS** (**`/css/css-scroll-snap/parsing/` 25/25 100% PASS**); `--smoke` 3/3 PASS |

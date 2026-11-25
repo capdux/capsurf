@@ -4226,3 +4226,6 @@
   - `src/js/shim/cssom.js`: `z-index` `calc`/`clamp` 校验允许 `none` 边界关键字。
   - `src/js/shim/window.js`: `z-index` 计算值求值支持 `clamp(none, v, max)` / `clamp(min, v, none)`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 776**:
+  - `src/js/shim/window.js`: 从 `nonNegLenProps` 移除 `scroll-margin-{top,right,bottom,left}`，修复负值 `scroll-margin` 计算值夹紧。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

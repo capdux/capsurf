@@ -3390,3 +3390,5 @@
 - 在 `dom_binding.cp` 基于 `cap:css` `SupportsTree`/`SupportsKind` 实现 Kleene 三值逻辑原生求值并暴露 `__capsurf_eval_supports`；验证对比表明高频细粒度 `CSS.supports` 保持 JS 零跨界求值更优（`CSS-supports-CSSStyleDeclaration.html` 568ms PASS），`--smoke` 3/3 PASS。
 ### Phase 775 — `clamp(none, ...)` 整数求值与等宽 `ch` 度量对齐
 - 补全 `z-index` 中 `clamp(none, ...)` 单侧无穷边界校验与求值（`clamp-integer-computed.html` 6/6 全绿），并在 `layout.cp` 对 `monospace` 字体 `ch` 宽度按 `0.60 * font_px` 解析（`bidi-line-break-001.html` 保持 **PASS**）。
+### Phase 776 — `/css/css-scroll-snap/parsing/` 全目录 25/25 (100% PASS) 达成
+- 从 `window.js` `nonNegLenProps` 移除物理 `scroll-margin-{top,right,bottom,left}` 的误夹紧，使负值 `calc(10px - 0.5em)` 正确计算为 `-10px`，`/css/css-scroll-snap/parsing/` 25/25 全绿。
