@@ -4281,3 +4281,7 @@
 - **Phase 789**:
   - `src/js/shim/element/element.js`: 新增 `Element.prototype.part`（`DOMTokenList` 属性同步、`[PutForwards=value]`、`enumerable: true` 与原型 `TypeError` 校验）。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 790**:
+  - `src/js/shim/cssom.js`: `isValidColor` 支持 `color-mix()` 与相对颜色 `from`；修复 `background-image` 多层 `image()` 校验，并在 `shape-outside`/`list-style-image`、`cross-fade` `calc()` 百分比与 `image(rgb(...))` 序列化中补全支持。
+  - `src/js/shim/window.js`: `applyUsedValuesToComputedMap` 新增 `cross-fade()` 百分比夹紧（含 `calc`/`sign`）、`currentcolor` 与 `color-mix(in srgb, ...)` 计算求值。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

@@ -10106,6 +10106,96 @@ function installWindow(global) {
           return (im && im[1]) ? ("image(" + normCol(im[1].trim()) + ")") : layer;
         }
         if (/^(?:-webkit-)?image-set\(/i.test(layer)) return normalizeImageSetComputed(layer);
+        if (/^cross-fade\(/i.test(layer)) {
+          const cfm = /^cross-fade\(\s*(.*)\s*\)$/i.exec(layer);
+          if (cfm) {
+            const evalCfPct = (pt) => {
+              const s = String(pt || "").trim();
+              if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)%$/.test(s)) {
+                const n = Math.min(100, Math.max(0, parseFloat(s.slice(0, -1))));
+                return Number(n.toFixed(6)) + "%";
+              }
+              if (/^(?:calc|min|max|clamp)\(/i.test(s)) {
+                const pre = s.replace(/\bsign\(([^()]+)\)/gi, (m, inn) => {
+                  const sv = evalCssLengthExpr(inn, 0, fontSize);
+                  return sv !== null ? String(Math.sign(sv)) : m;
+                });
+                const v = evalCssLengthExpr(pre.replace(/%/g, "px"), 0, fontSize);
+                if (v !== null && isFinite(v)) {
+                  const n = Math.min(100, Math.max(0, v));
+                  return Number(n.toFixed(6)) + "%";
+                }
+              }
+              return s;
+            };
+            const cfArgs = [];
+            let cc = "", cd = 0, cq = "";
+            for (let ci = 0; ci < cfm[1].length; ci++) {
+              const ch = cfm[1][ci];
+              if (cq) { cc += ch; if (ch === cq && cfm[1][ci - 1] !== "\\") cq = ""; continue; }
+              if (ch === "\"" || ch === "'") { cq = ch; cc += ch; continue; }
+              if (ch === "(") cd++; else if (ch === ")" && cd > 0) cd--;
+              if (cd === 0 && ch === ",") { cfArgs.push(cc.trim()); cc = ""; }
+              else cc += ch;
+            }
+            if (cc.trim()) cfArgs.push(cc.trim());
+            const outCf = cfArgs.map((item) => {
+              const toks = [];
+              let tc = "", td = 0, tq = "";
+              for (let ti = 0; ti < item.length; ti++) {
+                const ch = item[ti];
+                if (tq) { tc += ch; if (ch === tq && item[ti - 1] !== "\\") tq = ""; continue; }
+                if (ch === "\"" || ch === "'") { tq = ch; tc += ch; continue; }
+                if (ch === "(") td++; else if (ch === ")" && td > 0) td--;
+                if (td === 0 && /\s/.test(ch)) { if (tc) { toks.push(tc); tc = ""; } }
+                else tc += ch;
+              }
+              if (tc) toks.push(tc);
+              let imgTok = "", pctTok = "";
+              if (toks.length === 1) {
+                imgTok = toks[0];
+              } else if (toks.length >= 2) {
+                const isPctTok = (t) => /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)%$/.test(t) || (/^(?:calc|min|max|clamp)\(/i.test(t) && t.includes("%"));
+                if (isPctTok(toks[0])) { pctTok = evalCfPct(toks[0]); imgTok = toks.slice(1).join(" "); }
+                else if (isPctTok(toks[toks.length - 1])) { pctTok = evalCfPct(toks[toks.length - 1]); imgTok = toks.slice(0, -1).join(" "); }
+                else imgTok = item;
+              }
+              if (imgTok && !/^(?:url|image|image-set|-webkit-image-set|cross-fade|(?:repeating-)?(?:linear|radial|conic)-gradient)\(/i.test(imgTok)) {
+                let colVal = imgTok.replace(/\bcurrentcolor\b/gi, elColor);
+                const cmm = /^color-mix\(\s*in\s+srgb\s*,\s*(.*)\)$/i.exec(colVal);
+                if (cmm) {
+                  const cmParts = [];
+                  let cmc = "", cmd = 0;
+                  for (let k = 0; k < cmm[1].length; k++) {
+                    const ch = cmm[1][k];
+                    if (ch === "(") cmd++; else if (ch === ")" && cmd > 0) cmd--;
+                    if (cmd === 0 && ch === ",") { cmParts.push(cmc.trim()); cmc = ""; }
+                    else cmc += ch;
+                  }
+                  if (cmc.trim()) cmParts.push(cmc.trim());
+                  const parseRgb01 = (s) => {
+                    const nc = normCol(s.trim());
+                    const rm = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([0-9.]+))?\s*\)$/i.exec(nc);
+                    return rm ? [Number(rm[1]) / 255, Number(rm[2]) / 255, Number(rm[3]) / 255, rm[4] !== undefined ? Number(rm[4]) : 1] : null;
+                  };
+                  const a = cmParts.length === 2 ? parseRgb01(cmParts[0]) : null;
+                  const b = cmParts.length === 2 ? parseRgb01(cmParts[1]) : null;
+                  if (a && b) {
+                    const r = Number(((a[0] + b[0]) * 0.5).toFixed(6));
+                    const g = Number(((a[1] + b[1]) * 0.5).toFixed(6));
+                    const bl = Number(((a[2] + b[2]) * 0.5).toFixed(6));
+                    colVal = "color(srgb " + r + " " + g + " " + bl + ")";
+                  }
+                } else {
+                  colVal = normCol(colVal);
+                }
+                imgTok = colVal;
+              }
+              return pctTok ? (imgTok + " " + pctTok) : imgTok;
+            });
+            return "cross-fade(" + outCf.join(", ") + ")";
+          }
+        }
         if (/^(?:repeating-)?(?:linear|radial|conic)-gradient\(/i.test(layer)) return evalGradientComputed(layer);
         if (/^url\(\s*(['"]?)(.*?)\1\s*\)$/i.test(layer)) {
           const um = /^url\(\s*(['"]?)(.*?)\1\s*\)$/i.exec(layer);

@@ -166,11 +166,15 @@
     if (v === "currentcolor" || v === "transparent") return true;
     if (/^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(v)) return true;
     if (v.startsWith("#")) return false;
-    const fnMatch = /^(rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color|light-dark)\((.*)\)$/i.exec(v);
+    const fnMatch = /^(rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color|color-mix|light-dark)\((.*)\)$/i.exec(v);
     if (fnMatch) {
       const fn = fnMatch[1];
       const inner = fnMatch[2].trim();
       if (!inner) return false;
+      if (fn === "color-mix") {
+        const parts = splitTopLevelComma(inner);
+        return parts.length === 3 && /^in\s+/i.test(parts[0].trim());
+      }
       if (fn === "light-dark") {
         const parts = splitTopLevelComma(inner);
         return parts.length === 2 && isValidColor(parts[0]) && isValidColor(parts[1]);
@@ -205,7 +209,11 @@
         slashParts.push(sc.trim());
         if (slashParts.length > 2) return false;
         const mainToks = splitCssTokens(slashParts[0]);
-        if (mainToks.length !== 3) return false;
+        if (mainToks[0] === "from") {
+          if (mainToks.length < 5 || !isValidColor(mainToks[1])) return false;
+        } else if (mainToks.length !== 3) {
+          return false;
+        }
         if (slashParts.length === 2) {
           const aToks = splitCssTokens(slashParts[1]);
           if (aToks.length !== 1) return false;
@@ -246,7 +254,11 @@
         slashParts.push(cur.trim());
         if (slashParts.length > 2) return false;
         const mainToks = splitCssTokens(slashParts[0]);
-        if (mainToks.length !== 3) return false;
+        if (mainToks[0] === "from") {
+          if (mainToks.length < 5 || !isValidColor(mainToks[1])) return false;
+        } else if (mainToks.length !== 3) {
+          return false;
+        }
         const isVal = (s, allowPct, allowAng) => {
           if (s === "none") return true;
           if (/^(?:calc|min|max|clamp)\(/i.test(s)) return true;
@@ -1303,7 +1315,7 @@
       if (vLower === "none") return true;
       const toks = splitCssTokens(trimmed);
       if (toks.length === 0 || toks.length > 2) return false;
-      if (prop === "shape-outside" && toks.length === 1 && /^(?:linear-gradient|radial-gradient|conic-gradient|repeating-linear-gradient|repeating-radial-gradient|repeating-conic-gradient|image-set|-webkit-image-set|cross-fade)\(/i.test(toks[0])) return true;
+      if (prop === "shape-outside" && toks.length === 1 && /^(?:linear-gradient|radial-gradient|conic-gradient|repeating-linear-gradient|repeating-radial-gradient|repeating-conic-gradient|image|image-set|-webkit-image-set|cross-fade)\(/i.test(toks[0])) return true;
       const GBOX = prop === "clip-path"
         ? new Set(["content-box", "padding-box", "border-box", "margin-box", "fill-box", "stroke-box", "view-box"])
         : new Set(["content-box", "padding-box", "border-box", "margin-box"]);
@@ -3034,7 +3046,7 @@
       const toks = splitCssTokens(trimmed);
       if (toks.length !== 1) return false;
       const t = toks[0], tl = t.toLowerCase();
-      return tl === "none" || /^(?:url|linear-gradient|radial-gradient|conic-gradient|repeating-linear-gradient|repeating-radial-gradient|image-set)\(/i.test(tl);
+      return tl === "none" || /^(?:url|linear-gradient|radial-gradient|conic-gradient|repeating-linear-gradient|repeating-radial-gradient|image|image-set)\(/i.test(tl);
     }
     if (prop === "list-style") {
       const toks = splitCssTokens(trimmed);
@@ -3421,10 +3433,12 @@
             } else {
               const p0 = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))%$/.exec(ct[0]);
               const p1 = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))%$/.exec(ct[1]);
-              if (p0) { pctTok = parseFloat(p0[1]); imgTok = ct[1]; }
-              else if (p1) { pctTok = parseFloat(p1[1]); imgTok = ct[0]; }
+              const isMathPct = (t) => /^(?:calc|min|max|clamp)\(/i.test(t) && t.includes("%");
+              if (p0) { pctTok = parseFloat(p0[1]); imgTok = ct[1]; if (!(pctTok >= 0 && pctTok <= 100)) return false; }
+              else if (p1) { pctTok = parseFloat(p1[1]); imgTok = ct[0]; if (!(pctTok >= 0 && pctTok <= 100)) return false; }
+              else if (isMathPct(ct[0])) { imgTok = ct[1]; }
+              else if (isMathPct(ct[1])) { imgTok = ct[0]; }
               else return false;
-              if (!(pctTok >= 0 && pctTok <= 100)) return false;
             }
             if (!(/^(?:url|image|image-set|-webkit-image-set|cross-fade|(?:repeating-)?(?:linear|radial|conic)-gradient)\(/i.test(imgTok) || isValidColor(imgTok))) return false;
           }
@@ -3438,13 +3452,14 @@
           if (!isValidCssValue("background-image", ldArgs[0].trim()) || !isValidCssValue("background-image", ldArgs[1].trim())) return false;
           continue;
         }
-        if (/^(?:url|image|image-set|-webkit-image-set|(?:repeating-)?(?:linear|radial|conic)-gradient|-webkit-(?:linear|radial)-gradient)\(/i.test(bl)) continue;
+        if (/^image\(/i.test(bl)) {
+          const im = /^image\(\s*(.*)\s*\)$/i.exec(bl);
+          if (!im || !im[1] || !isValidColor(im[1])) return false;
+          continue;
+        }
+        if (/^(?:url|image-set|-webkit-image-set|(?:repeating-)?(?:linear|radial|conic)-gradient|-webkit-(?:linear|radial)-gradient)\(/i.test(bl)) continue;
         return false;
       }
-    }
-    if (prop === "background-image" && /^image\(/i.test(trimmed)) {
-      const im = /^image\(\s*(.*)\s*\)$/i.exec(trimmed);
-      return !!(im && im[1] && isValidColor(im[1]));
     }
     if ((prop === "background-image" || prop === "list-style-image") && /(?:linear|radial|conic)-gradient\(/i.test(trimmed)) {
       const gm = /^(?:repeating-)?(linear|radial|conic)-gradient\(\s*(.*)\s*\)$/i.exec(trimmed);
@@ -5446,12 +5461,24 @@
             const um = /^url\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*?))\s*\)$/i.exec(lt);
             if (um) return 'url("' + (um[1] ?? um[2] ?? um[3] ?? "").trim() + '")';
           }
+          if (/^image\(/i.test(lt)) {
+            const im = /^image\(\s*(.*)\s*\)$/i.exec(lt);
+            if (im && im[1]) {
+              const arg = im[1].trim();
+              const spRgb = /^rgba?\(\s*(\d+(?:\.\d+)?%?)\s+(\d+(?:\.\d+)?%?)\s+(\d+(?:\.\d+)?%?)(?:\s*\/\s*([^)]+))?\s*\)$/i.exec(arg);
+              if (spRgb) {
+                const aPart = spRgb[4] ? (", " + spRgb[4].trim()) : "";
+                return "image(" + (spRgb[4] ? "rgba(" : "rgb(") + spRgb[1] + ", " + spRgb[2] + ", " + spRgb[3] + aPart + "))";
+              }
+              return "image(" + arg.replace(/,\s*/g, ", ") + ")";
+            }
+          }
           if (/^cross-fade\(/i.test(lt)) {
             const cfm = /^cross-fade\(\s*(.*)\s*\)$/i.exec(lt);
             if (cfm) {
               const items = splitTopLevelComma(cfm[1]).map((it) => {
                 const ct = splitCssTokens(it.trim());
-                if (ct.length === 2 && /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)%$/.test(ct[0])) {
+                if (ct.length === 2 && (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)%$/.test(ct[0]) || (/^(?:calc|min|max|clamp)\(/i.test(ct[0]) && ct[0].includes("%")))) {
                   return ct[1] + " " + ct[0];
                 }
                 return ct.join(" ");

@@ -3418,3 +3418,5 @@
 - 在 `cssom.js` 补全 `CSS.elementSources` 命名空间属性与 `object-view-box`（接受 `none | inset() | xywh() | rect()`，拒绝 `circle()`/`ellipse()`/`polygon()`/`path()` 等非法形状），并在 `window.js` 补全初始值注册，`css-images/idlharness.html`、`object-view-box-parsing.html`、`object-view-box-transition-mutation.html` 3/3 **PASS**。
 ### Phase 789 — `Element.prototype.part` IDL 与 `DOMTokenList` 同步实现
 - 在 `element.js` 为 `Element.prototype` 补全 `part`（`[SameObject, PutForwards=value]` 反射 `"part"` 属性的 `DOMTokenList`，含原型访问 `TypeError` 校验），`css-shadow/idlharness.html` 与 `part/part-name-idl.html` 均 **PASS**。
+### Phase 790 — `cross-fade()` 计算求值与 `image()` / `color-mix()` 校验序列化打通
+- 在 `cssom.js` 中补全 `color-mix()` 与相对颜色 `from` 校验、修复 `background-image` 多层 `image()` 正则贪婪匹配，并在 `window.js` 实现 `cross-fade()` 计算值规范化（含 `calc`/`sign` 百分比 `[0%,100%]` 夹紧、`currentcolor` 与 `color-mix(in srgb, ...)`），`cross-fade-computed-value.html` (7/7) 与 `image-function-valid.html` (13/13) 均 **PASS**。
