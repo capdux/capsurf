@@ -3665,3 +3665,5 @@
 - 排查发现 `cascade.cp` `hasFontFamily` 使用子串查找导致 `-webkit-monospace` 误命中 `monospace`；`layout.cp` 对仅含 `viewBox` 纵横比的 SVG 在 `measureIntrinsicWidth`/`measureMinContentWidth` 中回退 `4px` 导致 `004` 失败而在 `max-content` 下未取用包含块宽度导致 `003` 失败；`layoutGridContainer` 未推进 `grid_row_start`/`grid_col_start` 导致第二行/第二列偏移为 0。修复后 4 项全绿。
 ### Phase 912 — `grid` 简写行内展开与 `cssText` 折叠序列化
 - 补齐 `element.js` `setEntryInStyleMap`/`removeKeyFromStyleMap` 对 `grid` 与 `grid-template` 简写的 longhand 展开与清理，并在 `formatStyleMap` 中按 `grid` -> `grid-template` 优先顺序折叠回 `cssText`，`grid-shorthand-serialization.html` 141/141 全绿；同步在 `cssom.js` 按 CSS Grid 3 放行 `repeat(auto-fill/auto-fit)` 内的 `<intrinsic-size>`，2 项 tentative 测试全部 `FAIL→PASS`。
+### Phase 913 — `scrollWidth`/`scrollHeight` padding-box 原点修正
+- `element.js` 的 `scrollWidth`/`scrollHeight` 原直接用 `cr.x - parentR.x`（border-box 原点）计算子元素偏移，未减去 `this.clientLeft`/`this.clientTop`，导致 `border: solid thick` 容器多计 5px。扣除 `clientLeft`/`clientTop` 后，`multicol-overflow-transform-001` 与 `multicol-overflow-positioned-transform-001` 一次通过。

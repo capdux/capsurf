@@ -22613,7 +22613,7 @@
           if (!childH && child.style && child.style.height) {
             childH = parseFloat(child.style.height) || 0;
           }
-          let relY = (parentR && cr && cr.height > 0) ? (cr.y - parentR.y + (this._scrollTop || 0)) : accumY;
+          let relY = (parentR && cr && cr.height > 0) ? (cr.y - parentR.y - (this.clientTop || 0) + (this._scrollTop || 0)) : accumY;
           accumY += childH;
           const b = relY + childH;
           if (b > maxBottom) maxBottom = b;
@@ -22644,7 +22644,7 @@
           if (!childW && child.style && child.style.width) {
             childW = parseFloat(child.style.width) || 0;
           }
-          let relX = (parentR && cr && cr.width > 0) ? (cr.x - parentR.x + (this._scrollLeft || 0)) : accumX;
+          let relX = (parentR && cr && cr.width > 0) ? (cr.x - parentR.x - (this.clientLeft || 0) + (this._scrollLeft || 0)) : accumX;
           accumX += childW;
           const r = relX + childW;
           if (r > maxRight) maxRight = r;
