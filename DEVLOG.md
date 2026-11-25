@@ -3649,3 +3649,5 @@
 - 解决 `hwb(120 30% 50%)` 因底层 `toFixed` 舍入误差输出 `127` 而非 `128` 的问题，并通过 `normalizePropColors` 区分 `hwb(... none)` 指定值与计算值 `%` 序列化；将 `color(srgb ...)` 通道精度提升至 8 位小数，一次性通过 `color-valid-hwb`、`color-computed-hwb`、`color-computed-rgb` 三套测试。
 ### Phase 904 — `hairline`、`border-shape` 与 `css-color` 非法语法校验闭环
 - 在 `cssom.js`、`window.js` 与 `element.js` 打通 `border`/`border-width` `hairline` 校验、展开与计算样式解析，规范化 `border-shape` `at center` 序列化，并在 `isValidColor`/`isValidCalcSyntax` 拦截 `hsl()` 无 `%` S/L 通道及带单位乘法 `calc(0.56turn * -0.43turn)`，4 项目标 WPT 全部一次通过。
+### Phase 905 — `tab-size-computed` 与 `css-transforms` `translate` 5 项全绿
+- 修复 `tab-size` 误将 `sign(2cqw - 10px)` 判定为混合长度单位的问题，并在 `transform` 校验入口拦截 `translate(null/INFINITE)` 非法参数，同时在 `window.js` `translate` 计算路径展开 `em`/`rem` 并按 `% + px` 排序，5 项测试一次全绿。

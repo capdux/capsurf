@@ -1686,8 +1686,9 @@
       if (/^(?:var|env)\(/i.test(t)) return true;
       if (/^(?:calc|min|max|clamp)\(/i.test(t)) {
         if (t.includes("%")) return false;
-        if (/(?:^|[^a-z])(?:\d+\.?\d*|\.\d+)(?:px|em|rem|ex|ch|vw|vh|vmin|vmax|cm|mm|q|in|pt|pc|cap|ic|lh|rlh|vi|vb|svw|svh|lvw|lvh|dvw|dvh)\b/i.test(t)) {
-          if (/(?:^|[(+\-,\s])(?:\d+\.?\d*|\.\d+)\s*[+\-]|[+\-]\s*(?:\d+\.?\d*|\.\d+)(?=$|[\s),+\-])/.test(t)) return false;
+        const tNoUnitless = t.replace(/\b(?:sign|abs)\([^()]*\)/gi, "0");
+        if (/(?:^|[^a-z])(?:\d+\.?\d*|\.\d+)(?:px|em|rem|ex|ch|vw|vh|vmin|vmax|cm|mm|q|in|pt|pc|cap|ic|lh|rlh|vi|vb|svw|svh|lvw|lvh|dvw|dvh)\b/i.test(tNoUnitless)) {
+          if (/(?:^|[(+\-,\s])(?:\d+\.?\d*|\.\d+)\s*[+\-]|[+\-]\s*(?:\d+\.?\d*|\.\d+)(?=$|[\s),+\-])/.test(tNoUnitless)) return false;
           return isValidLenPct(t, false);
         }
         return isValidCalcSyntax(t);
@@ -2332,6 +2333,30 @@
         else if (balT[_k] === ")") _td = Math.max(0, _td - 1);
       }
       if (_td > 0) balT += ")".repeat(_td);
+      if (/\btranslate(?:x|y|z|3d)?\(/i.test(balT)) {
+        const tToks = splitCssTokens(balT);
+        for (let ti = 0; ti < tToks.length; ti++) {
+          const tm = /^(translate(?:x|y|z|3d)?)\((.*)\)$/i.exec(tToks[ti]);
+          if (!tm) continue;
+          const tfn = tm[1].toLowerCase(), tInner = tm[2].trim();
+          if (!tInner) return false;
+          const tArgs = [];
+          let tCur = "", td = 0;
+          for (let k = 0; k < tInner.length; k++) {
+            const c = tInner[k];
+            if (c === "(") td++;
+            else if (c === ")") { if (td === 0) return false; td--; }
+            if (td === 0 && c === ",") { tArgs.push(tCur.trim()); tCur = ""; }
+            else tCur += c;
+          }
+          if (td !== 0) return false;
+          tArgs.push(tCur.trim());
+          for (let ai = 0; ai < tArgs.length; ai++) {
+            if (!tArgs[ai] || !isValidLenPct(tArgs[ai], true)) return false;
+            if ((tfn === "translatez" || (tfn === "translate3d" && ai === 2)) && tArgs[ai].includes("%") && !/\b(?:var|env)\(/i.test(tArgs[ai])) return false;
+          }
+        }
+      }
       if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_transform === "function") {
         return globalThis.__capsurf_is_valid_css_transform(balT);
       }
@@ -9101,6 +9126,30 @@
             return target.getPropertyValue ? target.getPropertyValue("-webkit-transform") : (target.transform || "");
           }
           if (prop === "transform") {
+      if (/\btranslate(?:x|y|z|3d)?\(/i.test(balT)) {
+        const tToks = splitCssTokens(balT);
+        for (let ti = 0; ti < tToks.length; ti++) {
+          const tm = /^(translate(?:x|y|z|3d)?)\((.*)\)$/i.exec(tToks[ti]);
+          if (!tm) continue;
+          const tfn = tm[1].toLowerCase(), tInner = tm[2].trim();
+          if (!tInner) return false;
+          const tArgs = [];
+          let tCur = "", td = 0;
+          for (let k = 0; k < tInner.length; k++) {
+            const c = tInner[k];
+            if (c === "(") td++;
+            else if (c === ")") { if (td === 0) return false; td--; }
+            if (td === 0 && c === ",") { tArgs.push(tCur.trim()); tCur = ""; }
+            else tCur += c;
+          }
+          if (td !== 0) return false;
+          tArgs.push(tCur.trim());
+          for (let ai = 0; ai < tArgs.length; ai++) {
+            if (!tArgs[ai] || !isValidLenPct(tArgs[ai], true)) return false;
+            if ((tfn === "translatez" || (tfn === "translate3d" && ai === 2)) && tArgs[ai].includes("%") && !/\b(?:var|env)\(/i.test(tArgs[ai])) return false;
+          }
+        }
+      }
       if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_transform === "function") {
         return globalThis.__capsurf_is_valid_css_transform(vLower);
       }

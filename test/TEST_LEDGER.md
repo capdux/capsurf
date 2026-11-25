@@ -2572,3 +2572,4 @@
 | Phase 902 | `contain: size / inline-size` 内在尺寸归零 | `src/layout/layout.cp` | `contain-size-dynamic-001` **PASS** (4/4); `contain-inline-size-replaced` 24/30 PASS; `--smoke` 3/3 PASS |
 | Phase 903 | `hwb` 精度/序列化、`rgb(... none)` 8 位精度、`r\gb` 转义 & 148 命名颜色 | `src/js/shim/cssom.js` | `color-valid-hwb`, `color-computed-hwb`, `color-computed-rgb` **3/3 PASS**; `--smoke` 3/3 PASS |
 | Phase 904 | `hairline` 边框、`border-shape` `at center` & `hsl()`/`calc()` 非法校验 | `cssom.js`, `window.js`, `element.js` | `border-shape-valid`, `border-width-hairline`, `color-invalid-hsl`, `color-invalid` **4/4 PASS**; `--smoke` 3/3 PASS |
+| Phase 905 | `tab-size` `sign(cqw)`、`translate()` 参数校验 & `translate` `em`/`%` 排序 | `cssom.js`, `window.js` | `tab-size-computed`, `translate-getComputedStyle`, `transform_translate_{invalid,max,min}` **5/5 PASS**; `--smoke` 3/3 PASS |

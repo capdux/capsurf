@@ -9682,6 +9682,16 @@ function installWindow(global) {
         if (trToks[i].indexOf("%") === -1) {
           const px = evalCssLengthExpr(trToks[i], 0, fontSize);
           if (px !== null) trToks[i] = formatCssPx(px);
+        } else if (/^calc\(/i.test(trToks[i])) {
+          let s = trToks[i]
+            .replace(/([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)em\b/gi, (_, n) => String(Number((Number(n) * fontSize).toFixed(6))) + "px")
+            .replace(/([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)rem\b/gi, (_, n) => String(Number((Number(n) * 16).toFixed(6))) + "px");
+          const cm = /^calc\(\s*([^+()]+)\s*\+\s*([^+()]+)\s*\)$/i.exec(s);
+          if (cm) {
+            const a = cm[1].trim(), b = cm[2].trim();
+            if (a.endsWith("px") && b.endsWith("%")) s = "calc(" + b + " + " + a + ")";
+          }
+          trToks[i] = s;
         }
       }
       if (trToks.length === 3 && trToks[2] === "0px") trToks.pop();
