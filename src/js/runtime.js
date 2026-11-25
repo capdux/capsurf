@@ -21716,6 +21716,24 @@
     function isFocusableElement(el) {
       if (!el || el.nodeType !== 1) return false;
       if (el.disabled) return false;
+      let cur = el;
+      while (cur && cur.nodeType === 1) {
+        let disp = "";
+        let cv = "";
+        try {
+          const csFn = typeof global !== "undefined" && global.getComputedStyle ? global.getComputedStyle : (typeof getComputedStyle === "function" ? getComputedStyle : null);
+          if (csFn) {
+            const cs = csFn(cur);
+            disp = String(cs.display || "").trim().toLowerCase();
+            cv = String(cs.contentVisibility || cs["content-visibility"] || "").trim().toLowerCase();
+          }
+        } catch (e) {}
+        if (!disp && cur.style && cur.style.display) disp = String(cur.style.display).trim().toLowerCase();
+        if (!cv && cur.style && cur.style.contentVisibility) cv = String(cur.style.contentVisibility).trim().toLowerCase();
+        if (disp === "none") return false;
+        if (cur !== el && cv === "hidden") return false;
+        cur = cur.assignedSlot || cur.parentElement || (cur.parentNode && cur.parentNode.nodeType === 11 ? cur.parentNode.host : null);
+      }
       const tag = String(el.tagName || el.localName || "").toLowerCase();
       if (tag === "button" || tag === "input" || tag === "select" || tag === "textarea" || tag === "summary" || tag === "iframe" || tag === "body") {
         return true;
@@ -22117,6 +22135,9 @@
           items.push({ type: "rb", count: isP ? 2 : 1 });
         }
 
+        const ownCv = (cs && (cs.contentVisibility || cs["content-visibility"]) ? String(cs.contentVisibility || cs["content-visibility"]).trim().toLowerCase() : "") || (node.style && node.style.contentVisibility ? String(node.style.contentVisibility).trim().toLowerCase() : "");
+        if (ownCv === "hidden") return;
+
         const kids = node.childNodes || node._children || [];
         if (kids && kids.length > 0) {
           for (let ki = 0; ki < kids.length; ki++) {
@@ -22229,6 +22250,13 @@
 
     Object.defineProperty(HTMLElementProto, "innerText", {
       get: function () {
+        let anc = this.parentElement || this.parentNode;
+        while (anc && anc.nodeType === 1) {
+          const acs = getElComputedStyleSafe(anc);
+          const acv = (acs && (acs.contentVisibility || acs["content-visibility"]) ? String(acs.contentVisibility || acs["content-visibility"]).trim().toLowerCase() : "") || (anc.style && anc.style.contentVisibility ? String(anc.style.contentVisibility).trim().toLowerCase() : "");
+          if (acv === "hidden") return "";
+          anc = anc.parentElement || anc.parentNode;
+        }
         if (!isElementBeingRendered(this)) {
           return this.textContent || "";
         }
@@ -25851,6 +25879,19 @@
     function SVGElement() {}
     SVGElement.prototype = Object.create(ElementProto);
     SVGElement.prototype.constructor = SVGElement;
+    SVGElement.prototype.getComputedTextLength = function () {
+      const txt = String(this.textContent || "");
+      if (!txt) return 0;
+      let fs = 16;
+      try {
+        const cs = getElComputedStyleSafe(this);
+        if (cs && cs.fontSize) {
+          const parsed = parseFloat(cs.fontSize);
+          if (parsed > 0) fs = parsed;
+        }
+      } catch (e) {}
+      return txt.length * fs * 0.6;
+    };
     Object.defineProperty(SVGElement.prototype, "className", {
       get: function () {
         if (!this._svgClassName) {
@@ -60919,11 +60960,24 @@
             return out;
           }, "elementsFromPoint");
         }
+        if (!docProto.caretRangeFromPoint) {
+          docProto.caretRangeFromPoint = markNative(function (x, y) {
+            const hit = (typeof this.elementFromPoint === "function" ? this.elementFromPoint(Number(x) || 0, Number(y) || 0) : null) || this.documentElement || this.body;
+            if (!hit) return null;
+            const r = typeof this.createRange === "function" ? this.createRange() : new Range();
+            r.setStart(hit, 0);
+            r.setEnd(hit, 0);
+            return r;
+          }, "caretRangeFromPoint");
+        }
         if (!global.document.elementFromPoint && docProto.elementFromPoint) {
           global.document.elementFromPoint = docProto.elementFromPoint.bind(global.document);
         }
         if (!global.document.elementsFromPoint && docProto.elementsFromPoint) {
           global.document.elementsFromPoint = docProto.elementsFromPoint.bind(global.document);
+        }
+        if (!global.document.caretRangeFromPoint && docProto.caretRangeFromPoint) {
+          global.document.caretRangeFromPoint = docProto.caretRangeFromPoint.bind(global.document);
         }
         if (typeof evaluateXPath !== "undefined") {
           if (!global.document.evaluate && docProto.evaluate) global.document.evaluate = docProto.evaluate.bind(global.document);

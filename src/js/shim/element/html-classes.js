@@ -343,6 +343,9 @@ function installHtmlClasses(global) {
         items.push({ type: "rb", count: isP ? 2 : 1 });
       }
 
+      const ownCv = (cs && (cs.contentVisibility || cs["content-visibility"]) ? String(cs.contentVisibility || cs["content-visibility"]).trim().toLowerCase() : "") || (node.style && node.style.contentVisibility ? String(node.style.contentVisibility).trim().toLowerCase() : "");
+      if (ownCv === "hidden") return;
+
       const kids = node.childNodes || node._children || [];
       if (kids && kids.length > 0) {
         for (let ki = 0; ki < kids.length; ki++) {
@@ -455,6 +458,13 @@ function installHtmlClasses(global) {
 
   Object.defineProperty(HTMLElementProto, "innerText", {
     get: function () {
+      let anc = this.parentElement || this.parentNode;
+      while (anc && anc.nodeType === 1) {
+        const acs = getElComputedStyleSafe(anc);
+        const acv = (acs && (acs.contentVisibility || acs["content-visibility"]) ? String(acs.contentVisibility || acs["content-visibility"]).trim().toLowerCase() : "") || (anc.style && anc.style.contentVisibility ? String(anc.style.contentVisibility).trim().toLowerCase() : "");
+        if (acv === "hidden") return "";
+        anc = anc.parentElement || anc.parentNode;
+      }
       if (!isElementBeingRendered(this)) {
         return this.textContent || "";
       }
@@ -4077,6 +4087,19 @@ function installHtmlClasses(global) {
   function SVGElement() {}
   SVGElement.prototype = Object.create(ElementProto);
   SVGElement.prototype.constructor = SVGElement;
+  SVGElement.prototype.getComputedTextLength = function () {
+    const txt = String(this.textContent || "");
+    if (!txt) return 0;
+    let fs = 16;
+    try {
+      const cs = getElComputedStyleSafe(this);
+      if (cs && cs.fontSize) {
+        const parsed = parseFloat(cs.fontSize);
+        if (parsed > 0) fs = parsed;
+      }
+    } catch (e) {}
+    return txt.length * fs * 0.6;
+  };
   Object.defineProperty(SVGElement.prototype, "className", {
     get: function () {
       if (!this._svgClassName) {

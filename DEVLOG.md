@@ -3440,3 +3440,5 @@
 - 在 `window.js` `collectElementOwnDeclarations` 中实现沿 `ShadowRoot.host` 向上穿透的 `::part(...)` 与 `exportparts` 映射级联匹配，并补充当前 ShadowRoot 内部 `:host::part(...)` 规则收集，`all-hosts.html`、`both-part-and-exportparts.html`、`host-part-001.html`、`invalidation-change-exportparts-forward.html` 4/4 **PASS**。
 ### Phase 800 — `:host::part()` 源码序/CSS 嵌套、外层 `::part()` `!important` 反转与嵌套声明式 Shadow DOM
 - 将 `:host::part()` 并入 `matchesSelector` 正常级联与特异性比较、为 `collectFromText` 增加 `&` 嵌套规则展平、修正外层 `::part()` 与内层普通/内联/`!important` 的上下文级联反转，并在 `processSubtreeTemplates` 中递归激活嵌套 `<template shadowrootmode>`，`/css/css-shadow/part/` 达 **39/41 PASS**。
+### Phase 801 — `content-visibility: hidden` 焦点/文本隔离与 `caretRangeFromPoint` / SVG 文本度量
+- 在 `html-element.js` 拦截 `display: none` 与 `content-visibility: hidden` 扁平树后代焦点，在 `html-classes.js` 使 `innerText` 跳过 `content-visibility: hidden` 子树并补全 `SVGElement.prototype.getComputedTextLength`，在 `index.js` 实现 `document.caretRangeFromPoint`，`content-visibility-{029,039,054,080,087}` 5 项 **PASS**。

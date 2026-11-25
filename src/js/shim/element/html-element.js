@@ -387,6 +387,24 @@ function installHtmlElementExtensions(proto) {
   function isFocusableElement(el) {
     if (!el || el.nodeType !== 1) return false;
     if (el.disabled) return false;
+    let cur = el;
+    while (cur && cur.nodeType === 1) {
+      let disp = "";
+      let cv = "";
+      try {
+        const csFn = typeof global !== "undefined" && global.getComputedStyle ? global.getComputedStyle : (typeof getComputedStyle === "function" ? getComputedStyle : null);
+        if (csFn) {
+          const cs = csFn(cur);
+          disp = String(cs.display || "").trim().toLowerCase();
+          cv = String(cs.contentVisibility || cs["content-visibility"] || "").trim().toLowerCase();
+        }
+      } catch (e) {}
+      if (!disp && cur.style && cur.style.display) disp = String(cur.style.display).trim().toLowerCase();
+      if (!cv && cur.style && cur.style.contentVisibility) cv = String(cur.style.contentVisibility).trim().toLowerCase();
+      if (disp === "none") return false;
+      if (cur !== el && cv === "hidden") return false;
+      cur = cur.assignedSlot || cur.parentElement || (cur.parentNode && cur.parentNode.nodeType === 11 ? cur.parentNode.host : null);
+    }
     const tag = String(el.tagName || el.localName || "").toLowerCase();
     if (tag === "button" || tag === "input" || tag === "select" || tag === "textarea" || tag === "summary" || tag === "iframe" || tag === "body") {
       return true;

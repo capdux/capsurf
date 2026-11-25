@@ -1704,11 +1704,24 @@ function installShim(global) {
           return out;
         }, "elementsFromPoint");
       }
+      if (!docProto.caretRangeFromPoint) {
+        docProto.caretRangeFromPoint = markNative(function (x, y) {
+          const hit = (typeof this.elementFromPoint === "function" ? this.elementFromPoint(Number(x) || 0, Number(y) || 0) : null) || this.documentElement || this.body;
+          if (!hit) return null;
+          const r = typeof this.createRange === "function" ? this.createRange() : new Range();
+          r.setStart(hit, 0);
+          r.setEnd(hit, 0);
+          return r;
+        }, "caretRangeFromPoint");
+      }
       if (!global.document.elementFromPoint && docProto.elementFromPoint) {
         global.document.elementFromPoint = docProto.elementFromPoint.bind(global.document);
       }
       if (!global.document.elementsFromPoint && docProto.elementsFromPoint) {
         global.document.elementsFromPoint = docProto.elementsFromPoint.bind(global.document);
+      }
+      if (!global.document.caretRangeFromPoint && docProto.caretRangeFromPoint) {
+        global.document.caretRangeFromPoint = docProto.caretRangeFromPoint.bind(global.document);
       }
       if (typeof evaluateXPath !== "undefined") {
         if (!global.document.evaluate && docProto.evaluate) global.document.evaluate = docProto.evaluate.bind(global.document);
