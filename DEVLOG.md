@@ -3639,3 +3639,5 @@
 - 定位 `rotate(calc(50grad)` 失败根因：内联 `style` 属性带末尾 `;` 且因外层括号未闭合未被分号切分，补全括号后 `45deg;` 未匹配 `toRad` 而落入 `serializeComputedTransform` 被 `parseFloat` 当作 45 弧度；剥离末尾 `;` 并配对补全括号后两项测试全绿。
 ### Phase 899 — `calc-letter-spacing` 与 `anchor-function-zero-fallback` 闭环
 - 定位 `calc(1 + 100%)` 漏过原因为 `%\b` 在非单词字符 `%` 后无法匹配；调整为 `(?:px|...|)\b|%` 并校验 `anchor-size()` fallback 维度，一次性通过 `calc-letter-spacing.html`、`various-values-important.html`、`anchor-function-zero-fallback.html`。
+### Phase 900 — `css-env` 语法校验与 IACVT 回退
+- 补齐 `elem.style.cssText` (`parseStyleMap`) 与 `isValidCssValue` 对 `env()` 首参 `<custom-ident>`、注释 `/**/` 及未闭合括号 `{)` 的解析期拦截，并在 `substituteStr` 后引入 `CSS.supports` 检验以在替换结果非法时正确触发 IACVT 回退至初始值，使 `syntax.tentative.html` (18/18) 全绿通过。

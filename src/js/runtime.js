@@ -4061,6 +4061,7 @@
         const hasPct2 = rgbCommaM[3].includes("%");
         if ((hasPct0 !== hasPct1) || (hasPct1 !== hasPct2)) return false;
       }
+      if (/(?:^|[^a-z0-9_-])env\(/i.test(String(val || ""))) return isValidEnvCalls(val);
       if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_color === "function" &&
           !/\b(?:from|contrast-color|device-cmyk|calc)\b/i.test(val)) {
         return globalThis.__capsurf_is_valid_css_color(val);
@@ -4800,6 +4801,60 @@
       return { rows: gt.rows, columns: gt.columns, areas: gt.areas, autoFlow: "row", autoRows: "auto", autoColumns: "auto", canonical: gt.canonical };
     }
 
+    function isValidEnvCalls(val) {
+      const s = String(val || "");
+      let i = 0;
+      while (i < s.length) {
+        const rest = s.slice(i);
+        const m = /(?:^|[^a-z0-9_-])env\(/i.exec(rest);
+        if (!m) break;
+        const openIdx = i + m.index + m[0].length - 1;
+        let j = openIdx + 1;
+        const stack = ["("];
+        let commaIdx = -1;
+        let inStr = "";
+        while (j < s.length && stack.length > 0) {
+          const ch = s[j];
+          if (inStr) {
+            if (ch === "\\" && j + 1 < s.length) { j += 2; continue; }
+            if (ch === inStr) inStr = "";
+            j++;
+            continue;
+          }
+          if (ch === "/" && s[j + 1] === "*") {
+            const endC = s.indexOf("*/", j + 2);
+            if (endC === -1) return false;
+            j = endC + 2;
+            continue;
+          }
+          if (ch === '"' || ch === "'") { inStr = ch; j++; continue; }
+          if (ch === "(" || ch === "[" || ch === "{") stack.push(ch);
+          else if (ch === ")" || ch === "]" || ch === "}") {
+            const top = stack.pop();
+            if ((ch === ")" && top !== "(") || (ch === "]" && top !== "[") || (ch === "}" && top !== "{")) return false;
+          } else if (ch === "," && stack.length === 1 && commaIdx === -1) {
+            commaIdx = j;
+          }
+          j++;
+        }
+        if (stack.length > 0 || inStr) return false;
+        const firstArgRaw = (commaIdx === -1 ? s.slice(openIdx + 1, j - 1) : s.slice(openIdx + 1, commaIdx));
+        const firstArg = firstArgRaw.replace(/\/\*[\s\S]*?\*\//g, " ").trim();
+        if (!firstArg) return false;
+        const toks = firstArg.split(/\s+/);
+        if (!/^(?:--|-?[a-z_\\])[a-z0-9_\\-]*$/i.test(toks[0])) return false;
+        for (let ti = 1; ti < toks.length; ti++) {
+          if (!/^\d+$/.test(toks[ti])) return false;
+        }
+        if (commaIdx !== -1) {
+          const fb = s.slice(commaIdx + 1, j - 1);
+          if (/(?:^|[^a-z0-9_-])env\(/i.test(fb) && !isValidEnvCalls(fb)) return false;
+        }
+        i = j;
+      }
+      return true;
+    }
+
     function isValidCssValue(prop, value) {
       if (typeof value !== "string") value = String(value);
       const trimmed = value.trim();
@@ -4812,7 +4867,8 @@
       }
       if (prop === "all") return false;
       if (vLower === "bogus") return false;
-      if (/[{}]/.test(trimmed.replace(/\\./g, "")) && !/(?:^|[^a-z0-9_-])var\(/i.test(vLower) && !/\burl\(/i.test(vLower)) return false;
+      if (/(?:^|[^a-z0-9_-])env\(/i.test(trimmed) && !isValidEnvCalls(trimmed)) return false;
+      if (/[{}]/.test(trimmed.replace(/\\./g, "")) && !/(?:^|[^a-z0-9_-])var\(/i.test(vLower) && !/(?:^|[^a-z0-9_-])env\(/i.test(vLower) && !/\burl\(/i.test(vLower)) return false;
       if (!_isValidCalcSyntax) _isValidCalcSyntax = isValidCalcSyntax;
 
       if (prop === "display") {
@@ -4858,7 +4914,7 @@
       }
 
       if (/^env\(/i.test(trimmed) && splitCssTokens(trimmed).length === 1) {
-        return isValidEnvSyntax(trimmed);
+        return isValidEnvCalls(trimmed);
       }
       if (/(?:^|[^a-z0-9_-])var\(/i.test(trimmed)) {
         return isValidCustomDeclValue(trimmed, false);
@@ -12530,7 +12586,8 @@
           }
           const key = rawName.startsWith("--") ? rawName : lowerName;
           if (key === "--") continue;
-          if (!key.startsWith("--") && /[{}]/.test(val) && !/(?:^|[^a-z0-9_-])var\(/i.test(val)) continue;
+          if (!key.startsWith("--") && /(?:^|[^a-z0-9_-])env\(/i.test(val) && !isValidEnvCalls(val)) continue;
+          if (!key.startsWith("--") && /[{}]/.test(val) && !/(?:^|[^a-z0-9_-])(?:var|env)\(/i.test(val)) continue;
           if (((context === "page" || context === "margin") && (key === "margin" || key === "padding")) ||
               (context === "style" && key === "columns")) {
             const expanded = expandCssShorthand(key, val);
@@ -19479,6 +19536,7 @@
                 (v.indexOf("var(") !== -1 && (k === "margin" || k === "padding" || (typeof globalThis.__capsurf_shorthandLonghands === "object" && globalThis.__capsurf_shorthandLonghands[k])))) {
               setEntryWithShorthand(map, k, rawKey, v, pri);
             } else {
+              if (!k.startsWith("--") && /(?:^|[^a-z0-9_-])env\(/i.test(v) && !isValidInlinePropValue(k, v)) continue;
               const cur = map.get(k);
               if (!cur || cur.priority !== "important" || pri === "important") {
                 setEntryInStyleMap(map, k, k === "appearance" ? "appearance" : rawKey, v, pri);
@@ -48345,8 +48403,16 @@
       for (const [k, v] of Array.from(computedMap.entries())) {
         if (!k.startsWith("--") && typeof v === "string" && /(?:^|[^a-z0-9_-])(?:var|env)\(/i.test(v)) {
           const res = substituteStr(v, 0);
-          if (res === INVALID || CSS_WIDE_AFTER_VAR.test(String(res).trim())) computedMap.delete(k);
-          else computedMap.set(k, res);
+          if (res === INVALID || CSS_WIDE_AFTER_VAR.test(String(res).trim())) {
+            computedMap.delete(k);
+          } else if (typeof CSS !== "undefined" && typeof CSS.supports === "function" &&
+                     STANDARD_COMPUTED_LONGHAND_SET.has(k) &&
+                     !/\b(?:sign|abs|calc|min|max|clamp|sibling-|attr)\(/i.test(res) &&
+                     !CSS.supports(k, res)) {
+            computedMap.delete(k);
+          } else {
+            computedMap.set(k, res);
+          }
         }
       }
     }

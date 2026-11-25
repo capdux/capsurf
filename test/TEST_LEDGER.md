@@ -2567,3 +2567,4 @@
 | Phase 897 | `AlignSelf.SelfStart`/`SelfEnd` 自身书写方向对齐（`flex-abspos-staticpos` 23/23 全绿） | `cascade.cp`, `layout.cp` | `flex-abspos-staticpos-align-self-rtl-004` **PASS** (全套 23/23, 552/552 PASS); `--smoke` 3/3 PASS |
 | Phase 898 | `tab-size` 混合单位校验 & `transform` 未闭合括号角度求值 | `cssom.js`, `window.js` | `calc-numbers.html`, `calc-angle-values.html` **2/2 PASS**; `--smoke` 3/3 PASS |
 | Phase 899 | `isValidLenPct` 混合单位/`anchor-size` fallback 校验 & `text-box-edge` 注册 | `cssom.js`, `window.js` | `calc-letter-spacing`, `various-values-important`, `anchor-function-zero-fallback` **3/3 PASS**; `--smoke` 3/3 PASS |
+| Phase 900 | `env()` 语法/注释/括号校验 & `substituteStr` IACVT 回退 | `cssom.js`, `window.js`, `element.js` | `syntax.tentative`, `env-parsing`, `env-fallback-substitution`, `indexed-env.tentative` **4/4 PASS**; `--smoke` 3/3 PASS |

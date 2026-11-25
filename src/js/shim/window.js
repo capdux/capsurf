@@ -6950,8 +6950,16 @@ function installWindow(global) {
     for (const [k, v] of Array.from(computedMap.entries())) {
       if (!k.startsWith("--") && typeof v === "string" && /(?:^|[^a-z0-9_-])(?:var|env)\(/i.test(v)) {
         const res = substituteStr(v, 0);
-        if (res === INVALID || CSS_WIDE_AFTER_VAR.test(String(res).trim())) computedMap.delete(k);
-        else computedMap.set(k, res);
+        if (res === INVALID || CSS_WIDE_AFTER_VAR.test(String(res).trim())) {
+          computedMap.delete(k);
+        } else if (typeof CSS !== "undefined" && typeof CSS.supports === "function" &&
+                   STANDARD_COMPUTED_LONGHAND_SET.has(k) &&
+                   !/\b(?:sign|abs|calc|min|max|clamp|sibling-|attr)\(/i.test(res) &&
+                   !CSS.supports(k, res)) {
+          computedMap.delete(k);
+        } else {
+          computedMap.set(k, res);
+        }
       }
     }
   }

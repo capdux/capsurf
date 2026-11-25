@@ -286,6 +286,7 @@ function createStyleProxy(element) {
               (v.indexOf("var(") !== -1 && (k === "margin" || k === "padding" || (typeof globalThis.__capsurf_shorthandLonghands === "object" && globalThis.__capsurf_shorthandLonghands[k])))) {
             setEntryWithShorthand(map, k, rawKey, v, pri);
           } else {
+            if (!k.startsWith("--") && /(?:^|[^a-z0-9_-])env\(/i.test(v) && !isValidInlinePropValue(k, v)) continue;
             const cur = map.get(k);
             if (!cur || cur.priority !== "important" || pri === "important") {
               setEntryInStyleMap(map, k, k === "appearance" ? "appearance" : rawKey, v, pri);

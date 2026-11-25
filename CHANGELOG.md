@@ -4636,3 +4636,5 @@
 - `src/js/shim/cssom.js`, `src/js/shim/window.js`: `tab-size` 校验拒绝加减混合无单位数与长度单位的 `calc()`（如 `calc(1 + 1px)`）；`transform` 解析与计算阶段剥离末尾 `;` 并自动补全 EOF 未闭合括号，`serializeComputedTransform` 改用括号配对扫描与 `evalTransformAngleExprRad` 支持嵌套 `calc()` 角度；`calc-numbers.html` & `calc-angle-values.html` **2/2 PASS**，`--smoke` 3/3 **PASS**。
 ### Phase 899 — `calc-letter-spacing`、`text-box-edge` 与 `anchor-size` 零回退全绿
 - `src/js/shim/cssom.js`, `src/js/shim/window.js`: 修复 `isValidLenPct` 中 `%\b` 正则漏洞并递归校验 `anchor()`/`anchor-size()` fallback（拒绝无单位 `calc(0)`）；注册 `text-box-edge`、`anchor-name`、`position-anchor`；`calc-letter-spacing.html`、`various-values-important.html`、`anchor-function-zero-fallback.html` **3/3 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 900 — `css-env` `syntax.tentative.html` (18/18) 全绿与 IACVT 回退闭环
+- `src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/shim/element/element.js`: 新增 `isValidEnvCalls` 校验 `env()` 参数语法与括号平衡，`parseStyleMap` 与 `isValidColor` 接入校验，`substituteStr` 后通过 `CSS.supports` 实现 IACVT 回退；`syntax.tentative.html` 等 4 项 `css-env` 用例 **4/4 PASS**，`--smoke` 3/3 **PASS**。
