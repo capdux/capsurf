@@ -2519,3 +2519,4 @@
 | Phase 850 | `isValidColor` / `gap` / `z-index` 接入 `cap:css` 原生校验 | `src/js/shim/cssom.js` | `clamp-integer-computed`, `color-valid-rgb`, `flex-basis-valid`, `gap-valid` 等 **8/8 PASS**; `--smoke` 3/3 PASS |
 | Phase 851 | `filter` / `box-shadow` / `font-*` / `line-height` 下沉 `cap:css` | `effects.cp`, `font.cp`, `dom_binding.cp`, `cssom.js` | `box-shadow-*`, `filter-parsing-*`, `font-weight-*` **6/6 PASS**; `--smoke` 3/3 PASS |
 | Phase 852 | `border-radius` / `margin` / `padding` 简写校验下沉 `cap:css` | `borderradius.cp`, `marginPad.cp`, `dom_binding.cp`, `cssom.js` | `border-radius-*`, `margin-*`, `padding-*` **6/6 PASS**; `--smoke` 3/3 PASS |
+| Phase 853 | `border-width`/`border-style`/`outline-width`/`outline-style` 下沉 `cap:css` | `border.cp`, `outline.cp`, `dom_binding.cp`, `cssom.js` | `border-{width,style}-*`, `outline-{width,style}-*` **8/8 PASS**; `--smoke` 3/3 PASS |

@@ -1620,6 +1620,9 @@
         prop === "border-top-width" || prop === "border-right-width" || prop === "border-bottom-width" || prop === "border-left-width" ||
         prop === "border-block-start-width" || prop === "border-block-end-width" || prop === "border-inline-start-width" || prop === "border-inline-end-width") {
       const maxN = prop === "border-width" ? 4 : (prop === "border-block-width" || prop === "border-inline-width" ? 2 : 1);
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_border_width === "function") {
+        return globalThis.__capsurf_is_valid_css_border_width(vLower, maxN);
+      }
       const toks = splitCssTokens(vLower);
       if (toks.length < 1 || toks.length > maxN) return false;
       for (let i = 0; i < toks.length; i++) {
@@ -1962,6 +1965,12 @@
         prop === "outline-style") {
       const LINE_STYLES = new Set(["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset"]);
       const maxN = prop === "border-style" ? 4 : (prop === "border-block-style" || prop === "border-inline-style" ? 2 : 1);
+      if (prop === "outline-style" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_outline_style === "function") {
+        return globalThis.__capsurf_is_valid_css_outline_style(vLower);
+      }
+      if (prop !== "outline-style" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_border_style === "function") {
+        return globalThis.__capsurf_is_valid_css_border_style(vLower, maxN);
+      }
       const toks = splitCssTokens(vLower);
       if (toks.length < 1 || toks.length > maxN) return false;
       for (let i = 0; i < toks.length; i++) {
@@ -1974,6 +1983,9 @@
       return true;
     }
     if (prop === "outline-width" || prop === "column-rule-width" || prop === "row-rule-width" || prop === "rule-width") {
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_border_width === "function") {
+        return globalThis.__capsurf_is_valid_css_border_width(vLower, 1);
+      }
       const toks = splitCssTokens(vLower);
       if (toks.length !== 1) return false;
       const t = toks[0];
