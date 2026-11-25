@@ -4072,6 +4072,29 @@
         const hasPct2 = rgbCommaM[3].includes("%");
         if ((hasPct0 !== hasPct1) || (hasPct1 !== hasPct2)) return false;
       }
+      const hslCommaM = /^hsla?\(\s*([^,]+)\s*,\s*([^,]+)\s*,\s*([^,)]+)(?:\s*,\s*([^)]+))?\s*\)$/i.exec(rawTrimmed);
+      if (hslCommaM) {
+        const isPctOrMath = (t) => /%|^(?:calc|min|max|clamp|var|env)\(/i.test(t.trim());
+        if (!isPctOrMath(hslCommaM[2]) || !isPctOrMath(hslCommaM[3])) return false;
+      }
+      if (/^(?:rgba?|hsla?|hwba?)\(/i.test(rawTrimmed) && /\b(?:calc|min|max|clamp)\(/i.test(rawTrimmed)) {
+        const innerC = rawTrimmed.slice(rawTrimmed.indexOf("(") + 1, -1);
+        let pd = 0, tok = "";
+        for (let ci = 0; ci < innerC.length; ci++) {
+          const ch = innerC[ci];
+          if (ch === "(") pd++;
+          else if (ch === ")" && pd > 0) pd--;
+          if (pd === 0 && (ch === "," || ch === "/" || /\s/.test(ch))) {
+            const tt = tok.trim();
+            if (/^(?:calc|min|max|clamp)\(/i.test(tt) && typeof _isValidCalcSyntax === "function" && !_isValidCalcSyntax(tt)) return false;
+            tok = "";
+          } else {
+            tok += ch;
+          }
+        }
+        const tt = tok.trim();
+        if (/^(?:calc|min|max|clamp)\(/i.test(tt) && typeof _isValidCalcSyntax === "function" && !_isValidCalcSyntax(tt)) return false;
+      }
       if (/(?:^|[^a-z0-9_-])env\(/i.test(rawTrimmed)) return isValidEnvCalls(rawTrimmed);
       if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_color === "function" &&
           !/\b(?:from|contrast-color|device-cmyk|calc)\b/i.test(rawTrimmed)) {
@@ -4904,7 +4927,7 @@
         for (let i = 0; i < toks.length; i++) {
           const t = toks[i], tl = t.toLowerCase();
           if (!hasS && LINE_STYLES.has(tl)) { hasS = true; continue; }
-          if (!hasW && (tl === "thin" || tl === "medium" || tl === "thick" || (isValidLenPct(tl, false) && !tl.endsWith("%") && !tl.includes("%")))) {
+          if (!hasW && (tl === "thin" || tl === "medium" || tl === "thick" || tl === "hairline" || (isValidLenPct(tl, false) && !tl.endsWith("%") && !tl.includes("%")))) {
             hasW = true; continue;
           }
           if (!hasC && isValidColor(t)) { hasC = true; continue; }
@@ -5145,6 +5168,7 @@
       }
 
       function isValidCalcSyntax(tok) {
+        if (/(?:\d|\.)(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|%|deg|rad|grad|turn|s|ms)\s*\*\s*[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|%|deg|rad|grad|turn|s|ms)\b/i.test(tok)) return false;
         if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_math === "function" &&
             !/\b(?:progress|media-progress|container-progress|calc-mix|calc-size)\(/i.test(tok)) {
           return globalThis.__capsurf_is_valid_css_math(tok);
@@ -5667,14 +5691,14 @@
           prop === "border-top-width" || prop === "border-right-width" || prop === "border-bottom-width" || prop === "border-left-width" ||
           prop === "border-block-start-width" || prop === "border-block-end-width" || prop === "border-inline-start-width" || prop === "border-inline-end-width") {
         const maxN = prop === "border-width" ? 4 : (prop === "border-block-width" || prop === "border-inline-width" ? 2 : 1);
-        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_border_width === "function") {
+        if (vLower.indexOf("hairline") === -1 && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_border_width === "function") {
           return globalThis.__capsurf_is_valid_css_border_width(vLower, maxN);
         }
         const toks = splitCssTokens(vLower);
         if (toks.length < 1 || toks.length > maxN) return false;
         for (let i = 0; i < toks.length; i++) {
           const t = toks[i];
-          if (t === "thin" || t === "medium" || t === "thick") continue;
+          if (t === "thin" || t === "medium" || t === "thick" || t === "hairline") continue;
           if (t.includes("%") && !/\b(?:var|env)\(/i.test(t)) return false;
           if (/^(?:calc|min|max|clamp)\(/i.test(t) && t.includes("%")) return false;
           if (!isValidLenPct(t, false)) return false;
@@ -7660,7 +7684,7 @@
           const t = toks[i], tl = t.toLowerCase();
           if ((prop === "outline" ? (tl === "auto" || (tl !== "hidden" && STYLES.has(tl))) : STYLES.has(tl))) {
             if (seenS) return false; seenS = true;
-          } else if (tl === "thin" || tl === "medium" || tl === "thick" ||
+          } else if (tl === "thin" || tl === "medium" || tl === "thick" || tl === "hairline" ||
                      (!tl.endsWith("%") && !(/^(?:calc|min|max|clamp)\(/i.test(tl) && tl.includes("%")) && isValidLenPct(tl, false))) {
             if (seenW) return false; seenW = true;
           } else if (isValidColor(t)) {
@@ -9148,7 +9172,7 @@
         for (let i = 0; i < parts.length; i++) {
           const t = parts[i], tl = t.toLowerCase();
           if (STY.has(tl)) st = tl;
-          else if (tl === "thin" || tl === "medium" || tl === "thick" || /^[+-]?(?:\d|\.)/.test(tl) || /^(?:calc|min|max|clamp)\(/i.test(tl)) {
+          else if (tl === "thin" || tl === "medium" || tl === "thick" || tl === "hairline" || /^[+-]?(?:\d|\.)/.test(tl) || /^(?:calc|min|max|clamp)\(/i.test(tl)) {
             w = (tl === "0" || tl === "+0" || tl === "-0") ? "0px" : (/^calc\(/i.test(t) ? canonicalizeCalcToken(t) : t);
           } else c = t;
         }
@@ -11395,7 +11419,7 @@
         for (let i = 0; i < p.length; i++) {
           const t = p[i], tl = t.toLowerCase();
           if (STY.has(tl)) st = tl;
-          else if (tl === "thin" || tl === "medium" || tl === "thick" || /^[+-]?(?:\d|\.)/.test(tl) || /^(?:calc|min|max|clamp)\(/i.test(tl)) {
+          else if (tl === "thin" || tl === "medium" || tl === "thick" || tl === "hairline" || /^[+-]?(?:\d|\.)/.test(tl) || /^(?:calc|min|max|clamp)\(/i.test(tl)) {
             w = (tl === "0" || tl === "+0" || tl === "-0") ? "0px" : (/^calc\(/i.test(t) ? canonicalizeCalcToken(t) : t);
           } else c = t;
         }
@@ -11419,7 +11443,7 @@
         for (let i = 0; i < p.length; i++) {
           const t = p[i], tl = t.toLowerCase();
           if (STY.has(tl)) st = tl;
-          else if (tl === "thin" || tl === "medium" || tl === "thick" || /^[+-]?(?:\d|\.)/.test(tl) || /^(?:calc|min|max|clamp)\(/i.test(tl)) {
+          else if (tl === "thin" || tl === "medium" || tl === "thick" || tl === "hairline" || /^[+-]?(?:\d|\.)/.test(tl) || /^(?:calc|min|max|clamp)\(/i.test(tl)) {
             w = (tl === "0" || tl === "+0" || tl === "-0") ? "0px" : (/^calc\(/i.test(t) ? canonicalizeCalcToken(t) : t);
           } else c = t;
         }
@@ -11554,7 +11578,7 @@
         for (let i = 0; i < p.length; i++) {
           const t = p[i], tl = t.toLowerCase();
           if (STY.has(tl)) st = tl;
-          else if (tl === "thin" || tl === "medium" || tl === "thick" || /^[+-]?(?:\d|\.)/.test(tl) || /^(?:calc|min|max|clamp)\(/i.test(tl)) {
+          else if (tl === "thin" || tl === "medium" || tl === "thick" || tl === "hairline" || /^[+-]?(?:\d|\.)/.test(tl) || /^(?:calc|min|max|clamp)\(/i.test(tl)) {
             w = (tl === "0" || tl === "+0" || tl === "-0") ? "0px" : (/^calc\(/i.test(t) ? canonicalizeCalcToken(t) : t);
           } else c = t;
         }
@@ -19401,6 +19425,7 @@
     if (!val || typeof val !== "string") return val || "";
     const v = val.trim();
     if (/^url\([^)]*$/i.test(v)) return v + ")";
+    if (key === "border-shape") return v.replace(/\bat\s+center\s*\)$/i, "at center center)");
     // CSS Color 4: legacy rgb()/rgba() with `none` channel serializes `none` as `0` for specified value
     if ((key === "color" || key.endsWith("-color")) && /^rgba?\s*\(/i.test(v) && /\bnone\b/i.test(v)) {
       const m = v.match(/^rgba?\(\s*([^\s,/]+)\s+([^\s,/]+)\s+([^\s,/]+)(?:\s*\/\s*([^\s)]+))?\s*\)$/i);
@@ -46886,7 +46911,7 @@
           if (cs && typeof cs.getPropertyValue === "function") {
             const parsePx = function (v) {
               const s = String(v || "").trim().toLowerCase();
-              if (s === "thin") return 1;
+              if (s === "thin" || s === "hairline") return 1;
               if (s === "medium") return 3;
               if (s === "thick") return 5;
               const n = parseFloat(s);
@@ -50200,7 +50225,7 @@
           computedMap.set(side + "-width", "0px");
         } else {
           const wr = (computedMap.get(side + "-width") || "medium").trim().toLowerCase();
-          if (wr === "thin") computedMap.set(side + "-width", "1px");
+          if (wr === "thin" || wr === "hairline") computedMap.set(side + "-width", "1px");
           else if (wr === "medium") computedMap.set(side + "-width", "3px");
           else if (wr === "thick") computedMap.set(side + "-width", "5px");
           else {
@@ -50569,7 +50594,7 @@
       if (!computedMap.has("field-sizing") || computedMap.get("field-sizing") === "") {
         computedMap.set("field-sizing", "fixed");
       }
-      const lineWidthMap = { thin: 1, medium: 3, thick: 5 };
+      const lineWidthMap = { thin: 1, medium: 3, thick: 5, hairline: 1 };
       const borderSideMap = {
         "border-top-width": "border-top-style",
         "border-right-width": "border-right-style",

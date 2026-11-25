@@ -4644,3 +4644,5 @@
 - `src/layout/layout.cp`: 在 `getReplacedSizeWithStyle`、`measureIntrinsicWidth`、`measureMinContentWidth` 及 `layoutBlockChildren` shrink-to-fit / auto-height 中实现 `contain: size` / `inline-size` 内在尺寸归零；通过 `cpc fix` + `cpc brief` 门禁，`contain-size-dynamic-001.html` **PASS**，`contain-inline-size-replaced.html` 推进至 24/30 PASS，`--smoke` 3/3 **PASS**。
 ### Phase 903 — `css-color` HWB、RGB 精度与 148 命名颜色补全
 - `src/js/shim/cssom.js`: 补齐 `NAMED_COLORS_MAP` 全量 148 个 CSS 命名颜色；`hwb()` 改走高精度 JS 路径并区分指定值（无 `%`）与计算值（有 `%`）；`color(...)` 与 `rgb(... none ...)` 序列化提升至 `toFixed(8)`；`isValidColor` 先解转义再校验；`color-valid-hwb.html`、`color-computed-hwb.html`、`color-computed-rgb.html` **3/3 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 904 — `border-width: hairline`、`border-shape` 与 `hsl()` 非法语法全绿
+- `src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/shim/element/element.js`: 新增 `hairline` 边框宽度支持（`1px`）；规范化 `border-shape` `at center center`；`isValidColor` 与 `isValidCalcSyntax` 拦截逗号 `hsla?` 无 `%` 通道及 `turn * turn` 非法乘积；4 项 WPT **4/4 PASS**，`--smoke` 3/3 **PASS**。

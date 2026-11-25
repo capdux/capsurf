@@ -5401,7 +5401,7 @@ function installWindow(global) {
         if (cs && typeof cs.getPropertyValue === "function") {
           const parsePx = function (v) {
             const s = String(v || "").trim().toLowerCase();
-            if (s === "thin") return 1;
+            if (s === "thin" || s === "hairline") return 1;
             if (s === "medium") return 3;
             if (s === "thick") return 5;
             const n = parseFloat(s);
@@ -8715,7 +8715,7 @@ function installWindow(global) {
         computedMap.set(side + "-width", "0px");
       } else {
         const wr = (computedMap.get(side + "-width") || "medium").trim().toLowerCase();
-        if (wr === "thin") computedMap.set(side + "-width", "1px");
+        if (wr === "thin" || wr === "hairline") computedMap.set(side + "-width", "1px");
         else if (wr === "medium") computedMap.set(side + "-width", "3px");
         else if (wr === "thick") computedMap.set(side + "-width", "5px");
         else {
@@ -9084,7 +9084,7 @@ function installWindow(global) {
     if (!computedMap.has("field-sizing") || computedMap.get("field-sizing") === "") {
       computedMap.set("field-sizing", "fixed");
     }
-    const lineWidthMap = { thin: 1, medium: 3, thick: 5 };
+    const lineWidthMap = { thin: 1, medium: 3, thick: 5, hairline: 1 };
     const borderSideMap = {
       "border-top-width": "border-top-style",
       "border-right-width": "border-right-style",

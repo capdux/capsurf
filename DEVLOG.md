@@ -3647,3 +3647,5 @@
 - 将 `contain_size` 与 `contain_inline_size` 接入替换元素内在尺寸计算、内在最小/最大宽度测量与 `layoutBlockChildren` shrink-to-fit / auto-height 路径，`contain-size-dynamic-001.html` 全绿通过，`contain-inline-size-replaced.html` 全部 `width=0` 断言通过。
 ### Phase 903 — `color-valid-hwb`、`color-computed-hwb` 与 `color-computed-rgb` 全绿
 - 解决 `hwb(120 30% 50%)` 因底层 `toFixed` 舍入误差输出 `127` 而非 `128` 的问题，并通过 `normalizePropColors` 区分 `hwb(... none)` 指定值与计算值 `%` 序列化；将 `color(srgb ...)` 通道精度提升至 8 位小数，一次性通过 `color-valid-hwb`、`color-computed-hwb`、`color-computed-rgb` 三套测试。
+### Phase 904 — `hairline`、`border-shape` 与 `css-color` 非法语法校验闭环
+- 在 `cssom.js`、`window.js` 与 `element.js` 打通 `border`/`border-width` `hairline` 校验、展开与计算样式解析，规范化 `border-shape` `at center` 序列化，并在 `isValidColor`/`isValidCalcSyntax` 拦截 `hsl()` 无 `%` S/L 通道及带单位乘法 `calc(0.56turn * -0.43turn)`，4 项目标 WPT 全部一次通过。
