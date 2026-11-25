@@ -921,7 +921,7 @@
     if (!_isValidCalcSyntax) _isValidCalcSyntax = isValidCalcSyntax;
 
     if (prop === "display") {
-      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_display === "function") {
+      if (vLower.indexOf("grid-lanes") === -1 && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_display === "function") {
         return globalThis.__capsurf_is_valid_css_display(vLower);
       }
       return !!canonicalizeDisplayValue(trimmed);

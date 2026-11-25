@@ -3607,3 +3607,5 @@
 - 修复 `DocumentTimeline.currentTime` 每次读取都调用 `performance.now()` 导致同步断言出现 `0.1px` 漂移的全局时序缺陷，并打通关键帧 `segT` 越界进度传递，使 `linear()` 与 `steps()` 输出外推测试全绿。
 ### Phase 883 — `solveCubicBezier` 越界切线外推与 `getTiming()` 补全
 - 修复 `solveCubicBezier` 在 `t <= 0` / `t >= 1` 直接钳位返回 `0` / `1` 的缺陷，严格按 CSS Easing 规范处理有限与垂直切线外推，并补全 `AnimationEffect.prototype.getTiming()`。
+### Phase 884 — `_rawBaseCache` 焦点状态失效与 `grid-lanes` 显示值放行
+- 修复 `element.focus()` 仅变更 `document.activeElement` 而未使 `element._rawBaseCache` 失效导致 `getComputedStyle(e)` 仍返回失焦样式的问题，并放行 CSS Grid 3 试验值 `grid-lanes`/`inline-grid-lanes`。

@@ -4816,7 +4816,7 @@
       if (!_isValidCalcSyntax) _isValidCalcSyntax = isValidCalcSyntax;
 
       if (prop === "display") {
-        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_display === "function") {
+        if (vLower.indexOf("grid-lanes") === -1 && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_display === "function") {
           return globalThis.__capsurf_is_valid_css_display(vLower);
         }
         return !!canonicalizeDisplayValue(trimmed);
@@ -48665,6 +48665,7 @@
     function collectRawComputedMap(element, normalizedPseudo) {
       const styleNodes = getStyleNodesForElement(element);
       const curDomEpoch = (typeof globalThis !== "undefined" && globalThis.__capsurf_domMutationEpoch) || 0;
+      const curActiveEl = (element && element.ownerDocument ? element.ownerDocument.activeElement : (typeof document !== "undefined" ? document.activeElement : null)) || null;
       const rawInlineSelf = (!normalizedPseudo && element && element.getAttribute) ? (element.getAttribute("style") || "") : "";
       const hasInlineImp = rawInlineSelf.toLowerCase().indexOf("!important") !== -1;
       let sheetKey = "";
@@ -48682,7 +48683,7 @@
           sheetKey += t.length + ":" + h.toString(36) + "|";
         }
         const bCache = element._rawBaseCache;
-        if (bCache && bCache.domEpoch === curDomEpoch && bCache.sheetKey === sheetKey) {
+        if (bCache && bCache.domEpoch === curDomEpoch && bCache.sheetKey === sheetKey && bCache.activeEl === curActiveEl) {
           computedMap = new Map(bCache.baseMap);
           if (bCache.impKeys && bCache.impKeys.size > 0) computedMap._importantKeys = new Set(bCache.impKeys);
           if (rawInlineSelf) parseDeclarationsBlockInto(element, rawInlineSelf, computedMap);
@@ -48837,7 +48838,7 @@
         delete computedMap._skipInline;
         const baseSnap = new Map(computedMap);
         const impSnap = computedMap._importantKeys ? new Set(computedMap._importantKeys) : null;
-        element._rawBaseCache = { domEpoch: curDomEpoch, sheetKey: sheetKey, baseMap: baseSnap, impKeys: impSnap, ancestors: ancestors };
+        element._rawBaseCache = { domEpoch: curDomEpoch, sheetKey: sheetKey, activeEl: curActiveEl, baseMap: baseSnap, impKeys: impSnap, ancestors: ancestors };
         if (rawInlineSelf) {
           parseDeclarationsBlockInto(element, rawInlineSelf, computedMap);
           for (let vi = 0; vi < valCheckProps.length; vi++) {

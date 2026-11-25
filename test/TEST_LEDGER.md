@@ -2551,3 +2551,4 @@
 | Phase 881 | `linear(...)` 语法校验、折叠与嵌套 `calc()`/`min()` 求值 | `cssom.js`, `window.js` | `linear-timing-functions-syntax` 等 5 项 **5/5 PASS**; `--smoke` 3/3 PASS |
 | Phase 882 | `DocumentTimeline` 帧时间冻结与 `linear()`/`steps()` 输出外推 | `src/js/shim/animations.js` | `linear-timing-functions-output`, `step-timing-functions-output` **2/2 PASS**; `--smoke` 3/3 PASS |
 | Phase 883 | `getTiming()` 与 `cubic-bezier()` 越界切线外推、`calc()` 时间与 `paused` 支持 | `src/js/shim/animations.js` | `cubic-bezier-timing-functions-output.html` **PASS**; `--smoke` 3/3 PASS |
+| Phase 884 | `_rawBaseCache` 焦点状态校验 & `display: grid-lanes` 支持 | `cssom.js`, `window.js` | `display-contents-focusable-001`, `display-{valid,computed}` **3/3 PASS**; `--smoke` 3/3 PASS |

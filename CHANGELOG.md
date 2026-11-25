@@ -4598,3 +4598,7 @@
 ### Phase 883 — `AnimationEffect.getTiming()` 与 `cubic-bezier()` 切线外推 / `paused` 动画时间求值
 - `src/js/shim/animations.js`: 补全 `AnimationEffect.prototype.getTiming()`；`solveCubicBezier` 在 `t < 0` 与 `t > 1` 按规范切线斜率外推（垂直切线回落 0）；`parseCssTimeMs` 支持 `calc()` 时间表达式；`parseAnimationSpecs` 支持 `paused` 状态与 `animation-delay` 覆盖。
 - `src/js/{runtime.js,runtime_source.cp}`: 重新打包；`cubic-bezier-timing-functions-output.html` **PASS**，`--smoke` 3/3 **PASS**。
+### Phase 884 — `:focus` `_rawBaseCache` 失效修复与 `display: grid-lanes` 支持
+- `src/js/shim/window.js`: `collectRawComputedMap` 中 `_rawBaseCache` 记录并比对 `activeEl`，使 `element.focus()` 后 `:focus` 规则立即生效。
+- `src/js/shim/cssom.js`: `isValidCssValue("display", ...)` 对 `grid-lanes`/`inline-grid-lanes` 走 `canonicalizeDisplayValue` 校验。
+- `src/js/{runtime.js,runtime_source.cp}`: 重新打包；`display-contents-focusable-001.html`、`display-valid.html`、`display-computed.html` **3/3 PASS**，`--smoke` 3/3 **PASS**。
