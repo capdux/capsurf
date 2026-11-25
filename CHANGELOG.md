@@ -4229,3 +4229,7 @@
 - **Phase 776**:
   - `src/js/shim/window.js`: 从 `nonNegLenProps` 移除 `scroll-margin-{top,right,bottom,left}`，修复负值 `scroll-margin` 计算值夹紧。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 777**:
+  - `src/js/shim/cssom.js`: `KNOWN_PROPS` 补全 `ruby-align`、`ruby-merge`、`ruby-overhang`、`ruby-position`。
+  - `src/js/shim/window.js`: `collectRawComputedMap` 合并多样式表级联解析以共享 `@layer` 注册顺序。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

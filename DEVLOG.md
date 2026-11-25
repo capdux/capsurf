@@ -3392,3 +3392,5 @@
 - 补全 `z-index` 中 `clamp(none, ...)` 单侧无穷边界校验与求值（`clamp-integer-computed.html` 6/6 全绿），并在 `layout.cp` 对 `monospace` 字体 `ch` 宽度按 `0.60 * font_px` 解析（`bidi-line-break-001.html` 保持 **PASS**）。
 ### Phase 776 — `/css/css-scroll-snap/parsing/` 全目录 25/25 (100% PASS) 达成
 - 从 `window.js` `nonNegLenProps` 移除物理 `scroll-margin-{top,right,bottom,left}` 的误夹紧，使负值 `calc(10px - 0.5em)` 正确计算为 `-10px`，`/css/css-scroll-snap/parsing/` 25/25 全绿。
+### Phase 777 — `/css/css-ruby/inheritance.html` 8/8 PASS 与多样式表 `@layer` 合并级联
+- 在 `cssom.js` `KNOWN_PROPS` 补全 `ruby-*` 属性，恢复 `/css/css-ruby/inheritance.html` 8/8 **PASS**；同时在 `window.js` `collectRawComputedMap` 将多样式表合并后单次级联以共享 `@layer` 顺序。

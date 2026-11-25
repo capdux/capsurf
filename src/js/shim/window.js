@@ -6844,7 +6844,8 @@ function installWindow(global) {
         text = (sn._sheet && sn._sheet._cascadeCssText) ? sn._sheet._cascadeCssText : (sn.textContent || "");
       }
       if (text) {
-        parseCssRulesInto(element, text, targetMap, normalizedPseudo);
+        if (!collectRawComputedMap._sheetTexts) collectRawComputedMap._sheetTexts = [];
+        collectRawComputedMap._sheetTexts.push(text);
       }
     }
     const ownerDoc = element.ownerDocument || (typeof document !== "undefined" ? document : null);
@@ -6855,9 +6856,15 @@ function installWindow(global) {
         if (!sheet || sheet.disabled) continue;
         const text = sheet._cascadeCssText || "";
         if (text) {
-          parseCssRulesInto(element, text, targetMap, normalizedPseudo);
+          if (!collectRawComputedMap._sheetTexts) collectRawComputedMap._sheetTexts = [];
+          collectRawComputedMap._sheetTexts.push(text);
         }
       }
+    }
+    if (collectRawComputedMap._sheetTexts && collectRawComputedMap._sheetTexts.length > 0) {
+      const combined = collectRawComputedMap._sheetTexts.join("\n");
+      collectRawComputedMap._sheetTexts = null;
+      parseCssRulesInto(element, combined, targetMap, normalizedPseudo);
     }
     if (!normalizedPseudo) {
       const rawInline = element.getAttribute ? element.getAttribute("style") : "";

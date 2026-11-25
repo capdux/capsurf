@@ -80,7 +80,7 @@
     "padding-top", "page", "page-break-after", "page-break-before", "page-break-inside",
     "paint-order", "perspective", "perspective-origin", "place-content", "place-items",
     "place-self", "pointer-events", "position", "position-try", "position-try-fallbacks", "position-try-order", "position-visibility", "quotes", "reading-flow", "reading-order", "resize", "right", "rotate",
-    "row-gap", "scale", "scroll-behavior", "scroll-margin", "scroll-margin-block",
+    "row-gap", "ruby-align", "ruby-merge", "ruby-overhang", "ruby-position", "scale", "scroll-behavior", "scroll-margin", "scroll-margin-block",
     "scroll-margin-block-end", "scroll-margin-block-start", "scroll-margin-bottom",
     "scroll-margin-inline", "scroll-margin-inline-end", "scroll-margin-inline-start",
     "scroll-margin-left", "scroll-margin-right", "scroll-margin-top", "scroll-padding",
