@@ -3442,3 +3442,5 @@
 - 将 `:host::part()` 并入 `matchesSelector` 正常级联与特异性比较、为 `collectFromText` 增加 `&` 嵌套规则展平、修正外层 `::part()` 与内层普通/内联/`!important` 的上下文级联反转，并在 `processSubtreeTemplates` 中递归激活嵌套 `<template shadowrootmode>`，`/css/css-shadow/part/` 达 **39/41 PASS**。
 ### Phase 801 — `content-visibility: hidden` 焦点/文本隔离与 `caretRangeFromPoint` / SVG 文本度量
 - 在 `html-element.js` 拦截 `display: none` 与 `content-visibility: hidden` 扁平树后代焦点，在 `html-classes.js` 使 `innerText` 跳过 `content-visibility: hidden` 子树并补全 `SVGElement.prototype.getComputedTextLength`，在 `index.js` 实现 `document.caretRangeFromPoint`，`content-visibility-{029,039,054,080,087}` 5 项 **PASS**。
+### Phase 802 — `::slotted()` 跨 Shadow DOM 级联、`:host(...)` 匹配与扁平树继承
+- 在 `window.js` 实现沿 `assignedSlot` 链的 `::slotted(...)` 级联匹配与扁平树祖先继承，并在 `selector.js` 补全 `:host(...)` 函数式匹配，`host-descendant-invalidation`、`host-functional-descendant-invalidation`、`slotted-link`、`slotted-nested`、`slotted-slot` 5/5 **PASS**。

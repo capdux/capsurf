@@ -581,6 +581,14 @@ function matchesCompoundSelector(el, compound, scopeRoot) {
         const same = el === h || (typeof el._nid === "number" && typeof h._nid === "number" && el._nid > 0 && el._nid === h._nid);
         if (!same) return false;
       }
+      else if (pseudo.startsWith(":host(") && pseudo.endsWith(")")) {
+        if (!scopeRoot || !scopeRoot.host) return false;
+        const h = scopeRoot.host;
+        const same = el === h || (typeof el._nid === "number" && typeof h._nid === "number" && el._nid > 0 && el._nid === h._nid);
+        if (!same) return false;
+        const inner = pseudo.slice(6, -1).trim();
+        if (!inner || !matchesCompoundSelector(el, inner, scopeRoot)) return false;
+      }
       else if (pseudo === ":scope") {
         const sr = scopeRoot || (typeof document !== "undefined" ? document.documentElement : null);
         if (!sr) return false;

@@ -4327,3 +4327,7 @@
   - `src/js/shim/element/html-classes.js`: `innerText` 跳过 `content-visibility: hidden` 子树；补全 `SVGElement.prototype.getComputedTextLength`。
   - `src/js/shim/index.js`: 补全 `document.caretRangeFromPoint`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 802**:
+  - `src/js/shim/window.js`: `collectElementOwnDeclarations` 实现跨 Shadow DOM `::slotted(...)` 级联与 `!important` 反转；`collectRawComputedMap` 支持沿 `assignedSlot` / `ShadowRoot.host` 扁平树继承。
+  - `src/js/shim/selector.js`: `matchesCompoundSelector` 补全 `:host(...)` 函数式伪类匹配。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
