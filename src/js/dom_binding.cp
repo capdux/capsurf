@@ -109,6 +109,8 @@ import {
     isValidCssPointerEventsValue,
     isValidCssUserSelectValue,
     isValidCssResizeValue,
+    isValidCssListStylePositionValue,
+    isValidCssListStyleTypeValue,
 } from "cap:css";
 import { LayoutTree, Rect } from "../layout/layout.cp";
 import { RUNTIME_CHUNKS } from "./runtime_source.cp";
@@ -1091,6 +1093,14 @@ fn callStrValidator1(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, pred: 
 @c fn js_capsurf_is_valid_css_resize(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     * = this_val;
     return callStrValidator1(ctx, argc, argv, isValidCssResizeValue);
+}
+@c fn js_capsurf_is_valid_css_list_style_position(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssListStylePositionValue);
+}
+@c fn js_capsurf_is_valid_css_list_style_type(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssListStyleTypeValue);
 }
 @c fn js_capsurf_is_valid_css_len_pct(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     * = this_val;
@@ -3217,6 +3227,8 @@ pub fn mountDom(
     defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_pointer_events", js_capsurf_is_valid_css_pointer_events, 1);
     defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_user_select", js_capsurf_is_valid_css_user_select, 1);
     defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_resize", js_capsurf_is_valid_css_resize, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_list_style_position", js_capsurf_is_valid_css_list_style_position, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_list_style_type", js_capsurf_is_valid_css_list_style_type, 1);
 
     // Assemble and evaluate modular runtime shim
     let total_len: usize = 0;

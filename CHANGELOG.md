@@ -4526,3 +4526,6 @@
 ### Phase 859 — `grid-auto-flow` / `pointer-events` / `user-select` / `resize` 下沉 `cap:css`
 - `/data/dev/cp/lib/css/{grid,ui,index}.cp`: 新增并导出 `isValidCssGridAutoFlowValue`、`isValidCssPointerEventsValue`、`isValidCssUserSelectValue`、`isValidCssResizeValue`。
 - `src/js/dom_binding.cp` & `src/js/shim/cssom.js`: 暴露并接入全部 4 个原生校验器，6 项 WPT 解析测试 **6/6 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 860 — `list-style-position` / `list-style-type` 校验下沉 `cap:css`
+- `/data/dev/cp/lib/css/liststyle.cp`: 新增并导出 `isValidCssListStylePositionValue`、`isValidCssListStyleTypeValue`。
+- `src/js/dom_binding.cp` & `src/js/shim/cssom.js`: 暴露并接入全部 2 个原生校验器，`list-style-position-*` 与 `list-style-type-*` **4/4 PASS**，`--smoke` 3/3 **PASS**。

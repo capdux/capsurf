@@ -3558,3 +3558,5 @@
 - 将 Flexbox 方向/换行与 Box Alignment 校验收口至 `cap:css` (`boxAlign.cp`) 并全量通过 12 项对应 WPT 解析测试，累计已有 **41 个** CSSOM 高频语法校验/求值/序列化入口完成 `cap:css` 下沉。
 ### Phase 859 — `grid-auto-flow` / `pointer-events` / `user-select` / `resize` 下沉 `cap:css`
 - 将 `grid-auto-flow`、`pointer-events`、`user-select`、`resize` 校验收口至 `cap:css` (`grid.cp` & `ui.cp`) 并全量通过 6 项对应 WPT 解析测试，累计已有 **45 个** CSSOM 高频语法校验/求值/序列化入口完成 `cap:css` 下沉。
+### Phase 860 — `list-style-position` / `list-style-type` 校验下沉 `cap:css`
+- 将 `list-style-position` 与 `list-style-type` 校验收口至 `cap:css` (`liststyle.cp`) 并全量通过 4 项对应 WPT 解析测试，累计已有 **47 个** CSSOM 高频语法校验/求值/序列化入口完成 `cap:css` 下沉。

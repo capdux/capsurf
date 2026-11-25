@@ -1161,6 +1161,7 @@
     if (prop === "pointer-events" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_pointer_events === "function") return globalThis.__capsurf_is_valid_css_pointer_events(vLower);
     if (prop === "user-select" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_user_select === "function") return globalThis.__capsurf_is_valid_css_user_select(vLower);
     if (prop === "resize" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_resize === "function") return globalThis.__capsurf_is_valid_css_resize(vLower);
+    if (prop === "list-style-position" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_list_style_position === "function") return globalThis.__capsurf_is_valid_css_list_style_position(vLower);
     if (allowedKeywords) {
       return allowedKeywords.indexOf(vLower) !== -1;
     }
@@ -3647,6 +3648,10 @@
       return true;
     }
     if (prop === "list-style-type") {
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_list_style_type === "function" &&
+          !/^symbols\(/i.test(vLower)) {
+        return globalThis.__capsurf_is_valid_css_list_style_type(trimmed);
+      }
       const toks = splitCssTokens(trimmed);
       if (toks.length !== 1) return false;
       const t = toks[0], tl = t.toLowerCase();
