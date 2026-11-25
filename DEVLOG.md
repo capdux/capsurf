@@ -3669,3 +3669,5 @@
 - `element.js` 的 `scrollWidth`/`scrollHeight` 原直接用 `cr.x - parentR.x`（border-box 原点）计算子元素偏移，未减去 `this.clientLeft`/`this.clientTop`，导致 `border: solid thick` 容器多计 5px。扣除 `clientLeft`/`clientTop` 后，`multicol-overflow-transform-001` 与 `multicol-overflow-positioned-transform-001` 一次通过。
 ### Phase 914 — CSS Borders 4 双角圆角简写映射与计算值序列化
 - 在 `cssom.js` 与 `window.js` 通过 `TWO_CORNER_RADIUS_MAP` 统一处理 8 个物理/逻辑双角圆角简写向 4 角 `border-*-radius` longhand 的展开与 `h0 [h1] / v0 [v1]` 折叠序列化，一次扫平 8 项 `-computed.html` 与 8 项 `-valid.html`。
+### Phase 915 — Flexbox `min-height: auto`、`align-self` 与单行确定交叉轴传播
+- 排查发现 `cascade.cp` `min_height` 默认值为 `zeroPx()` 导致未显式设置 `min-height` 时跳过 `min-height: auto` transferred size 夹紧，改用 `weights[7] == 0` 判定；`layoutFlexContainer` 原未合并 `align_self` 导致 `flex-start` 被误拉伸并传染 `child_h_definite`，且首遍 `layoutNode` 写死 `parent_h_definite=true` 使 `height: 100%` 折叠为 `0px`。修复后 3 项全绿。

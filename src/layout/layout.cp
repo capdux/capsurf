@@ -4449,9 +4449,18 @@ pub struct LayoutTree {
                         if (items[mi].target_main < min_w) items[mi].target_main = min_w;
                     }
                 } else {
-                    if (!cs.min_height.is_auto && !cs.min_height.is_none) {
+                    if (cs.weights[7] != 0 && !cs.min_height.is_auto && !cs.min_height.is_none) {
                         const min_h = cs.min_height.resolvePx(container_h, cs.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
                         if (items[mi].target_main < min_h) items[mi].target_main = min_h;
+                    } else if ((cs.min_height.is_auto || cs.weights[7] == 0) && cs.overflow_y == .Visible) { // PROP_MIN_HEIGHT = 7
+                        const cnode_m = &doc.nodes.items[@as(usize, cid)];
+                        if (rep := LayoutTree.getReplacedSizeWithStyle(cnode_m, cs)) {
+                            if (!cs.width.is_auto && !cs.width.is_none && !cs.width.isIntrinsic() && rep.width > 0.0 && rep.height > 0.0) {
+                                const w_px = cs.width.resolvePx(container_w, cs.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+                                const trans_h = w_px * (rep.height / rep.width);
+                                if (items[mi].target_main < trans_h) items[mi].target_main = trans_h;
+                            }
+                        }
                     }
                 }
             }
@@ -4515,20 +4524,31 @@ pub struct LayoutTree {
                 let itm = &items[k];
                 const cid = itm.node_id;
                 const cbox = &_.boxes.items[@as(usize, cid)];
+                const cstyle_al = &styles[@as(usize, cid)];
+                const eff_align: AlignSelf = switch (cstyle_al.align_self) {
+                    .Auto => switch (pstyle.align_items) {
+                        .Stretch => AlignSelf.Stretch,
+                        .FlexStart => AlignSelf.FlexStart,
+                        .FlexEnd => AlignSelf.FlexEnd,
+                        .Center => AlignSelf.Center,
+                        .Baseline => AlignSelf.Start,
+                    },
+                    * => cstyle_al.align_self,
+                };
 
                 const cross_item_size = if (is_row) cbox.borderBoxHeight() else cbox.borderBoxWidth();
                 let cross_pos: f32 = current_cross;
                 if (line_cross_avail > cross_item_size) {
-                    if (pstyle.align_items == .FlexEnd) {
+                    if (eff_align == .FlexEnd || eff_align == .End || eff_align == .SelfEnd) {
                         cross_pos = current_cross + (line_cross_avail - cross_item_size);
-                    } else if (pstyle.align_items == .Center) {
+                    } else if (eff_align == .Center) {
                         cross_pos = current_cross + (line_cross_avail - cross_item_size) / 2.0;
                     }
                 }
 
-                if (pstyle.align_items == .Stretch && line_cross_avail > 0.0) {
+                if (eff_align == .Stretch && line_cross_avail > 0.0) {
                     itm.target_cross = line_cross_avail;
-                    if (is_row && styles[@as(usize, cid)].height.is_auto) {
+                    if (is_row && cstyle_al.height.is_auto) {
                         _.boxes.items[@as(usize, cid)].forced_height = line_cross_avail;
                     }
                 }
@@ -4566,7 +4586,8 @@ pub struct LayoutTree {
                         visible: (pstyle.visibility == Visibility.Visible),
                     };
                 } else {
-                    _.layoutNode(doc, styles, cid, item_x, item_y, item_avail_w, item_avail_h);
+                    const item_h_def = if (is_row) !pbox.height_is_auto else !line_auto_main;
+                    _.layoutNodeEx(doc, styles, cid, item_x, item_y, item_avail_w, item_avail_h, item_x, item_y, item_h_def);
                 }
 
                 const rendered_cross = if (is_row) _.boxes.items[@as(usize, cid)].borderBoxHeight() else _.boxes.items[@as(usize, cid)].borderBoxWidth();
@@ -4577,6 +4598,20 @@ pub struct LayoutTree {
                 const actual_main = if (is_row) _.boxes.items[@as(usize, cid)].borderBoxWidth() else _.boxes.items[@as(usize, cid)].borderBoxHeight();
                 const step_main = if (actual_main > itm.target_main) actual_main else itm.target_main;
                 current_main += step_main + between_step;
+            }
+
+            if (is_row && line_count == 1 && pbox.height_is_auto && line_max_cross > 0.0) {
+                let rk: usize = l_start;
+                while (rk < l_end) : (rk += 1) {
+                    const rcid = items[rk].node_id;
+                    const rstyle = &styles[@as(usize, rcid)];
+                    if (!rstyle.height.is_auto && !rstyle.height.is_none && !rstyle.height.is_calc && rstyle.height.length.unit == CssUnit.Percent) {
+                        const rbox = &_.boxes.items[@as(usize, rcid)];
+                        const rx = rbox.rect.x - rbox.margin_left;
+                        const ry = rbox.rect.y - rbox.margin_top;
+                        _.layoutNodeEx(doc, styles, rcid, rx, ry, items[rk].target_main, line_max_cross, rx, ry, true);
+                    }
+                }
             }
 
             if (is_row && pstyle.align_items == .Baseline) {

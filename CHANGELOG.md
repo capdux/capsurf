@@ -4666,3 +4666,5 @@
 - `src/js/shim/element/element.js`: `scrollHeight`/`scrollWidth` 扣除 `clientTop`/`clientLeft`，修复 `border: thick` 下的 +5px 偏差，4 项 `css-multicol` WPT **4/4 PASS**，`--smoke` 3/3 **PASS**。
 ### Phase 914 — CSS Borders 4 双角圆角简写（16 项 `border-*-radius-*` 全绿）
 - `src/js/shim/cssom.js`, `src/js/shim/window.js`: 统一接入 `border-{top,bottom,left,right,block-start,block-end,inline-start,inline-end}-radius` 的展开与计算值序列化，8 项 `-computed.html` + 8 项 `-valid.html` 共 **16/16 FAIL→PASS**，`--smoke` 3/3 **PASS**。
+### Phase 915 — CSS Flexbox 转换最小高度、`eff_align` 与单行百分比交叉轴重排
+- `src/layout/layout.cp`: 修复 `column` flex `min-height: auto` transferred height 夹紧、按 `align_self` 计算 `eff_align` 及单行 `auto`-height 容器百分比高度子项二次重排；通过 `cpc fix` + `cpc brief` 4 门禁，3 项 `css-flexbox` WPT **3/3 PASS**，`--smoke` 3/3 **PASS**。
