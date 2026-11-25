@@ -1157,6 +1157,10 @@
     }
 
     function isValidCalcSyntax(tok) {
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_math === "function" &&
+          !/\b(?:progress|media-progress|container-progress|calc-mix|calc-size)\(/i.test(tok)) {
+        return globalThis.__capsurf_is_valid_css_math(tok);
+      }
       if (/^env\(/i.test(tok)) return isValidEnvSyntax(tok);
       if (/^(?:var|attr|anchor|anchor-size)\(/i.test(tok)) return true;
       const m = /^(calc|min|max|clamp)\((.*)\)$/i.exec(tok);

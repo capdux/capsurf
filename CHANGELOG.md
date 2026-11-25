@@ -4487,3 +4487,6 @@
 ### Phase 846 — `timeProps` / 反三角函数下沉 `cap:css` 与 CSSOM 顶层逗号分割修复
 - `src/js/shim/window.js`: `timeProps` 路由至 `__capsurf_eval_css_math` 并改用括号深度感知逗号分割；`evalCssAngleDeg` 补齐长度/时间/视口单位归一化；修复 `rotSignRaw` 处 `evalSignCalls` TDZ。
 - `src/js/shim/cssom.js`: `vLower.split(",")` 全量替换为 `splitTopLevelComma`，`rotate` 放行全部 21 种数学函数，`animation`/`transition` 时间函数补齐逐参单位校验；`minmax-time-computed` (24/24) 与 `minmax-time-invalid` (52/52) **PASS**，`acos-asin-atan-atan2-computed` **51/52**，`--smoke` 3/3 **PASS**。
+### Phase 847 — `isValidCssMathSyntax` 语法校验下沉 `cap:css`
+- `/data/dev/cp/lib/css/mathFunc.cp` & `index.cp`: 新增并导出 `isValidCssMathSyntax`，支持 21 种 CSS Math Level 4 函数、参数个数校验与 50 种 W3C 单位白名单。
+- `src/js/dom_binding.cp` & `src/js/shim/cssom.js`: 暴露 `__capsurf_is_valid_css_math` 并接入 `isValidCalcSyntax`；`acos-asin-atan-atan2-computed` (52/52)、`exp-log-{compute,invalid}`、`sin-cos-tan-computed`、`minmax-time-{computed,invalid}`、`clamp-integer-computed` **7/7 PASS**，`--smoke` 3/3 **PASS**。

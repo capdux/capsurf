@@ -3532,3 +3532,5 @@
 - 将 `cap:css` (`mathFunc.cp`) 已实现的 21 种 W3C CSS Math Level 4 函数及 `pi`/`e`/`infinity`/`NaN`、角度单位 (`deg`/`rad`/`grad`/`turn`) 通过 `dom_binding.cp` `__capsurf_eval_css_math` 暴露给 JS shim，替代 `window.js` 中对 `log`/`exp`/`sin`/`cos`/`tan`/`pow`/`sqrt`/`hypot` 等的 JS 缺失分支，显著提升数学表达式求值完备性与复用度。
 ### Phase 846 — `timeProps` / 反三角函数下沉 `cap:css` 与 CSSOM 顶层逗号分割修复
 - 修复 `cssom.js` 与 `window.js` 中 `split(",")` 误切 `min(1s, 2s)` 内部逗号的根因，并将时间属性数学表达式统一接入 `cap:css` `__capsurf_eval_css_math` 求值，同时消除 `acos-asin-atan-atan2-computed` 中 `evalSignCalls` TDZ 与 `atan2()` 单位缺失问题。
+### Phase 847 — `isValidCssMathSyntax` 语法校验下沉 `cap:css`
+- 将 `cssom.js` 中 `isValidCalcSyntax` 的复杂 JS 正则校验下沉至 `cap:css` (`mathFunc.cp` `isValidCssMathSyntax`)，通过 `dom_binding.cp` `__capsurf_is_valid_css_math` 统一入口提供原生语法、单位与参数个数校验，同步打通 `acos-asin-atan-atan2-computed` 与 `exp-log-invalid`。
