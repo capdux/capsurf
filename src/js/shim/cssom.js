@@ -462,6 +462,135 @@
   global.__capsurf_parseContainIntrinsicSize = parseContainIntrinsicSize;
   if (typeof globalThis !== "undefined") globalThis.__capsurf_parseContainIntrinsicSize = parseContainIntrinsicSize;
 
+  function parseNormalizeImageSet(raw) {
+    const mSet = /^(?:-webkit-)?image-set\(\s*(.*)\s*\)$/i.exec(String(raw || "").trim());
+    if (!mSet || !mSet[1].trim()) return null;
+    const items = splitTopLevelComma(mSet[1]);
+    if (items.length === 0) return null;
+    const evalResCalc = (expr) => {
+      const m = /^(calc|min|max|clamp)\((.*)\)$/i.exec(expr.trim());
+      if (!m) return null;
+      if (/(?:(?:\d|\.)(?:em|rem|ex|ch|lh|vw|vh|vmin|vmax|cqw|cqh)|\bsibling-(?:index|count))\b/i.test(m[2])) {
+        return /(?:\d|\.)(?:x|dppx|dpi|dpcm)\b/i.test(m[2]) ? expr.trim() : null;
+      }
+      const inn = m[2].replace(/\bsign\(([^()]+)\)/gi, (_, a) => {
+        const nm = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))/.exec(a.trim());
+        const nv = nm ? parseFloat(nm[1]) : 0;
+        return String(nv > 0 ? 1 : (nv < 0 ? -1 : 0));
+      });
+      // Recursive descent parser returning { val, dim } where dim is 0 (number) or 1 (dppx)
+      let pos = 0;
+      const skipWs = () => { while (pos < inn.length && /\s/.test(inn[pos])) pos++; };
+      const parseExpr = () => {
+        let left = parseTerm();
+        if (!left) return null;
+        while (true) {
+          skipWs();
+          const op = inn[pos];
+          if (op !== "+" && op !== "-") break;
+          pos++;
+          const right = parseTerm();
+          if (!right || left.dim !== right.dim) return null;
+          left = { val: op === "+" ? left.val + right.val : left.val - right.val, dim: left.dim };
+        }
+        return left;
+      };
+      const parseTerm = () => {
+        let left = parseFactor();
+        if (!left) return null;
+        while (true) {
+          skipWs();
+          const op = inn[pos];
+          if (op !== "*" && op !== "/") break;
+          pos++;
+          const right = parseFactor();
+          if (!right) return null;
+          if (op === "*") {
+            if (left.dim && right.dim) return null;
+            left = { val: left.val * right.val, dim: left.dim + right.dim };
+          } else {
+            if (right.dim || right.val === 0) return null;
+            left = { val: left.val / right.val, dim: left.dim };
+          }
+        }
+        return left;
+      };
+      const parseFactor = () => {
+        skipWs();
+        if (inn[pos] === "(") {
+          pos++;
+          const v = parseExpr();
+          skipWs();
+          if (!v || inn[pos] !== ")") return null;
+          pos++;
+          return v;
+        }
+        const rest = inn.slice(pos);
+        const nm = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)(x|dppx|dpi|dpcm)?/i.exec(rest);
+        if (!nm) return null;
+        pos += nm[0].length;
+        const num = parseFloat(nm[1]);
+        if (!isFinite(num)) return null;
+        if (!nm[2]) return { val: num, dim: 0 };
+        const u = nm[2].toLowerCase();
+        const factor = (u === "x" || u === "dppx") ? 1 : (u === "dpi" ? (1 / 96) : (2.54 / 96));
+        return { val: num * factor, dim: 1 };
+      };
+      const res = parseExpr();
+      skipWs();
+      if (!res || pos !== inn.length || res.dim !== 1) return null;
+      return "calc(" + String(Number(res.val.toFixed(6))) + "dppx)";
+    };
+    const outItems = [];
+    for (let ii = 0; ii < items.length; ii++) {
+      const it = items[ii].trim();
+      if (!it) return null;
+      const toks = splitCssTokens(it);
+      if (toks.length < 1 || toks.length > 3) return null;
+      const imgTk = toks[0];
+      let imgNorm = "";
+      if ((imgTk.startsWith("\"") && imgTk.endsWith("\"")) || (imgTk.startsWith("'") && imgTk.endsWith("'"))) {
+        imgNorm = 'url("' + imgTk.slice(1, -1) + '")';
+      } else if (/^url\(/i.test(imgTk)) {
+        const um = /^url\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*?))\s*\)$/i.exec(imgTk);
+        if (!um) return null;
+        imgNorm = 'url("' + (um[1] ?? um[2] ?? um[3] ?? "").trim() + '")';
+      } else if (/^(?:repeating-)?(?:linear|radial|conic)-gradient\(/i.test(imgTk)) {
+        imgNorm = imgTk;
+      } else if (/^image\(/i.test(imgTk)) {
+        const im = /^image\(\s*(.*)\s*\)$/i.exec(imgTk);
+        if (!im || !im[1] || !isValidColor(im[1])) return null;
+        imgNorm = imgTk;
+      } else {
+        return null;
+      }
+      let resNorm = "", typeNorm = "";
+      for (let ti = 1; ti < toks.length; ti++) {
+        const tk = toks[ti], tkl = tk.toLowerCase();
+        if (/^(?:\+?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)(?:x|dppx|dpi|dpcm)$/i.test(tkl)) {
+          if (resNorm) return null;
+          resNorm = tkl;
+        } else if (/^(?:calc|min|max|clamp)\(/i.test(tkl)) {
+          if (resNorm) return null;
+          const cr = evalResCalc(tk);
+          if (!cr) return null;
+          resNorm = cr;
+        } else if (/^type\(\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')\s*\)$/i.test(tk)) {
+          if (typeNorm) return null;
+          const tm = /^type\(\s*(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)')\s*\)$/i.exec(tk);
+          const tv = tm ? (tm[1] ?? tm[2] ?? "") : "";
+          typeNorm = 'type("' + tv + '")';
+        } else {
+          return null;
+        }
+      }
+      const parts = [imgNorm, resNorm || "1x"];
+      if (typeNorm) parts.push(typeNorm);
+      outItems.push(parts.join(" "));
+    }
+    return "image-set(" + outItems.join(", ") + ")";
+  }
+
   function isValidCssValue(prop, value) {
     if (typeof value !== "string") value = String(value);
     const trimmed = value.trim();
@@ -3220,10 +3349,12 @@
       }
       return true;
     }
+    const isValidImageSet = (raw) => parseNormalizeImageSet(raw) !== null;
     if (prop === "border-image-source") {
       if (vLower === "none") return true;
       if (splitTopLevelComma(trimmed).length !== 1) return false;
-      return /^(?:url|linear-gradient|radial-gradient|conic-gradient|repeating-linear-gradient|repeating-radial-gradient|repeating-conic-gradient|image|image-set|cross-fade|-webkit-linear-gradient|-webkit-radial-gradient)\(/i.test(trimmed);
+      if (/^(?:-webkit-)?image-set\(/i.test(trimmed)) return isValidImageSet(trimmed);
+      return /^(?:url|linear-gradient|radial-gradient|conic-gradient|repeating-linear-gradient|repeating-radial-gradient|repeating-conic-gradient|image|cross-fade|-webkit-linear-gradient|-webkit-radial-gradient)\(/i.test(trimmed);
     }
     if (prop === "border-image-width") {
       const toks = splitCssTokens(vLower);
@@ -3457,7 +3588,11 @@
           if (!im || !im[1] || !isValidColor(im[1])) return false;
           continue;
         }
-        if (/^(?:url|image-set|-webkit-image-set|(?:repeating-)?(?:linear|radial|conic)-gradient|-webkit-(?:linear|radial)-gradient)\(/i.test(bl)) continue;
+        if (/^(?:-webkit-)?image-set\(/i.test(bl)) {
+          if (!isValidImageSet(bl)) return false;
+          continue;
+        }
+        if (/^(?:url|(?:repeating-)?(?:linear|radial|conic)-gradient|-webkit-(?:linear|radial)-gradient)\(/i.test(bl)) continue;
         return false;
       }
     }
@@ -4839,6 +4974,10 @@
       }).join(", ");
     }
     if (key === "content") {
+      if (/^(?:-webkit-)?image-set\(/i.test(s)) {
+        const normSet = parseNormalizeImageSet(s);
+        if (normSet) return normSet;
+      }
       const normCounterTok = (tok) => {
         const cm = /^(counters?)\((.*)\)$/i.exec(tok);
         if (!cm) return tok;
@@ -5447,16 +5586,20 @@
         return part;
       }).join(", ");
     }
-    if (key === "list-style-image" || key === "background-image") {
+    if (key === "list-style-image" || key === "background-image" || key === "border-image-source") {
       let open = 0, close = 0;
       for (let i = 0; i < s.length; i++) {
         if (s[i] === "(") open++;
         else if (s[i] === ")") close++;
       }
       let res = open > close ? s + ")".repeat(open - close) : s;
-      if (key === "background-image") {
+      if (key === "background-image" || key === "list-style-image" || key === "border-image-source") {
         res = splitTopLevelComma(res).map((layer) => {
           const lt = layer.trim();
+          if (/^(?:-webkit-)?image-set\(/i.test(lt)) {
+            const normSet = parseNormalizeImageSet(lt);
+            if (normSet) return normSet;
+          }
           if (/^url\(/i.test(lt)) {
             const um = /^url\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*?))\s*\)$/i.exec(lt);
             if (um) return 'url("' + (um[1] ?? um[2] ?? um[3] ?? "").trim() + '")';

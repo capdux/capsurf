@@ -2457,3 +2457,4 @@
 | Phase 788 | WPT `CSS.elementSources` 与 `object-view-box` 校验及初始值 | `src/js/shim/cssom.js`, `src/js/shim/window.js` | `css-images/idlharness`, `object-view-box-parsing`, `object-view-box-transition-mutation` **3/3 PASS**; `--smoke` 3/3 PASS |
 | Phase 789 | WPT `Element.prototype.part` IDL 与 `DOMTokenList` 同步 | `src/js/shim/element/element.js` | `css-shadow/idlharness`, `part/part-name-idl` **2/2 PASS**; `--smoke` 3/3 PASS |
 | Phase 790 | WPT `cross-fade()` 计算求值与 `image()`/`color-mix()` 校验序列化 | `src/js/shim/cssom.js`, `src/js/shim/window.js` | `cross-fade-computed-value` (7/7 **PASS**)、`image-function-valid` (13/13 **PASS**); `--smoke` 3/3 PASS |
+| Phase 791 | WPT `image-set()` / `-webkit-image-set()` 解析与规范序列化（144/144） | `src/js/shim/cssom.js` | `image-set-parsing.html` (**144/144 PASS**); `--smoke` 3/3 PASS |
