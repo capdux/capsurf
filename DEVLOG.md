@@ -3486,3 +3486,5 @@
 - 在 `selector.js` 实现 `:has(...)` 相对选择器求值，移除 `scopeRoot` 向上匹配截断并引入 `stopAtEl` 区分 `:has()` 顶层相对链与嵌套 `:is(:scope ...)`，`has-argument-with-explicit-scope.html` 全绿 **PASS**。
 ### Phase 823 — 任意深度相对 `:has()` 组合器链与 `querySelectorAll` 拦截
 - 在 `selector.js` 抽取 `matchesComplexParts` 与 `__HAS_ANCHOR__` 锚点匹配，`wrapQuerySelector`/`wrapQuerySelectorAll` 统一拦截 `:has(`，`has-matches-to-uninserted-elements` 与 `has-relative-argument` (35/35) 全绿 **PASS**。
+### Phase 824 — 孤立节点/`documentElement` 子索引伪类与未挂载 `computedStyleMap`
+- 在 `selector.js`、`element.js` 将无父节点或 `document` 根元素的子索引伪类（`:first-child`/`:nth-child` 等）按 Selectors 4 规范视为 `1/1` 并打通 `document.querySelector`/`matches`，同时在 `window.js` `makeComputedStyleMap` 拦截未挂载节点返回 `undefined`，`child-indexed-pseudo-class` (57/57) 与 `get-disconnected-element` 全绿 **PASS**。

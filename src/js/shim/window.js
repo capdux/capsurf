@@ -14920,7 +14920,11 @@ function makeStylePropertyMap(declaration) {
   return new StylePropertyMap(() => declaration);
 }
 function makeComputedStyleMap(element, getComputedStyle, specified) {
-  const map = new StylePropertyMapReadOnly(() => getComputedStyle(element));
+  const map = new StylePropertyMapReadOnly(() => (
+    (element && element.isConnected)
+      ? getComputedStyle(element)
+      : { getPropertyValue: () => "", [Symbol.iterator]: function* () {} }
+  ));
   if (!specified)
     return map;
   const getAll = map.getAll.bind(map);

@@ -4411,3 +4411,8 @@
 - **Phase 823**:
   - `src/js/shim/selector.js`: 抽取 `matchesComplexParts` 与 `__HAS_ANCHOR__` 锚点匹配，支持任意深度相对 `:has()` 组合器链；`wrapQuerySelector`/`wrapQuerySelectorAll` 拦截 `:has(`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 824**:
+  - `src/js/shim/selector.js`: `matchesNthChild` 支持无父节点/`document` 根视为 `1/1`；`wrapQuerySelector`/`wrapQuerySelectorAll` 对 `document`/`DocumentFragment` 拦截子索引伪类。
+  - `src/js/shim/element/element.js`: `proto.matches` 对子索引伪类允许回落 JS 匹配器。
+  - `src/js/shim/window.js`: `makeComputedStyleMap` 对未挂载节点返回空样式。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

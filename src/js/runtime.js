@@ -17878,11 +17878,13 @@
       if (isPurePseudoElementSelector(s)) {
         return null;
       }
-      if ((s.includes(":checked") || s.includes(":scope") || s.includes("&") || s.includes(":has(")) && typeof findInSubtree === "function" && typeof matchesElementSelector === "function") {
-        const root = this === document ? (document.documentElement || document) : this;
-        const found = findInSubtree(root, function (el) {
+      if ((s.includes(":checked") || s.includes(":scope") || s.includes("&") || s.includes(":has(") ||
+           ((this === document || this.nodeType === 11) && /:(?:first-child|last-child|only-child|first-of-type|last-of-type|only-of-type|nth-)/i.test(s))) &&
+          typeof findInSubtree === "function" && typeof matchesElementSelector === "function") {
+        const scopeEl = this === document ? (document.documentElement || document) : this;
+        const found = findInSubtree(this, function (el) {
           const up = typeof upgradeElement === "function" ? upgradeElement(el) : el;
-          return matchesElementSelector(up, s, root, true);
+          return matchesElementSelector(up, s, scopeEl, true);
         }, true);
         return found ? (typeof upgradeElement === "function" ? upgradeElement(found) : found) : null;
       }
@@ -17902,11 +17904,13 @@
       if (isPurePseudoElementSelector(s)) {
         return new NodeList([]);
       }
-      if ((s.includes(":checked") || s.includes(":scope") || s.includes("&") || s.includes(":has(")) && typeof findInSubtree === "function" && typeof matchesElementSelector === "function") {
-        const root = this === document ? (document.documentElement || document) : this;
-        const matched = findInSubtree(root, function (el) {
+      if ((s.includes(":checked") || s.includes(":scope") || s.includes("&") || s.includes(":has(") ||
+           ((this === document || this.nodeType === 11) && /:(?:first-child|last-child|only-child|first-of-type|last-of-type|only-of-type|nth-)/i.test(s))) &&
+          typeof findInSubtree === "function" && typeof matchesElementSelector === "function") {
+        const scopeEl = this === document ? (document.documentElement || document) : this;
+        const matched = findInSubtree(this, function (el) {
           const up = typeof upgradeElement === "function" ? upgradeElement(el) : el;
-          return matchesElementSelector(up, s, root, true);
+          return matchesElementSelector(up, s, scopeEl, true);
         }, false);
         const out = [];
         for (let i = 0; i < matched.length; i++) {
@@ -18271,18 +18275,22 @@
 
   function matchesNthChild(el, exprRaw, fromLast, ofType) {
     const p = el.parentNode;
-    if (!p) return false;
-    const kids = p.children || p._children || p.childNodes || [];
-    const elTag = ofType ? String(el.localName || el.tagName || "").toLowerCase() : "";
     let idx = 0;
     let total = 0;
-    for (let k = 0; k < kids.length; k++) {
-      const ch = kids[k];
-      if (ch && ch.nodeType === 1) {
-        if (ofType && String(ch.localName || ch.tagName || "").toLowerCase() !== elTag) continue;
-        total++;
-        if (ch === el || (typeof el._nid === "number" && el._nid > 0 && ch._nid === el._nid)) {
-          idx = total;
+    if (!p || p.nodeType === 9) {
+      idx = 1;
+      total = 1;
+    } else {
+      const kids = p.children || p._children || p.childNodes || [];
+      const elTag = ofType ? String(el.localName || el.tagName || "").toLowerCase() : "";
+      for (let k = 0; k < kids.length; k++) {
+        const ch = kids[k];
+        if (ch && ch.nodeType === 1) {
+          if (ofType && String(ch.localName || ch.tagName || "").toLowerCase() !== elTag) continue;
+          total++;
+          if (ch === el || (typeof el._nid === "number" && el._nid > 0 && ch._nid === el._nid)) {
+            idx = total;
+          }
         }
       }
     }
@@ -20599,9 +20607,7 @@
           if (origProtoMatches.call(this, selector)) return true;
           const rootNode = typeof this.getRootNode === "function" ? this.getRootNode() : null;
           if (!(rootNode && rootNode.host) &&
-              s.indexOf(":is(") === -1 && s.indexOf(":where(") === -1 &&
-              s.indexOf(":has(") === -1 && s.indexOf(":not(") === -1 &&
-              s.indexOf(":scope") === -1) {
+              !/:(?:is|where|has|not|scope|first-child|last-child|only-child|first-of-type|last-of-type|only-of-type|nth-)/i.test(s)) {
             return false;
           }
         } catch (e) {
@@ -55402,7 +55408,11 @@
     return new StylePropertyMap(() => declaration);
   }
   function makeComputedStyleMap(element, getComputedStyle, specified) {
-    const map = new StylePropertyMapReadOnly(() => getComputedStyle(element));
+    const map = new StylePropertyMapReadOnly(() => (
+      (element && element.isConnected)
+        ? getComputedStyle(element)
+        : { getPropertyValue: () => "", [Symbol.iterator]: function* () {} }
+    ));
     if (!specified)
       return map;
     const getAll = map.getAll.bind(map);

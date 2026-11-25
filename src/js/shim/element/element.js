@@ -2174,9 +2174,7 @@ function installElementExtensions(proto) {
         if (origProtoMatches.call(this, selector)) return true;
         const rootNode = typeof this.getRootNode === "function" ? this.getRootNode() : null;
         if (!(rootNode && rootNode.host) &&
-            s.indexOf(":is(") === -1 && s.indexOf(":where(") === -1 &&
-            s.indexOf(":has(") === -1 && s.indexOf(":not(") === -1 &&
-            s.indexOf(":scope") === -1) {
+            !/:(?:is|where|has|not|scope|first-child|last-child|only-child|first-of-type|last-of-type|only-of-type|nth-)/i.test(s)) {
           return false;
         }
       } catch (e) {
