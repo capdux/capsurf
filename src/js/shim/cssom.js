@@ -1340,7 +1340,7 @@
           const cnt = rm[1].trim(), repBody = splitGridTokens(rm[2].trim());
           if (repBody.length === 0) return false;
           const isAuto = cnt === "auto-fill" || cnt === "auto-fit";
-          if (!isAuto && !/^[1-9]\d*$/.test(cnt)) return false;
+          if (!isAuto && !/^[1-9]\d*$/.test(cnt) && !(/^(?:calc|min|max|clamp)\(/i.test(cnt) && isValidCalcSyntax(cnt))) return false;
           if (isAuto) {
             autoRepCount++;
             if (autoRepCount > 1) return false;
@@ -1354,7 +1354,7 @@
             if (!isFixedSize(rt)) hasNonFixed = true;
             repTracks++;
           }
-          if (repTracks === 0 || (isAuto && repTracks !== 1)) return false;
+          if (repTracks === 0) return false;
           trackCount += repTracks;
           continue;
         }

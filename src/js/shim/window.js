@@ -11113,6 +11113,111 @@ function installWindow(global) {
       computedMap.set("color-interpolation-filters", cifVal.toLowerCase());
     }
     const fcaVal = computedMap.get("forced-color-adjust");
+    {
+      const dispG = (computedMap.get("display") || "block").toLowerCase();
+      const isGrid = dispG === "grid" || dispG === "inline-grid";
+      const fsG = evalCssLengthExpr(computedMap.get("font-size") || "16px", 16, 16) || 16;
+      const tokGridComp = (str) => {
+        const out = [];
+        let c = "", p = 0, b = 0;
+        for (let i = 0; i < str.length; i++) {
+          const ch = str[i];
+          if (ch === "(") p++; else if (ch === ")" && p > 0) p--;
+          else if (ch === "[" && p === 0) b++; else if (ch === "]" && p === 0 && b > 0) b--;
+          if (p === 0 && b === 0 && /\s/.test(ch)) { if (c) { out.push(c); c = ""; } }
+          else c += ch;
+        }
+        if (c) out.push(c);
+        return out;
+      };
+      for (let gi = 0; gi < 2; gi++) {
+        const gProp = gi === 0 ? "grid-template-columns" : "grid-template-rows";
+        const gRaw = computedMap.get(gProp);
+        if (!gRaw || gRaw === "none") continue;
+        const pctBaseRaw = gi === 0 ? computedMap.get("width") : computedMap.get("height");
+        const pctBase = (pctBaseRaw && pctBaseRaw !== "auto") ? (evalCssLengthExpr(pctBaseRaw, 0, fsG) || 0) : 0;
+        const toks = tokGridComp(gRaw);
+        const rawOut = [];
+        const resolveGridTrack = (t) => {
+          if (t === "0" || t === "+0" || t === "-0") return "0px";
+          if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:px|em|rem|cm|mm|in|pt|pc|q|vw|vh|%)$/i.test(t) || /^(?:calc|min|max|clamp)\(/i.test(t)) {
+            if (!isGrid && t.endsWith("%")) return t;
+            const px = evalCssLengthExpr(t, pctBase, fsG);
+            if (px !== null && isFinite(px)) return formatCssPx(px);
+          }
+          return t;
+        };
+        for (let ti = 0; ti < toks.length; ti++) {
+          const tk = toks[ti];
+          if (/^repeat\(/i.test(tk)) {
+            const rm = /^repeat\(\s*([^,]+)\s*,\s*(.+)\s*\)$/i.exec(tk);
+            if (!rm) { rawOut.push(tk); continue; }
+            const cntRaw = rm[1].trim().toLowerCase();
+            const bodyToks = tokGridComp(rm[2].trim());
+            if (!isGrid) {
+              const resBody = bodyToks.map((bt) => bt.startsWith("[") ? bt : resolveGridTrack(bt)).join(" ");
+              rawOut.push("repeat(" + cntRaw + ", " + resBody + ")");
+              continue;
+            }
+            if (cntRaw === "auto-fill" || cntRaw === "auto-fit") {
+              if (!isGrid) { rawOut.push(tk); continue; }
+              let sumTrackPx = 0;
+              for (let bi = 0; bi < bodyToks.length; bi++) {
+                if (!bodyToks[bi].startsWith("[")) {
+                  const px = evalCssLengthExpr(bodyToks[bi], pctBase, fsG);
+                  if (px !== null && isFinite(px)) sumTrackPx += px;
+                }
+              }
+              const reps = (pctBase > 0 && sumTrackPx > 0) ? Math.max(1, Math.floor(pctBase / sumTrackPx)) : 1;
+              const collapseFit = cntRaw === "auto-fit" && (!element || !element.children || element.children.length === 0);
+              for (let r = 0; r < reps; r++) {
+                for (let bi = 0; bi < bodyToks.length; bi++) {
+                  const bt = bodyToks[bi];
+                  rawOut.push(bt.startsWith("[") ? bt : (collapseFit ? "0px" : resolveGridTrack(bt)));
+                }
+              }
+            } else {
+              let n = 0;
+              if (/^\d+$/.test(cntRaw)) n = parseInt(cntRaw, 10);
+              else if (/^(?:calc|min|max|clamp)\(/i.test(cntRaw)) {
+                const expr = evalSignCalls(cntRaw.slice(cntRaw.indexOf("(") + 1, -1), element).trim();
+                if (/^[\d+\-*/().\s]+$/.test(expr)) {
+                  try { n = Math.max(1, Math.round(Function("return (" + expr + ")")())); } catch (_) {}
+                }
+              }
+              if (n > 0) {
+                for (let r = 0; r < n; r++) {
+                  for (let bi = 0; bi < bodyToks.length; bi++) {
+                    const bt = bodyToks[bi];
+                    rawOut.push(bt.startsWith("[") ? bt : resolveGridTrack(bt));
+                  }
+                }
+              } else {
+                rawOut.push(tk);
+              }
+            }
+          } else if (tk.startsWith("[")) {
+            rawOut.push(tk);
+          } else {
+            rawOut.push(resolveGridTrack(tk));
+          }
+        }
+        // Merge adjacent [a] [b] -> [a b]
+        const merged = [];
+        for (let mi = 0; mi < rawOut.length; mi++) {
+          const curT = rawOut[mi];
+          if (curT.startsWith("[") && curT.endsWith("]") && merged.length > 0 && merged[merged.length - 1].startsWith("[") && merged[merged.length - 1].endsWith("]")) {
+            const prevNames = merged[merged.length - 1].slice(1, -1).trim();
+            const curNames = curT.slice(1, -1).trim();
+            const combined = (prevNames + " " + curNames).trim();
+            if (combined) merged[merged.length - 1] = "[" + combined + "]";
+          } else {
+            merged.push(curT);
+          }
+        }
+        computedMap.set(gProp, merged.join(" "));
+      }
+    }
     if (!fcaVal || fcaVal === "initial" || fcaVal === "revert" || fcaVal === "revert-layer") {
       computedMap.set("forced-color-adjust", "auto");
     } else {

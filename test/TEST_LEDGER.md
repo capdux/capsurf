@@ -2475,3 +2475,4 @@
 | Phase 806 | WPT Popover API (`showPopover`/`:popover-open`) 与 `::slotted(dialog)::backdrop` | `src/js/shim/element/html-element.js`, `src/js/shim/selector.js` | `backdrop-tree-abiding-slotted`, `overlay/overlay-user-agent-rules` (**PASS**); `--smoke` 3/3 PASS |
 | Phase 807 | WPT `font` 简写校验/规范化与 `CSSCounterStyleRule` 非法构造拦截 | `src/js/shim/cssom.js` | `css-counter-styles/idlharness` (37/37 **PASS**), `css-fonts/parsing/font-invalid` (16/16 **PASS**); `--smoke` 3/3 PASS |
 | Phase 808 | WPT `grid-template` 简写全套与未挂载节点 `getComputedStyle` | `src/js/shim/cssom.js`, `src/js/shim/window.js` | `grid-template-{node-not-connected,shorthand,shorthand-invalid,shorthand-valid,shorthand-composition,shorthand-areas-valid}` (6/6 **PASS**); `--smoke` 3/3 PASS |
+| Phase 809 | WPT `grid-template-columns`/`rows` `repeat()` 展开与计算值求值 | `src/js/shim/cssom.js`, `src/js/shim/window.js` | `grid-template-{columns,rows}-computed{,-nogrid}` (4/4 **PASS**); `--smoke` 3/3 PASS |

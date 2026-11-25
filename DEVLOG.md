@@ -3456,3 +3456,5 @@
 - 在 `cssom.js` 新增 `parseAndNormalizeFontShorthand` 实现 `font` 简写 4 槽位前缀、尺寸/行高及字体族校验与规范化序列化，并为 `CSSCounterStyleRule` 补充非法构造拦截（保持 `length === 0`），`css-counter-styles/idlharness.html` (37/37) 与 `css-fonts/parsing/font-invalid.html` (16/16) 均 **PASS**。
 ### Phase 808 — `grid-template` 简写校验/展开/重组与未挂载节点 `getComputedStyle`
 - 在 `cssom.js` 实现 `grid-template` 简写语法校验、长属性展开（`rows`/`columns`/`areas`）及规范化重组，并在 `window.js` 使未挂载节点 `getComputedStyle` 返回 `""`，`grid-template-node-not-connected`、`grid-template-shorthand`、`grid-template-shorthand-{invalid,valid,composition,areas-valid}` 6/6 **PASS**。
+### Phase 809 — `grid-template-columns`/`rows` `repeat()` 多轨道/计算值展开与非网格容器兼容
+- 在 `cssom.js` 放开 `auto-fill`/`auto-fit` 多轨道与 `calc()` 次数校验，并在 `window.js` 实现网格容器轨道 `repeat()` 展开、`auto-fit` 空轨折叠与非网格容器 `repeat()` 保留求值，`grid-template-{columns,rows}-computed` 及 `-nogrid` 4/4 **PASS**。

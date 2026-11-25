@@ -4355,3 +4355,7 @@
   - `src/js/shim/cssom.js`: 新增 `parseGridTemplateShorthand` 实现 `grid-template` 简写校验、长属性展开与规范化重组。
   - `src/js/shim/window.js`: `getComputedStyle` 拦截 `element.isConnected === false` 返回空串。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 809**:
+  - `src/js/shim/cssom.js`: `grid-template-columns`/`rows` 支持 `repeat(auto-fill/auto-fit, ...)` 多轨道与 `repeat(calc(...), ...)`。
+  - `src/js/shim/window.js`: `applyUsedValuesToComputedMap` 实现 `grid-template-columns`/`rows` 轨道计算值求值与 `repeat()` 展开（含 `!isGrid` 非网格容器分支）。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
