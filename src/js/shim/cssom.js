@@ -824,6 +824,66 @@
     return { rows: rowsStr, columns: colsN, areas: areasStr, canonical: canonStr };
   }
 
+  function parseGridShorthand(trimmed) {
+    const low = trimmed.toLowerCase();
+    if (/(?:^|[^a-z0-9_-])var\(/i.test(low)) {
+      return { rows: trimmed, columns: trimmed, areas: trimmed, autoFlow: trimmed, autoRows: trimmed, autoColumns: trimmed, canonical: trimmed };
+    }
+    if (/\bauto-flow\b/i.test(low)) {
+      const slashParts = [];
+      let cur = "", pd = 0, bd = 0, q = "";
+      for (let i = 0; i < trimmed.length; i++) {
+        const ch = trimmed[i];
+        if (q) { cur += ch; if (ch === "\\" && i + 1 < trimmed.length) cur += trimmed[++i]; else if (ch === q) q = ""; continue; }
+        if (ch === '"' || ch === "'") { q = ch; cur += ch; continue; }
+        if (ch === "(") pd++; else if (ch === ")" && pd > 0) pd--;
+        else if (ch === "[" && pd === 0) bd++; else if (ch === "]" && pd === 0 && bd > 0) bd--;
+        if (pd === 0 && bd === 0 && ch === "/") { slashParts.push(cur.trim()); cur = ""; }
+        else cur += ch;
+      }
+      slashParts.push(cur.trim());
+      if (q || pd !== 0 || bd !== 0 || slashParts.length !== 2 || !slashParts[0] || !slashParts[1]) return null;
+      const parseAutoSide = (sideStr) => {
+        const toks = splitCssTokens(sideStr);
+        let hasAf = false, hasDense = false, idx = 0;
+        while (idx < toks.length && idx < 2) {
+          const tl = toks[idx].toLowerCase();
+          if (tl === "auto-flow" && !hasAf) { hasAf = true; idx++; continue; }
+          if (tl === "dense" && !hasDense) { hasDense = true; idx++; continue; }
+          break;
+        }
+        if (!hasAf) return null;
+        const rest = toks.slice(idx).join(" ");
+        if (rest && !isValidCssValue("grid-auto-rows", rest)) return null;
+        const restN = rest ? normalizeCssSpecifiedValue("grid-auto-rows", rest) : "";
+        return { dense: hasDense, track: restN };
+      };
+      const leftAf = /\bauto-flow\b/i.test(slashParts[0]);
+      const rightAf = /\bauto-flow\b/i.test(slashParts[1]);
+      if (leftAf && rightAf) return null;
+      if (leftAf) {
+        const af = parseAutoSide(slashParts[0]);
+        if (!af || !isValidCssValue("grid-template-columns", slashParts[1])) return null;
+        const colsN = normalizeCssSpecifiedValue("grid-template-columns", slashParts[1]);
+        const flow = af.dense ? "dense" : "row";
+        const autoR = af.track || "auto";
+        const canon = "auto-flow" + (af.dense ? " dense" : "") + (af.track ? (" " + af.track) : "") + " / " + colsN;
+        return { rows: "none", columns: colsN, areas: "none", autoFlow: flow, autoRows: autoR, autoColumns: "auto", canonical: canon };
+      } else {
+        const af = parseAutoSide(slashParts[1]);
+        if (!af || !isValidCssValue("grid-template-rows", slashParts[0])) return null;
+        const rowsN = normalizeCssSpecifiedValue("grid-template-rows", slashParts[0]);
+        const flow = af.dense ? "column dense" : "column";
+        const autoC = af.track || "auto";
+        const canon = rowsN + " / auto-flow" + (af.dense ? " dense" : "") + (af.track ? (" " + af.track) : "");
+        return { rows: rowsN, columns: "none", areas: "none", autoFlow: flow, autoRows: "auto", autoColumns: autoC, canonical: canon };
+      }
+    }
+    const gt = parseGridTemplateShorthand(trimmed);
+    if (!gt) return null;
+    return { rows: gt.rows, columns: gt.columns, areas: gt.areas, autoFlow: "row", autoRows: "auto", autoColumns: "auto", canonical: gt.canonical };
+  }
+
   function isValidCssValue(prop, value) {
     if (typeof value !== "string") value = String(value);
     const trimmed = value.trim();
@@ -849,6 +909,10 @@
 
     if (prop === "grid-template") {
       return !!parseGridTemplateShorthand(trimmed);
+    }
+
+    if (prop === "grid") {
+      return !!parseGridShorthand(trimmed);
     }
 
     if (prop === "border-color" || prop === "border-block-color" || prop === "border-inline-color") {
@@ -4418,6 +4482,7 @@
     if (key === "display") return canonicalizeDisplayValue(s) || s.toLowerCase();
     if (key === "font") return parseAndNormalizeFontShorthand(s) || s;
     if (key === "grid-template") { const p = parseGridTemplateShorthand(s); return p ? p.canonical : s; }
+    if (key === "grid") { const p = parseGridShorthand(s); return p ? p.canonical : s; }
     if (/\bvar\(/i.test(s)) return s;
     if (NUM_NORM_PROPS.has(key) && /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(s)) {
       const n = Number(s);
@@ -4850,6 +4915,22 @@
       }
       while (ri < rToks.length) out.push(rToks[ri++]);
       return out.join(" ") + (c !== "none" ? (" / " + c) : "");
+    }
+    if (key === "grid") {
+      const r = vals[0], c = vals[1], a = vals[2], flow = vals[3], ar = vals[4], ac = vals[5];
+      if (flow === "row" && ar === "auto" && ac === "auto") {
+        return serializeExpandedShorthand("grid-template", getVal);
+      }
+      if (a !== "none") return "";
+      if ((flow === "row" || flow === "row dense" || flow === "dense") && r === "none" && ac === "auto") {
+        const dense = (flow === "row dense" || flow === "dense") ? " dense" : "";
+        return "auto-flow" + dense + (ar !== "auto" ? (" " + ar) : "") + " / " + c;
+      }
+      if ((flow === "column" || flow === "column dense") && c === "none" && ar === "auto") {
+        const dense = flow === "column dense" ? " dense" : "";
+        return r + " / auto-flow" + dense + (ac !== "auto" ? (" " + ac) : "");
+      }
+      return "";
     }
     if (key === "text-decoration") {
       const parts = splitCssTokens(s);
@@ -6425,6 +6506,18 @@
       if (!p) return null;
       return [["grid-template-rows", p.rows], ["grid-template-columns", p.columns], ["grid-template-areas", p.areas]];
     }
+    if (key === "grid") {
+      const p = parseGridShorthand(normV);
+      if (!p) return null;
+      return [
+        ["grid-template-rows", p.rows],
+        ["grid-template-columns", p.columns],
+        ["grid-template-areas", p.areas],
+        ["grid-auto-flow", p.autoFlow],
+        ["grid-auto-rows", p.autoRows],
+        ["grid-auto-columns", p.autoColumns]
+      ];
+    }
     if (key === "position-try") {
       const ORDERS = new Set(["normal", "most-width", "most-height", "most-block-size", "most-inline-size"]);
       const toks = splitCssTokens(normV);
@@ -6569,6 +6662,22 @@
       }
       while (ri < rToks.length) out.push(rToks[ri++]);
       return out.join(" ") + (c !== "none" ? (" / " + c) : "");
+    }
+    if (key === "grid") {
+      const r = vals[0], c = vals[1], a = vals[2], flow = vals[3], ar = vals[4], ac = vals[5];
+      if (flow === "row" && ar === "auto" && ac === "auto") {
+        return serializeExpandedShorthand("grid-template", getVal);
+      }
+      if (a !== "none") return "";
+      if ((flow === "row" || flow === "row dense" || flow === "dense") && r === "none" && ac === "auto") {
+        const dense = (flow === "row dense" || flow === "dense") ? " dense" : "";
+        return "auto-flow" + dense + (ar !== "auto" ? (" " + ar) : "") + " / " + c;
+      }
+      if ((flow === "column" || flow === "column dense") && c === "none" && ar === "auto") {
+        const dense = flow === "column dense" ? " dense" : "";
+        return r + " / auto-flow" + dense + (ac !== "auto" ? (" " + ac) : "");
+      }
+      return "";
     }
     if (key === "text-decoration") {
       const parts = splitCssTokens(normV);
@@ -7152,6 +7261,7 @@
     "grid-column": ["grid-column-start", "grid-column-end"],
     "grid-area": ["grid-row-start", "grid-column-start", "grid-row-end", "grid-column-end"],
     "grid-template": ["grid-template-rows", "grid-template-columns", "grid-template-areas"],
+    "grid": ["grid-template-rows", "grid-template-columns", "grid-template-areas", "grid-auto-flow", "grid-auto-rows", "grid-auto-columns"],
     "font-variant": ["font-variant-ligatures", "font-variant-caps", "font-variant-alternates", "font-variant-numeric", "font-variant-east-asian", "font-variant-position", "font-variant-emoji"],
     background: ["background-image", "background-position", "background-size", "background-repeat", "background-attachment", "background-origin", "background-clip", "background-color"],
     mask: ["mask-image", "mask-position", "mask-size", "mask-repeat", "mask-origin", "mask-clip", "mask-composite", "mask-mode", "mask-border-source", "mask-border-slice", "mask-border-width", "mask-border-outset", "mask-border-repeat"]
@@ -7206,6 +7316,22 @@
       }
       while (ri < rToks.length) out.push(rToks[ri++]);
       return out.join(" ") + (c !== "none" ? (" / " + c) : "");
+    }
+    if (key === "grid") {
+      const r = vals[0], c = vals[1], a = vals[2], flow = vals[3], ar = vals[4], ac = vals[5];
+      if (flow === "row" && ar === "auto" && ac === "auto") {
+        return serializeExpandedShorthand("grid-template", getVal);
+      }
+      if (a !== "none") return "";
+      if ((flow === "row" || flow === "row dense" || flow === "dense") && r === "none" && ac === "auto") {
+        const dense = (flow === "row dense" || flow === "dense") ? " dense" : "";
+        return "auto-flow" + dense + (ar !== "auto" ? (" " + ar) : "") + " / " + c;
+      }
+      if ((flow === "column" || flow === "column dense") && c === "none" && ar === "auto") {
+        const dense = flow === "column dense" ? " dense" : "";
+        return r + " / auto-flow" + dense + (ac !== "auto" ? (" " + ac) : "");
+      }
+      return "";
     }
     if (key === "text-decoration") {
       return normalizeCssSpecifiedValue("text-decoration", vals.join(" "));
@@ -7374,6 +7500,18 @@
       const p = parseGridTemplateShorthand(normV);
       if (!p) return null;
       return [["grid-template-rows", p.rows], ["grid-template-columns", p.columns], ["grid-template-areas", p.areas]];
+    }
+    if (key === "grid") {
+      const p = parseGridShorthand(normV);
+      if (!p) return null;
+      return [
+        ["grid-template-rows", p.rows],
+        ["grid-template-columns", p.columns],
+        ["grid-template-areas", p.areas],
+        ["grid-auto-flow", p.autoFlow],
+        ["grid-auto-rows", p.autoRows],
+        ["grid-auto-columns", p.autoColumns]
+      ];
     }
     if (key === "position-try") {
       return vals[0] === "normal" ? vals[1] : (vals[0] + " " + vals[1]);
