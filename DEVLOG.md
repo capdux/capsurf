@@ -3627,3 +3627,5 @@
 - 将 `JustifyContent` 中原先混并的 `start`/`left`/`end`/`right` 拆分为独立枚举变体，使 `flex-abspos-staticpos-justify-content-003.html`（`row-reverse`）全部 24 项子测试通过。
 ### Phase 893 — `wrap-reverse` 交叉轴镜像与 `justify-content-001..008` 全绿
 - 在 `layoutFlexAbsChild` 补充 `FlexWrap.WrapReverse` 交叉轴镜像逻辑后，一次性打通 `flex-abspos-staticpos-justify-content-001..008.html` 全部 8 个文件（192 个子测试全绿）。
+### Phase 894 — `AlignSelf` 静态位置对齐实现
+- 在 `cascade.cp` 与 `layout.cp` 补全 `align-self` 解析与 `layoutFlexAbsChild` 覆盖计算，区分 `start`/`self-start` 与受 `wrap-reverse` 翻转的 `flex-start`，`align-self-{001,003,005,007}.html` 全部 96 项子测试通过。

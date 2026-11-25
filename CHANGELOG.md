@@ -4623,3 +4623,6 @@
 - `src/layout/layout.cp`: 新增 `LayoutTree.justifyMainOffset` 区分 `flex-start`/`flex-end`（受 `row-reverse` 翻转）与 `start`/`end`/`left`/`right`；通过 `cpc fix` + `cpc brief` 门禁，`flex-abspos-staticpos-justify-content-001/003` **2/2 PASS**，`--smoke` 3/3 **PASS**。
 ### Phase 893 — Flexbox `wrap-reverse` 交叉轴绝对定位静态位置镜像
 - `src/layout/layout.cp`: `layoutFlexAbsChild` 在 `FlexWrap.WrapReverse` 下镜像交叉轴 `FlexStart`/`Stretch` 与 `FlexEnd` 偏移；通过 `cpc fix` + `cpc brief` 门禁，`flex-abspos-staticpos-justify-content-001..008.html` **8/8 (192/192) PASS**，`--smoke` 3/3 **PASS**。
+### Phase 894 — `AlignSelf` 完整枚举与 Flexbox `abspos` `align-self` 静态对齐
+- `src/css/cascade.cp`: 新增 `AlignSelf` 枚举与 `PROP_ALIGN_SELF` 槽位（`TOTAL_PROP_SLOTS = 108`），支持 `self-start`/`self-end`/`baseline`/`last baseline` 等全部关键字。
+- `src/layout/layout.cp`: `layoutFlexAbsChild` 接入 `astyle.align_self` 覆盖 `pstyle.align_items`；通过 `cpc fix` + `cpc brief` 门禁，`flex-abspos-staticpos-align-self-{001,003,005,007}.html` **4/4 (96/96) PASS**，`--smoke` 3/3 **PASS**。

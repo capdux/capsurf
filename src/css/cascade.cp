@@ -760,10 +760,32 @@ pub enum AlignItems {
 
     static fn parse(raw: []const u8): AlignItems? {
         const s = std.mem.trim(u8, raw, " \t\r\n");
-        if (std.ascii.eqlIgnoreCase(s, "stretch")) return AlignItems.Stretch;
-        if (std.ascii.eqlIgnoreCase(s, "flex-start") || std.ascii.eqlIgnoreCase(s, "start")) return AlignItems.FlexStart;
-        if (std.ascii.eqlIgnoreCase(s, "flex-end") || std.ascii.eqlIgnoreCase(s, "end")) return AlignItems.FlexEnd;
+        if (std.ascii.eqlIgnoreCase(s, "stretch") || std.ascii.eqlIgnoreCase(s, "normal")) return AlignItems.Stretch;
+        if (std.ascii.eqlIgnoreCase(s, "flex-start") || std.ascii.eqlIgnoreCase(s, "start") || std.ascii.eqlIgnoreCase(s, "baseline") || std.ascii.eqlIgnoreCase(s, "first baseline")) return AlignItems.FlexStart;
+        if (std.ascii.eqlIgnoreCase(s, "flex-end") || std.ascii.eqlIgnoreCase(s, "end") || std.ascii.eqlIgnoreCase(s, "last baseline")) return AlignItems.FlexEnd;
         if (std.ascii.eqlIgnoreCase(s, "center")) return AlignItems.Center;
+        return null;
+    }
+}
+
+pub enum AlignSelf {
+    Auto,
+    Stretch,
+    FlexStart,
+    FlexEnd,
+    Start,
+    End,
+    Center,
+
+    static fn parse(raw: []const u8): AlignSelf? {
+        const s = std.mem.trim(u8, raw, " \t\r\n");
+        if (std.ascii.eqlIgnoreCase(s, "auto")) return AlignSelf.Auto;
+        if (std.ascii.eqlIgnoreCase(s, "stretch") || std.ascii.eqlIgnoreCase(s, "normal")) return AlignSelf.Stretch;
+        if (std.ascii.eqlIgnoreCase(s, "flex-start") || std.ascii.eqlIgnoreCase(s, "baseline") || std.ascii.eqlIgnoreCase(s, "first baseline")) return AlignSelf.FlexStart;
+        if (std.ascii.eqlIgnoreCase(s, "flex-end") || std.ascii.eqlIgnoreCase(s, "last baseline")) return AlignSelf.FlexEnd;
+        if (std.ascii.eqlIgnoreCase(s, "start") || std.ascii.eqlIgnoreCase(s, "self-start")) return AlignSelf.Start;
+        if (std.ascii.eqlIgnoreCase(s, "end") || std.ascii.eqlIgnoreCase(s, "self-end")) return AlignSelf.End;
+        if (std.ascii.eqlIgnoreCase(s, "center")) return AlignSelf.Center;
         return null;
     }
 }
@@ -1218,7 +1240,8 @@ pub const PROP_BG_POS: usize = 103;
 pub const PROP_OBJECT_VIEW_BOX: usize = 104;
 pub const PROP_BG_REPEAT: usize = 105;
 pub const PROP_CONTAIN: usize = 106;
-pub const TOTAL_PROP_SLOTS: usize = 107;
+pub const PROP_ALIGN_SELF: usize = 107;
+pub const TOTAL_PROP_SLOTS: usize = 108;
 
 pub enum ObjectViewBoxKind {
     None,
@@ -2380,6 +2403,7 @@ pub struct ComputedStyle {
     flex_wrap: FlexWrap = FlexWrap.NoWrap;
     justify_content: JustifyContent = JustifyContent.FlexStart;
     align_items: AlignItems = AlignItems.Stretch;
+    align_self: AlignSelf = AlignSelf.Auto;
     flex_grow: f32 = 0.0;
     flex_shrink: f32 = 1.0;
     flex_basis: LengthPercentageOrAuto = LengthPercentageOrAuto.autoVal();
@@ -4194,6 +4218,12 @@ pub struct ComputedStyle {
         if (std.ascii.eqlIgnoreCase(name, "align-items")) {
             if (ai := AlignItems.parse(val)) {
                 if (_.tryClaimSlot(PROP_ALIGN_ITEMS, weight)) _.align_items = ai;
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "align-self")) {
+            if (aself := AlignSelf.parse(val)) {
+                if (_.tryClaimSlot(PROP_ALIGN_SELF, weight)) _.align_self = aself;
             }
             return;
         }

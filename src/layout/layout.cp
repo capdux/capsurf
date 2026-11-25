@@ -19,6 +19,7 @@ import {
     FlexWrap,
     JustifyContent,
     AlignItems,
+    AlignSelf,
     BorderCollapse,
     CaptionSide,
     TableLayout,
@@ -4052,9 +4053,20 @@ pub struct LayoutTree {
         const rem_cross = if (is_row) (container_h - mb_h) else (container_w - mb_w);
         const main_off = LayoutTree.justifyMainOffset(pstyle.justify_content, is_row, is_rev, rem_main);
         const is_wrap_rev = (pstyle.flex_wrap == FlexWrap.WrapReverse);
-        const cross_off: f32 = switch (pstyle.align_items) {
-            .FlexStart, .Stretch => if (is_wrap_rev) rem_cross else 0.0,
+        const eff_align: AlignSelf = switch (astyle.align_self) {
+            .Auto => switch (pstyle.align_items) {
+                .Stretch => AlignSelf.Stretch,
+                .FlexStart => AlignSelf.FlexStart,
+                .FlexEnd => AlignSelf.FlexEnd,
+                .Center => AlignSelf.Center,
+            },
+            * => astyle.align_self,
+        };
+        const cross_off: f32 = switch (eff_align) {
+            .Auto, .FlexStart, .Stretch => if (is_wrap_rev) rem_cross else 0.0,
             .FlexEnd => if (is_wrap_rev) 0.0 else rem_cross,
+            .Start => 0.0,
+            .End => rem_cross,
             .Center => rem_cross / 2.0,
         };
         const sx = content_x + (if (is_row) main_off else cross_off);
