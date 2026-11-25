@@ -702,6 +702,128 @@
     return out.join(" ");
   }
 
+  function parseGridTemplateShorthand(trimmed) {
+    const low = trimmed.toLowerCase();
+    if (/(?:^|[^a-z0-9_-])var\(/i.test(low)) return { rows: trimmed, columns: trimmed, areas: trimmed, canonical: trimmed };
+    if (low === "none") return { rows: "none", columns: "none", areas: "none", canonical: "none" };
+    // Split top-level '/'
+    const slashParts = [];
+    let cur = "", pd = 0, bd = 0, q = "";
+    for (let i = 0; i < trimmed.length; i++) {
+      const ch = trimmed[i];
+      if (q) { cur += ch; if (ch === "\\" && i + 1 < trimmed.length) cur += trimmed[++i]; else if (ch === q) q = ""; continue; }
+      if (ch === '"' || ch === "'") { q = ch; cur += ch; continue; }
+      if (ch === "(") pd++;
+      else if (ch === ")" && pd > 0) pd--;
+      else if (ch === "[" && pd === 0) bd++;
+      else if (ch === "]" && pd === 0 && bd > 0) bd--;
+      if (pd === 0 && bd === 0 && ch === "/") { slashParts.push(cur.trim()); cur = ""; }
+      else cur += ch;
+    }
+    slashParts.push(cur.trim());
+    if (q || pd !== 0 || bd !== 0 || slashParts.length > 2) return null;
+
+    const cleanLineNames = (tok) => {
+      const inner = tok.slice(1, -1).trim();
+      return inner ? inner.split(/\s+/) : [];
+    };
+    const tokGrid = (str) => {
+      const out = [];
+      let c = "", p = 0, b = 0, qt = "";
+      for (let i = 0; i < str.length; i++) {
+        const ch = str[i];
+        if (qt) { c += ch; if (ch === "\\" && i + 1 < str.length) c += str[++i]; else if (ch === qt) { qt = ""; out.push(c); c = ""; } continue; }
+        if (ch === '"' || ch === "'") { if (c) { out.push(c); c = ""; } qt = ch; c += ch; continue; }
+        if (ch === "(") p++; else if (ch === ")" && p > 0) p--;
+        else if (ch === "[" && p === 0) { if (c) { out.push(c); c = ""; } b++; }
+        else if (ch === "]" && p === 0 && b > 0) { b--; c += ch; if (b === 0) { out.push(c); c = ""; } continue; }
+        if (p === 0 && b === 0 && /\s/.test(ch)) { if (c) { out.push(c); c = ""; } }
+        else c += ch;
+      }
+      if (c) out.push(c);
+      return out;
+    };
+    const isLineTok = (t) => t.startsWith("[") && t.endsWith("]");
+    const isStrTok = (t) => (t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"));
+    const normZero = (t) => (t === "0" || t === "+0" || t === "-0") ? "0px" : (/^calc\(/i.test(t) ? canonicalizeCalcToken(t) : t);
+    const hasQuotes = /["']/.test(slashParts[0]);
+
+    if (!hasQuotes) {
+      if (slashParts.length !== 2 || !slashParts[0] || !slashParts[1]) return null;
+      if (!isValidCssValue("grid-template-rows", slashParts[0])) return null;
+      if (!isValidCssValue("grid-template-columns", slashParts[1])) return null;
+      const rowsN = normalizeCssSpecifiedValue("grid-template-rows", slashParts[0]);
+      const colsN = normalizeCssSpecifiedValue("grid-template-columns", slashParts[1]);
+      if (rowsN === "none" && colsN === "none") return { rows: "none", columns: "none", areas: "none", canonical: "none" };
+      return { rows: rowsN, columns: colsN, areas: "none", canonical: rowsN + " / " + colsN };
+    }
+
+    // Areas form: [ <line-names>? <string> <track-size>? <line-names>? ]+ [ / <explicit-track-list> ]?
+    let colsN = "none";
+    if (slashParts.length === 2) {
+      const colStr = slashParts[1];
+      if (!colStr || colStr.toLowerCase() === "none" || /repeat\(\s*auto-(?:fill|fit)\b/i.test(colStr)) return null;
+      if (!isValidCssValue("grid-template-columns", colStr)) return null;
+      colsN = normalizeCssSpecifiedValue("grid-template-columns", colStr);
+      if (colsN === "0" || colsN === "+0" || colsN === "-0") colsN = "0px";
+    }
+    const toks = tokGrid(slashParts[0]);
+    if (toks.length === 0) return null;
+    const areaToks = [];
+    const rowOut = [];
+    const canonOut = [];
+    let ti = 0;
+    let prevTrailing = [];
+    while (ti < toks.length) {
+      let leading = [];
+      if (ti < toks.length && isLineTok(toks[ti])) {
+        if (!isValidCssValue("grid-template-rows", toks[ti] + " 10px")) return null;
+        leading = cleanLineNames(toks[ti]);
+        ti++;
+      }
+      if (ti >= toks.length || !isStrTok(toks[ti])) return null;
+      const mergedBefore = prevTrailing.concat(leading);
+      prevTrailing = [];
+      if (mergedBefore.length > 0) {
+        const lnStr = "[" + mergedBefore.join(" ") + "]";
+        rowOut.push(lnStr);
+        canonOut.push(lnStr);
+      }
+      const strRaw = toks[ti++];
+      const innerArea = strRaw.slice(1, -1).trim();
+      if (!innerArea) return null;
+      const normArea = '"' + innerArea.split(/\s+/).map((c) => (/^\.+$/.test(c) ? "." : c)).join(" ") + '"';
+      areaToks.push(normArea);
+
+      let trackSz = "auto";
+      if (ti < toks.length && !isLineTok(toks[ti]) && !isStrTok(toks[ti])) {
+        const cand = toks[ti++];
+        if (cand.toLowerCase() === "none" || /^repeat\(/i.test(cand)) return null;
+        if (!isValidCssValue("grid-template-rows", cand)) return null;
+        trackSz = normZero(cand);
+      }
+      rowOut.push(trackSz);
+      canonOut.push(normArea);
+      if (trackSz.toLowerCase() !== "auto") canonOut.push(trackSz);
+
+      if (ti < toks.length && isLineTok(toks[ti])) {
+        if (!isValidCssValue("grid-template-rows", toks[ti] + " 10px")) return null;
+        prevTrailing = cleanLineNames(toks[ti]);
+        ti++;
+      }
+    }
+    if (areaToks.length === 0) return null;
+    if (prevTrailing.length > 0) {
+      const lnStr = "[" + prevTrailing.join(" ") + "]";
+      rowOut.push(lnStr);
+      canonOut.push(lnStr);
+    }
+    const areasStr = areaToks.join(" ");
+    const rowsStr = rowOut.join(" ");
+    const canonStr = canonOut.join(" ") + (colsN !== "none" ? (" / " + colsN) : "");
+    return { rows: rowsStr, columns: colsN, areas: areasStr, canonical: canonStr };
+  }
+
   function isValidCssValue(prop, value) {
     if (typeof value !== "string") value = String(value);
     const trimmed = value.trim();
@@ -723,6 +845,10 @@
 
     if (prop === "font") {
       return !!parseAndNormalizeFontShorthand(trimmed);
+    }
+
+    if (prop === "grid-template") {
+      return !!parseGridTemplateShorthand(trimmed);
     }
 
     if (prop === "border-color" || prop === "border-block-color" || prop === "border-inline-color") {
@@ -4291,6 +4417,7 @@
     if (/^(?:inherit|initial|unset|revert|revert-layer)$/i.test(s)) return s.toLowerCase();
     if (key === "display") return canonicalizeDisplayValue(s) || s.toLowerCase();
     if (key === "font") return parseAndNormalizeFontShorthand(s) || s;
+    if (key === "grid-template") { const p = parseGridTemplateShorthand(s); return p ? p.canonical : s; }
     if (/\bvar\(/i.test(s)) return s;
     if (NUM_NORM_PROPS.has(key) && /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(s)) {
       const n = Number(s);
@@ -4687,6 +4814,42 @@
       if (hang) out += " hanging";
       if (each) out += " each-line";
       return out;
+    }
+    if (key === "grid-template") {
+      const r = vals[0], c = vals[1], a = vals[2];
+      if (a === "none") {
+        if (r === "none" && c === "none") return "none";
+        return r + " / " + c;
+      }
+      if (r === "none" || /repeat\(/i.test(r) || /repeat\(\s*auto-(?:fill|fit)\b/i.test(c)) return "";
+      const aToks = splitCssTokens(a);
+      const rToks = [];
+      let rc = "", rp = 0, rb = 0;
+      for (let i = 0; i < r.length; i++) {
+        const ch = r[i];
+        if (ch === "(") rp++; else if (ch === ")" && rp > 0) rp--;
+        else if (ch === "[" && rp === 0) rb++; else if (ch === "]" && rp === 0 && rb > 0) rb--;
+        if (rp === 0 && rb === 0 && /\s/.test(ch)) { if (rc) { rToks.push(rc); rc = ""; } }
+        else rc += ch;
+      }
+      if (rc) rToks.push(rc);
+      let trackCount = 0;
+      for (let i = 0; i < rToks.length; i++) {
+        if (!rToks[i].startsWith("[")) trackCount++;
+      }
+      if (trackCount !== aToks.length) return "";
+      const out = [];
+      let ai = 0, ri = 0;
+      while (ai < aToks.length) {
+        if (ri < rToks.length && rToks[ri].startsWith("[")) out.push(rToks[ri++]);
+        out.push(aToks[ai++]);
+        if (ri < rToks.length && !rToks[ri].startsWith("[")) {
+          const sz = rToks[ri++];
+          if (sz.toLowerCase() !== "auto") out.push(sz);
+        }
+      }
+      while (ri < rToks.length) out.push(rToks[ri++]);
+      return out.join(" ") + (c !== "none" ? (" / " + c) : "");
     }
     if (key === "text-decoration") {
       const parts = splitCssTokens(s);
@@ -6257,6 +6420,11 @@
       }
       return null;
     }
+    if (key === "grid-template") {
+      const p = parseGridTemplateShorthand(normV);
+      if (!p) return null;
+      return [["grid-template-rows", p.rows], ["grid-template-columns", p.columns], ["grid-template-areas", p.areas]];
+    }
     if (key === "position-try") {
       const ORDERS = new Set(["normal", "most-width", "most-height", "most-block-size", "most-inline-size"]);
       const toks = splitCssTokens(normV);
@@ -6365,6 +6533,42 @@
         ["border-bottom-" + suffix, b],
         ["border-left-" + suffix, l],
       ];
+    }
+    if (key === "grid-template") {
+      const r = vals[0], c = vals[1], a = vals[2];
+      if (a === "none") {
+        if (r === "none" && c === "none") return "none";
+        return r + " / " + c;
+      }
+      if (r === "none" || /repeat\(/i.test(r) || /repeat\(\s*auto-(?:fill|fit)\b/i.test(c)) return "";
+      const aToks = splitCssTokens(a);
+      const rToks = [];
+      let rc = "", rp = 0, rb = 0;
+      for (let i = 0; i < r.length; i++) {
+        const ch = r[i];
+        if (ch === "(") rp++; else if (ch === ")" && rp > 0) rp--;
+        else if (ch === "[" && rp === 0) rb++; else if (ch === "]" && rp === 0 && rb > 0) rb--;
+        if (rp === 0 && rb === 0 && /\s/.test(ch)) { if (rc) { rToks.push(rc); rc = ""; } }
+        else rc += ch;
+      }
+      if (rc) rToks.push(rc);
+      let trackCount = 0;
+      for (let i = 0; i < rToks.length; i++) {
+        if (!rToks[i].startsWith("[")) trackCount++;
+      }
+      if (trackCount !== aToks.length) return "";
+      const out = [];
+      let ai = 0, ri = 0;
+      while (ai < aToks.length) {
+        if (ri < rToks.length && rToks[ri].startsWith("[")) out.push(rToks[ri++]);
+        out.push(aToks[ai++]);
+        if (ri < rToks.length && !rToks[ri].startsWith("[")) {
+          const sz = rToks[ri++];
+          if (sz.toLowerCase() !== "auto") out.push(sz);
+        }
+      }
+      while (ri < rToks.length) out.push(rToks[ri++]);
+      return out.join(" ") + (c !== "none" ? (" / " + c) : "");
     }
     if (key === "text-decoration") {
       const parts = splitCssTokens(normV);
@@ -6947,6 +7151,7 @@
     "grid-row": ["grid-row-start", "grid-row-end"],
     "grid-column": ["grid-column-start", "grid-column-end"],
     "grid-area": ["grid-row-start", "grid-column-start", "grid-row-end", "grid-column-end"],
+    "grid-template": ["grid-template-rows", "grid-template-columns", "grid-template-areas"],
     "font-variant": ["font-variant-ligatures", "font-variant-caps", "font-variant-alternates", "font-variant-numeric", "font-variant-east-asian", "font-variant-position", "font-variant-emoji"],
     background: ["background-image", "background-position", "background-size", "background-repeat", "background-attachment", "background-origin", "background-clip", "background-color"],
     mask: ["mask-image", "mask-position", "mask-size", "mask-repeat", "mask-origin", "mask-clip", "mask-composite", "mask-mode", "mask-border-source", "mask-border-slice", "mask-border-width", "mask-border-outset", "mask-border-repeat"]
@@ -6965,6 +7170,42 @@
     }
     if (vals.length > 0 && /^(?:initial|inherit|unset|revert|revert-layer)$/i.test(vals[0]) && vals.every((v) => v.toLowerCase() === vals[0].toLowerCase())) {
       return vals[0].toLowerCase();
+    }
+    if (key === "grid-template") {
+      const r = vals[0], c = vals[1], a = vals[2];
+      if (a === "none") {
+        if (r === "none" && c === "none") return "none";
+        return r + " / " + c;
+      }
+      if (r === "none" || /repeat\(/i.test(r) || /repeat\(\s*auto-(?:fill|fit)\b/i.test(c)) return "";
+      const aToks = splitCssTokens(a);
+      const rToks = [];
+      let rc = "", rp = 0, rb = 0;
+      for (let i = 0; i < r.length; i++) {
+        const ch = r[i];
+        if (ch === "(") rp++; else if (ch === ")" && rp > 0) rp--;
+        else if (ch === "[" && rp === 0) rb++; else if (ch === "]" && rp === 0 && rb > 0) rb--;
+        if (rp === 0 && rb === 0 && /\s/.test(ch)) { if (rc) { rToks.push(rc); rc = ""; } }
+        else rc += ch;
+      }
+      if (rc) rToks.push(rc);
+      let trackCount = 0;
+      for (let i = 0; i < rToks.length; i++) {
+        if (!rToks[i].startsWith("[")) trackCount++;
+      }
+      if (trackCount !== aToks.length) return "";
+      const out = [];
+      let ai = 0, ri = 0;
+      while (ai < aToks.length) {
+        if (ri < rToks.length && rToks[ri].startsWith("[")) out.push(rToks[ri++]);
+        out.push(aToks[ai++]);
+        if (ri < rToks.length && !rToks[ri].startsWith("[")) {
+          const sz = rToks[ri++];
+          if (sz.toLowerCase() !== "auto") out.push(sz);
+        }
+      }
+      while (ri < rToks.length) out.push(rToks[ri++]);
+      return out.join(" ") + (c !== "none" ? (" / " + c) : "");
     }
     if (key === "text-decoration") {
       return normalizeCssSpecifiedValue("text-decoration", vals.join(" "));
@@ -7128,6 +7369,11 @@
         outLayers.push(parts.length > 0 ? parts.join(" ") : "none");
       }
       return outLayers.join(", ");
+    }
+    if (key === "grid-template") {
+      const p = parseGridTemplateShorthand(normV);
+      if (!p) return null;
+      return [["grid-template-rows", p.rows], ["grid-template-columns", p.columns], ["grid-template-areas", p.areas]];
     }
     if (key === "position-try") {
       return vals[0] === "normal" ? vals[1] : (vals[0] + " " + vals[1]);

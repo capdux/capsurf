@@ -3454,3 +3454,5 @@
 - 补全 `HTMLElement.prototype.{showPopover,hidePopover,togglePopover}` 与 `:popover-open` 伪类匹配，`backdrop-tree-abiding-slotted.html` 与 `overlay/overlay-user-agent-rules.html` **PASS**（`overlay-transition` 子测试 1 通过）。
 ### Phase 807 — `font` 简写校验/规范化与 `CSSCounterStyleRule` 非法构造拦截
 - 在 `cssom.js` 新增 `parseAndNormalizeFontShorthand` 实现 `font` 简写 4 槽位前缀、尺寸/行高及字体族校验与规范化序列化，并为 `CSSCounterStyleRule` 补充非法构造拦截（保持 `length === 0`），`css-counter-styles/idlharness.html` (37/37) 与 `css-fonts/parsing/font-invalid.html` (16/16) 均 **PASS**。
+### Phase 808 — `grid-template` 简写校验/展开/重组与未挂载节点 `getComputedStyle`
+- 在 `cssom.js` 实现 `grid-template` 简写语法校验、长属性展开（`rows`/`columns`/`areas`）及规范化重组，并在 `window.js` 使未挂载节点 `getComputedStyle` 返回 `""`，`grid-template-node-not-connected`、`grid-template-shorthand`、`grid-template-shorthand-{invalid,valid,composition,areas-valid}` 6/6 **PASS**。

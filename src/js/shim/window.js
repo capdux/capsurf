@@ -11649,6 +11649,7 @@ function installWindow(global) {
 
     declTarget.getPropertyValue = markNative(function (prop) {
       ensureLiveComputed();
+      if (element && element.isConnected === false) return "";
       const p = String(prop).trim();
       const pLow = p.toLowerCase();
       if (pLow === "size" || pLow === "page-orientation") {
@@ -11749,6 +11750,7 @@ function installWindow(global) {
             return idx < list.length ? list[idx] : undefined;
           }
           ensureLiveComputed();
+          if (element && element.isConnected === false) return "";
           if (prop === "size" || prop === "page-orientation" || prop === "pageOrientation") {
             return "";
           }
