@@ -3358,7 +3358,10 @@ pub struct ComputedStyle {
             }
             if (c == '\'') { in_sq = true; continue; }
             if (c == '"') { in_dq = true; continue; }
-            if (sp == 0 && (c == '!' || c == ';')) return false;
+            if (sp == 0 && (c == '!' || c == ';')) {
+                const is_cdo = (c == '!' && i >= 1 && raw[i - 1] == '<' && i + 2 < raw.len && raw[i + 1] == '-' && raw[i + 2] == '-');
+                if (!is_cdo) return false;
+            }
             if (c == '(' || c == '[' || c == '{') {
                 // Check var(...)
                 if (c == '(' && i >= 3) {
@@ -5470,10 +5473,12 @@ pub struct StyleSheet {
                 }
             }
         }
+        if (std.mem.eql(u8, p_name, "--")) return false;
         if (std.mem.startsWith(u8, p_name, "--") && p_name.len > 2) {
-            return ComputedStyle.isValidCustomPropValue(p_val);
+            return ComputedStyle.isValidDeclValueInner(p_val, true);
         }
-        if (std.ascii.eqlIgnoreCase(p_name, "user-modify") ||
+        if (std.ascii.startsWithIgnoreCase(p_name, "var-") ||
+            std.ascii.eqlIgnoreCase(p_name, "user-modify") ||
             std.ascii.eqlIgnoreCase(p_name, "-webkit-user-modify") ||
             std.ascii.eqlIgnoreCase(p_name, "-moz-user-modify")) {
             return false;

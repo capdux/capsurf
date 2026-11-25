@@ -4541,3 +4541,7 @@
 ### Phase 864 — CSS 转义自定义属性、EOF 隐式闭合 `var()`/规则块、重复 `!important` 拒绝与自引用循环检测
 - `/data/dev/cp/lib/css/stylesheet.cp`: `CssProperty.parse` 拒绝重复 `!important`；`CssStylesheetParser.parseRule` / `parseStylesheet` 支持 EOF 隐式闭合未闭合 `{` 规则块。
 - `src/css/cascade.cp`: 新增 `unescapeCssIdentBuf` / `eqlCssCustomPropName`（含孤立代理项 `U+FFFD` 规范化）、`stripCssCommentsBuf`、`customPropHasCycle`，并完善 `resolveVarExprBuf` 对 EOF 未闭合 `var(` 与自引用循环的处理；`variable-reference-21,23..30,39` **10/10 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 865 — `@supports` 括号嵌套/转义自定义属性/CDO `<!--` 全量转绿
+- `/data/dev/cp/lib/css/stylesheet.cp`: `parseRule` 与 `parseStylesheet` 追踪圆括号与方括号嵌套深度，避免 `@supports (color: { [ var(--a) ] })` 与 `(color: var(--a);)` 被提前分割。
+- `/data/dev/cp/lib/css/supports.cp`: `isValidPropIdent` 支持反斜杠转义，`parseInParens` 放行合法 `--*` 空/空白值并拦截孤立 `--`。
+- `src/css/cascade.cp`: `isValidDeclValueInner` 放行 CDO `<!--` token；`supportsDeclPredicate` 拦截 `--` 与 `VAR-*` 伪自定义属性；`variable-supports-01..67` **67/67 PASS**，`--smoke` 3/3 **PASS**。

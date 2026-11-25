@@ -3568,3 +3568,5 @@
 - 攻克 `/css/css-variables/` 大规模同源失败聚类：修复 `stylesheet.cp` 纯空白自定义属性丢弃、`cascade.cp` 单值 `var()` 限制、相邻 `var()` 拼接、`--* !important` 滞后覆盖及 `color` 计算值失效回退 `inherited_color`，`variable-reference` 批量转绿。
 ### Phase 864 — CSS 变量转义标识符、EOF 隐式闭合与循环依赖检测
 - 在 `cascade.cp` 与 `cap:css` (`stylesheet.cp`) 中补齐 CSS Syntax Level 3 EOF 隐式闭合（未闭合规则块 `{`、`var(` 与 `/*` 注释）、十六进制转义与孤立代理项 `U+FFFD` 映射、重复 `!important` 语法拒绝及 `var()` 自引用循环检测。
+### Phase 865 — `@supports` 与 CSS 变量声明校验全量打通
+- 修复了 `stylesheet.cp` 规则切分未追踪 `()`/`[]` 嵌套导致的 `@supports` 内部 `;`/`{}` 误切分，以及 `supports.cp` 与 `cascade.cp` 对转义自定义属性名、空值 `--a:`、CDO `<!--`、`VAR-*` 的判定，使得 `variable-supports-01..67` **67/67** 全部通过。
