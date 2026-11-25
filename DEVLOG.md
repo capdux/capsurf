@@ -3432,3 +3432,5 @@
 - 在 `selector.js` 补全 `::slotted()` 后接 tree-abiding 伪元素（`::before`/`::after`/`::marker`/`::placeholder`/`::file-selector-button`/`::details-content`/`::picker(...)`/`::picker-icon`）及 `:is()`/`:where()` 的链式校验，并在 `cssom.js` `CSS.supports("selector(...)")` 严格模式拦截 `::slotted(...):is/:where`，`slotted-parsing.html` 36/36 **PASS**。
 ### Phase 796 — `::part()` 序列化规范化与后接伪类校验全绿（70/70）
 - 在 `selector.js` 实现 `::part()` 未加引号反斜杠转义跳过、空白折叠（保留 `\ ` 尾随转义空格）及 `::part()` 后接结构/树信息伪类（含 `:not()` 透传）校验，并在 `cssom.js` 严格模式拦截 `::part():is/:where` 中的非法伪类，`part/serialization.html` (3/3) 与 `part/pseudo-classes-after-part.html` (67/67) 均 **PASS**。
+### Phase 797 — `::cue` 与 `::view-transition-*` 伪元素解析补全
+- 在 `selector.js` 补全 `::cue` 与 4 个 `::view-transition-*` 函数式伪元素，`pseudo-elements-after-part.html` 全部 23 项解析子测试通过（17/44→23/44 PASS）。

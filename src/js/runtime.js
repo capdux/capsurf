@@ -16822,7 +16822,8 @@
   const REQUIRED_FUNC_PSEUDOS = new Set([
     ":not", ":is", ":where", ":has", ":state", ":lang", ":dir", ":host-context",
     ":nth-child", ":nth-last-child", ":nth-of-type", ":nth-last-of-type",
-    "::slotted", "::part", "::scroll-button", "::picker", ":active-view-transition-type"
+    "::slotted", "::part", "::scroll-button", "::picker", ":active-view-transition-type",
+    "::view-transition-group", "::view-transition-image-pair", "::view-transition-new", "::view-transition-old"
   ]);
   const NON_EMPTY_FUNC_PSEUDOS = new Set([":not", ":has", ":state", ":host-context", "::slotted", "::part", ":lang", ":dir", ":active-view-transition-type"]);
   const PART_DISALLOWED_PSEUDOS = new Set([
@@ -16851,7 +16852,8 @@
     "::marker", "::placeholder", "::backdrop", "::slotted", "::part",
     "::file-selector-button", "::target-text", "::spelling-error", "::grammar-error",
     "::highlight", "::search-text", "::view-transition", "::details-content",
-    "::column", "::scroll-marker", "::scroll-button", "::picker", "::picker-icon"
+    "::column", "::scroll-marker", "::scroll-button", "::picker", "::picker-icon", "::cue",
+    "::view-transition-group", "::view-transition-image-pair", "::view-transition-new", "::view-transition-old"
   ]);
 
   function splitTopLevelSelectorList(str) {
