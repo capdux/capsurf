@@ -81,7 +81,7 @@
     "padding-top", "page", "page-break-after", "page-break-before", "page-break-inside",
     "paint-order", "perspective", "perspective-origin", "place-content", "place-items",
     "place-self", "pointer-events", "position", "position-try", "position-try-fallbacks", "position-try-order", "position-visibility", "quotes", "reading-flow", "reading-order", "resize", "right", "rotate",
-    "row-gap", "ruby-align", "ruby-merge", "ruby-overhang", "ruby-position", "scale", "scroll-behavior", "scroll-margin", "scroll-margin-block",
+    "row-gap", "row-rule", "row-rule-color", "row-rule-style", "row-rule-width", "ruby-align", "ruby-merge", "ruby-overhang", "ruby-position", "rule", "rule-color", "rule-style", "rule-width", "scale", "scroll-behavior", "scroll-margin", "scroll-margin-block",
     "scroll-margin-block-end", "scroll-margin-block-start", "scroll-margin-bottom",
     "scroll-margin-inline", "scroll-margin-inline-end", "scroll-margin-inline-start",
     "scroll-margin-left", "scroll-margin-right", "scroll-margin-top", "scroll-padding",
@@ -4829,7 +4829,7 @@
       }
       return d && w ? (d + " " + w) : (d || w || s);
     }
-    if (key === "outline" || key === "border" || key === "column-rule" ||
+    if (key === "outline" || key === "border" || key === "column-rule" || key === "row-rule" || key === "rule" ||
         key === "border-top" || key === "border-right" || key === "border-bottom" || key === "border-left") {
       const parts = splitCssTokens(s);
       const STY = new Set(["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset", "auto"]);
@@ -6991,7 +6991,7 @@
         ["border-image-repeat", "stretch"]
       ];
     }
-    if (key === "outline" || key === "column-rule") {
+    if (key === "outline" || key === "column-rule" || key === "row-rule" || key === "rule") {
       const p = splitCssTokens(normV);
       const STY = new Set(["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset", "auto"]);
       let w = "medium", st = "none", c = "currentcolor";
@@ -7002,9 +7002,7 @@
           w = (tl === "0" || tl === "+0" || tl === "-0") ? "0px" : (/^calc\(/i.test(t) ? canonicalizeCalcToken(t) : t);
         } else c = t;
       }
-      return key === "outline"
-        ? [["outline-color", c], ["outline-style", st], ["outline-width", w]]
-        : [["column-rule-width", w], ["column-rule-style", st], ["column-rule-color", c]];
+      return [[key + "-width", w], [key + "-style", st], [key + "-color", c]];
     }
     if (key === "contain-intrinsic-size") {
       const p = parseContainIntrinsicSize(normV);
@@ -7252,6 +7250,8 @@
     transition: ["transition-property", "transition-duration", "transition-timing-function", "transition-delay", "transition-behavior"],
     outline: ["outline-color", "outline-style", "outline-width"],
     "column-rule": ["column-rule-width", "column-rule-style", "column-rule-color"],
+    "row-rule": ["row-rule-width", "row-rule-style", "row-rule-color"],
+    "rule": ["rule-width", "rule-style", "rule-color"],
     columns: ["column-width", "column-count", "column-height", "column-wrap"],
     overflow: ["overflow-x", "overflow-y"],
     gap: ["row-gap", "column-gap"],
@@ -7660,7 +7660,7 @@
       const ow = vals[2] === "medium" ? "" : vals[2];
       return [oc, ost, ow].filter(Boolean).join(" ") || "none";
     }
-    if (key === "column-rule") {
+    if (key === "column-rule" || key === "row-rule" || key === "rule") {
       const cw = vals[0] === "medium" && (vals[1] !== "none" || vals[2].toLowerCase() !== "currentcolor") ? "" : vals[0];
       const cst = vals[1] === "none" && (cw || vals[2].toLowerCase() !== "currentcolor") ? "" : vals[1];
       const cc = vals[2].toLowerCase() === "currentcolor" ? "" : vals[2];

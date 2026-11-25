@@ -7448,6 +7448,7 @@ function installWindow(global) {
         else computedMap.delete(ck);
       } else if (low === "initial" || ((low === "unset" || low === "revert") && !inh)) {
         if (ck === "display") computedMap.set("display", "inline");
+        else if (ck === "direction") computedMap.set("direction", "ltr");
         else computedMap.delete(ck);
       }
     }
@@ -8800,7 +8801,7 @@ function installWindow(global) {
       "border-bottom-width": "border-bottom-style",
       "border-left-width": "border-left-style",
     };
-    const lwProps = ["outline-width", "border-top-width", "border-right-width", "border-bottom-width", "border-left-width", "column-rule-width"];
+    const lwProps = ["outline-width", "border-top-width", "border-right-width", "border-bottom-width", "border-left-width", "column-rule-width", "row-rule-width", "rule-width"];
     for (let i = 0; i < lwProps.length; i++) {
       const lk = lwProps[i];
       const bsProp = borderSideMap[lk];
@@ -9710,7 +9711,7 @@ function installWindow(global) {
       elColor = normCol(rawCol);
     }
     computedMap.set("color", elColor);
-    for (const ck of ["text-decoration-color", "text-emphasis-color", "outline-color", "background-color", "border-top-color", "border-right-color", "border-bottom-color", "border-left-color", "column-rule-color", "flood-color", "lighting-color"]) {
+    for (const ck of ["text-decoration-color", "text-emphasis-color", "outline-color", "background-color", "border-top-color", "border-right-color", "border-bottom-color", "border-left-color", "column-rule-color", "row-rule-color", "rule-color", "flood-color", "lighting-color"]) {
       const cv = (computedMap.get(ck) || "").trim();
       const cvLow = cv.toLowerCase();
       if (ck === "background-color" && (!cv || cvLow === "transparent")) {
@@ -9991,6 +9992,10 @@ function installWindow(global) {
       ["column-fill", "balance"],
       ["column-rule-style", "none"],
       ["column-rule-width", "3px"],
+      ["row-rule-style", "none"],
+      ["row-rule-width", "3px"],
+      ["rule-style", "none"],
+      ["rule-width", "3px"],
       ["column-span", "none"],
       ["column-width", "auto"],
       ["column-height", "auto"],
@@ -11420,7 +11425,7 @@ function installWindow(global) {
     "padding-block-end", "padding-block-start", "padding-bottom", "padding-inline-end", "padding-inline-start",
     "padding-left", "padding-right", "padding-top", "page", "perspective", "perspective-origin", "pointer-events",
     "position", "position-try-fallbacks", "position-try-order", "position-visibility", "quotes", "reading-flow", "reading-order", "resize", "right", "rotate", "row-gap",
-    "ruby-align", "ruby-merge", "ruby-overhang", "ruby-position", "scale", "scroll-behavior", "scroll-marker-group", "scroll-target-group", "scrollbar-color", "scrollbar-gutter", "scrollbar-width",
+    "ruby-align", "ruby-merge", "ruby-overhang", "ruby-position", "row-rule-color", "row-rule-style", "row-rule-width", "rule-color", "rule-style", "rule-width", "scale", "scroll-behavior", "scroll-marker-group", "scroll-target-group", "scrollbar-color", "scrollbar-gutter", "scrollbar-width",
     "-webkit-transform", "-moz-transform",
     "scroll-margin-block-end", "scroll-margin-block-start", "scroll-margin-bottom",
     "scroll-margin-inline-end", "scroll-margin-inline-start", "scroll-margin-left",
@@ -11771,11 +11776,11 @@ function installWindow(global) {
         if (typ !== "disc") parts.push(typ);
         return parts.length ? parts.join(" ") : "outside none disc";
       }
-      if (name === "column-rule") {
-        const w = computedMap.get("column-rule-width") || "0px";
-        const st = computedMap.get("column-rule-style") || "none";
+      if (name === "column-rule" || name === "row-rule" || name === "rule") {
+        const w = computedMap.get(name + "-width") || "0px";
+        const st = computedMap.get(name + "-style") || "none";
         const defC = computedMap.get("color") || "rgb(0, 0, 0)";
-        const rawC = computedMap.get("column-rule-color");
+        const rawC = computedMap.get(name + "-color");
         const c = (!rawC || rawC.toLowerCase() === "currentcolor") ? defC : rawC;
         return st === "none" ? (w + " " + c) : (w + " " + st + " " + c);
       }

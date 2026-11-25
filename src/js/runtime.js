@@ -3976,7 +3976,7 @@
       "padding-top", "page", "page-break-after", "page-break-before", "page-break-inside",
       "paint-order", "perspective", "perspective-origin", "place-content", "place-items",
       "place-self", "pointer-events", "position", "position-try", "position-try-fallbacks", "position-try-order", "position-visibility", "quotes", "reading-flow", "reading-order", "resize", "right", "rotate",
-      "row-gap", "ruby-align", "ruby-merge", "ruby-overhang", "ruby-position", "scale", "scroll-behavior", "scroll-margin", "scroll-margin-block",
+      "row-gap", "row-rule", "row-rule-color", "row-rule-style", "row-rule-width", "ruby-align", "ruby-merge", "ruby-overhang", "ruby-position", "rule", "rule-color", "rule-style", "rule-width", "scale", "scroll-behavior", "scroll-margin", "scroll-margin-block",
       "scroll-margin-block-end", "scroll-margin-block-start", "scroll-margin-bottom",
       "scroll-margin-inline", "scroll-margin-inline-end", "scroll-margin-inline-start",
       "scroll-margin-left", "scroll-margin-right", "scroll-margin-top", "scroll-padding",
@@ -8724,7 +8724,7 @@
         }
         return d && w ? (d + " " + w) : (d || w || s);
       }
-      if (key === "outline" || key === "border" || key === "column-rule" ||
+      if (key === "outline" || key === "border" || key === "column-rule" || key === "row-rule" || key === "rule" ||
           key === "border-top" || key === "border-right" || key === "border-bottom" || key === "border-left") {
         const parts = splitCssTokens(s);
         const STY = new Set(["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset", "auto"]);
@@ -10886,7 +10886,7 @@
           ["border-image-repeat", "stretch"]
         ];
       }
-      if (key === "outline" || key === "column-rule") {
+      if (key === "outline" || key === "column-rule" || key === "row-rule" || key === "rule") {
         const p = splitCssTokens(normV);
         const STY = new Set(["none", "hidden", "dotted", "dashed", "solid", "double", "groove", "ridge", "inset", "outset", "auto"]);
         let w = "medium", st = "none", c = "currentcolor";
@@ -10897,9 +10897,7 @@
             w = (tl === "0" || tl === "+0" || tl === "-0") ? "0px" : (/^calc\(/i.test(t) ? canonicalizeCalcToken(t) : t);
           } else c = t;
         }
-        return key === "outline"
-          ? [["outline-color", c], ["outline-style", st], ["outline-width", w]]
-          : [["column-rule-width", w], ["column-rule-style", st], ["column-rule-color", c]];
+        return [[key + "-width", w], [key + "-style", st], [key + "-color", c]];
       }
       if (key === "contain-intrinsic-size") {
         const p = parseContainIntrinsicSize(normV);
@@ -11147,6 +11145,8 @@
       transition: ["transition-property", "transition-duration", "transition-timing-function", "transition-delay", "transition-behavior"],
       outline: ["outline-color", "outline-style", "outline-width"],
       "column-rule": ["column-rule-width", "column-rule-style", "column-rule-color"],
+      "row-rule": ["row-rule-width", "row-rule-style", "row-rule-color"],
+      "rule": ["rule-width", "rule-style", "rule-color"],
       columns: ["column-width", "column-count", "column-height", "column-wrap"],
       overflow: ["overflow-x", "overflow-y"],
       gap: ["row-gap", "column-gap"],
@@ -11555,7 +11555,7 @@
         const ow = vals[2] === "medium" ? "" : vals[2];
         return [oc, ost, ow].filter(Boolean).join(" ") || "none";
       }
-      if (key === "column-rule") {
+      if (key === "column-rule" || key === "row-rule" || key === "rule") {
         const cw = vals[0] === "medium" && (vals[1] !== "none" || vals[2].toLowerCase() !== "currentcolor") ? "" : vals[0];
         const cst = vals[1] === "none" && (cw || vals[2].toLowerCase() !== "currentcolor") ? "" : vals[1];
         const cc = vals[2].toLowerCase() === "currentcolor" ? "" : vals[2];
@@ -47882,6 +47882,7 @@
           else computedMap.delete(ck);
         } else if (low === "initial" || ((low === "unset" || low === "revert") && !inh)) {
           if (ck === "display") computedMap.set("display", "inline");
+          else if (ck === "direction") computedMap.set("direction", "ltr");
           else computedMap.delete(ck);
         }
       }
@@ -49234,7 +49235,7 @@
         "border-bottom-width": "border-bottom-style",
         "border-left-width": "border-left-style",
       };
-      const lwProps = ["outline-width", "border-top-width", "border-right-width", "border-bottom-width", "border-left-width", "column-rule-width"];
+      const lwProps = ["outline-width", "border-top-width", "border-right-width", "border-bottom-width", "border-left-width", "column-rule-width", "row-rule-width", "rule-width"];
       for (let i = 0; i < lwProps.length; i++) {
         const lk = lwProps[i];
         const bsProp = borderSideMap[lk];
@@ -50144,7 +50145,7 @@
         elColor = normCol(rawCol);
       }
       computedMap.set("color", elColor);
-      for (const ck of ["text-decoration-color", "text-emphasis-color", "outline-color", "background-color", "border-top-color", "border-right-color", "border-bottom-color", "border-left-color", "column-rule-color", "flood-color", "lighting-color"]) {
+      for (const ck of ["text-decoration-color", "text-emphasis-color", "outline-color", "background-color", "border-top-color", "border-right-color", "border-bottom-color", "border-left-color", "column-rule-color", "row-rule-color", "rule-color", "flood-color", "lighting-color"]) {
         const cv = (computedMap.get(ck) || "").trim();
         const cvLow = cv.toLowerCase();
         if (ck === "background-color" && (!cv || cvLow === "transparent")) {
@@ -50425,6 +50426,10 @@
         ["column-fill", "balance"],
         ["column-rule-style", "none"],
         ["column-rule-width", "3px"],
+        ["row-rule-style", "none"],
+        ["row-rule-width", "3px"],
+        ["rule-style", "none"],
+        ["rule-width", "3px"],
         ["column-span", "none"],
         ["column-width", "auto"],
         ["column-height", "auto"],
@@ -51854,7 +51859,7 @@
       "padding-block-end", "padding-block-start", "padding-bottom", "padding-inline-end", "padding-inline-start",
       "padding-left", "padding-right", "padding-top", "page", "perspective", "perspective-origin", "pointer-events",
       "position", "position-try-fallbacks", "position-try-order", "position-visibility", "quotes", "reading-flow", "reading-order", "resize", "right", "rotate", "row-gap",
-      "ruby-align", "ruby-merge", "ruby-overhang", "ruby-position", "scale", "scroll-behavior", "scroll-marker-group", "scroll-target-group", "scrollbar-color", "scrollbar-gutter", "scrollbar-width",
+      "ruby-align", "ruby-merge", "ruby-overhang", "ruby-position", "row-rule-color", "row-rule-style", "row-rule-width", "rule-color", "rule-style", "rule-width", "scale", "scroll-behavior", "scroll-marker-group", "scroll-target-group", "scrollbar-color", "scrollbar-gutter", "scrollbar-width",
       "-webkit-transform", "-moz-transform",
       "scroll-margin-block-end", "scroll-margin-block-start", "scroll-margin-bottom",
       "scroll-margin-inline-end", "scroll-margin-inline-start", "scroll-margin-left",
@@ -52205,11 +52210,11 @@
           if (typ !== "disc") parts.push(typ);
           return parts.length ? parts.join(" ") : "outside none disc";
         }
-        if (name === "column-rule") {
-          const w = computedMap.get("column-rule-width") || "0px";
-          const st = computedMap.get("column-rule-style") || "none";
+        if (name === "column-rule" || name === "row-rule" || name === "rule") {
+          const w = computedMap.get(name + "-width") || "0px";
+          const st = computedMap.get(name + "-style") || "none";
           const defC = computedMap.get("color") || "rgb(0, 0, 0)";
-          const rawC = computedMap.get("column-rule-color");
+          const rawC = computedMap.get(name + "-color");
           const c = (!rawC || rawC.toLowerCase() === "currentcolor") ? defC : rawC;
           return st === "none" ? (w + " " + c) : (w + " " + st + " " + c);
         }

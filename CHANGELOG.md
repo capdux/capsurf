@@ -4401,3 +4401,7 @@
   - `src/js/shim/window.js`: `collectNested` 支持任意多层 CSS 嵌套规则递归展开（含 `nestDepth <= 12` 护栏）。
   - `src/js/shim/element/element.js`: `proto.matches` 对复杂选择器直接调用 `matchesElementSelector(..., true)` 消除全树 `querySelectorAll` 回退开销。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 821**:
+  - `src/js/shim/window.js`: `direction` `initial` 解析显式置 `"ltr"`；补全 `row-rule*` 与 `rule*` 默认初始值、颜色规范化与计算值序列化。
+  - `src/js/shim/cssom.js`: `STANDARD_CSS_PROPERTIES`、`SHORTHAND_EXPAND_LONGHANDS`、`expandCssShorthand` 及 `serializeExpandedShorthand` 补全 `row-rule*` 与 `rule*`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

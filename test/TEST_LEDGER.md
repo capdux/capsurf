@@ -2487,3 +2487,4 @@
 | Phase 818 | WPT `var()` 回退 `revert` 无效化与 `--*` `unset`/`revert` | `src/js/shim/window.js` | `revert-in-fallback`, `variable-definition-keywords` 2/2 **PASS**; `--smoke` 3/3 PASS |
 | Phase 819 | WPT `background-position` `calc()` 与 `(expr) * N` 序列化 | `src/js/shim/cssom.js` | `calc-background-position-003`, `calc-serialization-002` 2/2 **PASS**; `--smoke` 3/3 PASS |
 | Phase 820 | WPT 多层 CSS 嵌套、`@-rule {}`、`O(1)` `matches` 与 `lightgreen` | `src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/shim/element/element.js` | `has-css-nesting-shared`, `at-rule-in-declaration-list` 2/2 **PASS**; `--smoke` 3/3 PASS |
+| Phase 821 | WPT `direction: initial` 隔离与 `row-rule`/`rule` 简写全链路 | `src/js/shim/cssom.js`, `src/js/shim/window.js` | `css-writing-modes/inheritance` (20/20 **PASS**), `gap-decorations-rule-shorthand-roundtrip.tentative` (15/15 **PASS**); `--smoke` 3/3 PASS |
