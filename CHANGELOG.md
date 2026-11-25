@@ -4529,3 +4529,6 @@
 ### Phase 860 — `list-style-position` / `list-style-type` 校验下沉 `cap:css`
 - `/data/dev/cp/lib/css/liststyle.cp`: 新增并导出 `isValidCssListStylePositionValue`、`isValidCssListStyleTypeValue`。
 - `src/js/dom_binding.cp` & `src/js/shim/cssom.js`: 暴露并接入全部 2 个原生校验器，`list-style-position-*` 与 `list-style-type-*` **4/4 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 861 — `writing-mode` / `direction` / `unicode-bidi` / `float` / `clear` / `object-fit` 下沉 `cap:css`
+- `/data/dev/cp/lib/css/{layoutctrl,index}.cp`: 新增并导出 `isValidCssWritingModeValue`、`isValidCssDirectionValue`、`isValidCssUnicodeBidiValue`、`isValidCssFloatValue`、`isValidCssClearValue`、`isValidCssObjectFitValue`（补齐 `object-fit` 双关键字）。
+- `src/js/dom_binding.cp` & `src/js/shim/cssom.js`: 暴露并接入全部 6 个原生校验器，8 项 WPT 解析测试 **8/8 PASS**，`--smoke` 3/3 **PASS**。

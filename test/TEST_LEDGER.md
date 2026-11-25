@@ -2527,3 +2527,4 @@
 | Phase 858 | `flex-direction`/`flex-wrap`/`align-*`/`justify-content` 下沉 `cap:css` | `boxAlign.cp`, `dom_binding.cp`, `cssom.js` | `flex-{direction,wrap}-*`, `{align,justify}-*` **12/12 PASS**; `--smoke` 3/3 PASS |
 | Phase 859 | `grid-auto-flow`/`pointer-events`/`user-select`/`resize` 下沉 `cap:css` | `grid.cp`, `ui.cp`, `dom_binding.cp`, `cssom.js` | `grid-auto-flow-*`, `user-select-*`, `resize-*` **6/6 PASS**; `--smoke` 3/3 PASS |
 | Phase 860 | `list-style-position`/`list-style-type` 下沉 `cap:css` | `liststyle.cp`, `dom_binding.cp`, `cssom.js` | `list-style-{position,type}-*` **4/4 PASS**; `--smoke` 3/3 PASS |
+| Phase 861 | `writing-mode`/`direction`/`unicode-bidi`/`float`/`clear`/`object-fit` 下沉 `cap:css` | `layoutctrl.cp`, `dom_binding.cp`, `cssom.js` | `writing-mode-*`, `direction-*`, `unicode-bidi-*`, `object-fit-*` **8/8 PASS**; `--smoke` 3/3 PASS |

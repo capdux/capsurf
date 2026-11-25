@@ -111,6 +111,12 @@ import {
     isValidCssResizeValue,
     isValidCssListStylePositionValue,
     isValidCssListStyleTypeValue,
+    isValidCssWritingModeValue,
+    isValidCssDirectionValue,
+    isValidCssUnicodeBidiValue,
+    isValidCssFloatValue,
+    isValidCssClearValue,
+    isValidCssObjectFitValue,
 } from "cap:css";
 import { LayoutTree, Rect } from "../layout/layout.cp";
 import { RUNTIME_CHUNKS } from "./runtime_source.cp";
@@ -1101,6 +1107,30 @@ fn callStrValidator1(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, pred: 
 @c fn js_capsurf_is_valid_css_list_style_type(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     * = this_val;
     return callStrValidator1(ctx, argc, argv, isValidCssListStyleTypeValue);
+}
+@c fn js_capsurf_is_valid_css_writing_mode(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssWritingModeValue);
+}
+@c fn js_capsurf_is_valid_css_direction(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssDirectionValue);
+}
+@c fn js_capsurf_is_valid_css_unicode_bidi(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssUnicodeBidiValue);
+}
+@c fn js_capsurf_is_valid_css_float(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssFloatValue);
+}
+@c fn js_capsurf_is_valid_css_clear(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssClearValue);
+}
+@c fn js_capsurf_is_valid_css_object_fit(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssObjectFitValue);
 }
 @c fn js_capsurf_is_valid_css_len_pct(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     * = this_val;
@@ -3229,6 +3259,12 @@ pub fn mountDom(
     defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_resize", js_capsurf_is_valid_css_resize, 1);
     defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_list_style_position", js_capsurf_is_valid_css_list_style_position, 1);
     defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_list_style_type", js_capsurf_is_valid_css_list_style_type, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_writing_mode", js_capsurf_is_valid_css_writing_mode, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_direction", js_capsurf_is_valid_css_direction, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_unicode_bidi", js_capsurf_is_valid_css_unicode_bidi, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_float", js_capsurf_is_valid_css_float, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_clear", js_capsurf_is_valid_css_clear, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_object_fit", js_capsurf_is_valid_css_object_fit, 1);
 
     // Assemble and evaluate modular runtime shim
     let total_len: usize = 0;

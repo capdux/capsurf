@@ -1162,6 +1162,11 @@
     if (prop === "user-select" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_user_select === "function") return globalThis.__capsurf_is_valid_css_user_select(vLower);
     if (prop === "resize" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_resize === "function") return globalThis.__capsurf_is_valid_css_resize(vLower);
     if (prop === "list-style-position" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_list_style_position === "function") return globalThis.__capsurf_is_valid_css_list_style_position(vLower);
+    if (prop === "writing-mode" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_writing_mode === "function") return globalThis.__capsurf_is_valid_css_writing_mode(vLower);
+    if (prop === "direction" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_direction === "function") return globalThis.__capsurf_is_valid_css_direction(vLower);
+    if (prop === "unicode-bidi" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_unicode_bidi === "function") return globalThis.__capsurf_is_valid_css_unicode_bidi(vLower);
+    if (prop === "float" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_float === "function") return globalThis.__capsurf_is_valid_css_float(vLower);
+    if (prop === "clear" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_clear === "function") return globalThis.__capsurf_is_valid_css_clear(vLower);
     if (allowedKeywords) {
       return allowedKeywords.indexOf(vLower) !== -1;
     }
@@ -4042,6 +4047,9 @@
       return false;
     }
     if (prop === "object-fit") {
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_object_fit === "function") {
+        return globalThis.__capsurf_is_valid_css_object_fit(vLower);
+      }
       const toks = splitCssTokens(vLower);
       if (toks.length === 1) {
         return toks[0] === "fill" || toks[0] === "contain" || toks[0] === "cover" || toks[0] === "none" || toks[0] === "scale-down";
