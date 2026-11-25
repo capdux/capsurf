@@ -2036,6 +2036,9 @@
       return true;
     }
     if (prop === "flex-grow" || prop === "flex-shrink") {
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_flex_number === "function") {
+        return globalThis.__capsurf_is_valid_css_flex_number(vLower);
+      }
       const toks = splitCssTokens(vLower);
       if (toks.length !== 1) return false;
       const t = toks[0];
@@ -2044,6 +2047,9 @@
       return Number(t) >= 0;
     }
     if (prop === "order") {
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_order === "function") {
+        return globalThis.__capsurf_is_valid_css_order(vLower);
+      }
       const toks = splitCssTokens(vLower);
       if (toks.length !== 1) return false;
       const t = toks[0];

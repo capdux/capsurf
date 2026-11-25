@@ -2522,3 +2522,4 @@
 | Phase 853 | `border-width`/`border-style`/`outline-width`/`outline-style` 下沉 `cap:css` | `border.cp`, `outline.cp`, `dom_binding.cp`, `cssom.js` | `border-{width,style}-*`, `outline-{width,style}-*` **8/8 PASS**; `--smoke` 3/3 PASS |
 | Phase 854 | `inset` / `overflow` 校验下沉 `cap:css` | `positionProp.cp`, `overflowProp.cp`, `dom_binding.cp`, `cssom.js` | `top-*`, `inset-*`, `overflow-*` **6/6 PASS**; `--smoke` 3/3 PASS |
 | Phase 855 | `background-{size,repeat}` / `mask-{size,repeat}` 校验下沉 `cap:css` | `background.cp`, `dom_binding.cp`, `cssom.js` | `background-{size,repeat}-*`, `mask-{size,repeat}-*` **8/8 PASS**; `--smoke` 3/3 PASS |
+| Phase 856 | `flex-grow` / `flex-shrink` / `order` 校验下沉 `cap:css` | `flexgrid.cp`, `dom_binding.cp`, `cssom.js` | `flex-{grow,shrink}-*`, `order-*` **6/6 PASS**; `--smoke` 3/3 PASS |

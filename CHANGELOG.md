@@ -4514,3 +4514,6 @@
 ### Phase 855 — `background-size` / `background-repeat` / `mask-size` / `mask-repeat` 校验下沉 `cap:css`
 - `/data/dev/cp/lib/css/background.cp`: 新增并导出 `isValidCssBgSizeValue`、`isValidCssBgRepeatValue`。
 - `src/js/dom_binding.cp` & `src/js/shim/cssom.js`: 暴露并接入全部 2 个原生校验器，`background-{size,repeat}-{valid,invalid}` 与 `mask-{size,repeat}-{valid,invalid}` **8/8 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 856 — `flex-grow` / `flex-shrink` / `order` 校验下沉 `cap:css` 并接线验证
+- `/data/dev/cp/lib/css/{flexgrid,index}.cp`: 新增并导出 `isValidCssFlexNumberValue`、`isValidCssOrderValue`。
+- `src/js/dom_binding.cp` & `src/js/shim/cssom.js`: 暴露并接入全部 2 个原生校验器，`flex-grow-{valid,invalid}`、`flex-shrink-{valid,invalid}`、`order-{valid,invalid}` **6/6 PASS**，`--smoke` 3/3 **PASS**。
