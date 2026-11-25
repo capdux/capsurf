@@ -5352,6 +5352,18 @@ pub struct ComputedStyle {
             }
             return;
         }
+        if (std.ascii.eqlIgnoreCase(name, "content-visibility")) {
+            const tr_cv = std.mem.trim(u8, val, " \t\r\n");
+            if (std.ascii.eqlIgnoreCase(tr_cv, "hidden")) {
+                if (_.tryClaimSlot(PROP_CONTAIN, weight)) {
+                    _.contain_size = true;
+                    _.contain_layout = true;
+                    _.contain_paint = true;
+                    _.contain_style = true;
+                }
+            }
+            return;
+        }
         if (std.ascii.eqlIgnoreCase(name, "container-type")) {
             if (ct := ContainerType.parse(val)) {
                 if (_.tryClaimSlot(PROP_CONTAINER_TYPE, weight)) {

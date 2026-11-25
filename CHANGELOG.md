@@ -4709,3 +4709,7 @@
 ## Phase 929: `contain: size` 多列弹性项固有尺寸与 `content-visibility` 渲染文本过滤
 - `src/css/cascade.cp`, `src/layout/layout.cp`: 新增 `PROP_COLUMN_COUNT`，在 `contain: size` 与 `layoutFlexContainer` 中按 `(column_count - 1) * column_gap` 计算主轴固有宽。
 - `src/js/shim/element/html-classes.js`: `collectRenderedText` 跳过 `content-visibility: hidden` 及视口外 `auto`；`orthogonal-parent-shrink-to-fit-002` 与 `contain-size-multicol-as-flex-item` **2/2 PASS**，`--smoke` 3/3 **PASS**。
+
+## Phase 930: `content-visibility: hidden` 包含语义与离屏 `innerText` 完整收官
+- `src/css/cascade.cp`: 解析 `content-visibility: hidden` 并自动启用 `contain: size layout paint style`。
+- `src/js/shim/element/html-classes.js`: `innerText` getter 对被 `content-visibility` 跳过的子树返回 `""`；3 项 `content-visibility` WPT **3/3 PASS**，`--smoke` 3/3 **PASS**。

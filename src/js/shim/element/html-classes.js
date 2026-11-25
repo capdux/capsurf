@@ -477,9 +477,7 @@ function installHtmlClasses(global) {
     get: function () {
       let anc = this.parentElement || this.parentNode;
       while (anc && anc.nodeType === 1) {
-        const acs = getElComputedStyleSafe(anc);
-        const acv = (acs && (acs.contentVisibility || acs["content-visibility"]) ? String(acs.contentVisibility || acs["content-visibility"]).trim().toLowerCase() : "") || (anc.style && anc.style.contentVisibility ? String(anc.style.contentVisibility).trim().toLowerCase() : "");
-        if (acv === "hidden") return "";
+        if (isContentVisibilitySkipped(anc, null)) return "";
         anc = anc.parentElement || anc.parentNode;
       }
       if (!isElementBeingRendered(this)) {

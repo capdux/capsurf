@@ -3702,3 +3702,5 @@
 - `cascade.cp` 原未解析 `writing-mode`，且 `layout.cp` 对垂直书写模式按水平文本度量宽度、同时 `flushInlineLine` 未将同行 `float: left` 宽度计入后续行内元素偏移。接入 `WritingMode` 继承、`isVertical()` 原子行内化与列宽估算、以及左浮动预遍历后，16 项 `orthogonal-parent-shrink-to-fit-001{c..x}` 一次全绿。
 ### Phase 929 — `contain: size` 多列弹性子项与 `content-visibility` `innerText`
 - `contain-size-multicol-as-flex-item` 失败源于 `cascade.cp` 未解析 `column-count`/`columns` 且 `layoutFlexContainer` 对 `contain: size` 子项误用 `resolveBoxMetrics` 撑满宽度 (`784`)；接入 `PROP_COLUMN_COUNT` 并在 `measureIntrinsicWidth` 返回 `(column_count - 1) * column_gap` (`100`) 后一次通过。
+### Phase 930 — `content-visibility: hidden` 四重包含与 `innerText` 全绿
+- `cascade.cp` 补齐 `content-visibility: hidden` 后，隐式确立 `contain_size`/`contain_layout` BFC，使 `content-visibility-088` 外层高度归零、`offsetTop` 阻止外边距穿出均一次通过；同步修正 `html-classes.js` `innerText` getter 对离屏 `content-visibility: auto` 祖先返回 `""`，`content-visibility-086` 全绿。
