@@ -7447,6 +7447,7 @@
       if (p.length === 2) return [["overflow-x", p[0]], ["overflow-y", p[1]]];
     }
     if (key === "gap" || key === "grid-gap") {
+      if (!/(?:^|[^a-z0-9_-])(?:var|env)\(/i.test(normV) && !isValidCssValue(key, normV)) return null;
       const p = splitCssTokens(normV);
       if (p.length === 1) return [["row-gap", p[0]], ["column-gap", p[0]]];
       if (p.length === 2) return [["row-gap", p[0]], ["column-gap", p[1]]];
@@ -8865,6 +8866,10 @@
         if (key === "--") continue;
         if (!key.startsWith("--") && /(?:^|[^a-z0-9_-])env\(/i.test(val) && !isValidEnvCalls(val)) continue;
         if (!key.startsWith("--") && /[{}]/.test(val) && !/(?:^|[^a-z0-9_-])(?:var|env)\(/i.test(val)) continue;
+        if (context === "style" && !key.startsWith("--") &&
+            !/^(?:inherit|initial|unset|revert|revert-layer)$/i.test(val.trim()) &&
+            !/(?:^|[^a-z0-9_-])(?:var|env)\(/i.test(val) &&
+            !isValidCssValue(key, val)) continue;
         if (((context === "page" || context === "margin") && (key === "margin" || key === "padding")) ||
             (context === "style" && key === "columns")) {
           const expanded = expandCssShorthand(key, val);
@@ -9515,6 +9520,12 @@
       }
       if (this._onMutate) this._onMutate();
     },
+    enumerable: true,
+    configurable: true,
+  });
+  Object.defineProperty(CSSStyleRule.prototype, "style", {
+    get: function () { return this._style; },
+    set: function (v) { if (this._style) this._style.cssText = v; },
     enumerable: true,
     configurable: true,
   });
@@ -10466,7 +10477,7 @@
       rule.selectorText = canonSel;
       const style = makeRuleStyleDeclaration(parsed.declText || "", "style", null, onMutate);
       style._parentRule = rule;
-      rule.style = style;
+      rule._style = style;
       if ((parsed.declText || "").indexOf("{") !== -1) {
         const nestedParts = splitStylesheetRules(parsed.declText || "");
         for (let ni = 0; ni < nestedParts.length; ni++) {

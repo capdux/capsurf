@@ -2585,3 +2585,4 @@
 | Phase 915 | Flexbox `min-height: auto` transferred height、`eff_align` & 单行百分比重排 | `src/layout/layout.cp` | `flex-minimum-size-003`, `position-relative-percentage-top-004`, `position-relative-percentage-top-005` **3/3 PASS**; `--smoke` 3/3 PASS |
 | Phase 916 | `flex-basis: content` 高度不定性 & `height: stretch` 确定性判定 | `cascade.cp`, `layout.cp` | `flex-basis-content-percentage-height`, `position-relative-stretch-height-001` **2/2 PASS**; `--smoke` 3/3 PASS |
 | Phase 917 | `cross-fade()` `sign()` 放行 & `grid-gap` `inherit`/`var()` 序列化 | `cssom.js`, `element.js`, `window.js` | `legacy-gap-aliases-001`, `cross-fade-computed-value` **2/2 PASS**; `--smoke` 3/3 PASS |
+| Phase 918 | `CSSStyleRule.style` `[PutForwards]`、table-cell `min/max-width` & `gap` 解析/计算值 | `layout.cp`, `cssom.js`, `window.js` | `logicalprops-quirklength`, `logicalprops-inline-size` & 6× `css-align/gaps/*-parsing-001` **8/8 PASS**; `--smoke` 3/3 PASS |

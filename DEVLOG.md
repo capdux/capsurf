@@ -3675,3 +3675,5 @@
 - 新增 `IntrinsicSizeKeyword.Content` 与 `LayoutBox.ignore_height_for_flex_content`，在 `column` flex 下使 `flex: 1 1 content; height: 100px` 忽略显式 `height` 作为百分比子项包含块；同步在 `resolveBoxMetrics` 对 `height: stretch` 区分 `parent_h_definite` 填充与不定父高退化 `auto`，两项测试全绿。
 ### Phase 917 — `cross-fade()` `sign()` 放行与 `grid-gap` `var()`/`inherit` 序列化
 - `cssom.js` `cross-fade()` 校验误将 `sign(1em - 10000px)` 内长度单位当成顶层百分比表达式拒绝，剥离后 `evalCfPct` 立即精确算出 `49%`；`element.js` 将 `gap` 加入 `foldPairs` 并在 `lookupPropertyValue` 返回 `pendingVar` 后，`grid-gap` 全面对齐新标准别名语义。
+### Phase 918 — `CSSStyleRule.style` `[PutForwards]` 与 `gap`/`table-cell` 全绿修复
+- 发现 `cssRule.style = "..."` 直接覆盖数据属性为字符串，在 `CSSStyleRule.prototype` 定义 `[PutForwards=cssText]` 并于 `parseDeclarationsBlockInto` 启用 `isValidCssValue` 过滤后 `logicalprops-quirklength.html` 10/10 全绿；同步为 `layoutTableContainer` 补齐 `min/max-width` 夹紧并将 `gap`/`row-gap`/`column-gap` 接入 `valCheckProps` 与 `calc(% + px)` 排序，8 项 WPT 全绿。

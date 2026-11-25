@@ -2545,7 +2545,15 @@ pub struct LayoutTree {
             if (!cell.is_anon) {
                 const cstyle = &styles[@as(usize, cell.node_id)];
                 if (!cstyle.width.is_auto && !cstyle.width.is_none) {
-                    const rw = cstyle.width.resolvePx(avail_w, cstyle.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+                    let rw = cstyle.width.resolvePx(avail_w, cstyle.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+                    if (!cstyle.min_width.is_auto && !cstyle.min_width.is_none) {
+                        const min_w = cstyle.min_width.resolvePx(avail_w, cstyle.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+                        if (rw < min_w) rw = min_w;
+                    }
+                    if (!cstyle.max_width.is_auto && !cstyle.max_width.is_none) {
+                        const max_w = cstyle.max_width.resolvePx(avail_w, cstyle.font_size_px, _.root_font_px, _.viewport_width, _.viewport_height);
+                        if (rw > max_w) rw = max_w;
+                    }
                     if (cstyle.box_sizing == BoxSizing.BorderBox) {
                         pw = rw;
                     } else {

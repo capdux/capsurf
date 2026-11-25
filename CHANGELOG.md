@@ -4672,3 +4672,5 @@
 - `src/css/cascade.cp`, `src/layout/layout.cp`: 解析 `flex-basis: content` 并在 `column` 方向将 `height` 视作 `auto`，补齐 `height: stretch` 在确定/不定父高度下的布局分支；通过 `cpc fix` + `cpc brief` 4 门禁，2 项 `css-flexbox` WPT **2/2 PASS**，`--smoke` 3/3 **PASS**。
 ### Phase 917 — `cross-fade()` `sign()` 放行与 `grid-gap` 旧别名折叠
 - `src/js/shim/cssom.js`, `src/js/shim/element/element.js`, `src/js/shim/window.js`: `cross-fade()` 数学百分比校验剥离 `sign()`/`abs()`/`progress()` 内部单位，补齐 `gap` `foldPairs` CSS-wide 折叠与 `pendingVar` 返回，`legacy-gap-aliases-001.html` 与 `cross-fade-computed-value.html` **2/2 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 918 — `CSSStyleRule.style` `[PutForwards]`、table-cell `min/max-width` 夹紧与 `gap` 校验全绿（8 项 PASS）
+- `src/layout/layout.cp`, `src/js/shim/cssom.js`, `src/js/shim/window.js`: 补齐 `CSSStyleRule.prototype.style` `[PutForwards=cssText]` 与声明合法性过滤、table-cell `min/max-width` 夹紧及 6 项 `gap` 属性整条校验与 `calc(% + px)` 规范化；通过 `cpc fix` + `cpc brief` 4 门禁，8 项 WPT **8/8 PASS**，`--smoke` 3/3 **PASS**。

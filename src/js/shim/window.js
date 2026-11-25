@@ -6083,13 +6083,16 @@ function installWindow(global) {
           setDecl("border-left-width", sides[3], isImp);
         }
       } else if (key === "gap" || key === "grid-gap") {
-        const parts = splitCssTopLevelWhitespace(val);
-        if (parts.length === 1) {
-          setDecl("row-gap", parts[0], isImp);
-          setDecl("column-gap", parts[0], isImp);
-        } else if (parts.length === 2) {
-          setDecl("row-gap", parts[0], isImp);
-          setDecl("column-gap", parts[1], isImp);
+        const gapOk = (typeof globalThis.__capsurf_isValidCssValue !== "function") || /(?:var|env)\(/i.test(val) || globalThis.__capsurf_isValidCssValue("gap", val);
+        if (gapOk) {
+          const parts = splitCssTopLevelWhitespace(val);
+          if (parts.length === 1) {
+            setDecl("row-gap", parts[0], isImp);
+            setDecl("column-gap", parts[0], isImp);
+          } else if (parts.length === 2) {
+            setDecl("row-gap", parts[0], isImp);
+            setDecl("column-gap", parts[1], isImp);
+          }
         }
       } else if (key === "grid-row-gap") {
         setDecl("row-gap", val, isImp);
@@ -7510,7 +7513,7 @@ function installWindow(global) {
         }
       }
     }
-    const valCheckProps = ["text-combine-upright", "text-orientation", "align-items", "align-self", "flex-direction", "flex-grow", "flex-shrink", "flex-basis", "flex-wrap", "order"];
+    const valCheckProps = ["text-combine-upright", "text-orientation", "align-items", "align-self", "flex-direction", "flex-grow", "flex-shrink", "flex-basis", "flex-wrap", "order", "column-gap", "row-gap", "gap", "grid-column-gap", "grid-row-gap", "grid-gap"];
     const preOwn = new Map();
     for (let vi = 0; vi < valCheckProps.length; vi++) {
       const vp = valCheckProps[vi];
@@ -9567,7 +9570,7 @@ function installWindow(global) {
       if (nv && nv !== "auto" && nv !== "none" && nv !== "normal" && nv !== "min-content" && nv !== "max-content" && nv !== "fit-content" && nv.indexOf("%") === -1) {
         const px = evalCssLengthExpr(nv, 0, fontSize);
         if (px !== null) computedMap.set(nk, formatCssPx(Math.max(0, px)));
-      } else if (nk === "flex-basis" && /^calc\(/i.test(nv) && nv.indexOf("%") !== -1) {
+      } else if ((nk === "flex-basis" || nk === "row-gap" || nk === "column-gap") && /^calc\(/i.test(nv) && nv.indexOf("%") !== -1) {
         const inn = nv.slice(5, -1).trim();
         const evalL = (pv, xv) => {
           const e = inn

@@ -11400,6 +11400,7 @@
         if (p.length === 2) return [["overflow-x", p[0]], ["overflow-y", p[1]]];
       }
       if (key === "gap" || key === "grid-gap") {
+        if (!/(?:^|[^a-z0-9_-])(?:var|env)\(/i.test(normV) && !isValidCssValue(key, normV)) return null;
         const p = splitCssTokens(normV);
         if (p.length === 1) return [["row-gap", p[0]], ["column-gap", p[0]]];
         if (p.length === 2) return [["row-gap", p[0]], ["column-gap", p[1]]];
@@ -12818,6 +12819,10 @@
           if (key === "--") continue;
           if (!key.startsWith("--") && /(?:^|[^a-z0-9_-])env\(/i.test(val) && !isValidEnvCalls(val)) continue;
           if (!key.startsWith("--") && /[{}]/.test(val) && !/(?:^|[^a-z0-9_-])(?:var|env)\(/i.test(val)) continue;
+          if (context === "style" && !key.startsWith("--") &&
+              !/^(?:inherit|initial|unset|revert|revert-layer)$/i.test(val.trim()) &&
+              !/(?:^|[^a-z0-9_-])(?:var|env)\(/i.test(val) &&
+              !isValidCssValue(key, val)) continue;
           if (((context === "page" || context === "margin") && (key === "margin" || key === "padding")) ||
               (context === "style" && key === "columns")) {
             const expanded = expandCssShorthand(key, val);
@@ -13468,6 +13473,12 @@
         }
         if (this._onMutate) this._onMutate();
       },
+      enumerable: true,
+      configurable: true,
+    });
+    Object.defineProperty(CSSStyleRule.prototype, "style", {
+      get: function () { return this._style; },
+      set: function (v) { if (this._style) this._style.cssText = v; },
       enumerable: true,
       configurable: true,
     });
@@ -14419,7 +14430,7 @@
         rule.selectorText = canonSel;
         const style = makeRuleStyleDeclaration(parsed.declText || "", "style", null, onMutate);
         style._parentRule = rule;
-        rule.style = style;
+        rule._style = style;
         if ((parsed.declText || "").indexOf("{") !== -1) {
           const nestedParts = splitStylesheetRules(parsed.declText || "");
           for (let ni = 0; ni < nestedParts.length; ni++) {
@@ -47984,13 +47995,16 @@
             setDecl("border-left-width", sides[3], isImp);
           }
         } else if (key === "gap" || key === "grid-gap") {
-          const parts = splitCssTopLevelWhitespace(val);
-          if (parts.length === 1) {
-            setDecl("row-gap", parts[0], isImp);
-            setDecl("column-gap", parts[0], isImp);
-          } else if (parts.length === 2) {
-            setDecl("row-gap", parts[0], isImp);
-            setDecl("column-gap", parts[1], isImp);
+          const gapOk = (typeof globalThis.__capsurf_isValidCssValue !== "function") || /(?:var|env)\(/i.test(val) || globalThis.__capsurf_isValidCssValue("gap", val);
+          if (gapOk) {
+            const parts = splitCssTopLevelWhitespace(val);
+            if (parts.length === 1) {
+              setDecl("row-gap", parts[0], isImp);
+              setDecl("column-gap", parts[0], isImp);
+            } else if (parts.length === 2) {
+              setDecl("row-gap", parts[0], isImp);
+              setDecl("column-gap", parts[1], isImp);
+            }
           }
         } else if (key === "grid-row-gap") {
           setDecl("row-gap", val, isImp);
@@ -49411,7 +49425,7 @@
           }
         }
       }
-      const valCheckProps = ["text-combine-upright", "text-orientation", "align-items", "align-self", "flex-direction", "flex-grow", "flex-shrink", "flex-basis", "flex-wrap", "order"];
+      const valCheckProps = ["text-combine-upright", "text-orientation", "align-items", "align-self", "flex-direction", "flex-grow", "flex-shrink", "flex-basis", "flex-wrap", "order", "column-gap", "row-gap", "gap", "grid-column-gap", "grid-row-gap", "grid-gap"];
       const preOwn = new Map();
       for (let vi = 0; vi < valCheckProps.length; vi++) {
         const vp = valCheckProps[vi];
@@ -51468,7 +51482,7 @@
         if (nv && nv !== "auto" && nv !== "none" && nv !== "normal" && nv !== "min-content" && nv !== "max-content" && nv !== "fit-content" && nv.indexOf("%") === -1) {
           const px = evalCssLengthExpr(nv, 0, fontSize);
           if (px !== null) computedMap.set(nk, formatCssPx(Math.max(0, px)));
-        } else if (nk === "flex-basis" && /^calc\(/i.test(nv) && nv.indexOf("%") !== -1) {
+        } else if ((nk === "flex-basis" || nk === "row-gap" || nk === "column-gap") && /^calc\(/i.test(nv) && nv.indexOf("%") !== -1) {
           const inn = nv.slice(5, -1).trim();
           const evalL = (pv, xv) => {
             const e = inn
