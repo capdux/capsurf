@@ -3378,3 +3378,5 @@
 - 修复 `window.js` `@supports` 块未求值及不支持属性泄漏到 `getComputedStyle` 的问题；修复 `element.js`/`cssom.js` `-webkit-appearance` 别名规范化与 `Webkit*` 驼峰转换，使 `/css/css-ui/` 9 项回归用例全部恢复 **PASS**。
 ### Phase 769 — `@font-face` `tech()`、`metric-overrides` 与 `font-width`/`font-stretch` 闭环
 - 修复 `cssom.js` 中 `@font-face` `tech()` 大小写规范化、`ascent/descent/line-gap-override` 非负百分比校验、以及 `font-width`/`font-stretch` 别名映射，3 项全绿（`font-face-src-tech.html` `FAIL→PASS`，基线增至 `7,211`）。
+### Phase 770 — `/css/css-masking/parsing/` 全目录 28/28 (100% PASS) 达成
+- 在 `cssom.js` `KNOWN_PROPS` 与 `window.js` `STANDARD_COMPUTED_LONGHANDS` 补齐 `mask-border-*` 与 `mask-{clip,mode,origin,position}`，`mask-valid.sub.html` 与 `mask-computed.html` 全部恢复 **PASS**，实现 `/css/css-masking/parsing/` 28/28 全绿。
