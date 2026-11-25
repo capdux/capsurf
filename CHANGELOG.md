@@ -4608,3 +4608,5 @@
 - `src/js/{runtime.js,runtime_source.cp}`: 重新打包；`flex-computed.html`（`/css/css-flexbox/parsing/` **27/27 100% PASS**）与 `grid-area-computed.html` **2/2 PASS**，`--smoke` 3/3 **PASS**。
 ### Phase 886 — 显式高度表格行高均分扩展（`absolute-tables-001` 修复）
 - `src/layout/layout.cp`: `layoutTableCore` 在 `!tb_h.height_is_auto` 时将富余表格内容高度均分至各行 `row_h`，修复单元格 `clientHeight` 停留在固有高度（22px）而非撑满表格（38px）的问题；通过 `cpc fix` + `cpc brief` 门禁，`/css/css-tables/absolute-tables-001.html` **PASS**，`--smoke` 3/3 **PASS**。
+### Phase 887 — Flexbox `row-reverse`/`column-reverse` 主轴反转布局
+- `src/layout/layout.cp`: `layoutFlexContainer` 增加 `RowReverse`/`ColumnReverse` 检测，镜像 `FlexStart`/`FlexEnd` 起始偏移并在各弹性行内反转子项顺序；通过 `cpc fix` + `cpc brief` 门禁，`column-reverse-gap.html` **PASS**，`--smoke` 3/3 **PASS**。

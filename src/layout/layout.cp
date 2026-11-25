@@ -4243,14 +4243,24 @@ pub struct LayoutTree {
                 count_minus_1 = @floatFromInt(l_count - 1);
             }
 
+            const is_rev = (pstyle.flex_direction == FlexDirection.RowReverse || pstyle.flex_direction == FlexDirection.ColumnReverse);
             const start_offset: f32 = switch (pstyle.justify_content) {
-                .FlexStart => 0.0,
-                .FlexEnd => remaining_main,
+                .FlexStart => if (is_rev) remaining_main else 0.0,
+                .FlexEnd => if (is_rev) 0.0 else remaining_main,
                 .Center => remaining_main / 2.0,
                 .SpaceAround => (remaining_main / count_f) / 2.0,
                 .SpaceEvenly => remaining_main / count_plus_1,
                 .SpaceBetween => 0.0,
             };
+
+            if (is_rev && l_count > 1) {
+                let ri: usize = 0;
+                while (ri < l_count / 2) : (ri += 1) {
+                    const tmp_it = items[l_start + ri];
+                    items[l_start + ri] = items[l_end - 1 - ri];
+                    items[l_end - 1 - ri] = tmp_it;
+                }
+            }
 
             let space_between_step = gap;
             if (l_count > 1) {

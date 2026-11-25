@@ -3613,3 +3613,5 @@
 - 修复 `window.js` `flex` 简写展开与 `cssom.js` `valCheckProps` 拦截 `calc(10 + (sign(20cqw - 10px) * 5))` 导致回落 `"0 1 1px"` 的问题，并跳过 `grid-*` 计算值的 `normalizeCssColor` 解义，保住 `\31 st` 转义序列化。
 ### Phase 886 — 表格显式高度向行高与单元格分配
 - 定位 `absolute-tables-001.html` 中 `.tbl` 已正确计算为 `38px` 但 `.cell` 仍为 `22px` 的根因：`layoutTableCore` 仅将显式宽度分配至列宽而未将显式高度分配至 `row_h`；补齐均分逻辑后 8 个子断言全部通过。
+### Phase 887 — Flexbox 反向主轴 (`row-reverse`/`column-reverse`) 缺失补齐
+- 修复 `layoutFlexContainer` 仅判断 `isRow()` 而忽略 `RowReverse`/`ColumnReverse` 的主轴反转与 `justify-content` 镜像问题，`column-reverse-gap.html` 一次性通过。
