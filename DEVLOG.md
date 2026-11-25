@@ -3651,3 +3651,5 @@
 - 在 `cssom.js`、`window.js` 与 `element.js` 打通 `border`/`border-width` `hairline` 校验、展开与计算样式解析，规范化 `border-shape` `at center` 序列化，并在 `isValidColor`/`isValidCalcSyntax` 拦截 `hsl()` 无 `%` S/L 通道及带单位乘法 `calc(0.56turn * -0.43turn)`，4 项目标 WPT 全部一次通过。
 ### Phase 905 — `tab-size-computed` 与 `css-transforms` `translate` 5 项全绿
 - 修复 `tab-size` 误将 `sign(2cqw - 10px)` 判定为混合长度单位的问题，并在 `transform` 校验入口拦截 `translate(null/INFINITE)` 非法参数，同时在 `window.js` `translate` 计算路径展开 `em`/`rem` 并按 `% + px` 排序，5 项测试一次全绿。
+### Phase 906 — `TransitionEvent` 与 `@starting-style` 解析闭环
+- 修复 `TransitionEvent` 缺少 `type` 参数抛 `TypeError`、`propertyName`/`pseudoElement` 强制转字符串、`elapsedTime` 有限浮点数校验及 `Event` 继承原型链，并接入 `@starting-style` 块级规则与空前导符检验，`transitionevent-interface.html` 与 `starting-style-parsing.html` 一次全绿。

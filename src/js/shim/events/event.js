@@ -1336,17 +1336,46 @@ Object.defineProperty(PageTransitionEvent.prototype, "persisted", {
   configurable: true,
 });
 
-function TransitionEvent(type, options) {
-  Event.call(this, type, options);
-  const opts = (options !== null && typeof options === "object") ? options : {};
+function TransitionEvent(type, eventInitDict = {}) {
+  if (arguments.length < 1) {
+    throw new TypeError("Failed to construct 'TransitionEvent': 1 argument required, but only 0 present.");
+  }
+  const opts = (eventInitDict !== null && eventInitDict !== undefined && typeof eventInitDict === "object")
+    ? eventInitDict
+    : (eventInitDict === undefined || eventInitDict === null ? {} : (() => { throw new TypeError("Failed to construct 'TransitionEvent': parameter 2 ('eventInitDict') is not an object."); })());
+  let et = 0;
+  if (opts.elapsedTime !== undefined) {
+    et = Number(opts.elapsedTime);
+    if (!Number.isFinite(et)) {
+      throw new TypeError("Failed to construct 'TransitionEvent': The provided double value is non-finite.");
+    }
+  }
+  Event.call(this, type, opts);
   _transitionEventState.set(this, {
-    propertyName: opts.propertyName != null ? String(opts.propertyName) : "",
-    elapsedTime: typeof opts.elapsedTime === "number" ? opts.elapsedTime : 0,
-    pseudoElement: opts.pseudoElement != null ? String(opts.pseudoElement) : "",
+    propertyName: opts.propertyName !== undefined ? String(opts.propertyName) : "",
+    elapsedTime: et,
+    pseudoElement: opts.pseudoElement !== undefined ? String(opts.pseudoElement) : "",
   });
 }
-TransitionEvent.prototype = Object.create(Event.prototype);
-TransitionEvent.prototype.constructor = TransitionEvent;
+Object.setPrototypeOf(TransitionEvent, Event);
+Object.defineProperty(TransitionEvent, "prototype", {
+  value: Object.create(Event.prototype),
+  writable: false,
+  enumerable: false,
+  configurable: false,
+});
+Object.defineProperty(TransitionEvent.prototype, "constructor", {
+  value: TransitionEvent,
+  writable: true,
+  enumerable: false,
+  configurable: true,
+});
+Object.defineProperty(TransitionEvent.prototype, Symbol.toStringTag, {
+  value: "TransitionEvent",
+  writable: false,
+  enumerable: false,
+  configurable: true,
+});
 markNative(TransitionEvent, "TransitionEvent");
 ["propertyName", "elapsedTime", "pseudoElement"].forEach(function (prop) {
   Object.defineProperty(TransitionEvent.prototype, prop, {
@@ -1355,7 +1384,7 @@ markNative(TransitionEvent, "TransitionEvent");
       if (!s) throw new TypeError("Illegal invocation");
       return s[prop];
     },
-    enumerable: false,
+    enumerable: true,
     configurable: true,
   });
 });

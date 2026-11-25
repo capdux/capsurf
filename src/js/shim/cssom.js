@@ -10196,6 +10196,7 @@
       case "-webkit-keyframes": return "keyframes";
       case "page": return "page";
       case "scope": return "scope";
+      case "starting-style": return "starting-style";
       case "charset": return "charset";
       case "counter-style": return "counter-style";
       default: return "unknown";
@@ -10728,6 +10729,26 @@
       rule._serialize = function () {
         const inner = rule.cssRules.map((r) => r.cssText).join("\n  ");
         return "@layer" + (lr.name ? " " + lr.name : "") + (inner ? " {\n  " + inner + "\n}" : " {\n}");
+      };
+      return rule;
+    }
+
+    if (kind === "starting-style") {
+      const prelude = sel.replace(/^@starting-style\b/i, "").trim();
+      if (prelude !== "") return null;
+      const rule = new CSSGroupingRule();
+      rule.parentRule = parentRule || null;
+      rule.parentStyleSheet = parentSheet || null;
+      rule._onMutate = onMutate || null;
+      const children = splitStylesheetRules(parsed.declText || "");
+      for (let i = 0; i < children.length; i++) {
+        const c = constructRule(children[i], parentSheet, rule, onMutate);
+        if (c) rule.cssRules.push(c);
+      }
+      rule._serialize = function () {
+        if (rule.cssRules.length === 0) return "@starting-style {\n}";
+        const inner = rule.cssRules.map((r) => r.cssText).join("\n  ");
+        return "@starting-style {\n  " + inner + "\n}";
       };
       return rule;
     }

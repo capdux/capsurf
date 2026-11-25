@@ -4648,3 +4648,5 @@
 - `src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/shim/element/element.js`: 新增 `hairline` 边框宽度支持（`1px`）；规范化 `border-shape` `at center center`；`isValidColor` 与 `isValidCalcSyntax` 拦截逗号 `hsla?` 无 `%` 通道及 `turn * turn` 非法乘积；4 项 WPT **4/4 PASS**，`--smoke` 3/3 **PASS**。
 ### Phase 905 — `tab-size` `cqw`/`sign()`、`translate` `em` 解析与 `translate()` 非法参数拦截
 - `src/js/shim/cssom.js`, `src/js/shim/window.js`: `tab-size` 剥离 `sign()`/`abs()` 后检测单位；`transform` 前置校验 `translate*()` 参数；`translate` 计算值解析 `em`/`rem` 并按 `%` 在 `px` 前规范排序；`tab-size-computed`、`translate-getComputedStyle`、`transform_translate_{invalid,max,min}` **5/5 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 906 — `TransitionEvent` WebIDL 合规与 `@starting-style` 解析全绿
+- `src/js/shim/cssom.js`, `src/js/shim/events/event.js`, `src/js/shim/index.js`: 实现 `@starting-style` 解析校验与序列化；补齐 `TransitionEvent` WebIDL 构造/原型链/属性枚举与有限 `double` 校验；`transitionevent-interface.html` (42/42) 与 `starting-style-parsing.html` (5/5) **2/2 PASS**，`idlharness.html` 推进至 48/64 PASS，`--smoke` 3/3 **PASS**。

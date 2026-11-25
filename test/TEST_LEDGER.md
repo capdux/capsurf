@@ -2573,3 +2573,4 @@
 | Phase 903 | `hwb` 精度/序列化、`rgb(... none)` 8 位精度、`r\gb` 转义 & 148 命名颜色 | `src/js/shim/cssom.js` | `color-valid-hwb`, `color-computed-hwb`, `color-computed-rgb` **3/3 PASS**; `--smoke` 3/3 PASS |
 | Phase 904 | `hairline` 边框、`border-shape` `at center` & `hsl()`/`calc()` 非法校验 | `cssom.js`, `window.js`, `element.js` | `border-shape-valid`, `border-width-hairline`, `color-invalid-hsl`, `color-invalid` **4/4 PASS**; `--smoke` 3/3 PASS |
 | Phase 905 | `tab-size` `sign(cqw)`、`translate()` 参数校验 & `translate` `em`/`%` 排序 | `cssom.js`, `window.js` | `tab-size-computed`, `translate-getComputedStyle`, `transform_translate_{invalid,max,min}` **5/5 PASS**; `--smoke` 3/3 PASS |
+| Phase 906 | `TransitionEvent` WebIDL 构造/原型 & `@starting-style` 解析/序列化 | `cssom.js`, `event.js`, `index.js` | `transitionevent-interface` (42/42), `starting-style-parsing` (5/5) **2/2 PASS**; `idlharness` 48/64; `--smoke` 3/3 PASS |
