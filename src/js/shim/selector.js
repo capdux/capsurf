@@ -680,6 +680,36 @@ function matchesCompoundSelector(el, compound, scopeRoot) {
       else if (pseudo.startsWith(":not(") && pseudo.endsWith(")")) {
         if (matchesElementSelector(el, s.slice(start + 5, i - 1), scopeRoot, true)) return false;
       }
+      else if (pseudo.startsWith(":has(") && pseudo.endsWith(")")) {
+        const hasInner = s.slice(start + 5, i - 1);
+        const hasItems = splitTopLevelSelectorList(hasInner);
+        if (!hasItems || hasItems.length === 0) return false;
+        let anyHas = false;
+        for (let hi = 0; hi < hasItems.length && !anyHas; hi++) {
+          const rawItem = hasItems[hi].trim();
+          if (!rawItem) continue;
+          if (rawItem[0] === ">") {
+            const rest = rawItem.slice(1).trim();
+            for (let c = el.firstElementChild; c; c = c.nextElementSibling) {
+              if (matchesElementSelector(c, rest, scopeRoot, true)) { anyHas = true; break; }
+            }
+          } else if (rawItem[0] === "+") {
+            const rest = rawItem.slice(1).trim();
+            const ns = el.nextElementSibling;
+            if (ns && matchesElementSelector(ns, rest, scopeRoot, true)) anyHas = true;
+          } else if (rawItem[0] === "~") {
+            const rest = rawItem.slice(1).trim();
+            for (let ns = el.nextElementSibling; ns; ns = ns.nextElementSibling) {
+              if (matchesElementSelector(ns, rest, scopeRoot, true)) { anyHas = true; break; }
+            }
+          } else {
+            if (findInSubtree(el, (cand) => matchesComplexSelector(cand, rawItem, scopeRoot, el), true)) {
+              anyHas = true;
+            }
+          }
+        }
+        if (!anyHas) return false;
+      }
       else return false;
     } else if (ch === "*") {
       i++;
@@ -743,14 +773,16 @@ function splitComplexSelector(sel) {
   return parts;
 }
 
-function matchesComplexSelector(el, sel, scopeRoot) {
+function matchesComplexSelector(el, sel, scopeRoot, stopAtEl) {
   const parts = splitComplexSelector(sel);
   if (parts.length === 0) return false;
   if (!matchesCompoundSelector(el, parts[parts.length - 1], scopeRoot)) return false;
   if (parts.length === 1) return true;
 
   function getParentOrHost(n) {
-    return n.parentElement || (n.parentNode && n.parentNode.nodeType === 1 ? n.parentNode : (n.parentNode && n.parentNode === scopeRoot && scopeRoot.host ? scopeRoot.host : null));
+    const p = n.parentElement || (n.parentNode && n.parentNode.nodeType === 1 ? n.parentNode : (n.parentNode && n.parentNode === scopeRoot && scopeRoot.host ? scopeRoot.host : null));
+    if (stopAtEl && p && (p === stopAtEl || (typeof p._nid === "number" && p._nid > 0 && p._nid === stopAtEl._nid))) return null;
+    return p;
   }
   function matchFrom(node, idx) {
     if (idx < 0) return true;
@@ -762,7 +794,6 @@ function matchesComplexSelector(el, sel, scopeRoot) {
         if (matchesCompoundSelector(anc, targetCompound, scopeRoot) && matchFrom(anc, idx - 2)) {
           return true;
         }
-        if (scopeRoot && (anc === scopeRoot || (typeof anc._nid === "number" && anc._nid > 0 && anc._nid === scopeRoot._nid))) break;
         anc = getParentOrHost(anc);
       }
       return false;

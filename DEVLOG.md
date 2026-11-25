@@ -3482,3 +3482,5 @@
 - 在 `window.js` 将 2 层 CSS 嵌套展开升级为递归 `collectNested`、`element.js` `proto.matches` 直连 `matchesElementSelector(..., true)` 消除全树扫描瓶颈、`cssom.js` 跳过声明列表中的 `@-rule {}` 块并补全 `lightgreen` 命名色，`has-css-nesting-shared` 与 `at-rule-in-declaration-list` 2/2 全绿 **PASS**。
 ### Phase 821 — `direction: initial` 继承隔离与 `row-rule`/`rule` 简写全链路
 - 修复 `window.js` `direction: initial` 删除键后误触发 `__capsurf_getComputedDirection` 继承父级 `rtl` 的问题，并在 `cssom.js`/`window.js` 补齐 `row-rule*` 与 `rule*` 简写展开/计算值/序列化，`css-writing-modes/inheritance`（目录 **20/20**）与 `gap-decorations-rule-shorthand-roundtrip.tentative`（目录 **15/15**）2/2 全绿 **PASS**。
+### Phase 822 — `:has()` 相对选择器与显式 `:scope` 祖先界限
+- 在 `selector.js` 实现 `:has(...)` 相对选择器求值，移除 `scopeRoot` 向上匹配截断并引入 `stopAtEl` 区分 `:has()` 顶层相对链与嵌套 `:is(:scope ...)`，`has-argument-with-explicit-scope.html` 全绿 **PASS**。

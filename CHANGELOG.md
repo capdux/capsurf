@@ -4405,3 +4405,6 @@
   - `src/js/shim/window.js`: `direction` `initial` 解析显式置 `"ltr"`；补全 `row-rule*` 与 `rule*` 默认初始值、颜色规范化与计算值序列化。
   - `src/js/shim/cssom.js`: `STANDARD_CSS_PROPERTIES`、`SHORTHAND_EXPAND_LONGHANDS`、`expandCssShorthand` 及 `serializeExpandedShorthand` 补全 `row-rule*` 与 `rule*`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 822**:
+  - `src/js/shim/selector.js`: `matchesCompoundSelector` 实现 `:has(...)` 相对选择器求值；`matchesComplexSelector` 移除 `scopeRoot` 过早截断并新增 `stopAtEl` 参数限定 `:has()` 顶层链范围。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
