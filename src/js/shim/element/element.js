@@ -12,6 +12,7 @@ const STYLE_LEGACY_ALIASES = {
   "grid-row-gap": "row-gap",
   "grid-column-gap": "column-gap",
   "grid-gap": "gap",
+  "word-wrap": "overflow-wrap",
   "-webkit-border-radius": "border-radius",
   "-webkit-appearance": "appearance",
   "-webkit-align-content": "align-content",

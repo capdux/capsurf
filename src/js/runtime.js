@@ -19741,6 +19741,7 @@
     "grid-row-gap": "row-gap",
     "grid-column-gap": "column-gap",
     "grid-gap": "gap",
+    "word-wrap": "overflow-wrap",
     "-webkit-border-radius": "border-radius",
     "-webkit-appearance": "appearance",
     "-webkit-align-content": "align-content",
@@ -49849,7 +49850,20 @@
         if (unit === "px" || unit === "") return num;
         if (unit === "%") return refPx !== null ? (num / 100) * refPx : null;
         if (unit === "em") return num * (fontSizePx || 16);
-        if (unit === "rem") return num * 16;
+        if (unit === "rem") {
+          let rFs = 16;
+          if (!evalCssLengthExpr._inRootFs && typeof document !== "undefined" && document && document.documentElement && document.documentElement.nodeType === 1) {
+            evalCssLengthExpr._inRootFs = true;
+            try {
+              const rMap = collectRawComputedMap(document.documentElement, "");
+              const rRaw = (rMap.get("font-size") || "16px").trim();
+              const rVal = evalCssLengthExpr(rRaw, 16, 16, 19.2);
+              if (rVal !== null && rVal > 0) rFs = rVal;
+            } catch (e) {}
+            evalCssLengthExpr._inRootFs = false;
+          }
+          return num * rFs;
+        }
         if (unit === "pt") return num * (96 / 72);
         if (unit === "pc") return num * 16;
         if (unit === "in") return num * 96;
@@ -50017,6 +50031,15 @@
           return computeElementUsedWidthPx(element.parentElement || element.parentNode, depth + 1, visited);
         }
         const fontSize = evalCssLengthExpr(rawMap.get("font-size") || "16px", 16, 16) || 16;
+        let lhPx = fontSize * 1.2;
+        const lhRawW = (rawMap.get("line-height") || "").trim().toLowerCase();
+        if (lhRawW && lhRawW !== "normal") {
+          if (/^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(lhRawW)) lhPx = Number(lhRawW) * fontSize;
+          else {
+            const lp = evalCssLengthExpr(lhRawW, fontSize, fontSize);
+            if (lp !== null && lp > 0) lhPx = lp;
+          }
+        }
         const parentEl = element.parentElement || element.parentNode;
         const cbW = (parentEl && parentEl.nodeType === 1) ? computeElementUsedWidthPx(parentEl, depth + 1, visited) : 800;
         let wRaw = (rawMap.get("width") || "auto").trim().toLowerCase();
@@ -50043,7 +50066,7 @@
           }
           w = maxChildW;
         } else {
-          w = evalCssLengthExpr(wRaw, cbW, fontSize);
+          w = evalCssLengthExpr(wRaw, cbW, fontSize, lhPx);
           if (w === null) w = cbW;
         }
 
@@ -52674,7 +52697,7 @@
             const pR = Number(pctC.toFixed(6));
             const xR = Number(pxC.toFixed(6));
             if (xR === 0) return String(pR) + "%";
-            if (pR === 0) return formatCssPx(xR);
+            if (pR === 0) return tl.indexOf("%") !== -1 ? ("calc(0%" + (xR < 0 ? " - " + formatCssPx(-xR) : " + " + formatCssPx(xR)) + ")") : formatCssPx(xR);
             return "calc(" + String(pR) + "%" + (xR < 0 ? " - " + formatCssPx(-xR) : " + " + formatCssPx(xR)) + ")";
           }
         }

@@ -2602,3 +2602,4 @@
 | Phase 932 | `KeyframeEffect.pseudoElement` & `stretch` + `aspect-ratio` 反推宽 | `animations.js`, `layout.cp` | `backdrop-animate`, `aspect-ratio-1` (4/4) **2/2 PASS**; `--smoke` 3/3 PASS |
 | Phase 933 | `hasInvalidCalcUnitMix` 拦截 `min`/`max`/`clamp`/`progress`/`dim*dim` | `src/js/shim/cssom.js` | `progress-invalid` (35/35), `clamp-length-invalid` (23/23), `minmax-percentage-invalid` (48/48), `calc-unit-analysis` (10/10) **4/4 PASS**; `--smoke` 3/3 PASS |
 | Phase 934 | `sign`/`abs` 单位校验 & 整数插值半舍入 | `cssom.js`, `animations.js`, `window.js` | `signs-abs-invalid` (53/53), `integer_interpolation_round_half_001`, `integer_interpolation_round_half_002` **3/3 PASS**; `--smoke` 3/3 PASS |
+| Phase 935 | 动态 `rem`/`lh`、`calc(0% + ...)` & `word-wrap` 别名 | `element.js`, `window.js` | `getComputedStyle-calc-mixed-units-001` (3/3), `getComputedStyle-calc-mixed-units-002` (8/8) **2/2 PASS**; `--smoke` 3/3 PASS |

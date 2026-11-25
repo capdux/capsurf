@@ -3714,3 +3714,5 @@
 - `isValidLenPct` 原在 `calc()` 前置校验前直接透传 `__capsurf_is_valid_css_len_pct`，导致 `clamp(0, 10rem, 100%)`、`min(1%, 0)`、`calc(2px * 1px)` 及 `progress(10, 0px, 10)` 未被拦截。提取 `hasInvalidCalcUnitMix` 并同时接入 `isValidCalcSyntax` 与 `isValidLenPct` 后，4 项共 116 个 subtest 一次全绿。
 ### Phase 934 — `sign`/`abs` 单位混用拦截与整数动画向正无穷半舍入
 - `signs-abs-invalid` 剩余 2 项 (`sign(10px + 5rad)` 与 `font-weight: sign(10%)`) 在 `hasInvalidCalcUnitMix` 与 `font-weight` 校验补齐后 53/53 全绿；`interpolateAnimValue` 对 `<integer>` 属性使用 `Math.round(v)` 后 `integer_interpolation_round_half_001/002` 一次通过。
+### Phase 935 — 动态 `rem`/`lh` 计算、`calc(0% + ...)` 保留与 `word-wrap` 别名
+- `getComputedStyle-calc-mixed-units-001` 失败源于 `calc(100% - 100% + 20em)` 在 `pctC == 0` 时未保留 `0%`；`002` 失败源于 `rem` 硬编码 `16` 及 `lh` 未取 `line-height` 计算值；补齐后 `001` (3/3) 与 `002` (8/8) 均一次通过。

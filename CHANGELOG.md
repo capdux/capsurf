@@ -4728,3 +4728,7 @@
 ## Phase 934: `sign`/`abs` 单位混用拦截与整数动画半舍入
 - `src/js/shim/cssom.js`: 拦截 `sign`/`abs` 混用不兼容单位及 `font-weight` 中的 `sign(%)/abs(%)`。
 - `src/js/shim/animations.js`, `src/js/shim/window.js`: 整数插值向正无穷半舍入并规范化内联空 `url()`；`signs-abs-invalid`、`integer_interpolation_round_half_001/002` **3/3 PASS**，`--smoke` 3/3 **PASS**。
+
+## Phase 935: `rem`/`lh` 动态计算、`calc(0% + ...)` 保留与 `word-wrap` 别名
+- `src/js/shim/element/element.js`: `STYLE_LEGACY_ALIASES` 新增 `"word-wrap": "overflow-wrap"`。
+- `src/js/shim/window.js`: `evalCssLengthExpr` 动态求解根元素 `rem` 与计算行高 `lhPx`，`evalLinLenPctTok` 保留 `calc(0% + ...)`；`getComputedStyle-calc-mixed-units-001/002` **2/2 PASS**，`--smoke` 3/3 **PASS**。
