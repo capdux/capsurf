@@ -3578,3 +3578,5 @@
 - 修复了 `cssom.js` 与 `element.js` 修改内联样式或属性后仅递增 `__capsurf_cssom_epoch` 而未递增 `__capsurf_domMutationEpoch` 导致后代元素命中陈旧 `_rawBaseCache` 的问题，`/css/css-contain/content-visibility/content-visibility-036.html` 转绿。
 ### Phase 869 — `<select><option>` 无限递归卡死根因消除
 - 通过最小 CDP 复现与 GDB Thread 1 栈追踪定位 `HTMLSelectElement.prototype.childNodes` 与 `getSelectOptions` 间的循环调用，加入 `_inSelectChildNodes` 重入守卫后彻底消除 4 项跨模块（`css-flexbox`、`css-contain`）引擎卡死问题。
+### Phase 870 — 内联 `inherit`/`initial`/`unset`/`revert` 展开顺序修复（`/css/css-transforms/` 达成 100%）
+- 修复了 `collectRawComputedMap` 开启 `_skipInline` 时先展开 CSS-wide 关键字、后解析内联 `style` 导致内联 `inherit`/`initial`/`unset` 未被展开的全局缺陷，一次性打通 `/css/css-transforms/`（31/31）及 `/css/css-images/inheritance.html`。

@@ -4555,3 +4555,5 @@
 - `src/js/shim/cssom.js`: `notify()` 同步递增 `__capsurf_domMutationEpoch` 失效后代 `_rawBaseCache`；`content-visibility-036.html` **PASS**，`--smoke` 3/3 **PASS**。
 ### Phase 869 — 彻底消除 `<select><option>` 触发引擎卡死的 `childNodes` / `options` 无限递归
 - `src/js/shim/element/forms/select.js`: 为 `HTMLSelectElement.prototype.childNodes` getter 增加 `_inSelectChildNodes` 重入守卫，阻断 `firstChild -> ensureChildren -> childNodes -> options -> getSelectOptions -> firstChild` 死循环；4 项 Flex/Contain `<select>` TIMEOUT/卡死用例 **4/4 PASS**（497~804ms），`--smoke` 3/3 **PASS**。
+### Phase 870 — 内联样式 CSS-wide 关键字二次展开（`/css/css-transforms/` 100% PASS）
+- `src/js/shim/window.js`: 抽离 `resolveCssWideKeywordsInMap`，在 `_skipInline` 与 `hitBaseCache` 合入 `rawInlineSelf` 后对含 `inherit`/`initial`/`unset`/`revert` 的声明执行二次展开；`/css/css-transforms/` **31/31 (100%) PASS**、`/css/css-images/inheritance.html` **PASS**、`--smoke` 3/3 **PASS**。

@@ -7533,32 +7533,35 @@ function installWindow(global) {
 
     // Resolve CSS-wide keywords ("inherit", "initial", "unset", "revert") across all properties
     const isInheritedProp = (prop) => prop.startsWith("--") || INHERITED_CSS_PROPS.has(prop);
-    for (const [ck, cv] of Array.from(computedMap.entries())) {
-      const low = String(cv || "").trim().toLowerCase();
-      const inh = isInheritedProp(ck);
-      if (low === "inherit" || ((low === "unset" || low === "revert") && inh)) {
-        let resolved = null;
-        const inheritChain = normalizedPseudo ? [element].concat(ancestors) : ancestors;
-        for (let ai = 0; ai < inheritChain.length; ai++) {
-          const ancMap = new Map();
-          collectElementOwnDeclarations(inheritChain[ai], styleNodes, "", ancMap);
-          if (ancMap.has(ck)) {
-            const av = String(ancMap.get(ck) || "").trim();
-            const alow = av.toLowerCase();
-            if (alow === "inherit" || ((alow === "unset" || alow === "revert") && inh)) continue;
-            if (alow === "initial" || alow === "unset" || alow === "revert") break;
-            resolved = av;
-            break;
+    const resolveCssWideKeywordsInMap = (targetMap) => {
+      for (const [ck, cv] of Array.from(targetMap.entries())) {
+        const low = String(cv || "").trim().toLowerCase();
+        const inh = isInheritedProp(ck);
+        if (low === "inherit" || ((low === "unset" || low === "revert") && inh)) {
+          let resolved = null;
+          const inheritChain = normalizedPseudo ? [element].concat(ancestors) : ancestors;
+          for (let ai = 0; ai < inheritChain.length; ai++) {
+            const ancMap = new Map();
+            collectElementOwnDeclarations(inheritChain[ai], styleNodes, "", ancMap);
+            if (ancMap.has(ck)) {
+              const av = String(ancMap.get(ck) || "").trim();
+              const alow = av.toLowerCase();
+              if (alow === "inherit" || ((alow === "unset" || alow === "revert") && inh)) continue;
+              if (alow === "initial" || alow === "unset" || alow === "revert") break;
+              resolved = av;
+              break;
+            }
           }
+          if (resolved !== null) targetMap.set(ck, resolved);
+          else targetMap.delete(ck);
+        } else if (low === "initial" || ((low === "unset" || low === "revert") && !inh)) {
+          if (ck === "display") targetMap.set("display", "inline");
+          else if (ck === "direction") targetMap.set("direction", "ltr");
+          else targetMap.delete(ck);
         }
-        if (resolved !== null) computedMap.set(ck, resolved);
-        else computedMap.delete(ck);
-      } else if (low === "initial" || ((low === "unset" || low === "revert") && !inh)) {
-        if (ck === "display") computedMap.set("display", "inline");
-        else if (ck === "direction") computedMap.set("direction", "ltr");
-        else computedMap.delete(ck);
       }
-    }
+    };
+    resolveCssWideKeywordsInMap(computedMap);
 
     // Overlay active/paused Web Animations values
     if (!normalizedPseudo && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_getAnimatedStyles === "function") {
@@ -7575,7 +7578,14 @@ function installWindow(global) {
       const baseSnap = new Map(computedMap);
       const impSnap = computedMap._importantKeys ? new Set(computedMap._importantKeys) : null;
       element._rawBaseCache = { domEpoch: curDomEpoch, sheetKey: sheetKey, baseMap: baseSnap, impKeys: impSnap, ancestors: ancestors };
-      if (rawInlineSelf) parseDeclarationsBlockInto(element, rawInlineSelf, computedMap);
+      if (rawInlineSelf) {
+        parseDeclarationsBlockInto(element, rawInlineSelf, computedMap);
+        if (/\b(?:inherit|initial|unset|revert(?:-layer)?)\b/i.test(rawInlineSelf)) {
+          resolveCssWideKeywordsInMap(computedMap);
+        }
+      }
+    } else if (hitBaseCache && rawInlineSelf && /\b(?:inherit|initial|unset|revert(?:-layer)?)\b/i.test(rawInlineSelf)) {
+      resolveCssWideKeywordsInMap(computedMap);
     }
 
     // Resolve var() references using the complete (inherited + own) map
