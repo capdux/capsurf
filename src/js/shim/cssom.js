@@ -2883,7 +2883,7 @@
       return vLower === "none" || vLower === "all";
     }
     if (prop === "text-orientation") {
-      return vLower === "mixed" || vLower === "upright" || vLower === "sideways";
+      return vLower === "mixed" || vLower === "upright" || vLower === "sideways" || vLower === "sideways-right";
     }
     if (prop === "bookmark-level") {
       if (vLower === "none") return true;
@@ -4976,6 +4976,7 @@
     const s = String(raw).trim();
     if (/^(?:inherit|initial|unset|revert|revert-layer)$/i.test(s)) return s.toLowerCase();
     if (key === "display") return canonicalizeDisplayValue(s) || s.toLowerCase();
+    if (key === "text-orientation" && s.toLowerCase() === "sideways-right") return "sideways";
     if (key === "overscroll-behavior") {
       const t = splitCssTokens(s.toLowerCase());
       return (t.length === 2 && t[0] === t[1]) ? t[0] : t.join(" ");

@@ -2630,7 +2630,8 @@ pub struct LayoutTree {
         // 4. Final table border-box width
         let final_table_w: f32 = natural_grid_w;
         if (has_explicit_table_w) {
-            final_table_w = @max(explicit_table_w, max_cap_min_w);
+            const min_fixed_w = total_h_spacing + table_border_h + table_pad_h;
+            final_table_w = @max(explicit_table_w, @max(min_fixed_w, max_cap_min_w));
         } else {
             final_table_w = @max(natural_grid_w, max_cap_min_w);
         }

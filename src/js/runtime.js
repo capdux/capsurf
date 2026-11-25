@@ -6836,7 +6836,7 @@
         return vLower === "none" || vLower === "all";
       }
       if (prop === "text-orientation") {
-        return vLower === "mixed" || vLower === "upright" || vLower === "sideways";
+        return vLower === "mixed" || vLower === "upright" || vLower === "sideways" || vLower === "sideways-right";
       }
       if (prop === "bookmark-level") {
         if (vLower === "none") return true;
@@ -8929,6 +8929,7 @@
       const s = String(raw).trim();
       if (/^(?:inherit|initial|unset|revert|revert-layer)$/i.test(s)) return s.toLowerCase();
       if (key === "display") return canonicalizeDisplayValue(s) || s.toLowerCase();
+      if (key === "text-orientation" && s.toLowerCase() === "sideways-right") return "sideways";
       if (key === "overscroll-behavior") {
         const t = splitCssTokens(s.toLowerCase());
         return (t.length === 2 && t[0] === t[1]) ? t[0] : t.join(" ");
@@ -49567,7 +49568,7 @@
           }
         }
       }
-      const valCheckProps = ["text-combine-upright", "text-orientation", "align-items", "align-self", "flex-direction", "flex-grow", "flex-shrink", "flex-basis", "flex-wrap", "order", "column-gap", "row-gap", "gap", "grid-column-gap", "grid-row-gap", "grid-gap", "shape-outside", "clip-path"];
+      const valCheckProps = ["text-combine-upright", "text-orientation", "writing-mode", "align-items", "align-self", "flex-direction", "flex-grow", "flex-shrink", "flex-basis", "flex-wrap", "order", "column-gap", "row-gap", "gap", "grid-column-gap", "grid-row-gap", "grid-gap", "shape-outside", "clip-path"];
       const preOwn = new Map();
       for (let vi = 0; vi < valCheckProps.length; vi++) {
         const vp = valCheckProps[vi];
@@ -52440,6 +52441,9 @@
         }).join(" "));
       }
       const wm = (computedMap.get("writing-mode") || "horizontal-tb").trim().toLowerCase();
+      if ((computedMap.get("text-orientation") || "").trim().toLowerCase() === "sideways-right") {
+        computedMap.set("text-orientation", "sideways");
+      }
       const tes = (computedMap.get("text-emphasis-style") || "").trim().toLowerCase();
       if (wm.startsWith("vertical")) {
         if (tes === "filled") computedMap.set("text-emphasis-style", "sesame");

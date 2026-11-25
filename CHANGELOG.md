@@ -4694,3 +4694,7 @@
 ## Phase 925: `classList` `[PutForwards]`、`list-item` 自折叠、`InColumnGroup` 表格解析与 `display: contents` 伪元素点击
 - `src/js/shim/element/element.js`, `src/js/shim/window.js`: 为 `classList` 添加 `[PutForwards=value]` setter，并为 `Document.prototype.elementFromPoint` 接入 `::after`/`::before` 定位伪元素命中转发。
 - `src/css/cascade.cp`, `src/layout/layout.cp`, `src/html/tree_builder.cp`: 补齐 `display: list-item` 解析与无标记列表项自折叠外边距穿透、以及 HTML5 `InColumnGroup` 状态机闭环；4 项 WPT **4/4 PASS**，`--smoke` 3/3 **PASS**。
+
+## Phase 926: `writing-mode` 校验、`text-orientation: sideways-right` 规范化与固定表格列宽
+- `src/js/shim/cssom.js`, `src/js/shim/window.js`: 放行并规范化 `text-orientation: sideways-right -> sideways`，将 `writing-mode` 接入 `valCheckProps` 过滤非法声明。
+- `src/layout/layout.cp`: 固定布局表格最小宽度保底包含 `border-spacing`；3 项 WPT **3/3 PASS**，`--smoke` 3/3 **PASS**。
