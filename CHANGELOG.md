@@ -4408,3 +4408,6 @@
 - **Phase 822**:
   - `src/js/shim/selector.js`: `matchesCompoundSelector` 实现 `:has(...)` 相对选择器求值；`matchesComplexSelector` 移除 `scopeRoot` 过早截断并新增 `stopAtEl` 参数限定 `:has()` 顶层链范围。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 823**:
+  - `src/js/shim/selector.js`: 抽取 `matchesComplexParts` 与 `__HAS_ANCHOR__` 锚点匹配，支持任意深度相对 `:has()` 组合器链；`wrapQuerySelector`/`wrapQuerySelectorAll` 拦截 `:has(`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

@@ -2489,3 +2489,4 @@
 | Phase 820 | WPT 多层 CSS 嵌套、`@-rule {}`、`O(1)` `matches` 与 `lightgreen` | `src/js/shim/cssom.js`, `src/js/shim/window.js`, `src/js/shim/element/element.js` | `has-css-nesting-shared`, `at-rule-in-declaration-list` 2/2 **PASS**; `--smoke` 3/3 PASS |
 | Phase 821 | WPT `direction: initial` 隔离与 `row-rule`/`rule` 简写全链路 | `src/js/shim/cssom.js`, `src/js/shim/window.js` | `css-writing-modes/inheritance` (20/20 **PASS**), `gap-decorations-rule-shorthand-roundtrip.tentative` (15/15 **PASS**); `--smoke` 3/3 PASS |
 | Phase 822 | WPT `:has()` 相对选择器与 `:scope` 祖先界限 | `src/js/shim/selector.js` | `has-argument-with-explicit-scope` (13/13 **PASS**); `--smoke` 3/3 PASS |
+| Phase 823 | WPT 任意深度相对 `:has()` 组合器链与 `querySelectorAll` | `src/js/shim/selector.js` | `has-matches-to-uninserted-elements`, `has-relative-argument` (35/35 **PASS**); `--smoke` 3/3 PASS |
