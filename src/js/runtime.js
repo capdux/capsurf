@@ -17775,7 +17775,8 @@
       }
 
       // Invalid stray characters
-      if (/[!@$%^&;{}()\]/]/.test(s[i])) return null;
+      if (s[i] === "&") { out += s[i++]; continue; }
+      if (/[!@$%^;{}()\]/]/.test(s[i])) return null;
       out += s[i++];
     }
 
@@ -17845,7 +17846,7 @@
       if (isPurePseudoElementSelector(s)) {
         return null;
       }
-      if ((s.includes(":checked") || s.includes(":scope")) && typeof findInSubtree === "function" && typeof matchesElementSelector === "function") {
+      if ((s.includes(":checked") || s.includes(":scope") || s.includes("&")) && typeof findInSubtree === "function" && typeof matchesElementSelector === "function") {
         const root = this === document ? (document.documentElement || document) : this;
         const found = findInSubtree(root, function (el) {
           const up = typeof upgradeElement === "function" ? upgradeElement(el) : el;
@@ -17869,7 +17870,7 @@
       if (isPurePseudoElementSelector(s)) {
         return new NodeList([]);
       }
-      if ((s.includes(":checked") || s.includes(":scope")) && typeof findInSubtree === "function" && typeof matchesElementSelector === "function") {
+      if ((s.includes(":checked") || s.includes(":scope") || s.includes("&")) && typeof findInSubtree === "function" && typeof matchesElementSelector === "function") {
         const root = this === document ? (document.documentElement || document) : this;
         const matched = findInSubtree(root, function (el) {
           const up = typeof upgradeElement === "function" ? upgradeElement(el) : el;
@@ -17907,7 +17908,13 @@
     const len = s.length;
     while (i < len) {
       const ch = s[i];
-      if (ch === "#") {
+      if (ch === "&") {
+        i++;
+        const sr = scopeRoot || (typeof document !== "undefined" ? document.documentElement : null);
+        if (!sr) return false;
+        const same = el === sr || (typeof el._nid === "number" && typeof sr._nid === "number" && el._nid > 0 && el._nid === sr._nid);
+        if (!same) return false;
+      } else if (ch === "#") {
         i++;
         const start = i;
         while (i < len && !/[.#:\[\s]/.test(s[i])) i++;
@@ -20507,7 +20514,7 @@
         return getNodeDirectionality(this) === targetDir;
       }
       if (/::slotted\(/i.test(s) && s.indexOf(":not(") === -1) return false;
-      if (origProtoMatches) {
+      if (origProtoMatches && s.indexOf("&") === -1) {
         try {
           if (origProtoMatches.call(this, selector)) return true;
           const rootNode = typeof this.getRootNode === "function" ? this.getRootNode() : null;
@@ -20520,6 +20527,11 @@
         } catch (e) {
           if (e && e.name === "SyntaxError") throw e;
         }
+      }
+      if (s.indexOf("&") !== -1 && typeof matchesElementSelector === "function") {
+        const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
+        const sr = doc ? doc.documentElement : null;
+        return matchesElementSelector(this, s, sr, true);
       }
       if (s === ":checked") return Boolean(this.checked || (String(this.tagName || "").toUpperCase() === "OPTION" && this.selected));
       if (s === ":disabled") return Boolean(this.disabled);
@@ -46770,7 +46782,7 @@
       const len = s.length;
       while (i < len) {
         const ch = s[i];
-        if (/\s|>|\+|~|\*/.test(ch)) { i++; continue; }
+        if (/\s|>|\+|~|\*|&/.test(ch)) { i++; continue; }
         if (ch === "#") {
           i++;
           while (i < len && /[a-zA-Z0-9_-]|\\./.test(s[i])) { if (s[i] === "\\") i++; i++; }
@@ -52215,7 +52227,7 @@
         if (lower === "perspective-origin" || lower === "transform-origin") return getDefaultOriginComputed();
         if (lower === "image-orientation") return "from-image";
         if (lower === "content") {
-          return (normalizedPseudo === "::before" || normalizedPseudo === "::after" || normalizedPseudo === "::marker") ? "none" : "normal";
+          return (normalizedPseudo === "::before" || normalizedPseudo === "::after") ? "none" : "normal";
         }
         if (lower === "color-scheme") return "normal";
         if (lower === "quotes") return "auto";
@@ -52311,7 +52323,7 @@
             if (kebab === "text-orientation") return "mixed";
             if (kebab === "perspective-origin" || kebab === "transform-origin") return getDefaultOriginComputed();
             if (kebab === "content") {
-              return (normalizedPseudo === "::before" || normalizedPseudo === "::after" || normalizedPseudo === "::marker") ? "none" : "normal";
+              return (normalizedPseudo === "::before" || normalizedPseudo === "::after") ? "none" : "normal";
             }
             if (kebab === "quotes") return "auto";
             if (kebab === "bookmark-level") return "none";

@@ -6388,7 +6388,7 @@ function installWindow(global) {
     const len = s.length;
     while (i < len) {
       const ch = s[i];
-      if (/\s|>|\+|~|\*/.test(ch)) { i++; continue; }
+      if (/\s|>|\+|~|\*|&/.test(ch)) { i++; continue; }
       if (ch === "#") {
         i++;
         while (i < len && /[a-zA-Z0-9_-]|\\./.test(s[i])) { if (s[i] === "\\") i++; i++; }
@@ -11833,7 +11833,7 @@ function installWindow(global) {
       if (lower === "perspective-origin" || lower === "transform-origin") return getDefaultOriginComputed();
       if (lower === "image-orientation") return "from-image";
       if (lower === "content") {
-        return (normalizedPseudo === "::before" || normalizedPseudo === "::after" || normalizedPseudo === "::marker") ? "none" : "normal";
+        return (normalizedPseudo === "::before" || normalizedPseudo === "::after") ? "none" : "normal";
       }
       if (lower === "color-scheme") return "normal";
       if (lower === "quotes") return "auto";
@@ -11929,7 +11929,7 @@ function installWindow(global) {
           if (kebab === "text-orientation") return "mixed";
           if (kebab === "perspective-origin" || kebab === "transform-origin") return getDefaultOriginComputed();
           if (kebab === "content") {
-            return (normalizedPseudo === "::before" || normalizedPseudo === "::after" || normalizedPseudo === "::marker") ? "none" : "normal";
+            return (normalizedPseudo === "::before" || normalizedPseudo === "::after") ? "none" : "normal";
           }
           if (kebab === "quotes") return "auto";
           if (kebab === "bookmark-level") return "none";

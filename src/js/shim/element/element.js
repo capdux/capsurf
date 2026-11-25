@@ -2169,7 +2169,7 @@ function installElementExtensions(proto) {
       return getNodeDirectionality(this) === targetDir;
     }
     if (/::slotted\(/i.test(s) && s.indexOf(":not(") === -1) return false;
-    if (origProtoMatches) {
+    if (origProtoMatches && s.indexOf("&") === -1) {
       try {
         if (origProtoMatches.call(this, selector)) return true;
         const rootNode = typeof this.getRootNode === "function" ? this.getRootNode() : null;
@@ -2182,6 +2182,11 @@ function installElementExtensions(proto) {
       } catch (e) {
         if (e && e.name === "SyntaxError") throw e;
       }
+    }
+    if (s.indexOf("&") !== -1 && typeof matchesElementSelector === "function") {
+      const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
+      const sr = doc ? doc.documentElement : null;
+      return matchesElementSelector(this, s, sr, true);
     }
     if (s === ":checked") return Boolean(this.checked || (String(this.tagName || "").toUpperCase() === "OPTION" && this.selected));
     if (s === ":disabled") return Boolean(this.disabled);

@@ -3472,3 +3472,5 @@
 - 将 `cssom.js` `isValidCssValue` 中 `env()`/`var()` 校验前置到 `*-color` 分支前修复 `@supports (background-color: env(test))`，在 `window.js` 补齐 `evaluateSupportsCondition` 并在 `substituteStr`/`resolveCustomProp` 统一实现 `env()` 回退替换、注释/前导空白剥离与无回退无效传播，`css-env` 2 项及 `scale-parsing-computed` 全绿 **PASS**。
 ### Phase 816 — `::view-transition-*` 伪元素参数与 `:only-child` 链式校验
 - 在 `selector.js` 实现 `::view-transition-{group,image-pair,new,old}` 的 `<pt-name-and-class-selector>` 严格校验并放行链式 `:only-child`，4 个伪元素解析/非法用例全绿 **PASS**。
+### Phase 817 — 顶层 `&` 选择器（`:scope`/`:root` 匹配与零特异性）及 `::marker` 默认 `content`
+- 在 `selector.js`/`element.js`/`window.js` 打通顶层 `&` 选择器校验、`matches` 根元素匹配与零特异性计算，并修正 `::marker` 初始 `content` 为 `"normal"`，`top-level-is-scope`、`top-level-parent-pseudo-specificity` 与 `marker-computed-content` 3/3 全绿 **PASS**。

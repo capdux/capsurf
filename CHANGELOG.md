@@ -4385,3 +4385,8 @@
 - **Phase 816**:
   - `src/js/shim/selector.js`: 补全 `::view-transition-{group,image-pair,new,old}` 非空参数校验（`* | <custom-ident>` + `.<custom-ident>*`）及 `:only-child` 链式规则。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 817**:
+  - `src/js/shim/selector.js`: 放行顶层 `&` 选择器校验并在 `matchesCompoundSelector` 中按 `:scope`/`:root` 匹配。
+  - `src/js/shim/element/element.js`: `proto.matches` 对含 `&` 选择器绕过原生快路径直接调用 `matchesElementSelector`。
+  - `src/js/shim/window.js`: `calcSingleSelectorSpecificity` 保持 `&` 零特异性；修正 `::marker` 默认 `content` 计算值为 `"normal"`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

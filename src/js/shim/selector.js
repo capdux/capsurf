@@ -379,7 +379,8 @@ function canonicalizeComplexSelector(raw, inHas, inFunc, inPart) {
     }
 
     // Invalid stray characters
-    if (/[!@$%^&;{}()\]/]/.test(s[i])) return null;
+    if (s[i] === "&") { out += s[i++]; continue; }
+    if (/[!@$%^;{}()\]/]/.test(s[i])) return null;
     out += s[i++];
   }
 
@@ -449,7 +450,7 @@ function wrapQuerySelector(origFn) {
     if (isPurePseudoElementSelector(s)) {
       return null;
     }
-    if ((s.includes(":checked") || s.includes(":scope")) && typeof findInSubtree === "function" && typeof matchesElementSelector === "function") {
+    if ((s.includes(":checked") || s.includes(":scope") || s.includes("&")) && typeof findInSubtree === "function" && typeof matchesElementSelector === "function") {
       const root = this === document ? (document.documentElement || document) : this;
       const found = findInSubtree(root, function (el) {
         const up = typeof upgradeElement === "function" ? upgradeElement(el) : el;
@@ -473,7 +474,7 @@ function wrapQuerySelectorAll(origFn) {
     if (isPurePseudoElementSelector(s)) {
       return new NodeList([]);
     }
-    if ((s.includes(":checked") || s.includes(":scope")) && typeof findInSubtree === "function" && typeof matchesElementSelector === "function") {
+    if ((s.includes(":checked") || s.includes(":scope") || s.includes("&")) && typeof findInSubtree === "function" && typeof matchesElementSelector === "function") {
       const root = this === document ? (document.documentElement || document) : this;
       const matched = findInSubtree(root, function (el) {
         const up = typeof upgradeElement === "function" ? upgradeElement(el) : el;
@@ -511,7 +512,13 @@ function matchesCompoundSelector(el, compound, scopeRoot) {
   const len = s.length;
   while (i < len) {
     const ch = s[i];
-    if (ch === "#") {
+    if (ch === "&") {
+      i++;
+      const sr = scopeRoot || (typeof document !== "undefined" ? document.documentElement : null);
+      if (!sr) return false;
+      const same = el === sr || (typeof el._nid === "number" && typeof sr._nid === "number" && el._nid > 0 && el._nid === sr._nid);
+      if (!same) return false;
+    } else if (ch === "#") {
       i++;
       const start = i;
       while (i < len && !/[.#:\[\s]/.test(s[i])) i++;
