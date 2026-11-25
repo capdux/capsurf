@@ -8,7 +8,10 @@ const REQUIRED_FUNC_PSEUDOS = new Set([
   "::slotted", "::part", "::scroll-button", "::picker", ":active-view-transition-type",
   "::view-transition-group", "::view-transition-image-pair", "::view-transition-new", "::view-transition-old"
 ]);
-const NON_EMPTY_FUNC_PSEUDOS = new Set([":not", ":has", ":state", ":host-context", "::slotted", "::part", ":lang", ":dir", ":active-view-transition-type"]);
+const NON_EMPTY_FUNC_PSEUDOS = new Set([
+  ":not", ":has", ":state", ":host-context", "::slotted", "::part", ":lang", ":dir", ":active-view-transition-type",
+  "::view-transition-group", "::view-transition-image-pair", "::view-transition-new", "::view-transition-old"
+]);
 const PART_DISALLOWED_PSEUDOS = new Set([
   ":empty", ":first-child", ":first-of-type", ":last-child", ":last-of-type",
   ":nth-child", ":nth-last-child", ":nth-last-of-type", ":nth-of-type",
@@ -184,7 +187,12 @@ function canonicalizeComplexSelector(raw, inHas, inFunc, inPart) {
             pName === "::picker" || pName === "::picker-icon" || pName === "::backdrop"
           )) ||
           (!isDouble && (pName === ":is" || pName === ":where"))
-        ));
+        )) || (!isDouble && (
+          lastPseudoEl === "::view-transition-group" ||
+          lastPseudoEl === "::view-transition-image-pair" ||
+          lastPseudoEl === "::view-transition-new" ||
+          lastPseudoEl === "::view-transition-old"
+        ) && pName === ":only-child");
         if (!allowChain) return null;
       }
       if (seenPart && PART_DISALLOWED_PSEUDOS.has(pName)) return null;
@@ -318,6 +326,23 @@ function canonicalizeComplexSelector(raw, inHas, inFunc, inPart) {
           out += "::scroll-button(" + sbArg + ")";
           seenTerminalPseudoEl = true;
           lastPseudoEl = "::scroll-button";
+        } else if (
+          pName === "::view-transition-group" ||
+          pName === "::view-transition-image-pair" ||
+          pName === "::view-transition-new" ||
+          pName === "::view-transition-old"
+        ) {
+          if (!inner || /[\s,>+~#()[\]]/.test(inner)) return null;
+          const vtParts = inner.split(".");
+          const VT_EXCLUDED = new Set(["default", "unset", "initial", "inherit", "revert", "revert-layer"]);
+          const isVtIdent = (id) => !!id && !VT_EXCLUDED.has(id.toLowerCase()) && /^(?:--|[a-z_-]|[^\x00-\x7f])(?:[a-z0-9_-]|[^\x00-\x7f])*$/i.test(id);
+          if (vtParts[0] !== "*" && !isVtIdent(vtParts[0])) return null;
+          for (let vi = 1; vi < vtParts.length; vi++) {
+            if (!isVtIdent(vtParts[vi])) return null;
+          }
+          out += pName + "(" + inner + ")";
+          seenTerminalPseudoEl = true;
+          lastPseudoEl = pName;
         } else {
           out += pName + "(" + inner + ")";
           if (isDouble && pName !== "::part") { seenTerminalPseudoEl = true; lastPseudoEl = pName; }

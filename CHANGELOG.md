@@ -4382,3 +4382,6 @@
   - `src/js/shim/cssom.js`: `isValidCssValue` 将 `env(` 与 `var(` 校验前置到 `*-color` 分支之前。
   - `src/js/shim/window.js`: 新增 `evaluateSupportsCondition` 委托 `CSS.supports`；`substituteStr`/`resolveCustomProp` 支持 `env()` 回退替换与无回退无效传播。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 816**:
+  - `src/js/shim/selector.js`: 补全 `::view-transition-{group,image-pair,new,old}` 非空参数校验（`* | <custom-ident>` + `.<custom-ident>*`）及 `:only-child` 链式规则。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
