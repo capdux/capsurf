@@ -16845,7 +16845,8 @@
     ":popover-open", ":autofill", ":playing", ":paused", ":muted", ":seeking",
     ":stalled", ":buffering", ":volume-locked", ":open", ":closed", ":target-within",
     ":past", ":current", ":future", ":blank", ":heading", ":before", ":after",
-    ":first-line", ":first-letter", ":active-view-transition", ":active-view-transition-type", ":xr-overlay"
+    ":first-line", ":first-letter", ":active-view-transition", ":active-view-transition-type", ":xr-overlay",
+    ":has-slotted"
   ]);
   const KNOWN_PSEUDO_ELEMENTS = new Set([
     "::before", "::after", "::first-line", "::first-letter", "::selection",
@@ -17411,6 +17412,10 @@
           if (!sr) return false;
           const same = el === sr || (typeof el._nid === "number" && typeof sr._nid === "number" && el._nid > 0 && el._nid === sr._nid);
           if (!same) return false;
+        }
+        else if (pseudo === ":has-slotted") {
+          if (String(el.localName || el.tagName || "").toLowerCase() !== "slot") return false;
+          if (typeof el.assignedNodes !== "function" || el.assignedNodes().length === 0) return false;
         }
         else if (pseudo === ":first-child") { if (el.previousElementSibling) return false; }
         else if (pseudo === ":last-child") { if (el.nextElementSibling) return false; }
@@ -20941,6 +20946,7 @@
       }
       const ShadowRootCtor = typeof ShadowRoot !== "undefined" ? ShadowRoot : (global.ShadowRoot || null);
       const shadow = ShadowRootCtor ? new ShadowRootCtor(this, mode) : new DocumentFragment();
+      shadow.slotAssignment = init.slotAssignment === "manual" ? "manual" : "named";
       elementShadowRootMap.set(this, shadow);
       try {
         Object.defineProperty(this, "_shadowRoot", {
@@ -22390,6 +22396,9 @@
       if (!parent || !parent._shadowRoot) return null;
       const root = parent._shadowRoot;
       if (!includeClosed && root.mode !== "open") return null;
+      if (root.slotAssignment === "manual") {
+        return (node._manualSlot && typeof node._manualSlot.getRootNode === "function" && node._manualSlot.getRootNode() === root) ? node._manualSlot : null;
+      }
       const targetName = node.nodeType === 1
         ? ((typeof node.getAttribute === "function" ? node.getAttribute("slot") : "") || "")
         : "";
@@ -22406,6 +22415,15 @@
       if (!slot || typeof slot.getRootNode !== "function") return [];
       const root = slot.getRootNode();
       if (!root || !root.host) return [];
+      if (root.slotAssignment === "manual") {
+        const manual = slot._manualAssignedNodes || [];
+        const out = [];
+        for (let i = 0; i < manual.length; i++) {
+          const n = manual[i];
+          if (n && n.parentNode === root.host && n._manualSlot === slot) out.push(n);
+        }
+        return out;
+      }
       const slotName = (typeof slot.getAttribute === "function" ? slot.getAttribute("name") : "") || "";
       const slots = collectSlotsInShadowRoot(root);
       let firstMatchingSlot = null;
@@ -22437,6 +22455,9 @@
     const _pendingSlotChangeHosts = new Set();
     function scheduleSlotChange(host) {
       if (!host || !host._shadowRoot) return;
+      if (typeof globalThis !== "undefined") {
+        globalThis.__capsurf_domMutationEpoch = (globalThis.__capsurf_domMutationEpoch || 0) + 1;
+      }
       if (_pendingSlotChangeHosts.has(host)) return;
       _pendingSlotChangeHosts.add(host);
       const root = host._shadowRoot;
@@ -22491,6 +22512,31 @@
       set: function (v) { if (typeof this.setAttribute === "function") this.setAttribute("name", String(v)); },
       configurable: true,
     });
+    HTMLSlotElement.prototype.assign = function (...nodes) {
+      const root = typeof this.getRootNode === "function" ? this.getRootNode() : null;
+      if (!root || root.slotAssignment !== "manual") return;
+      const prev = this._manualAssignedNodes || [];
+      for (let i = 0; i < prev.length; i++) {
+        if (prev[i] && prev[i]._manualSlot === this) prev[i]._manualSlot = null;
+      }
+      const next = [];
+      const seen = new Set();
+      for (let i = 0; i < nodes.length; i++) {
+        const n = nodes[i];
+        if (!n || (n.nodeType !== 1 && n.nodeType !== 3) || seen.has(n)) continue;
+        seen.add(n);
+        if (n._manualSlot && n._manualSlot !== this && Array.isArray(n._manualSlot._manualAssignedNodes)) {
+          n._manualSlot._manualAssignedNodes = n._manualSlot._manualAssignedNodes.filter((x) => x !== n);
+        }
+        n._manualSlot = this;
+        next.push(n);
+      }
+      this._manualAssignedNodes = next;
+      if (typeof globalThis !== "undefined") {
+        globalThis.__capsurf_domMutationEpoch = (globalThis.__capsurf_domMutationEpoch || 0) + 1;
+      }
+      if (root.host) scheduleSlotChange(root.host);
+    };
     HTMLSlotElement.prototype.assignedNodes = function (options) {
       const assigned = computeAssignedNodesForSlot(this);
       this._lastAssignedNodes = assigned;
@@ -45928,7 +45974,8 @@
       }
 
       // QuerySelectorAll fallback
-      const doc = el.ownerDocument || global.document || (typeof document !== "undefined" ? document : null);
+      const elRoot = (el && typeof el.getRootNode === "function") ? el.getRootNode() : null;
+      const doc = (elRoot && typeof elRoot.querySelectorAll === "function") ? elRoot : (el.ownerDocument || global.document || (typeof document !== "undefined" ? document : null));
       if (doc && typeof doc.querySelectorAll === "function") {
         try {
           const list = doc.querySelectorAll(s);
@@ -50841,15 +50888,18 @@
       const liveDoc = (element && element.ownerDocument) || global.document || (typeof document !== "undefined" ? document : null);
       let lastStyleAttr = (element && typeof element.getAttribute === "function") ? (element.getAttribute("style") || "") : "";
       let lastActiveEl = liveDoc ? liveDoc.activeElement : null;
+      let lastDomEpoch = (typeof globalThis !== "undefined" && globalThis.__capsurf_domMutationEpoch) || 0;
       let computedMap = collectRawComputedMap(element, normalizedPseudo);
       applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo);
       let _cachedPropList = null;
       function ensureLiveComputed() {
         const curStyleAttr = (element && typeof element.getAttribute === "function") ? (element.getAttribute("style") || "") : "";
         const curActiveEl = liveDoc ? liveDoc.activeElement : null;
-        if (curStyleAttr !== lastStyleAttr || curActiveEl !== lastActiveEl) {
+        const curDomEpoch = (typeof globalThis !== "undefined" && globalThis.__capsurf_domMutationEpoch) || 0;
+        if (curStyleAttr !== lastStyleAttr || curActiveEl !== lastActiveEl || curDomEpoch !== lastDomEpoch) {
           lastStyleAttr = curStyleAttr;
           lastActiveEl = curActiveEl;
+          lastDomEpoch = curDomEpoch;
           _cachedPropList = null;
           computedMap = collectRawComputedMap(element, normalizedPseudo);
           applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo);

@@ -3444,3 +3444,5 @@
 - 在 `html-element.js` 拦截 `display: none` 与 `content-visibility: hidden` 扁平树后代焦点，在 `html-classes.js` 使 `innerText` 跳过 `content-visibility: hidden` 子树并补全 `SVGElement.prototype.getComputedTextLength`，在 `index.js` 实现 `document.caretRangeFromPoint`，`content-visibility-{029,039,054,080,087}` 5 项 **PASS**。
 ### Phase 802 — `::slotted()` 跨 Shadow DOM 级联、`:host(...)` 匹配与扁平树继承
 - 在 `window.js` 实现沿 `assignedSlot` 链的 `::slotted(...)` 级联匹配与扁平树祖先继承，并在 `selector.js` 补全 `:host(...)` 函数式匹配，`host-descendant-invalidation`、`host-functional-descendant-invalidation`、`slotted-link`、`slotted-nested`、`slotted-slot` 5/5 **PASS**。
+### Phase 803 — `:has-slotted`、`slotAssignment: "manual"` 与 DOM 变更实时样式刷新
+- 新增 `:has-slotted` 伪类、`HTMLSlotElement.prototype.assign()` 手动插槽分配、`matchesSingleSelector` ShadowRoot 作用域优先与 `ensureLiveComputed` 的 DOM 变更 epoch 联动重算，`slotted-invalidation`、`has-slotted-changing-001/002`、`has-slotted-manual-assignment` 4/4 **PASS**。

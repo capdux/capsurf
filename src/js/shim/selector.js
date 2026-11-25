@@ -28,7 +28,8 @@ const KNOWN_PSEUDO_CLASSES = new Set([
   ":popover-open", ":autofill", ":playing", ":paused", ":muted", ":seeking",
   ":stalled", ":buffering", ":volume-locked", ":open", ":closed", ":target-within",
   ":past", ":current", ":future", ":blank", ":heading", ":before", ":after",
-  ":first-line", ":first-letter", ":active-view-transition", ":active-view-transition-type", ":xr-overlay"
+  ":first-line", ":first-letter", ":active-view-transition", ":active-view-transition-type", ":xr-overlay",
+  ":has-slotted"
 ]);
 const KNOWN_PSEUDO_ELEMENTS = new Set([
   "::before", "::after", "::first-line", "::first-letter", "::selection",
@@ -594,6 +595,10 @@ function matchesCompoundSelector(el, compound, scopeRoot) {
         if (!sr) return false;
         const same = el === sr || (typeof el._nid === "number" && typeof sr._nid === "number" && el._nid > 0 && el._nid === sr._nid);
         if (!same) return false;
+      }
+      else if (pseudo === ":has-slotted") {
+        if (String(el.localName || el.tagName || "").toLowerCase() !== "slot") return false;
+        if (typeof el.assignedNodes !== "function" || el.assignedNodes().length === 0) return false;
       }
       else if (pseudo === ":first-child") { if (el.previousElementSibling) return false; }
       else if (pseudo === ":last-child") { if (el.nextElementSibling) return false; }

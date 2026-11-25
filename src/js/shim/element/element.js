@@ -3229,6 +3229,7 @@ function installElementExtensions(proto) {
     }
     const ShadowRootCtor = typeof ShadowRoot !== "undefined" ? ShadowRoot : (global.ShadowRoot || null);
     const shadow = ShadowRootCtor ? new ShadowRootCtor(this, mode) : new DocumentFragment();
+    shadow.slotAssignment = init.slotAssignment === "manual" ? "manual" : "named";
     elementShadowRootMap.set(this, shadow);
     try {
       Object.defineProperty(this, "_shadowRoot", {

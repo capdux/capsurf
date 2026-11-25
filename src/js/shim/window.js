@@ -6286,7 +6286,8 @@ function installWindow(global) {
     }
 
     // QuerySelectorAll fallback
-    const doc = el.ownerDocument || global.document || (typeof document !== "undefined" ? document : null);
+    const elRoot = (el && typeof el.getRootNode === "function") ? el.getRootNode() : null;
+    const doc = (elRoot && typeof elRoot.querySelectorAll === "function") ? elRoot : (el.ownerDocument || global.document || (typeof document !== "undefined" ? document : null));
     if (doc && typeof doc.querySelectorAll === "function") {
       try {
         const list = doc.querySelectorAll(s);
@@ -11199,15 +11200,18 @@ function installWindow(global) {
     const liveDoc = (element && element.ownerDocument) || global.document || (typeof document !== "undefined" ? document : null);
     let lastStyleAttr = (element && typeof element.getAttribute === "function") ? (element.getAttribute("style") || "") : "";
     let lastActiveEl = liveDoc ? liveDoc.activeElement : null;
+    let lastDomEpoch = (typeof globalThis !== "undefined" && globalThis.__capsurf_domMutationEpoch) || 0;
     let computedMap = collectRawComputedMap(element, normalizedPseudo);
     applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo);
     let _cachedPropList = null;
     function ensureLiveComputed() {
       const curStyleAttr = (element && typeof element.getAttribute === "function") ? (element.getAttribute("style") || "") : "";
       const curActiveEl = liveDoc ? liveDoc.activeElement : null;
-      if (curStyleAttr !== lastStyleAttr || curActiveEl !== lastActiveEl) {
+      const curDomEpoch = (typeof globalThis !== "undefined" && globalThis.__capsurf_domMutationEpoch) || 0;
+      if (curStyleAttr !== lastStyleAttr || curActiveEl !== lastActiveEl || curDomEpoch !== lastDomEpoch) {
         lastStyleAttr = curStyleAttr;
         lastActiveEl = curActiveEl;
+        lastDomEpoch = curDomEpoch;
         _cachedPropList = null;
         computedMap = collectRawComputedMap(element, normalizedPseudo);
         applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo);

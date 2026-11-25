@@ -590,6 +590,9 @@ function installHtmlClasses(global) {
     if (!parent || !parent._shadowRoot) return null;
     const root = parent._shadowRoot;
     if (!includeClosed && root.mode !== "open") return null;
+    if (root.slotAssignment === "manual") {
+      return (node._manualSlot && typeof node._manualSlot.getRootNode === "function" && node._manualSlot.getRootNode() === root) ? node._manualSlot : null;
+    }
     const targetName = node.nodeType === 1
       ? ((typeof node.getAttribute === "function" ? node.getAttribute("slot") : "") || "")
       : "";
@@ -606,6 +609,15 @@ function installHtmlClasses(global) {
     if (!slot || typeof slot.getRootNode !== "function") return [];
     const root = slot.getRootNode();
     if (!root || !root.host) return [];
+    if (root.slotAssignment === "manual") {
+      const manual = slot._manualAssignedNodes || [];
+      const out = [];
+      for (let i = 0; i < manual.length; i++) {
+        const n = manual[i];
+        if (n && n.parentNode === root.host && n._manualSlot === slot) out.push(n);
+      }
+      return out;
+    }
     const slotName = (typeof slot.getAttribute === "function" ? slot.getAttribute("name") : "") || "";
     const slots = collectSlotsInShadowRoot(root);
     let firstMatchingSlot = null;
@@ -637,6 +649,9 @@ function installHtmlClasses(global) {
   const _pendingSlotChangeHosts = new Set();
   function scheduleSlotChange(host) {
     if (!host || !host._shadowRoot) return;
+    if (typeof globalThis !== "undefined") {
+      globalThis.__capsurf_domMutationEpoch = (globalThis.__capsurf_domMutationEpoch || 0) + 1;
+    }
     if (_pendingSlotChangeHosts.has(host)) return;
     _pendingSlotChangeHosts.add(host);
     const root = host._shadowRoot;
@@ -691,6 +706,31 @@ function installHtmlClasses(global) {
     set: function (v) { if (typeof this.setAttribute === "function") this.setAttribute("name", String(v)); },
     configurable: true,
   });
+  HTMLSlotElement.prototype.assign = function (...nodes) {
+    const root = typeof this.getRootNode === "function" ? this.getRootNode() : null;
+    if (!root || root.slotAssignment !== "manual") return;
+    const prev = this._manualAssignedNodes || [];
+    for (let i = 0; i < prev.length; i++) {
+      if (prev[i] && prev[i]._manualSlot === this) prev[i]._manualSlot = null;
+    }
+    const next = [];
+    const seen = new Set();
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      if (!n || (n.nodeType !== 1 && n.nodeType !== 3) || seen.has(n)) continue;
+      seen.add(n);
+      if (n._manualSlot && n._manualSlot !== this && Array.isArray(n._manualSlot._manualAssignedNodes)) {
+        n._manualSlot._manualAssignedNodes = n._manualSlot._manualAssignedNodes.filter((x) => x !== n);
+      }
+      n._manualSlot = this;
+      next.push(n);
+    }
+    this._manualAssignedNodes = next;
+    if (typeof globalThis !== "undefined") {
+      globalThis.__capsurf_domMutationEpoch = (globalThis.__capsurf_domMutationEpoch || 0) + 1;
+    }
+    if (root.host) scheduleSlotChange(root.host);
+  };
   HTMLSlotElement.prototype.assignedNodes = function (options) {
     const assigned = computeAssignedNodesForSlot(this);
     this._lastAssignedNodes = assigned;

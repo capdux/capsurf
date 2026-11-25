@@ -4331,3 +4331,9 @@
   - `src/js/shim/window.js`: `collectElementOwnDeclarations` 实现跨 Shadow DOM `::slotted(...)` 级联与 `!important` 反转；`collectRawComputedMap` 支持沿 `assignedSlot` / `ShadowRoot.host` 扁平树继承。
   - `src/js/shim/selector.js`: `matchesCompoundSelector` 补全 `:host(...)` 函数式伪类匹配。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 803**:
+  - `src/js/shim/selector.js`: 新增 `:has-slotted` 伪类匹配。
+  - `src/js/shim/element/element.js`: `attachShadow` 保存 `slotAssignment` 模式。
+  - `src/js/shim/element/html-classes.js`: 实现手动插槽分配（`slotAssignment: "manual"` 与 `HTMLSlotElement.prototype.assign`）及 `__capsurf_domMutationEpoch` 递增。
+  - `src/js/shim/window.js`: `matchesSingleSelector` 优先使用 `getRootNode()` 作用域，`ensureLiveComputed` 监听 `__capsurf_domMutationEpoch` 自动刷新。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
