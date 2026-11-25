@@ -10446,7 +10446,8 @@ function installWindow(global) {
       } else if (!cv || cvLow === "currentcolor") {
         computedMap.set(ck, elColor);
       } else {
-        computedMap.set(ck, normCol(cv));
+        const cvWithCur = /\bcurrentcolor\b/i.test(cv) ? cv.replace(/\bcurrentcolor\b/gi, elColor) : cv;
+        computedMap.set(ck, normCol(cvWithCur));
       }
     }
     const ccRaw = (computedMap.get("caret-color") || "").trim();

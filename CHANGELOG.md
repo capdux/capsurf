@@ -4732,3 +4732,8 @@
 ## Phase 935: `rem`/`lh` 动态计算、`calc(0% + ...)` 保留与 `word-wrap` 别名
 - `src/js/shim/element/element.js`: `STYLE_LEGACY_ALIASES` 新增 `"word-wrap": "overflow-wrap"`。
 - `src/js/shim/window.js`: `evalCssLengthExpr` 动态求解根元素 `rem` 与计算行高 `lhPx`，`evalLinLenPctTok` 保留 `calc(0% + ...)`；`getComputedStyle-calc-mixed-units-001/002` **2/2 PASS**，`--smoke` 3/3 **PASS**。
+
+## Phase 936: Nested `light-dark()` & `color-mix()` (`srgb`/`lch`) with `currentColor`
+- **`src/js/dom_binding.cp`**：升级 `_resolveLightDark` 支持多层嵌套 `light-dark()` 迭代展开，并对分支结果为 `currentcolor` 的场景按属性名回落至父元素或自身计算 `color`。
+- **`src/js/shim/window.js`**：在 `getComputedStyle` 颜色长手归一化入口将内嵌 `currentcolor` 替换为元素自身 `elColor`，确保 `color-mix()` 与 `inherit` 后代按自身 `color` 求值。
+- **`src/js/shim/cssom.js`**：在 `normalizeSingleColor` 中新增递归 `color-mix(in srgb|lch ...)` 求值器，支持预乘 Alpha 插值、缺失/无色相 `none` 保留与标准 CSS Color 4/5 序列化。

@@ -16107,6 +16107,136 @@
           return "color(" + sp + " " + fmtC(toks[1]) + " " + fmtC(toks[2]) + " " + fmtC(toks[3]) + aStr + ")";
         }
       }
+      if (s.startsWith("color-mix(") && s.endsWith(")")) {
+        const inner = s.slice(10, -1).trim();
+        const parts = [];
+        let cur = "", d = 0;
+        for (let i = 0; i < inner.length; i++) {
+          const ch = inner[i];
+          if (ch === "(") d++;
+          else if (ch === ")" && d > 0) d--;
+          if (d === 0 && ch === ",") { parts.push(cur.trim()); cur = ""; }
+          else cur += ch;
+        }
+        if (cur.trim()) parts.push(cur.trim());
+        if (parts.length === 3 && /^in\s+/i.test(parts[0])) {
+          const spTokens = parts[0].slice(3).trim().toLowerCase().split(/\s+/);
+          const space = spTokens[0];
+          const hueMethod = spTokens.slice(1).join(" ") || "shorter hue";
+          const parseMixItem = (item) => {
+            const toks = [];
+            let tc = "", td = 0;
+            for (let i = 0; i < item.length; i++) {
+              const ch = item[i];
+              if (ch === "(") td++;
+              else if (ch === ")" && td > 0) td--;
+              if (td === 0 && /\s/.test(ch)) { if (tc) { toks.push(tc); tc = ""; } }
+              else tc += ch;
+            }
+            if (tc) toks.push(tc);
+            const pctRe = /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)%$/;
+            if (toks.length === 1) return { col: toks[0], pct: null };
+            if (toks.length >= 2 && pctRe.test(toks[0])) return { col: toks.slice(1).join(" "), pct: parseFloat(toks[0]) };
+            if (toks.length >= 2 && pctRe.test(toks[toks.length - 1])) return { col: toks.slice(0, -1).join(" "), pct: parseFloat(toks[toks.length - 1]) };
+            return { col: item, pct: null };
+          };
+          const m1 = parseMixItem(parts[1]), m2 = parseMixItem(parts[2]);
+          let p1 = m1.pct, p2 = m2.pct;
+          if (p1 === null && p2 === null) { p1 = 50; p2 = 50; }
+          else if (p1 === null) p1 = 100 - p2;
+          else if (p2 === null) p2 = 100 - p1;
+          if (p1 >= 0 && p2 >= 0 && p1 + p2 > 0) {
+            let alphaMult = 1;
+            const sum = p1 + p2;
+            if (sum < 100) alphaMult = sum / 100;
+            const t1 = p1 / sum, t2 = p2 / sum;
+            const toSrgb01 = (cStr) => {
+              const nc = normalizeSingleColor(cStr);
+              if (!nc || typeof nc !== "string") return null;
+              const low = nc.trim().toLowerCase();
+              if (low === "transparent") return [0, 0, 0, 0];
+              const rm = /^rgba?\(\s*([0-9.eE+-]+)\s*,\s*([0-9.eE+-]+)\s*,\s*([0-9.eE+-]+)(?:\s*,\s*([0-9.eE+-]+))?\s*\)$/.exec(low);
+              if (rm) return [Number(rm[1]) / 255, Number(rm[2]) / 255, Number(rm[3]) / 255, rm[4] !== undefined ? Number(rm[4]) : 1];
+              const cm = /^color\(\s*srgb\s+([^\s/]+)\s+([^\s/]+)\s+([^\s/)]+)(?:\s*\/\s*([^\s)]+))?\s*\)$/.exec(low);
+              if (cm) return [cm[1] === "none" ? 0 : Number(cm[1]), cm[2] === "none" ? 0 : Number(cm[2]), cm[3] === "none" ? 0 : Number(cm[3]), cm[4] !== undefined ? (cm[4] === "none" ? 0 : Number(cm[4])) : 1];
+              return null;
+            };
+            const srgbToLin = (c) => (Math.abs(c) <= 0.04045 ? c / 12.92 : Math.sign(c) * Math.pow((Math.abs(c) + 0.055) / 1.055, 2.4));
+            const srgbToLch = (rgba) => {
+              const r = srgbToLin(rgba[0]), g = srgbToLin(rgba[1]), b = srgbToLin(rgba[2]);
+              // sRGB -> XYZ D65 -> XYZ D50 (Bradford) -> Lab -> LCH
+              const x65 = 0.4123907992659595 * r + 0.357584339383878 * g + 0.1804807884018343 * b;
+              const y65 = 0.21263900587151036 * r + 0.715168678767756 * g + 0.07219231536073371 * b;
+              const z65 = 0.01933081871559185 * r + 0.11919477979462599 * g + 0.9505321522496607 * b;
+              const x50 = 1.0479298208405488 * x65 + 0.022946793341019088 * y65 - 0.05019222954313557 * z65;
+              const y50 = 0.029627815688159344 * x65 + 0.990434484573249 * y65 - 0.01707382502938514 * z65;
+              const z50 = -0.009243058152591178 * x65 + 0.015055144896577895 * y65 + 0.7518742899580008 * z65;
+              const f = (t) => (t > 216 / 24389 ? Math.cbrt(t) : (24389 / 27 * t + 16) / 116);
+              const fx = f(x50 / 0.3457 / (1 / 0.3585) * (0.3585 / 0.3457)); // D50 white: [0.3457/0.3585, 1.0, (1-0.3457-0.3585)/0.3585]
+              const d50X = 0.3457 / 0.3585, d50Y = 1.0, d50Z = (1 - 0.3457 - 0.3585) / 0.3585;
+              const fX = f(x50 / d50X), fY = f(y50 / d50Y), fZ = f(z50 / d50Z);
+              const L = 116 * fY - 16;
+              const a = 500 * (fX - fY);
+              const bb = 200 * (fY - fZ);
+              const C = Math.hypot(a, bb);
+              let H = C < 1e-6 ? null : (Math.atan2(bb, a) * 180 / Math.PI + 360) % 360;
+              return [L, C, H, rgba[3]];
+            };
+            const toLch = (cStr) => {
+              const nc = normalizeSingleColor(cStr);
+              if (!nc || typeof nc !== "string") return null;
+              const lm = /^lch\(\s*([^\s/]+)\s+([^\s/]+)\s+([^\s/)]+)(?:\s*\/\s*([^\s)]+))?\s*\)$/i.exec(nc.trim());
+              if (lm) return [lm[1] === "none" ? 0 : parseFloat(lm[1]), lm[2] === "none" ? 0 : parseFloat(lm[2]), lm[3] === "none" ? null : parseFloat(lm[3]), lm[4] !== undefined ? (lm[4] === "none" ? 0 : parseFloat(lm[4])) : 1];
+              const srgb = toSrgb01(nc);
+              return srgb ? srgbToLch(srgb) : null;
+            };
+            const fmtMixNum = (n) => {
+              if (Math.abs(n) < 1e-7) return "0";
+              return String(Number(n.toFixed(6)));
+            };
+            if (space === "srgb") {
+              const c1 = toSrgb01(m1.col), c2 = toSrgb01(m2.col);
+              if (c1 && c2) {
+                const a = c1[3] * t1 + c2[3] * t2;
+                const r = a > 0 ? (c1[0] * c1[3] * t1 + c2[0] * c2[3] * t2) / a : 0;
+                const g = a > 0 ? (c1[1] * c1[3] * t1 + c2[1] * c2[3] * t2) / a : 0;
+                const b = a > 0 ? (c1[2] * c1[3] * t1 + c2[2] * c2[3] * t2) / a : 0;
+                const fa = a * alphaMult;
+                return fa >= 1 - 1e-6
+                  ? "color(srgb " + fmtMixNum(r) + " " + fmtMixNum(g) + " " + fmtMixNum(b) + ")"
+                  : "color(srgb " + fmtMixNum(r) + " " + fmtMixNum(g) + " " + fmtMixNum(b) + " / " + fmtMixNum(fa) + ")";
+              }
+            } else if (space === "lch") {
+              const c1 = toLch(m1.col), c2 = toLch(m2.col);
+              if (c1 && c2) {
+                const a = c1[3] * t1 + c2[3] * t2;
+                const L = a > 0 ? (c1[0] * c1[3] * t1 + c2[0] * c2[3] * t2) / a : 0;
+                const C = a > 0 ? (c1[1] * c1[3] * t1 + c2[1] * c2[3] * t2) / a : 0;
+                let H = null;
+                if (c1[2] !== null && c2[2] !== null) {
+                  let h1 = c1[2], h2 = c2[2], diff = h2 - h1;
+                  if (hueMethod.startsWith("shorter")) {
+                    if (diff > 180) h1 += 360; else if (diff < -180) h2 += 360;
+                  } else if (hueMethod.startsWith("longer")) {
+                    if (diff > 0 && diff < 180) h1 += 360; else if (diff > -180 && diff <= 0) h2 += 360;
+                  } else if (hueMethod.startsWith("increasing")) {
+                    if (h2 < h1) h2 += 360;
+                  } else if (hueMethod.startsWith("decreasing")) {
+                    if (h1 < h2) h1 += 360;
+                  }
+                  H = ((h1 * t1 + h2 * t2) % 360 + 360) % 360;
+                } else if (c1[2] !== null) H = c1[2];
+                else if (c2[2] !== null) H = c2[2];
+                const hStr = (H === null || C < 1e-6) ? "none" : fmtMixNum(H);
+                const fa = a * alphaMult;
+                return fa >= 1 - 1e-6
+                  ? "lch(" + fmtMixNum(L) + " " + fmtMixNum(C) + " " + hStr + ")"
+                  : "lch(" + fmtMixNum(L) + " " + fmtMixNum(C) + " " + hStr + " / " + fmtMixNum(fa) + ")";
+              }
+            }
+          }
+        }
+      }
       if (s.toLowerCase() === "canvastext") return "rgb(0, 0, 0)";
       return val;
     }
@@ -52597,7 +52727,8 @@
         } else if (!cv || cvLow === "currentcolor") {
           computedMap.set(ck, elColor);
         } else {
-          computedMap.set(ck, normCol(cv));
+          const cvWithCur = /\bcurrentcolor\b/i.test(cv) ? cv.replace(/\bcurrentcolor\b/gi, elColor) : cv;
+          computedMap.set(ck, normCol(cvWithCur));
         }
       }
       const ccRaw = (computedMap.get("caret-color") || "").trim();

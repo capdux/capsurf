@@ -3716,3 +3716,7 @@
 - `signs-abs-invalid` 剩余 2 项 (`sign(10px + 5rad)` 与 `font-weight: sign(10%)`) 在 `hasInvalidCalcUnitMix` 与 `font-weight` 校验补齐后 53/53 全绿；`interpolateAnimValue` 对 `<integer>` 属性使用 `Math.round(v)` 后 `integer_interpolation_round_half_001/002` 一次通过。
 ### Phase 935 — 动态 `rem`/`lh` 计算、`calc(0% + ...)` 保留与 `word-wrap` 别名
 - `getComputedStyle-calc-mixed-units-001` 失败源于 `calc(100% - 100% + 20em)` 在 `pctC == 0` 时未保留 `0%`；`002` 失败源于 `rem` 硬编码 `16` 及 `lh` 未取 `line-height` 计算值；补齐后 `001` (3/3) 与 `002` (8/8) 均一次通过。
+
+## Phase 936: 嵌套 `light-dark()` 与 `color-mix()` (`srgb`/`lch`) + `currentColor` 解析
+- **根因定位**：`dom_binding.cp` 的 `_resolveLightDark` 仅展开单层且未对 `currentColor` 回落解析；`window.js` 对含 `color-mix()` 的属性值直接送入 `normCol` 而未替换内嵌 `currentcolor`；`cssom.js` `normalizeSingleColor` 缺少 `color-mix()` 递归求值路径。
+- **修复方案**：改写 `_resolveLightDark` 为最多 16 层迭代展开并处理 `currentcolor` 继承/自身回落；在 `window.js` 调用 `normCol` 前替换 `\bcurrentcolor\b`；在 `cssom.js` 实现 `srgb` 与 `lch`（含 `sRGB -> XYZ D65 -> D50 -> Lab -> LCH` 转换及极坐标色相插值、`C < 1e-6` 输出 `none`）递归求值。4 个 `/css/css-color/` 用例全过，`--smoke` 3/3 PASS。

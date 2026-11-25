@@ -6,6 +6,7 @@
 
 | 测试时间 | 目录 / Filter | 分片 | 用例数 | 结果摘要 | 备注 |
 | :--- | :--- | :--- | :---: | :--- | :--- |
+| 2026-11-26 10:48 | `Phase 936`: `light-dark()` 嵌套与 `color-mix()` `srgb`/`lch` | 定向 | 4 | `light-dark-basic`, `light-dark-currentcolor-in-color`, `color-mix-currentcolor-visited-getcomputedstyle`, `nested-color-mix-with-currentcolor` **4/4 PASS** | `--smoke` 3/3 PASS |
 | 2026-11-25 07:40 | `Phase 748`: `Element` 树描述符同步 (`ChildNode` & `textContent`) | 定向 | 6 | `ChildNode-before` (45/45), `ChildNode-after` (45/45), `DocumentType-remove` (4/4), `CharacterData-remove` (12/12), `Node-textContent` (81/81) **5/6 PASS** | `--smoke` 3/3 PASS |
 | 2026-11-25 07:37 | `Phase 747`: `Body-FrameSet-Event-Handlers.html` | 定向 | 3 | `Body-FrameSet-Event-Handlers` **PASS** (48/48), `Event-constructors` PASS, `remove-all-listeners` PASS | `--smoke` 3/3 PASS |
 | 2026-11-25 07:33 | `Phase 746`: `Event-constructors`, `remove-all-listeners`, `HTMLFrameSetElement` | 定向 | 3 | `Event-constructors` PASS (14/14), `remove-all-listeners` PASS (2/2) | `--smoke` 3/3 PASS |
