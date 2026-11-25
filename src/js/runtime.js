@@ -17391,6 +17391,7 @@
         }
         const pseudo = s.slice(start, i).toLowerCase();
         if (pseudo === ":checked") { if (!el.checked && !(String(el.tagName || "").toUpperCase() === "OPTION" && el.selected)) return false; }
+        else if (pseudo === ":popover-open") { if (!el._popoverOpen) return false; }
         else if (pseudo === ":disabled") { if (!el.disabled) return false; }
         else if (pseudo === ":enabled") { if (el.disabled) return false; }
         else if (pseudo === ":host") {
@@ -21814,6 +21815,53 @@
         this.dispatchEvent(evt);
       };
       markNative(proto.blur, "blur");
+    }
+
+    if (!proto.showPopover) {
+      proto.showPopover = function () {
+        const attr = typeof this.getAttribute === "function" ? this.getAttribute("popover") : null;
+        if (attr === null) {
+          if (typeof DOMException !== "undefined") throw new DOMException("Not supported on elements without a popover attribute", "NotSupportedError");
+          throw new Error("NotSupportedError");
+        }
+        if (this._popoverOpen) return;
+        const mode = String(attr).toLowerCase();
+        if (mode !== "manual") {
+          const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
+          if (doc && typeof doc.querySelectorAll === "function") {
+            const others = doc.querySelectorAll("[popover]");
+            for (let i = 0; i < others.length; i++) {
+              const o = others[i];
+              if (o && o !== this && o._popoverOpen && String(o.getAttribute("popover") || "").toLowerCase() !== "manual") {
+                o._popoverOpen = false;
+              }
+            }
+          }
+        }
+        this._popoverOpen = true;
+        if (typeof globalThis !== "undefined") {
+          globalThis.__capsurf_domMutationEpoch = (globalThis.__capsurf_domMutationEpoch || 0) + 1;
+        }
+      };
+      markNative(proto.showPopover, "showPopover");
+    }
+    if (!proto.hidePopover) {
+      proto.hidePopover = function () {
+        this._popoverOpen = false;
+        if (typeof globalThis !== "undefined") {
+          globalThis.__capsurf_domMutationEpoch = (globalThis.__capsurf_domMutationEpoch || 0) + 1;
+        }
+      };
+      markNative(proto.hidePopover, "hidePopover");
+    }
+    if (!proto.togglePopover) {
+      proto.togglePopover = function (force) {
+        const want = force !== undefined ? Boolean(force) : !this._popoverOpen;
+        if (want) this.showPopover();
+        else this.hidePopover();
+        return Boolean(this._popoverOpen);
+      };
+      markNative(proto.togglePopover, "togglePopover");
     }
   }
 

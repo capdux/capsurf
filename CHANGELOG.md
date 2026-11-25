@@ -4344,3 +4344,7 @@
   - `src/js/shim/selector.js`: 补全 `:has-slotted(...)` 函数式伪类匹配。
   - `src/js/shim/window.js`: `collectRawComputedMap` 为 `<details>` 非 `<summary>` 子代收集 `::details-content` 继承属性。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 806**:
+  - `src/js/shim/element/html-element.js`: 新增 `HTMLElement.prototype.{showPopover,hidePopover,togglePopover}`。
+  - `src/js/shim/selector.js`: 新增 `:popover-open` 伪类匹配。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

@@ -574,6 +574,7 @@ function matchesCompoundSelector(el, compound, scopeRoot) {
       }
       const pseudo = s.slice(start, i).toLowerCase();
       if (pseudo === ":checked") { if (!el.checked && !(String(el.tagName || "").toUpperCase() === "OPTION" && el.selected)) return false; }
+      else if (pseudo === ":popover-open") { if (!el._popoverOpen) return false; }
       else if (pseudo === ":disabled") { if (!el.disabled) return false; }
       else if (pseudo === ":enabled") { if (el.disabled) return false; }
       else if (pseudo === ":host") {
