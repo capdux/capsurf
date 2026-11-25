@@ -3548,3 +3548,5 @@
 - 将 `border-width`/`border-style`/`outline-width`/`outline-style` 校验收口至 `cap:css` (`border.cp` & `outline.cp`) 并全量通过 8 项对应 WPT 解析测试，累计已有 24 个 CSSOM 高频语法校验/求值/序列化入口完成 `cap:css` 下沉。
 ### Phase 854 — `inset` / `overflow` 校验下沉 `cap:css` 并接线验证
 - 将 `top`/`right`/`bottom`/`left`/`inset*` 与 `overflow` 校验收口至 `cap:css` (`positionProp.cp` & `overflowProp.cp`) 并全量通过 6 项对应 WPT 解析测试，累计已有 26 个 CSSOM 高频语法校验/求值/序列化入口完成 `cap:css` 下沉。
+### Phase 855 — `background-size` / `background-repeat` / `mask-size` / `mask-repeat` 校验下沉 `cap:css`
+- 将 `background-size`/`mask-size` 与 `background-repeat`/`mask-repeat` 校验收口至 `cap:css` (`background.cp`) 并全量通过 8 项对应 WPT 解析测试，累计已有 28 个 CSSOM 高频语法校验/求值/序列化入口完成 `cap:css` 下沉。

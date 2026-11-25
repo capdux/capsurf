@@ -2521,3 +2521,4 @@
 | Phase 852 | `border-radius` / `margin` / `padding` 简写校验下沉 `cap:css` | `borderradius.cp`, `marginPad.cp`, `dom_binding.cp`, `cssom.js` | `border-radius-*`, `margin-*`, `padding-*` **6/6 PASS**; `--smoke` 3/3 PASS |
 | Phase 853 | `border-width`/`border-style`/`outline-width`/`outline-style` 下沉 `cap:css` | `border.cp`, `outline.cp`, `dom_binding.cp`, `cssom.js` | `border-{width,style}-*`, `outline-{width,style}-*` **8/8 PASS**; `--smoke` 3/3 PASS |
 | Phase 854 | `inset` / `overflow` 校验下沉 `cap:css` | `positionProp.cp`, `overflowProp.cp`, `dom_binding.cp`, `cssom.js` | `top-*`, `inset-*`, `overflow-*` **6/6 PASS**; `--smoke` 3/3 PASS |
+| Phase 855 | `background-{size,repeat}` / `mask-{size,repeat}` 校验下沉 `cap:css` | `background.cp`, `dom_binding.cp`, `cssom.js` | `background-{size,repeat}-*`, `mask-{size,repeat}-*` **8/8 PASS**; `--smoke` 3/3 PASS |

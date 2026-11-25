@@ -90,6 +90,8 @@ import {
     isValidCssOutlineStyleValue,
     isValidCssInsetValue,
     isValidCssOverflowValue,
+    isValidCssBgSizeValue,
+    isValidCssBgRepeatValue,
 } from "cap:css";
 import { LayoutTree, Rect } from "../layout/layout.cp";
 import { RUNTIME_CHUNKS } from "./runtime_source.cp";
@@ -984,6 +986,14 @@ fn callStrValidator1(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, pred: 
     let max_toks: i32 = 1;
     if (argc >= 2) * = JS_ToInt32(ctx, &max_toks, unsafe { argv[1] });
     return jsBool(isValidCssOverflowValue(trimmed, if (max_toks >= 2) 2 else 1));
+}
+@c fn js_capsurf_is_valid_css_bg_size(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssBgSizeValue);
+}
+@c fn js_capsurf_is_valid_css_bg_repeat(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssBgRepeatValue);
 }
 @c fn js_capsurf_is_valid_css_len_pct(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     * = this_val;
@@ -3091,6 +3101,8 @@ pub fn mountDom(
     defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_border_style", js_capsurf_is_valid_css_border_style, 2);
     defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_inset", js_capsurf_is_valid_css_inset, 2);
     defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_overflow", js_capsurf_is_valid_css_overflow, 2);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_bg_size", js_capsurf_is_valid_css_bg_size, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_bg_repeat", js_capsurf_is_valid_css_bg_repeat, 1);
 
     // Assemble and evaluate modular runtime shim
     let total_len: usize = 0;

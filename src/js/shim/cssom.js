@@ -1998,6 +1998,9 @@
       return isValidLenPct(t, false);
     }
     if (prop === "background-repeat" || prop === "mask-repeat") {
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_bg_repeat === "function") {
+        return globalThis.__capsurf_is_valid_css_bg_repeat(vLower);
+      }
       const layers = splitTopLevelComma(vLower);
       const SINGLE = new Set(["repeat-x", "repeat-y", "repeat", "space", "round", "no-repeat"]);
       const PAIR = new Set(["repeat", "space", "round", "no-repeat"]);
@@ -2600,6 +2603,9 @@
       return true;
     }
     if (prop === "background-size" || prop === "mask-size") {
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_bg_size === "function") {
+        return globalThis.__capsurf_is_valid_css_bg_size(vLower);
+      }
       const layers = splitTopLevelComma(vLower);
       for (let i = 0; i < layers.length; i++) {
         const toks = splitCssTokens(layers[i].trim());
