@@ -3572,3 +3572,5 @@
 - 修复了 `stylesheet.cp` 规则切分未追踪 `()`/`[]` 嵌套导致的 `@supports` 内部 `;`/`{}` 误切分，以及 `supports.cp` 与 `cascade.cp` 对转义自定义属性名、空值 `--a:`、CDO `<!--`、`VAR-*` 的判定，使得 `variable-supports-01..67` **67/67** 全部通过。
 ### Phase 866 — `scrollbar-color` 双色序列化与 `getComputedStyle` 懒尺寸计算修复
 - 修复了 `cssom.js` 单色快路径截断 `scrollbar-color` 第二个颜色的问题，以及 `window.js` `getComputedStyle` Proxy 属性访问绕过 `_lazyWidth`/`_lazyHeight` 的问题，使得 `/css/css-scrollbars/` 解析与继承全绿、`/css/css-sizing/inheritance-002.html` 转绿。
+### Phase 867 — 替换元素百分比最小内容贡献修复（`/css/css-sizing/` 达成 100%）
+- 在 `layout.cp` `measureIntrinsicWidth` 中遵循 CSS Sizing 3 `#replaced-percentage-min-contribution`，修复 `<canvas>` 在 `width: 0px` 容器中的百分比 `width`/`max-width` 退化，`intrinsic-percent-replaced-028.html` 转绿，`/css/css-sizing/` **32/32** 全部通过。

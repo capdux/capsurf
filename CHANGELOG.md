@@ -4548,3 +4548,5 @@
 ### Phase 866 — `scrollbar-color` 双色序列化与绝对定位 `initial` 尺寸计算值修复
 - `src/js/shim/cssom.js`: `normalizeCssSpecifiedValue` 仅在单 token 时走 `normalizeSingleColor` 快路径，`wrapComputedStyleDecl` 统一使用 `normalizePropColors` 处理多色属性 `scrollbar-color`。
 - `src/js/shim/window.js`: `computeElementUsedWidthPx`/`computeElementUsedHeightPx` 将 `initial`/`unset`/`revert` 规范化为 `auto`，补齐 `_lazyHeight` 触发条件及 `declTarget` Proxy `get` 路径的懒计算触发；`scrollbar-color-parsing.html`、`css-scrollbars/inheritance.html`、`css-sizing/inheritance-002.html` **3/3 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 867 — 替换元素百分比 `width`/`max-width` 最小内容贡献修复（`/css/css-sizing/` 100% PASS）
+- `src/layout/layout.cp`: `measureIntrinsicWidth` 在 `avail_w <= 0.0` 且替换元素带有百分比 `width` 或 `max-width` 时按 CSS Sizing 3 返回 `0.0`；`/css/css-sizing/` 全目录 **32/32 (100%) PASS**，`--smoke` 3/3 **PASS**。

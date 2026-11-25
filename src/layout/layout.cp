@@ -1893,12 +1893,19 @@ pub struct LayoutTree {
         const h_decor = pl + pr + bl + br;
 
         let content_w: f32 = 0.0;
+        const rep_opt = LayoutTree.getReplacedSizeWithStyle(node, st);
+        const width_is_pct = !st.width.is_auto && !st.width.is_none && !st.width.isIntrinsic() &&
+            !st.width.is_calc && st.width.length.unit == CssUnit.Percent;
+        const max_width_is_pct = !st.max_width.is_auto && !st.max_width.is_none && !st.max_width.isIntrinsic() &&
+            !st.max_width.is_calc && st.max_width.length.unit == CssUnit.Percent;
         const width_is_definite = !st.width.is_auto && !st.width.is_none && !st.width.isIntrinsic() &&
             (st.width.is_calc || st.width.length.unit != CssUnit.Percent);
-        if (width_is_definite) {
+        if (rep_opt != null && avail_w <= 0.0 && (width_is_pct || max_width_is_pct)) {
+            content_w = 0.0;
+        } else if (width_is_definite) {
             const w = st.width.resolvePx(avail_w, fs, _.root_font_px, _.viewport_width, _.viewport_height);
             content_w = if (st.box_sizing == BoxSizing.BorderBox) (if (w > h_decor) (w - h_decor) else 0.0) else w;
-        } else if (rep := LayoutTree.getReplacedSizeWithStyle(node, st)) {
+        } else if (rep := rep_opt) {
             content_w = rep.width;
         } else if (st.display.isFlex() || st.display.isWebkitBox()) {
             const is_row = st.flex_direction.isRow();
@@ -2052,12 +2059,19 @@ pub struct LayoutTree {
         const h_decor = pl + pr + bl + br;
 
         let content_w: f32 = 0.0;
+        const rep_opt = LayoutTree.getReplacedSizeWithStyle(node, st);
+        const width_is_pct = !st.width.is_auto && !st.width.is_none && !st.width.isIntrinsic() &&
+            !st.width.is_calc && st.width.length.unit == CssUnit.Percent;
+        const max_width_is_pct = !st.max_width.is_auto && !st.max_width.is_none && !st.max_width.isIntrinsic() &&
+            !st.max_width.is_calc && st.max_width.length.unit == CssUnit.Percent;
         const width_is_definite = !st.width.is_auto && !st.width.is_none && !st.width.isIntrinsic() &&
             (st.width.is_calc || st.width.length.unit != CssUnit.Percent);
-        if (width_is_definite) {
+        if (rep_opt != null && avail_w <= 0.0 && (width_is_pct || max_width_is_pct)) {
+            content_w = 0.0;
+        } else if (width_is_definite) {
             const w = st.width.resolvePx(avail_w, fs, _.root_font_px, _.viewport_width, _.viewport_height);
             content_w = if (st.box_sizing == BoxSizing.BorderBox) (if (w > h_decor) (w - h_decor) else 0.0) else w;
-        } else if (rep := LayoutTree.getReplacedSizeWithStyle(node, st)) {
+        } else if (rep := rep_opt) {
             content_w = rep.width;
         } else if (st.display.isFlex() || st.display.isWebkitBox()) {
             const is_row_nowrap = st.flex_direction.isRow() && st.flex_wrap == FlexWrap.NoWrap;
