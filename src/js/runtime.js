@@ -17776,7 +17776,7 @@
 
     function lookupPropertyValue(map, key) {
       const entry = map.get(key);
-      if (entry) return serializeInlineSpecifiedValue(key, entry.value);
+      if (entry && key !== "font") return serializeInlineSpecifiedValue(key, entry.value);
       if (key === "margin" || key === "padding") {
         const names = [key + "-top", key + "-right", key + "-bottom", key + "-left"];
         const vals = [];
@@ -17838,7 +17838,14 @@
       }
       if (key === "font" && map.has("font")) {
         const fVal = map.get("font").value;
-        const fv = lookupPropertyValue(map, "font-variant");
+        let fv = lookupPropertyValue(map, "font-variant");
+        if (!fv && map.has("font-variant")) fv = map.get("font-variant").value;
+        if (!fv && map.has("font-variant-caps")) {
+          const capsVal = map.get("font-variant-caps").value;
+          const otherFv = ["font-variant-ligatures", "font-variant-alternates", "font-variant-numeric", "font-variant-east-asian", "font-variant-position", "font-variant-emoji"];
+          const allOtherNormal = otherFv.every((k) => !map.has(k) || map.get(k).value === "normal");
+          fv = allOtherNormal ? capsVal : "__non_css2__";
+        }
         if (fv && fv !== "normal") {
           if (fv === "small-caps") return fVal.startsWith("small-caps ") ? fVal : ("small-caps " + fVal);
           return "";
@@ -18044,7 +18051,7 @@
           return undefined;
         }
         const map = parseStyleMap();
-        if (map.has(prop)) return serializeInlineSpecifiedValue(prop, map.get(prop).value);
+        if (prop !== "font" && map.has(prop)) return serializeInlineSpecifiedValue(prop, map.get(prop).value);
         const kebab = normalizeStylePropKey(propToKebab(prop));
         return lookupPropertyValue(map, kebab);
       },
@@ -49826,17 +49833,19 @@
         normalizedPseudo = p;
       }
 
+      const liveDoc = (element && element.ownerDocument) || global.document || (typeof document !== "undefined" ? document : null);
       let lastStyleAttr = (element && typeof element.getAttribute === "function") ? (element.getAttribute("style") || "") : "";
+      let lastActiveEl = liveDoc ? liveDoc.activeElement : null;
       let computedMap = collectRawComputedMap(element, normalizedPseudo);
       applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo);
       function ensureLiveComputed() {
-        if (element && typeof element.getAttribute === "function") {
-          const curStyleAttr = element.getAttribute("style") || "";
-          if (curStyleAttr !== lastStyleAttr) {
-            lastStyleAttr = curStyleAttr;
-            computedMap = collectRawComputedMap(element, normalizedPseudo);
-            applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo);
-          }
+        const curStyleAttr = (element && typeof element.getAttribute === "function") ? (element.getAttribute("style") || "") : "";
+        const curActiveEl = liveDoc ? liveDoc.activeElement : null;
+        if (curStyleAttr !== lastStyleAttr || curActiveEl !== lastActiveEl) {
+          lastStyleAttr = curStyleAttr;
+          lastActiveEl = curActiveEl;
+          computedMap = collectRawComputedMap(element, normalizedPseudo);
+          applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo);
         }
       }
 

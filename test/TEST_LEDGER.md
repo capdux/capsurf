@@ -2447,3 +2447,4 @@
 | Phase 778 | WPT `/css/css-display/` 伪元素 `display` 规范化与 `reading-flow` 收紧 | `src/js/shim/window.js`, `test/wpt/wpt-expectations.json` | `display-first-line-001`, `display-math-on-pseudo-elements-001`, `reading-flow-valid`, `reading-order-valid` **4/4 FAIL→PASS** (`7,217` PASS); `--smoke` 3/3 PASS |
 | Phase 779 | WPT `::first-letter`/`::first-line` 伪元素选择器识别与首字块化 | `src/js/shim/window.js` | `display-first-letter-001` **PASS**; `--smoke` 3/3 PASS |
 | Phase 780 | WPT `display: contents` 合法性校验、`<button>` 默认值与穿透块化 | `src/js/shim/window.js` | `display-contents-parsing-001`, `display-contents-blockify-dynamic` **PASS**; `--smoke` 3/3 PASS |
+| Phase 781 | WPT `:focus` 实时样式刷新与 `font`/`font-variant` 联动序列化 | `src/js/shim/window.js`, `src/js/shim/element/element.js`, `test/wpt/wpt-expectations.json` | `display-contents-focusable-001` **PASS**、`font-shorthand-variant` **FAIL→PASS**; `--smoke` 3/3 PASS |

@@ -4243,3 +4243,8 @@
 - **Phase 780**:
   - `src/js/shim/window.js`: `setDecl` 校验 `display` 合法值，`<button>` 默认 `display` 设为 `"inline-block"`，并支持穿透 `display: contents` 祖先的 Flex/Grid 子项动态块化。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 781**:
+  - `src/js/shim/window.js`: `ensureLiveComputed` 追踪 `liveDoc.activeElement` 变化以实时刷新 `:focus` 计算样式。
+  - `src/js/shim/element/element.js`: 修复 `lookupPropertyValue` 与 `styleProxy.get` 对 `font` 的提前短路，补全 `font` 与 `font-variant-caps` CSS2 值联动序列化。
+  - `test/wpt/wpt-expectations.json`: 收紧 `/css/css-fonts/parsing/font-shorthand-variant.html` 为 `PASS`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

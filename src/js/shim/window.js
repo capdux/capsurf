@@ -10597,17 +10597,19 @@ function installWindow(global) {
       normalizedPseudo = p;
     }
 
+    const liveDoc = (element && element.ownerDocument) || global.document || (typeof document !== "undefined" ? document : null);
     let lastStyleAttr = (element && typeof element.getAttribute === "function") ? (element.getAttribute("style") || "") : "";
+    let lastActiveEl = liveDoc ? liveDoc.activeElement : null;
     let computedMap = collectRawComputedMap(element, normalizedPseudo);
     applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo);
     function ensureLiveComputed() {
-      if (element && typeof element.getAttribute === "function") {
-        const curStyleAttr = element.getAttribute("style") || "";
-        if (curStyleAttr !== lastStyleAttr) {
-          lastStyleAttr = curStyleAttr;
-          computedMap = collectRawComputedMap(element, normalizedPseudo);
-          applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo);
-        }
+      const curStyleAttr = (element && typeof element.getAttribute === "function") ? (element.getAttribute("style") || "") : "";
+      const curActiveEl = liveDoc ? liveDoc.activeElement : null;
+      if (curStyleAttr !== lastStyleAttr || curActiveEl !== lastActiveEl) {
+        lastStyleAttr = curStyleAttr;
+        lastActiveEl = curActiveEl;
+        computedMap = collectRawComputedMap(element, normalizedPseudo);
+        applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo);
       }
     }
 
