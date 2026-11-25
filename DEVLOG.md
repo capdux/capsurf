@@ -3516,3 +3516,5 @@
 - 在 `painter.cp` 中为 `decodePngAnyToRgba` 补全 `color_type == 3` (`PLTE`+`tRNS`, `1/2/4/8-bit`) 索引调色板解码，复用 `computeBgTileSize` 新增 `paintPngBg` 与 `loadBgPngBytesWithDoc` 统一驱动 WPT PNG 背景缩放与平铺，一次性打通 `background-size-005`..`020`（批次由 26/79 提升至 **35/79 PASS**），`--smoke` 3/3 **PASS**。
 ### Phase 838 — `background-repeat: space | round` 双轴均匀平铺与整数倍缩放
 - 在 `cascade.cp` 与 `painter.cp` 中实现 `BgRepeatMode`（`repeat`/`no-repeat`/`space`/`round`）双值解析及共享 `computeBgAxisTiling` 平铺计算，一次性打通 `background-repeat-space-{1a..1c,2,4..9}`（10/12 **PASS**，整组 **12/23 PASS**），`--smoke` 3/3 **PASS**。
+### Phase 839 — `sibling-index()` / `sibling-count()` 全属性计算值求值与化简 (`10x FAIL→PASS`)
+- 在 `window.js` `applyUsedValuesToComputedMap` 统一解析 `sibling-index()`/`sibling-count()`（兼容 Shadow DOM `assignedSlot` 扁平树）并经 `simplifySibCalc` 执行乘除加减化简与单值解包，同时在 `cssom.js` 规范空白/参数校验，`/css/css-values/tree-counting/` 一次性收获 **10 项 `FAIL→PASS`**，`--smoke` 3/3 **PASS**。

@@ -4460,3 +4460,7 @@
 - **Phase 838**:
   - `src/css/cascade.cp`: 新增 `BgRepeatMode` (`Repeat`/`NoRepeat`/`Space`/`Round`) 与双值 `background-repeat` 解析。
   - `src/render/painter.cp`: 新增 `computeBgAxisTiling`，统一为 `paintImgSvgBg` 与 `paintPngBg` 实现 `space`/`round` 平铺。
+- **Phase 839**:
+  - `src/js/shim/window.js`: `applyUsedValuesToComputedMap` 实现 `sibling-index()`/`sibling-count()`（含 `assignedSlot` 扁平树）求值与 `simplifySibCalc` 化简。
+  - `src/js/shim/cssom.js`: `isValidCalcSyntax` 支持 `sibling-index( )`/`sibling-count( )` 空参数空白并拒绝非法参数。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

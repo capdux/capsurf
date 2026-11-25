@@ -5108,9 +5108,12 @@
             const after = body[i + idM[0].length];
             if (after === "(") {
               if (!CALC_FUNCS.has(idLow)) return false;
-              if ((idLow === "sibling-index" || idLow === "sibling-count") && body[i + idM[0].length + 1] === ")") {
-                topAddTerms[topAddTerms.length - 1] += idM[0] + "()";
-                i += idM[0].length + 2;
+              if (idLow === "sibling-index" || idLow === "sibling-count") {
+                const afterOpen = body.slice(i + idM[0].length + 1);
+                const closeM = /^\s*\)/.exec(afterOpen);
+                if (!closeM) return false;
+                topAddTerms[topAddTerms.length - 1] += idLow + "()";
+                i += idM[0].length + 1 + closeM[0].length;
                 expectVal = false;
                 continue;
               }
@@ -48371,6 +48374,73 @@
 
     function applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo) {
       if (!element || element.nodeType !== 1) return;
+      {
+        let hasSibFn = false;
+        for (const v of computedMap.values()) {
+          if (typeof v === "string" && /sibling-(?:index|count)\s*\(/i.test(v)) {
+            hasSibFn = true;
+            break;
+          }
+        }
+        if (hasSibFn) {
+          let si = 1;
+          let sc = 1;
+          const slot = element.assignedSlot;
+          let sibList = null;
+          if (slot && typeof slot.assignedNodes === "function") {
+            const nodes = slot.assignedNodes({ flatten: true });
+            sibList = [];
+            for (let k = 0; k < nodes.length; k++) {
+              if (nodes[k] && nodes[k].nodeType === 1) sibList.push(nodes[k]);
+            }
+          } else {
+            const pn = element.parentElement || element.parentNode;
+            if (pn && pn.children) sibList = pn.children;
+          }
+          if (sibList && sibList.length > 0) {
+            sc = sibList.length;
+            for (let k = 0; k < sibList.length; k++) {
+              if (sibList[k] === element) { si = k + 1; break; }
+            }
+          }
+          const simplifySibCalc = (str) => {
+            let prev = "";
+            let cur = str;
+            for (let pass = 0; pass < 4 && cur !== prev; pass++) {
+              prev = cur;
+              cur = cur.replace(/calc\(\s*([^()]+?)\s*\)/gi, (_, inner) => {
+                let s = inner.trim();
+                s = s.replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))([a-z%]*)\s*\*\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+))([a-z%]*)/gi, (m, a, ua, b, ub) => {
+                  if (ua && ub) return m;
+                  const val = Number(a) * Number(b);
+                  return (Number.isFinite(val) ? String(Math.round(val * 1e6) / 1e6) : "0") + (ua || ub);
+                });
+                s = s.replace(/([+-]?(?:\d+(?:\.\d+)?|\.\d+))([a-z%]*)\s*\/\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+))/gi, (m, a, ua, b) => {
+                  const bn = Number(b);
+                  if (!bn) return m;
+                  const val = Number(a) / bn;
+                  return (Number.isFinite(val) ? String(Math.round(val * 1e6) / 1e6) : "0") + ua;
+                });
+                s = s.replace(/^([+-]?(?:\d+(?:\.\d+)?|\.\d+))([a-z%]*)\s*([+-])\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+))([a-z%]*)$/i, (m, a, ua, op, b, ub) => {
+                  if (ua !== ub) return m;
+                  const val = op === "+" ? Number(a) + Number(b) : Number(a) - Number(b);
+                  return (Number.isFinite(val) ? String(Math.round(val * 1e6) / 1e6) : "0") + ua;
+                });
+                if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)[a-z%]*$/i.test(s)) return s;
+                return "calc(" + s + ")";
+              });
+            }
+            return cur;
+          };
+          for (const [k, rawV] of computedMap.entries()) {
+            if (typeof rawV === "string" && /sibling-(?:index|count)\s*\(/i.test(rawV)) {
+              let nv = rawV.replace(/sibling-index\s*\(\s*\)/gi, String(si)).replace(/sibling-count\s*\(\s*\)/gi, String(sc));
+              nv = simplifySibCalc(nv);
+              computedMap.set(k, nv);
+            }
+          }
+        }
+      }
       if (normalizedPseudo) {
         const pFontSize = evalCssLengthExpr(computedMap.get("font-size") || "16px", 16, 16) || 16;
         for (const smProp of ["scroll-margin-top", "scroll-margin-right", "scroll-margin-bottom", "scroll-margin-left"]) {

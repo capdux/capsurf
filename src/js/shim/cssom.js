@@ -1213,9 +1213,12 @@
           const after = body[i + idM[0].length];
           if (after === "(") {
             if (!CALC_FUNCS.has(idLow)) return false;
-            if ((idLow === "sibling-index" || idLow === "sibling-count") && body[i + idM[0].length + 1] === ")") {
-              topAddTerms[topAddTerms.length - 1] += idM[0] + "()";
-              i += idM[0].length + 2;
+            if (idLow === "sibling-index" || idLow === "sibling-count") {
+              const afterOpen = body.slice(i + idM[0].length + 1);
+              const closeM = /^\s*\)/.exec(afterOpen);
+              if (!closeM) return false;
+              topAddTerms[topAddTerms.length - 1] += idLow + "()";
+              i += idM[0].length + 1 + closeM[0].length;
               expectVal = false;
               continue;
             }

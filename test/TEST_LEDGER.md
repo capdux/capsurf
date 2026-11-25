@@ -2505,3 +2505,4 @@
 | Phase 836 | SVG 矢量 `background-size` / `background-repeat` 与极端 `viewBox` 防溢出 | `src/css/cascade.cp`, `src/render/painter.cp`, `src/cdp/session.cp` | `css-backgrounds/background-size/vector/*` **205/206 PASS**; `--smoke` 3/3 PASS |
 | Phase 837 | 调色板 PNG (`PLTE`+`tRNS`, `1/2/4/8-bit`) 解码与 `paintPngBg` | `src/render/painter.cp` | `background-size-005..020` 全绿 (**35/79 PASS**); `--smoke` 3/3 PASS |
 | Phase 838 | `background-repeat: space \| round` (`computeBgAxisTiling`) | `src/css/cascade.cp`, `src/render/painter.cp` | `background-repeat-space-*` **10/12 PASS** (**12/23 PASS**); `--smoke` 3/3 PASS |
+| Phase 839 | `sibling-index()`/`sibling-count()` 全局求值与 `simplifySibCalc` | `src/js/shim/window.js`, `src/js/shim/cssom.js` | `css-values/tree-counting/` **10x `FAIL→PASS`**; `--smoke` 3/3 PASS |
