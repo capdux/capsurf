@@ -4642,3 +4642,5 @@
 - `src/css/cascade.cp`, `src/layout/layout.cp`: 解析 `contain` 全部关键字，为 `contain: layout/paint` 建立 `abs_cb_*` 与 `fixed_cb_*` 包含块、BFC 隔离及 `contain: layout` 基线抑制；补齐 `AlignItems.Baseline` 弹性行内基线对齐、BFC 跨块浮动清除追踪与非 BFC 首/末子元素外边距穿透折叠；通过 `cpc fix` + `cpc brief` 门禁，`contain-layout-dynamic-001.html` & `contain-paint-dynamic-001.html` **2/2 PASS**，`--smoke` 3/3 **PASS**。
 ### Phase 902 — `contain: size` / `inline-size` 内在尺寸归零
 - `src/layout/layout.cp`: 在 `getReplacedSizeWithStyle`、`measureIntrinsicWidth`、`measureMinContentWidth` 及 `layoutBlockChildren` shrink-to-fit / auto-height 中实现 `contain: size` / `inline-size` 内在尺寸归零；通过 `cpc fix` + `cpc brief` 门禁，`contain-size-dynamic-001.html` **PASS**，`contain-inline-size-replaced.html` 推进至 24/30 PASS，`--smoke` 3/3 **PASS**。
+### Phase 903 — `css-color` HWB、RGB 精度与 148 命名颜色补全
+- `src/js/shim/cssom.js`: 补齐 `NAMED_COLORS_MAP` 全量 148 个 CSS 命名颜色；`hwb()` 改走高精度 JS 路径并区分指定值（无 `%`）与计算值（有 `%`）；`color(...)` 与 `rgb(... none ...)` 序列化提升至 `toFixed(8)`；`isValidColor` 先解转义再校验；`color-valid-hwb.html`、`color-computed-hwb.html`、`color-computed-rgb.html` **3/3 PASS**，`--smoke` 3/3 **PASS**。

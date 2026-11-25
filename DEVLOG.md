@@ -3645,3 +3645,5 @@
 - 在 `cascade.cp` 与 `layout.cp` 实装 `contain: layout/paint` 对 `position: absolute/fixed` 的包含块拦截、`establishes_bfc` 隔离、`contain_layout` 基线抑制，同时补齐 `AlignItems.Baseline` 弹性基线对齐、同 BFC 跨块级元素浮动清除与非 BFC 首/末子元素外边距穿透折叠，一次性全绿通过 `contain-layout-dynamic-001.html` 与 `contain-paint-dynamic-001.html`。
 ### Phase 902 — `contain: size` / `inline-size` 尺寸遏制归零
 - 将 `contain_size` 与 `contain_inline_size` 接入替换元素内在尺寸计算、内在最小/最大宽度测量与 `layoutBlockChildren` shrink-to-fit / auto-height 路径，`contain-size-dynamic-001.html` 全绿通过，`contain-inline-size-replaced.html` 全部 `width=0` 断言通过。
+### Phase 903 — `color-valid-hwb`、`color-computed-hwb` 与 `color-computed-rgb` 全绿
+- 解决 `hwb(120 30% 50%)` 因底层 `toFixed` 舍入误差输出 `127` 而非 `128` 的问题，并通过 `normalizePropColors` 区分 `hwb(... none)` 指定值与计算值 `%` 序列化；将 `color(srgb ...)` 通道精度提升至 8 位小数，一次性通过 `color-valid-hwb`、`color-computed-hwb`、`color-computed-rgb` 三套测试。
