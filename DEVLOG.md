@@ -3631,3 +3631,5 @@
 - 在 `cascade.cp` 与 `layout.cp` 补全 `align-self` 解析与 `layoutFlexAbsChild` 覆盖计算，区分 `start`/`self-start` 与受 `wrap-reverse` 翻转的 `flex-start`，`align-self-{001,003,005,007}.html` 全部 96 项子测试通过。
 ### Phase 895 — `baseline` 逻辑对齐语义与 `align-self-001..008` 全绿
 - 修正 `AlignSelf.parse` 将 `baseline`/`last baseline` 归入 `FlexStart`/`FlexEnd` 导致在 `wrap-reverse` 容器中被镜像翻转的缺陷，改归 `Start`/`End` 后 `align-self-001..008.html` 全部 8 个文件 192 项子测试全绿。
+### Phase 896 — RTL 弹性盒绝对定位静态位置支持
+- 在 `layoutFlexAbsChild` 与 `justifyMainOffset` 补全 `Direction.Rtl` 对 `flex-start`/`flex-end`/`start`/`end` 的主轴与交叉轴镜像处理，`align-content-001` 与 5 项 RTL 静态位置测试（共 144 项子测试）一次通过。

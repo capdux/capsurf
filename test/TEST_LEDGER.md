@@ -2563,3 +2563,4 @@
 | Phase 893 | Flexbox `wrap-reverse` 交叉轴静态位置镜像 | `src/layout/layout.cp` | `flex-abspos-staticpos-justify-content-001..008` **8/8 (192/192) PASS**; `--smoke` 3/3 PASS |
 | Phase 894 | `AlignSelf` 枚举解析与 Flexbox `abspos` `align-self` 静态对齐 | `cascade.cp`, `layout.cp` | `flex-abspos-staticpos-align-self-{001,003,005,007}` (96/96 **PASS**); `--smoke` 3/3 PASS |
 | Phase 895 | `AlignSelf` `baseline` 逻辑对齐修正（`align-self-001..008` 全绿） | `src/css/cascade.cp` | `flex-abspos-staticpos-align-self-001..008` **8/8 (192/192) PASS**; `--smoke` 3/3 PASS |
+| Phase 896 | Flexbox RTL `direction: rtl` `abspos` 静态位置镜像 | `src/layout/layout.cp` | `align-content-001` & `*-rtl-*` **6/6 (144/144) PASS**; `--smoke` 3/3 PASS |

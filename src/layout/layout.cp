@@ -20,6 +20,7 @@ import {
     JustifyContent,
     AlignItems,
     AlignSelf,
+    Direction,
     BorderCollapse,
     CaptionSide,
     TableLayout,
@@ -4016,12 +4017,15 @@ pub struct LayoutTree {
         }
     }
 
-    static fn justifyMainOffset(jc: JustifyContent, is_row: bool, is_rev: bool, rem: f32): f32 {
+    static fn justifyMainOffset(jc: JustifyContent, is_row: bool, is_rev: bool, is_rtl: bool, rem: f32): f32 {
+        const is_main_rtl = is_row && is_rtl;
+        const is_eff_rev = (is_rev != is_main_rtl);
         return switch (jc) {
-            .FlexStart, .SpaceBetween => if (is_rev) rem else 0.0,
-            .FlexEnd => if (is_rev) 0.0 else rem,
-            .Start, .Left => 0.0,
-            .End => rem,
+            .FlexStart, .SpaceBetween => if (is_eff_rev) rem else 0.0,
+            .FlexEnd => if (is_eff_rev) 0.0 else rem,
+            .Start => if (is_main_rtl) rem else 0.0,
+            .End => if (is_main_rtl) 0.0 else rem,
+            .Left => 0.0,
             .Right => if (is_row) rem else 0.0,
             .Center, .SpaceAround, .SpaceEvenly => rem / 2.0,
         };
@@ -4049,10 +4053,13 @@ pub struct LayoutTree {
         const mb_w = abox.borderBoxWidth() + abox.marginHorizontal();
         const mb_h = abox.borderBoxHeight() + abox.marginVertical();
         const is_rev = (pstyle.flex_direction == FlexDirection.RowReverse || pstyle.flex_direction == FlexDirection.ColumnReverse);
+        const is_rtl = (pstyle.direction == Direction.Rtl);
         const rem_main = if (is_row) (container_w - mb_w) else (container_h - mb_h);
         const rem_cross = if (is_row) (container_h - mb_h) else (container_w - mb_w);
-        const main_off = LayoutTree.justifyMainOffset(pstyle.justify_content, is_row, is_rev, rem_main);
+        const main_off = LayoutTree.justifyMainOffset(pstyle.justify_content, is_row, is_rev, is_rtl, rem_main);
         const is_wrap_rev = (pstyle.flex_wrap == FlexWrap.WrapReverse);
+        const is_cross_rtl = (!is_row && is_rtl);
+        const is_cross_rev = (is_wrap_rev != is_cross_rtl);
         const eff_align: AlignSelf = switch (astyle.align_self) {
             .Auto => switch (pstyle.align_items) {
                 .Stretch => AlignSelf.Stretch,
@@ -4063,10 +4070,10 @@ pub struct LayoutTree {
             * => astyle.align_self,
         };
         const cross_off: f32 = switch (eff_align) {
-            .Auto, .FlexStart, .Stretch => if (is_wrap_rev) rem_cross else 0.0,
-            .FlexEnd => if (is_wrap_rev) 0.0 else rem_cross,
-            .Start => 0.0,
-            .End => rem_cross,
+            .Auto, .FlexStart, .Stretch => if (is_cross_rev) rem_cross else 0.0,
+            .FlexEnd => if (is_cross_rev) 0.0 else rem_cross,
+            .Start => if (is_cross_rtl) rem_cross else 0.0,
+            .End => if (is_cross_rtl) 0.0 else rem_cross,
             .Center => rem_cross / 2.0,
         };
         const sx = content_x + (if (is_row) main_off else cross_off);

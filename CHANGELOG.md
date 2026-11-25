@@ -4628,3 +4628,5 @@
 - `src/layout/layout.cp`: `layoutFlexAbsChild` 接入 `astyle.align_self` 覆盖 `pstyle.align_items`；通过 `cpc fix` + `cpc brief` 门禁，`flex-abspos-staticpos-align-self-{001,003,005,007}.html` **4/4 (96/96) PASS**，`--smoke` 3/3 **PASS**。
 ### Phase 895 — `align-self` `baseline`/`last baseline` 在 `wrap-reverse` 下的精确对齐
 - `src/css/cascade.cp`: `AlignSelf.parse` 将 `baseline`/`first baseline` 归入 `Start`、`last baseline` 归入 `End`；通过 `cpc fix` + `cpc brief` 门禁，`flex-abspos-staticpos-align-self-001..008.html` **8/8 (192/192) PASS**，`--smoke` 3/3 **PASS**。
+### Phase 896 — Flexbox RTL `direction: rtl` 绝对定位静态位置镜像
+- `src/layout/layout.cp`: `justifyMainOffset` 与 `layoutFlexAbsChild` 引入 `Direction.Rtl` 主轴/交叉轴镜像逻辑，区分随 `rtl` 翻转的 `start`/`end` 与不翻转的 `left`/`right`；通过 `cpc fix` + `cpc brief` 门禁，`align-content-001`、`align-self-rtl-{001..003}`、`justify-content-rtl-{001,002}` **6/6 PASS**，`--smoke` 3/3 **PASS**。
