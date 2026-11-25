@@ -4457,3 +4457,6 @@
   - `src/render/painter.cp`: 新增 `readWptAssetLocal`、`computeBgSvgTileSize`、`paintImgSvgBg`，升级 `paintSvgContainerRef`/`paintSvgChildrenDirect` 支持非等比缩放 (`scale_x`/`scale_y`)、`<rect>` 百分比属性、零 `viewBox` 保护与极端 `viewBox` 裁剪防溢出。
 - **Phase 837**:
   - `src/render/painter.cp`: 抽取 `computeBgTileSize`、新增 `loadBgPngBytesWithDoc` 与 `paintPngBg`；`decodePngAnyToRgba` 支持 `1/2/4/8-bit` `PLTE`+`tRNS` 调色板 PNG 解码。
+- **Phase 838**:
+  - `src/css/cascade.cp`: 新增 `BgRepeatMode` (`Repeat`/`NoRepeat`/`Space`/`Round`) 与双值 `background-repeat` 解析。
+  - `src/render/painter.cp`: 新增 `computeBgAxisTiling`，统一为 `paintImgSvgBg` 与 `paintPngBg` 实现 `space`/`round` 平铺。

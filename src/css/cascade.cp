@@ -1344,6 +1344,22 @@ pub struct ObjectViewBox {
     }
 }
 
+pub enum BgRepeatMode {
+    Repeat,
+    NoRepeat,
+    Space,
+    Round,
+
+    static fn parseSingle(raw: []const u8): BgRepeatMode? {
+        const s = std.mem.trim(u8, raw, " \t\r\n");
+        if (std.ascii.eqlIgnoreCase(s, "repeat")) return BgRepeatMode.Repeat;
+        if (std.ascii.eqlIgnoreCase(s, "no-repeat")) return BgRepeatMode.NoRepeat;
+        if (std.ascii.eqlIgnoreCase(s, "space")) return BgRepeatMode.Space;
+        if (std.ascii.eqlIgnoreCase(s, "round")) return BgRepeatMode.Round;
+        return null;
+    }
+}
+
 pub enum ObjectFit {
     Fill,
     Contain,
@@ -2433,8 +2449,8 @@ pub struct ComputedStyle {
     bg_size_w_val: f32 = 0.0;
     bg_size_h_kind: u8 = 0;
     bg_size_h_val: f32 = 0.0;
-    bg_repeat_x: bool = true;
-    bg_repeat_y: bool = true;
+    bg_repeat_x: BgRepeatMode = BgRepeatMode.Repeat;
+    bg_repeat_y: BgRepeatMode = BgRepeatMode.Repeat;
     bg_pos: ObjectPos = ObjectPos { x_pct: 0.0, x_px: 0.0, y_pct: 0.0, y_px: 0.0 };
     object_fit: ObjectFit = ObjectFit.Fill;
     object_pos: ObjectPos = ObjectPos {};
@@ -4631,18 +4647,24 @@ pub struct ComputedStyle {
         if (std.ascii.eqlIgnoreCase(name, "background-repeat")) {
             if (_.tryClaimSlot(PROP_BG_REPEAT, weight)) {
                 const tr = std.mem.trim(u8, val, " \t\r\n");
-                if (std.ascii.eqlIgnoreCase(tr, "no-repeat")) {
-                    _.bg_repeat_x = false;
-                    _.bg_repeat_y = false;
-                } else if (std.ascii.eqlIgnoreCase(tr, "repeat-x")) {
-                    _.bg_repeat_x = true;
-                    _.bg_repeat_y = false;
+                if (std.ascii.eqlIgnoreCase(tr, "repeat-x")) {
+                    _.bg_repeat_x = BgRepeatMode.Repeat;
+                    _.bg_repeat_y = BgRepeatMode.NoRepeat;
                 } else if (std.ascii.eqlIgnoreCase(tr, "repeat-y")) {
-                    _.bg_repeat_x = false;
-                    _.bg_repeat_y = true;
-                } else if (std.ascii.eqlIgnoreCase(tr, "repeat")) {
-                    _.bg_repeat_x = true;
-                    _.bg_repeat_y = true;
+                    _.bg_repeat_x = BgRepeatMode.NoRepeat;
+                    _.bg_repeat_y = BgRepeatMode.Repeat;
+                } else {
+                    let rit = std.mem.tokenizeAny(u8, tr, " \t\r\n");
+                    if (r0 := rit.next()) {
+                        if (m0 := BgRepeatMode.parseSingle(r0)) {
+                            _.bg_repeat_x = m0;
+                            if (r1 := rit.next()) {
+                                _.bg_repeat_y = BgRepeatMode.parseSingle(r1) ?? m0;
+                            } else {
+                                _.bg_repeat_y = m0;
+                            }
+                        }
+                    }
                 }
             }
             return;

@@ -2,7 +2,7 @@
 // CapSurf 2D Software Rasterizer & Screenshot Entrypoint (Milestone 5)
 
 import { Document, NodeData, NodeType, NodeId, NULL_NODE } from "../dom/dom.cp";
-import { ComputedStyle, ResolvedPaintStyle, CssPosition, CornerShape, Visibility, BgGradientKind, FloatMode, ListStyleType, ListStylePosition, ObjectFit, BgSizeKeyword, ObjectPos, ObjectViewBox, ObjectViewBoxRect, formatListMarker } from "../css/cascade.cp";
+import { ComputedStyle, ResolvedPaintStyle, CssPosition, CornerShape, Visibility, BgGradientKind, FloatMode, ListStyleType, ListStylePosition, ObjectFit, BgSizeKeyword, BgRepeatMode, ObjectPos, ObjectViewBox, ObjectViewBoxRect, formatListMarker } from "../css/cascade.cp";
 import {
     Direction,
     UnicodeBidi,
@@ -2303,6 +2303,54 @@ fn computeBgSvgTileSize(
     return computeBgTileSize(box_w, box_h, nat_w, nat_h, has_nat_w, has_nat_h, ratio, fit, w_kind, w_val, h_kind, h_val);
 }
 
+const BgAxisTiling = struct {
+    tile_len: f32,
+    start: f32,
+    step: f32,
+    count: usize,
+};
+
+fn computeBgAxisTiling(area_origin: f32, area_len: f32, raw_tile_len: f32, pos_pct: f32, pos_px: f32, mode: BgRepeatMode): BgAxisTiling {
+    if (raw_tile_len <= 0.0 || area_len <= 0.0) {
+        return BgAxisTiling { tile_len: raw_tile_len, start: area_origin, step: raw_tile_len, count: 0 };
+    }
+    switch (mode) {
+        .NoRepeat => {
+            const st = area_origin + (area_len - raw_tile_len) * pos_pct + pos_px;
+            return BgAxisTiling { tile_len: raw_tile_len, start: st, step: raw_tile_len, count: 1 };
+        },
+        .Round => {
+            const n = @max(1.0, @round(area_len / raw_tile_len));
+            const new_len = area_len / n;
+            const cnt = @min(@as(usize, @intFromFloat(n)), 256);
+            return BgAxisTiling { tile_len: new_len, start: area_origin, step: new_len, count: cnt };
+        },
+        .Space => {
+            const n = @floor(area_len / raw_tile_len);
+            if (n < 1.0) {
+                return BgAxisTiling { tile_len: raw_tile_len, start: area_origin, step: raw_tile_len, count: 0 };
+            }
+            if (n < 2.0) {
+                const st = area_origin + (area_len - raw_tile_len) * pos_pct + pos_px;
+                return BgAxisTiling { tile_len: raw_tile_len, start: st, step: raw_tile_len, count: 1 };
+            }
+            const gap = (area_len - n * raw_tile_len) / (n - 1.0);
+            const cnt = @min(@as(usize, @intFromFloat(n)), 256);
+            return BgAxisTiling { tile_len: raw_tile_len, start: area_origin, step: raw_tile_len + gap, count: cnt };
+        },
+        .Repeat => {
+            let st = area_origin + (area_len - raw_tile_len) * pos_pct + pos_px;
+            let guard: usize = 0;
+            while (st > area_origin && guard < 256) : (guard += 1) {
+                st -= raw_tile_len;
+            }
+            const span = (area_origin + area_len) - st;
+            const cnt = if (span > 0.0) @min(@as(usize, @intFromFloat(@ceil(span / raw_tile_len))), 256) else 0;
+            return BgAxisTiling { tile_len: raw_tile_len, start: st, step: raw_tile_len, count: cnt };
+        },
+    }
+}
+
 fn paintImgSvgBg(
     canvas: *Canvas,
     allocator: std.mem.Allocator,
@@ -2316,8 +2364,8 @@ fn paintImgSvgBg(
     w_val: f32,
     h_kind: u8,
     h_val: f32,
-    repeat_x: bool,
-    repeat_y: bool,
+    repeat_x: BgRepeatMode,
+    repeat_y: BgRepeatMode,
     is_img_elem: bool,
 ) {
     let file_buf: [65536]u8 = undefined;
@@ -2356,32 +2404,16 @@ fn paintImgSvgBg(
         return;
     }
 
-    const base_x = box_rect.x + (box_rect.width - tile.width) * pos.x_pct + pos.x_px;
-    const base_y = box_rect.y + (box_rect.height - tile.height) * pos.y_pct + pos.y_px;
-    if (!repeat_x && !repeat_y) {
-        paintSvgContainerRef(canvas, &svg_doc, null, svg_root, base_x, base_y, tile.width, tile.height, CssColor.rgb(0, 0, 0), CssColor.rgb(0, 0, 0), img_clip, 0);
-        return;
-    }
-    let start_x = base_x;
-    if (repeat_x) {
-        while (start_x > box_rect.x) : (start_x -= tile.width) {}
-    }
-    let start_y = base_y;
-    if (repeat_y) {
-        while (start_y > box_rect.y) : (start_y -= tile.height) {}
-    }
-    let ty = start_y;
-    let y_guard: usize = 0;
-    while (ty < box_rect.y + box_rect.height && y_guard < 128) : (y_guard += 1) {
-        let tx = start_x;
-        let x_guard: usize = 0;
-        while (tx < box_rect.x + box_rect.width && x_guard < 128) : (x_guard += 1) {
-            paintSvgContainerRef(canvas, &svg_doc, null, svg_root, tx, ty, tile.width, tile.height, CssColor.rgb(0, 0, 0), CssColor.rgb(0, 0, 0), img_clip, 0);
-            if (!repeat_x) break;
-            tx += tile.width;
+    const tx_info = computeBgAxisTiling(box_rect.x, box_rect.width, tile.width, pos.x_pct, pos.x_px, repeat_x);
+    const ty_info = computeBgAxisTiling(box_rect.y, box_rect.height, tile.height, pos.y_pct, pos.y_px, repeat_y);
+    let yi: usize = 0;
+    while (yi < ty_info.count) : (yi += 1) {
+        const ty = ty_info.start + @as(f32, @floatFromInt(yi)) * ty_info.step;
+        let xi: usize = 0;
+        while (xi < tx_info.count) : (xi += 1) {
+            const tx = tx_info.start + @as(f32, @floatFromInt(xi)) * tx_info.step;
+            paintSvgContainerRef(canvas, &svg_doc, null, svg_root, tx, ty, tx_info.tile_len, ty_info.tile_len, CssColor.rgb(0, 0, 0), CssColor.rgb(0, 0, 0), img_clip, 0);
         }
-        if (!repeat_y) break;
-        ty += tile.height;
     }
 }
 
@@ -2392,7 +2424,7 @@ fn paintImgSvg(
     img_rect: Rect,
     parent_clip: ClipRect?,
 ) {
-    paintImgSvgBg(canvas, allocator, src, "", img_rect, parent_clip, ObjectFit.Fill, ObjectPos{}, 0, 0.0, 0, 0.0, false, false, true);
+    paintImgSvgBg(canvas, allocator, src, "", img_rect, parent_clip, ObjectFit.Fill, ObjectPos{}, 0, 0.0, 0, 0.0, BgRepeatMode.NoRepeat, BgRepeatMode.NoRepeat, true);
 }
 
 pub fn loadBgPngBytes(src: []const u8, out_buf: []u8): ([]const u8)? {
@@ -2743,8 +2775,8 @@ fn paintPngBg(
     w_val: f32,
     h_kind: u8,
     h_val: f32,
-    repeat_x: bool,
-    repeat_y: bool,
+    repeat_x: BgRepeatMode,
+    repeat_y: BgRepeatMode,
 ) {
     if (!box_rect.visible || box_rect.width <= 0.0 || box_rect.height <= 0.0 || src.len == 0) return;
     const file_buf = allocator.alloc(u8, 65536) catch return;
@@ -2761,34 +2793,18 @@ fn paintPngBg(
     const tile = computeBgTileSize(box_rect.width, box_rect.height, nw, nh, true, true, nw / nh, fit, w_kind, w_val, h_kind, h_val);
     if (!std.math.isFinite(tile.width) || !std.math.isFinite(tile.height) || tile.width <= 0.0 || tile.height <= 0.0) return;
     const clip_box = intersectBoxClip(box_rect, parent_clip);
-    const dst_w = @as(u32, @intFromFloat(@max(1.0, @round(tile.width))));
-    const dst_h = @as(u32, @intFromFloat(@max(1.0, @round(tile.height))));
-    const base_x = box_rect.x + (box_rect.width - tile.width) * pos.x_pct + pos.x_px;
-    const base_y = box_rect.y + (box_rect.height - tile.height) * pos.y_pct + pos.y_px;
-    if (!repeat_x && !repeat_y) {
-        canvas.blitScaledRgbaClipped(@as(i32, @intFromFloat(@floor(base_x))), @as(i32, @intFromFloat(@floor(base_y))), dst_w, dst_h, rgba, img_w, img_h, clip_box);
-        return;
-    }
-    let start_x = base_x;
-    if (repeat_x) {
-        while (start_x > box_rect.x) : (start_x -= tile.width) {}
-    }
-    let start_y = base_y;
-    if (repeat_y) {
-        while (start_y > box_rect.y) : (start_y -= tile.height) {}
-    }
-    let ty = start_y;
-    let y_guard: usize = 0;
-    while (ty < box_rect.y + box_rect.height && y_guard < 128) : (y_guard += 1) {
-        let tx = start_x;
-        let x_guard: usize = 0;
-        while (tx < box_rect.x + box_rect.width && x_guard < 128) : (x_guard += 1) {
+    const tx_info = computeBgAxisTiling(box_rect.x, box_rect.width, tile.width, pos.x_pct, pos.x_px, repeat_x);
+    const ty_info = computeBgAxisTiling(box_rect.y, box_rect.height, tile.height, pos.y_pct, pos.y_px, repeat_y);
+    const dst_w = @as(u32, @intFromFloat(@max(1.0, @round(tx_info.tile_len))));
+    const dst_h = @as(u32, @intFromFloat(@max(1.0, @round(ty_info.tile_len))));
+    let yi: usize = 0;
+    while (yi < ty_info.count) : (yi += 1) {
+        const ty = ty_info.start + @as(f32, @floatFromInt(yi)) * ty_info.step;
+        let xi: usize = 0;
+        while (xi < tx_info.count) : (xi += 1) {
+            const tx = tx_info.start + @as(f32, @floatFromInt(xi)) * tx_info.step;
             canvas.blitScaledRgbaClipped(@as(i32, @intFromFloat(@floor(tx))), @as(i32, @intFromFloat(@floor(ty))), dst_w, dst_h, rgba, img_w, img_h, clip_box);
-            if (!repeat_x) break;
-            tx += tile.width;
         }
-        if (!repeat_y) break;
-        ty += tile.height;
     }
 }
 
@@ -3536,7 +3552,7 @@ fn paintNodeRecursive(
             if (src := node.getAttribute("src")) {
                 const content_rect = computeNodeContentRect(r, style, effective_paint_style, vw, vh);
                 if (std.mem.startsWith(u8, src, "data:image/svg+xml") || std.mem.indexOf(u8, src, ".svg") != null) {
-                    paintImgSvgBg(canvas, canvas.allocator, src, opts.doc_url, content_rect, active_clip, style.object_fit, style.object_pos, 0, 0.0, 0, 0.0, false, false, true);
+                    paintImgSvgBg(canvas, canvas.allocator, src, opts.doc_url, content_rect, active_clip, style.object_fit, style.object_pos, 0, 0.0, 0, 0.0, BgRepeatMode.NoRepeat, BgRepeatMode.NoRepeat, true);
                 } else {
                     paintBackgroundImage(canvas, canvas.allocator, src, opts.doc_url, content_rect, active_clip, style.object_fit, style.object_pos, style.object_view_box);
                 }
