@@ -3564,3 +3564,5 @@
 - 将 `writing-mode`/`direction`/`unicode-bidi`/`float`/`clear`/`object-fit` 校验收口至 `cap:css` (`layoutctrl.cp`) 并全量通过 8 项对应 WPT 解析测试，累计已有 **53 个** CSSOM 高频语法校验/求值/序列化入口完成 `cap:css` 下沉。
 ### Phase 862 — `contain` / `content-visibility` / `isolation` / `mix-blend-mode` 下沉 `cap:css`
 - 将 `contain`/`content-visibility`/`isolation`/`mix-blend-mode` 校验收口至 `cap:css` (`containProp.cp`) 并全量通过 6 项对应 WPT 解析测试，累计已有 **57 个** CSSOM 高频语法校验/求值/序列化入口完成 `cap:css` 下沉。
+### Phase 863 — 原生 CSS 变量多段 `var()` 替换、`!important` 级联优先序与计算值失效回退
+- 攻克 `/css/css-variables/` 大规模同源失败聚类：修复 `stylesheet.cp` 纯空白自定义属性丢弃、`cascade.cp` 单值 `var()` 限制、相邻 `var()` 拼接、`--* !important` 滞后覆盖及 `color` 计算值失效回退 `inherited_color`，`variable-reference` 批量转绿。

@@ -2415,6 +2415,7 @@ pub struct ComputedStyle {
     counter_inc_val: i32 = 1,
     font_weight: f32 = 400.0,
     color: CssColor = CssColor.rgb(0, 0, 0);
+    inherited_color: CssColor = CssColor.rgb(0, 0, 0);
     text_fill_color: CssColor = CssColor.rgba(0, 0, 0, 0);
     has_text_fill_color: bool = false;
     text_decoration_underline: bool = false;
@@ -2743,6 +2744,7 @@ pub struct ComputedStyle {
                 _.line_height_px = p.line_height_px;
             }
             _.color = p.color;
+            _.inherited_color = p.color;
             _.color_scheme = p.color_scheme;
             _.text_fill_color = p.text_fill_color;
             _.has_text_fill_color = p.has_text_fill_color;
@@ -2973,6 +2975,132 @@ pub struct ComputedStyle {
         return null;
     }
 
+    static fn hasVarCallIgnoreCase(raw: []const u8): bool {
+        if (raw.len < 4) return false;
+        let i: usize = 0;
+        while (i + 4 <= raw.len) : (i += 1) {
+            if (std.ascii.eqlIgnoreCase(raw[i .. i + 4], "var(")) return true;
+        }
+        return false;
+    }
+
+    fn resolveVarExprBuf(
+        raw: []const u8,
+        out_buf: []u8,
+        syntax_invalid: *bool,
+        computed_invalid: *bool,
+    ): []const u8 {
+        syntax_invalid.* = false;
+        computed_invalid.* = false;
+        if (!ComputedStyle.hasVarCallIgnoreCase(raw)) {
+            return std.mem.trim(u8, raw, " \t\r\n");
+        }
+        let work_a: [1024]u8 = undefined;
+        let work_b: [1024]u8 = undefined;
+        let cur_len: usize = @min(raw.len, work_a.len);
+        @memcpy(work_a[0..cur_len], raw[0..cur_len]);
+        let use_a = true;
+        let pass: u32 = 0;
+        while (pass < 8) : (pass += 1) {
+            const cur = if (use_a) work_a[0..cur_len] else work_b[0..cur_len];
+            let dst = if (use_a) work_b[0..] else work_a[0..];
+            let out_len: usize = 0;
+            let i: usize = 0;
+            let replaced = false;
+            while (i < cur.len) {
+                if (i + 4 <= cur.len && std.ascii.eqlIgnoreCase(cur[i .. i + 4], "var(")) {
+                    let depth: i32 = 1;
+                    let j: usize = i + 4;
+                    let in_sq = false;
+                    let in_dq = false;
+                    while (j < cur.len && depth > 0) : (j += 1) {
+                        const c = cur[j];
+                        if (in_sq) {
+                            if (c == '\\' && j + 1 < cur.len) { j += 1; continue; }
+                            if (c == '\'') in_sq = false;
+                            continue;
+                        }
+                        if (in_dq) {
+                            if (c == '\\' && j + 1 < cur.len) { j += 1; continue; }
+                            if (c == '"') in_dq = false;
+                            continue;
+                        }
+                        if (c == '\'') { in_sq = true; continue; }
+                        if (c == '"') { in_dq = true; continue; }
+                        if (c == '(') depth += 1;
+                        else if (c == ')') depth -= 1;
+                    }
+                    if (depth != 0) {
+                        syntax_invalid.* = true;
+                        return "";
+                    }
+                    const inner = cur[i + 4 .. j - 1];
+                    if (!ComputedStyle.isValidVarCall(inner)) {
+                        syntax_invalid.* = true;
+                        return "";
+                    }
+                    // Find top-level comma
+                    let cdepth: i32 = 0;
+                    let c_sq = false;
+                    let c_dq = false;
+                    let comma_idx: usize? = null;
+                    let k: usize = 0;
+                    while (k < inner.len) : (k += 1) {
+                        const ch = inner[k];
+                        if (c_sq) {
+                            if (ch == '\\' && k + 1 < inner.len) { k += 1; continue; }
+                            if (ch == '\'') c_sq = false;
+                            continue;
+                        }
+                        if (c_dq) {
+                            if (ch == '\\' && k + 1 < inner.len) { k += 1; continue; }
+                            if (ch == '"') c_dq = false;
+                            continue;
+                        }
+                        if (ch == '\'') { c_sq = true; continue; }
+                        if (ch == '"') { c_dq = true; continue; }
+                        if (ch == '(' || ch == '[' || ch == '{') cdepth += 1;
+                        else if (ch == ')' || ch == ']' || ch == '}') { if (cdepth > 0) cdepth -= 1; }
+                        else if (ch == ',' && cdepth == 0) { comma_idx = k; break; }
+                    }
+                    const var_name = std.mem.trim(u8, if (comma_idx != null) inner[0..comma_idx.?] else inner, " \t\r\n");
+                    let sub_val: []const u8 = "";
+                    if (resolved := _.getCustomProp(var_name)) {
+                        sub_val = resolved;
+                    } else if (comma_idx != null) {
+                        sub_val = inner[comma_idx.? + 1 ..];
+                    } else {
+                        computed_invalid.* = true;
+                        return "";
+                    }
+                    const take = @min(sub_val.len, dst.len - out_len);
+                    @memcpy(dst[out_len .. out_len + take], sub_val[0..take]);
+                    out_len += take;
+                    if (j + 4 <= cur.len && std.ascii.eqlIgnoreCase(cur[j .. j + 4], "var(") && out_len < dst.len) {
+                        dst[out_len] = ' ';
+                        out_len += 1;
+                    }
+                    i = j;
+                    replaced = true;
+                } else {
+                    if (out_len < dst.len) {
+                        dst[out_len] = cur[i];
+                        out_len += 1;
+                    }
+                    i += 1;
+                }
+            }
+            cur_len = out_len;
+            use_a = !use_a;
+            if (!replaced) break;
+        }
+        const final_slice = if (use_a) work_a[0..cur_len] else work_b[0..cur_len];
+        const trimmed = std.mem.trim(u8, final_slice, " \t\r\n");
+        const take_out = @min(trimmed.len, out_buf.len);
+        @memcpy(out_buf[0..take_out], trimmed[0..take_out]);
+        return out_buf[0..take_out];
+    }
+
     fn resolveVarValue(raw: []const u8): []const u8 {
         let cur = std.mem.trim(u8, raw, " \t\r\n");
         let depth: u32 = 0;
@@ -3138,7 +3266,20 @@ pub struct ComputedStyle {
             return;
         }
         const name = canonicalizeCssPropertyName(raw_name);
-        const val = _.resolveVarValue(prop.value);
+        let var_buf: [1024]u8 = undefined;
+        let var_syntax_invalid = false;
+        let var_computed_invalid = false;
+        const val = _.resolveVarExprBuf(prop.value, &var_buf, &var_syntax_invalid, &var_computed_invalid);
+        if (var_syntax_invalid) return;
+        if (var_computed_invalid) {
+            if (std.ascii.eqlIgnoreCase(name, "color")) {
+                if (_.tryClaimSlot(PROP_COLOR, weight)) {
+                    _.has_color_light_dark = false;
+                    _.color = _.inherited_color;
+                }
+            }
+            return;
+        }
 
         if (std.ascii.eqlIgnoreCase(name, "display")) {
             if (d := Display.parse(val)) {
@@ -4497,6 +4638,11 @@ pub struct ComputedStyle {
                 if (_.tryClaimSlot(PROP_COLOR, weight)) {
                     _.has_color_light_dark = false;
                     _.color = c;
+                }
+            } else if (ComputedStyle.hasVarCallIgnoreCase(prop.value)) {
+                if (_.tryClaimSlot(PROP_COLOR, weight)) {
+                    _.has_color_light_dark = false;
+                    _.color = _.inherited_color;
                 }
             }
             return;
@@ -5862,19 +6008,42 @@ pub struct Cascade {
                     continue;
                 }
                 if (best_spec := Matcher.matchBestSpecificity(doc, node_id_u32, &rule.selectors)) {
+                    // Pass 1: custom properties (--*) before regular properties so var() sees final cascaded values
+                    let cd_i: usize = 0;
+                    while (cd_i < rule.decl_count) : (cd_i += 1) {
+                        const dname = std.mem.trim(u8, rule.declarations[cd_i].name, " \t\r\n");
+                        if (std.mem.startsWith(u8, dname, "--")) {
+                            const w = Cascade.packWeight(false, false, best_spec, source_order + @as(u32, @intCast(cd_i)));
+                            style.applyProperty(&rule.declarations[cd_i], w, root_font_px);
+                        }
+                    }
+                    let cimp_i: usize = 0;
+                    while (cimp_i < rule.important_count) : (cimp_i += 1) {
+                        const iname = std.mem.trim(u8, rule.important_declarations[cimp_i].name, " \t\r\n");
+                        if (std.mem.startsWith(u8, iname, "--")) {
+                            const w = Cascade.packWeight(true, false, best_spec, source_order + @as(u32, @intCast(rule.decl_count + cimp_i)));
+                            style.applyProperty(&rule.important_declarations[cimp_i], w, root_font_px);
+                        }
+                    }
                     // Normal declarations
                     let d_i: usize = 0;
                     while (d_i < rule.decl_count) : (d_i += 1) {
                         const w = Cascade.packWeight(false, false, best_spec, source_order);
                         source_order += 1;
-                        style.applyProperty(&rule.declarations[d_i], w, root_font_px);
+                        const dname = std.mem.trim(u8, rule.declarations[d_i].name, " \t\r\n");
+                        if (!std.mem.startsWith(u8, dname, "--")) {
+                            style.applyProperty(&rule.declarations[d_i], w, root_font_px);
+                        }
                     }
                     // !important declarations
                     let imp_i: usize = 0;
                     while (imp_i < rule.important_count) : (imp_i += 1) {
                         const w = Cascade.packWeight(true, false, best_spec, source_order);
                         source_order += 1;
-                        style.applyProperty(&rule.important_declarations[imp_i], w, root_font_px);
+                        const iname = std.mem.trim(u8, rule.important_declarations[imp_i].name, " \t\r\n");
+                        if (!std.mem.startsWith(u8, iname, "--")) {
+                            style.applyProperty(&rule.important_declarations[imp_i], w, root_font_px);
+                        }
                     }
                 }
             }

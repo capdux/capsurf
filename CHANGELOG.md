@@ -4535,3 +4535,6 @@
 ### Phase 862 — `contain` / `content-visibility` / `isolation` / `mix-blend-mode` 下沉 `cap:css`
 - `/data/dev/cp/lib/css/{containProp,index}.cp`: 新增并导出 `isValidCssContainValue`、`isValidCssContentVisibilityValue`、`isValidCssIsolationValue`、`isValidCssMixBlendModeValue`。
 - `src/js/dom_binding.cp` & `src/js/shim/cssom.js`: 暴露并接入全部 4 个原生校验器，6 项 WPT 解析测试 **6/6 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 863 — 原生 CSS 变量多段 `var()` 替换、`!important` 级联优先序与计算值失效回退
+- `/data/dev/cp/lib/css/stylesheet.cp`: 保留 `--b: ;` 纯空白自定义属性值。
+- `src/css/cascade.cp`: 新增 `resolveVarExprBuf` 支持多段/相邻 `var()` 替换与语法校验，`Cascade.resolve` 两遍级联确保 `--*`（含 `!important`）先于常规属性求值，`color` 计算值失效时回退 `inherited_color`；`variable-reference-01..11,13..15` **14/14 PASS**，`--smoke` 3/3 **PASS**。

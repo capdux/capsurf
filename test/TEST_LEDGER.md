@@ -2529,3 +2529,4 @@
 | Phase 860 | `list-style-position`/`list-style-type` 下沉 `cap:css` | `liststyle.cp`, `dom_binding.cp`, `cssom.js` | `list-style-{position,type}-*` **4/4 PASS**; `--smoke` 3/3 PASS |
 | Phase 861 | `writing-mode`/`direction`/`unicode-bidi`/`float`/`clear`/`object-fit` 下沉 `cap:css` | `layoutctrl.cp`, `dom_binding.cp`, `cssom.js` | `writing-mode-*`, `direction-*`, `unicode-bidi-*`, `object-fit-*` **8/8 PASS**; `--smoke` 3/3 PASS |
 | Phase 862 | `contain`/`content-visibility`/`isolation`/`mix-blend-mode` 下沉 `cap:css` | `containProp.cp`, `dom_binding.cp`, `cssom.js` | `contain-*`, `isolation-*`, `mix-blend-mode-*` **6/6 PASS**; `--smoke` 3/3 PASS |
+| Phase 863 | 原生 CSS 变量多段 `var()` / `!important` 级联 / 失效回退 | `stylesheet.cp`, `src/css/cascade.cp` | `variable-reference-01..11,13..15` **14/14 PASS**; `--smoke` 3/3 PASS |
