@@ -7368,7 +7368,7 @@
         if (context !== "page" && (rawName.toLowerCase() === "size" || rawName.toLowerCase() === "page-orientation")) {
           continue;
         }
-        const key = rawName.startsWith("--") ? rawName : rawName.toLowerCase();
+        const key = rawName.startsWith("--") ? rawName : lowerName;
         if (key === "--") continue;
         if (!key.startsWith("--") && /[{}]/.test(val) && !/(?:^|[^a-z0-9_-])var\(/i.test(val)) continue;
         if ((context === "page" || context === "margin") && (key === "margin" || key === "padding")) {
@@ -7385,7 +7385,7 @@
         if (!data.has(key)) {
           authoredOrder.push(key);
         }
-        data.set(key, { name: rawName, value: val, priority: priority });
+        data.set(key, { name: key === "appearance" ? "appearance" : rawName, value: val, priority: priority });
       }
     }
 

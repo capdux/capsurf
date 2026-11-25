@@ -14,7 +14,6 @@ const STYLE_LEGACY_ALIASES = {
   "grid-gap": "gap",
   "-webkit-border-radius": "border-radius",
   "-webkit-appearance": "appearance",
-  "webkitappearance": "appearance",
 };
 
 const BG_LONGHANDS = [
@@ -343,7 +342,7 @@ function createStyleProxy(element) {
     if (p === "cssFloat") return "float";
     let body = p;
     let prefix = "";
-    if (p.startsWith("webkit")) {
+    if (p.startsWith("webkit") || p.startsWith("Webkit")) {
       prefix = "-webkit-";
       body = p.slice(6);
     } else if (p.startsWith("Moz")) {

@@ -2434,3 +2434,4 @@
 | Phase 765 | 二八分层 CSS 下沉 Batch 1：`cap:css` MediaQuery/Color 桥接与 `color.cp` alpha 修复 | `src/js/dom_binding.cp`, `src/js/shim/window.js`, `/data/dev/cp/lib/css/color.cp` | `cpc brief` PASS; `--smoke` 3/3 PASS |
 | Phase 766 | 二八分层 CSS 下沉 Batch 2：`SupportsTree` 与 `MediaQueryList` 接管 `cascade.cp` | `src/css/cascade.cp`, `/data/dev/cp/lib/css/media.cp` | `at-media-001.html` **PASS**; `cpc brief` PASS; `--smoke` 3/3 PASS |
 | Phase 767 | `@media (unknown)` / `not (unknown)` 三值逻辑与 `media.cp` `and(` 修复 | `src/css/cascade.cp`, `/data/dev/cp/lib/css/media.cp` | `at-media-001`, `at-media-002` **PASS**; `--smoke` 3/3 PASS |
+| Phase 768 | WPT `/css/css-ui/` 9 项 (`user-modify` 屏蔽、`@supports` 过滤、`-webkit-appearance`) 全部 PASS | `src/css/cascade.cp`, `src/js/shim/window.js`, `src/js/shim/element/element.js`, `src/js/shim/cssom.js` | `{user,moz-user,webkit-user}-modify-{01,03}`, `webkit-appearance-{parsing,property,serialization}` **9/9 PASS**; `--smoke` 3/3 PASS |

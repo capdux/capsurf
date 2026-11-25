@@ -5881,6 +5881,11 @@ function installWindow(global) {
   function parseDeclarationsBlockInto(element, declBlock, computedMap, impFilter, prevLayerSnapshot) {
     const impSet = computedMap._importantKeys || (computedMap._importantKeys = new Set());
     function setDecl(k, v, isImp) {
+      if (!k.startsWith("--") && typeof globalThis !== "undefined" &&
+          typeof globalThis.__isCssPropertySupported === "function" &&
+          !globalThis.__isCssPropertySupported(k)) {
+        return;
+      }
       if (!isImp && impSet.has(k)) return;
       computedMap.set(k, v);
       if (isImp) impSet.add(k);

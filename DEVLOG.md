@@ -3374,3 +3374,5 @@
 - 移除 `cascade.cp` 中手写的 `@supports` 递归条件解析，统一切换为 `cap:css` `SupportsTree.parse` + `.eval`；同时将 `CssRuleKind.Media` 接入 `cap:css` `MediaQueryList.parse` + `MediaEnv.evaluate`，并在 `/data/dev/cp/lib/css/media.cp` 补齐 `MediaType.unknown` 变体，使 `@media not unknown`（`at-media-001.html`）通过。
 ### Phase 767 — `@media (unknown)` / `not (unknown)` 三值逻辑与 `media.cp` `and(` 修复
 - 收紧 `cascade.cp` 中 `MediaQueryList.parse` 失败回退条件，避免未知媒体特性误回退到旧逻辑返回 `true`，使 `at-media-001.html` 与 `at-media-002.html` 均通过；同时完善 `/data/dev/cp/lib/css/media.cp` 支持 `and(` 无空格语法。
+### Phase 768 — `/css/css-ui/` 9 项（`user-modify` 屏蔽、`@supports` 过滤、`-webkit-appearance` 别名规范化）全绿
+- 修复 `window.js` `@supports` 块未求值及不支持属性泄漏到 `getComputedStyle` 的问题；修复 `element.js`/`cssom.js` `-webkit-appearance` 别名规范化与 `Webkit*` 驼峰转换，使 `/css/css-ui/` 9 项回归用例全部恢复 **PASS**。

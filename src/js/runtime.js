@@ -11263,7 +11263,7 @@
           if (context !== "page" && (rawName.toLowerCase() === "size" || rawName.toLowerCase() === "page-orientation")) {
             continue;
           }
-          const key = rawName.startsWith("--") ? rawName : rawName.toLowerCase();
+          const key = rawName.startsWith("--") ? rawName : lowerName;
           if (key === "--") continue;
           if (!key.startsWith("--") && /[{}]/.test(val) && !/(?:^|[^a-z0-9_-])var\(/i.test(val)) continue;
           if ((context === "page" || context === "margin") && (key === "margin" || key === "padding")) {
@@ -11280,7 +11280,7 @@
           if (!data.has(key)) {
             authoredOrder.push(key);
           }
-          data.set(key, { name: rawName, value: val, priority: priority });
+          data.set(key, { name: key === "appearance" ? "appearance" : rawName, value: val, priority: priority });
         }
       }
 
@@ -17394,7 +17394,6 @@
     "grid-gap": "gap",
     "-webkit-border-radius": "border-radius",
     "-webkit-appearance": "appearance",
-    "webkitappearance": "appearance",
   };
 
   const BG_LONGHANDS = [
@@ -17723,7 +17722,7 @@
       if (p === "cssFloat") return "float";
       let body = p;
       let prefix = "";
-      if (p.startsWith("webkit")) {
+      if (p.startsWith("webkit") || p.startsWith("Webkit")) {
         prefix = "-webkit-";
         body = p.slice(6);
       } else if (p.startsWith("Moz")) {
@@ -45039,6 +45038,11 @@
     function parseDeclarationsBlockInto(element, declBlock, computedMap, impFilter, prevLayerSnapshot) {
       const impSet = computedMap._importantKeys || (computedMap._importantKeys = new Set());
       function setDecl(k, v, isImp) {
+        if (!k.startsWith("--") && typeof globalThis !== "undefined" &&
+            typeof globalThis.__isCssPropertySupported === "function" &&
+            !globalThis.__isCssPropertySupported(k)) {
+          return;
+        }
         if (!isImp && impSet.has(k)) return;
         computedMap.set(k, v);
         if (isImp) impSet.add(k);

@@ -4193,3 +4193,9 @@
 - **Phase 767**:
   - `/data/dev/cp/lib/css/media.cp`: `MediaQuery.parse` 支持 `and(` 无空格语法。
   - `src/css/cascade.cp`: 收紧 `MediaQueryList.parse` 失败回退范围并处理空 `@media {}` 规则，修复 `@media (unknown)` 与 `@media not (unknown)` 三值逻辑。
+- **Phase 768**:
+  - `src/css/cascade.cp`: `supportsDeclPredicate` 拒绝 `user-modify` / `-webkit-user-modify` / `-moz-user-modify`。
+  - `src/js/shim/window.js`: `setDecl` 过滤不支持的 CSS 属性；`@supports` 块接入 `CSS.supports` 条件求值。
+  - `src/js/shim/element/element.js`: `STYLE_LEGACY_ALIASES` 新增 `-webkit-appearance`→`appearance`，`propToKebab` 兼容 `Webkit*`，`style[prop]` 对不支持属性返回 `undefined`。
+  - `src/js/shim/cssom.js`: `parseInitial`、`setProperty`、`getPropertyValue`、`Proxy.get` 规范化 `-webkit-appearance` 为 `appearance` 并返回 `undefined` 于不支持属性。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
