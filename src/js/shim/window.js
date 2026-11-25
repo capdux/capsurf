@@ -9009,7 +9009,15 @@ function installWindow(global) {
     if (!computedMap.has("transform") || computedMap.get("transform") === "") {
       computedMap.set("transform", "none");
     } else {
-      let tfVal = computedMap.get("transform").trim();
+      let tfVal = computedMap.get("transform").trim().replace(/;+$/, "").trim();
+      {
+        let _td = 0;
+        for (let _k = 0; _k < tfVal.length; _k++) {
+          if (tfVal[_k] === "(") _td++;
+          else if (tfVal[_k] === ")") _td = Math.max(0, _td - 1);
+        }
+        if (_td > 0) tfVal += ")".repeat(_td);
+      }
       if (/\b(?:calc|min|max|clamp|sign|abs)\(/i.test(tfVal)) {
         tfVal = evalCssMathInValue(tfVal);
         computedMap.set("transform", tfVal);

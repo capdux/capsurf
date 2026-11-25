@@ -5451,7 +5451,14 @@
         if (toks.length !== 1) return false;
         const t = toks[0];
         if (/^(?:var|env)\(/i.test(t)) return true;
-        if (/^(?:calc|min|max|clamp)\(/i.test(t)) return !t.includes("%") && isValidCalcSyntax(t);
+        if (/^(?:calc|min|max|clamp)\(/i.test(t)) {
+          if (t.includes("%")) return false;
+          if (/(?:^|[^a-z])(?:\d+\.?\d*|\.\d+)(?:px|em|rem|ex|ch|vw|vh|vmin|vmax|cm|mm|q|in|pt|pc|cap|ic|lh|rlh|vi|vb|svw|svh|lvw|lvh|dvw|dvh)\b/i.test(t)) {
+            if (/(?:^|[(+\-,\s])(?:\d+\.?\d*|\.\d+)\s*[+\-]|[+\-]\s*(?:\d+\.?\d*|\.\d+)(?=$|[\s),+\-])/.test(t)) return false;
+            return isValidLenPct(t, false);
+          }
+          return isValidCalcSyntax(t);
+        }
         if (/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(t)) {
           return Number(t) >= 0 && !t.startsWith("-");
         }
@@ -6086,10 +6093,16 @@
         return true;
       }
       if (prop === "transform") {
-        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_transform === "function") {
-          return globalThis.__capsurf_is_valid_css_transform(vLower);
+        let balT = vLower, _td = 0;
+        for (let _k = 0; _k < balT.length; _k++) {
+          if (balT[_k] === "(") _td++;
+          else if (balT[_k] === ")") _td = Math.max(0, _td - 1);
         }
-        const toks = splitCssTokens(vLower);
+        if (_td > 0) balT += ")".repeat(_td);
+        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_transform === "function") {
+          return globalThis.__capsurf_is_valid_css_transform(balT);
+        }
+        const toks = splitCssTokens(balT);
         if (toks.length === 1 && toks[0] === "none") return true;
         if (toks.length < 1) return false;
         const FN_ARGS = {
@@ -15656,13 +15669,61 @@
       return s;
     }
 
-    function parseTransformAngleRad(raw) {
-      const s = String(raw || "0").trim().toLowerCase();
+    function evalTransformAngleExprRad(expr) {
+      let s = String(expr || "").trim().toLowerCase();
+      if (!s) return 0;
+      let d = 0;
+      for (let i = 0; i < s.length; i++) {
+        if (s[i] === "(") d++;
+        else if (s[i] === ")") d = Math.max(0, d - 1);
+      }
+      if (d > 0) s += ")".repeat(d);
+      if (/^(?:calc|min|max|clamp)\(/.test(s)) {
+        const m = /^(calc|min|max|clamp)\((.*)\)$/.exec(s);
+        if (m) {
+          const fn = m[1], inner = m[2];
+          if (fn === "calc") return evalTransformAngleExprRad(inner);
+          const parts = [];
+          let cur = "", pd = 0;
+          for (let i = 0; i < inner.length; i++) {
+            const c = inner[i];
+            if (c === "(") pd++;
+            else if (c === ")") pd--;
+            if (pd === 0 && c === ",") { parts.push(cur.trim()); cur = ""; }
+            else cur += c;
+          }
+          parts.push(cur.trim());
+          const vals = parts.map(evalTransformAngleExprRad);
+          if (fn === "min") return Math.min(...vals);
+          if (fn === "max") return Math.max(...vals);
+          if (fn === "clamp" && vals.length === 3) return Math.max(vals[0], Math.min(vals[1], vals[2]));
+        }
+      }
+      const replaced = s
+        .replace(/\bpi\b/g, String(Math.PI))
+        .replace(/\be\b/g, String(Math.E))
+        .replace(/([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)\s*(deg|grad|turn|rad)\b/gi, function (_, n, u) {
+          const v = parseFloat(n);
+          if (u === "deg") return String(v * Math.PI / 180);
+          if (u === "grad") return String(v * Math.PI / 200);
+          if (u === "turn") return String(v * Math.PI * 2);
+          return String(v);
+        });
+      if (/^[0-9eE.+\-*/()\s]+$/.test(replaced)) {
+        try {
+          const v = Function("return (" + replaced + ")")();
+          if (typeof v === "number" && Number.isFinite(v)) return v;
+        } catch (_) {}
+      }
       const num = parseFloat(s) || 0;
       if (s.endsWith("deg")) return num * Math.PI / 180;
       if (s.endsWith("turn")) return num * Math.PI * 2;
       if (s.endsWith("grad")) return num * Math.PI / 200;
-      return num; // rad
+      return num;
+    }
+
+    function parseTransformAngleRad(raw) {
+      return evalTransformAngleExprRad(raw);
     }
 
     function exactCosSin(raw) {
@@ -15723,12 +15784,36 @@
         M = R;
       };
 
-      const fnRe = /([a-zA-Z0-9_-]+)\s*\(([^)]*)\)/g;
-      let m;
       let matched = false;
-      while ((m = fnRe.exec(trimmed)) !== null) {
-        const fn = m[1].toLowerCase();
-        const args = m[2].split(",").map((s) => s.trim()).filter(Boolean);
+      let ti = 0;
+      while (ti < trimmed.length) {
+        const rest = trimmed.slice(ti);
+        const fm = /^([a-zA-Z0-9_-]+)\s*\(/.exec(rest);
+        if (!fm) { ti++; continue; }
+        const fn = fm[1].toLowerCase();
+        let start = ti + fm[0].length;
+        let p = start, depth = 1;
+        while (p < trimmed.length && depth > 0) {
+          if (trimmed[p] === "(") depth++;
+          else if (trimmed[p] === ")") depth--;
+          p++;
+        }
+        const rawArgs = trimmed.slice(start, depth === 0 ? p - 1 : p);
+        ti = p;
+        const args = [];
+        let curA = "", ad = 0;
+        for (let ai = 0; ai < rawArgs.length; ai++) {
+          const ch = rawArgs[ai];
+          if (ch === "(") ad++;
+          else if (ch === ")" && ad > 0) ad--;
+          if (ad === 0 && ch === ",") {
+            if (curA.trim()) args.push(curA.trim());
+            curA = "";
+          } else {
+            curA += ch;
+          }
+        }
+        if (curA.trim()) args.push(curA.trim());
         if (fn === "scale") {
           const sx = parseFloat(args[0]);
           const sy = args.length > 1 ? parseFloat(args[1]) : sx;
@@ -50271,7 +50356,15 @@
       if (!computedMap.has("transform") || computedMap.get("transform") === "") {
         computedMap.set("transform", "none");
       } else {
-        let tfVal = computedMap.get("transform").trim();
+        let tfVal = computedMap.get("transform").trim().replace(/;+$/, "").trim();
+        {
+          let _td = 0;
+          for (let _k = 0; _k < tfVal.length; _k++) {
+            if (tfVal[_k] === "(") _td++;
+            else if (tfVal[_k] === ")") _td = Math.max(0, _td - 1);
+          }
+          if (_td > 0) tfVal += ")".repeat(_td);
+        }
         if (/\b(?:calc|min|max|clamp|sign|abs)\(/i.test(tfVal)) {
           tfVal = evalCssMathInValue(tfVal);
           computedMap.set("transform", tfVal);

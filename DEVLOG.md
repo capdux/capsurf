@@ -3635,3 +3635,5 @@
 - 在 `layoutFlexAbsChild` 与 `justifyMainOffset` 补全 `Direction.Rtl` 对 `flex-start`/`flex-end`/`start`/`end` 的主轴与交叉轴镜像处理，`align-content-001` 与 5 项 RTL 静态位置测试（共 144 项子测试）一次通过。
 ### Phase 897 — `self-start`/`self-end` 自身书写方向与 `flex-abspos-staticpos` 全绿收官
 - 区分 `start`/`end`（参考弹性容器 `pstyle.direction`）与 `self-start`/`self-end`（参考子元素 `astyle.direction`），攻克 `flex-abspos-staticpos-align-self-rtl-004.html`，实现全套 23 个 `flex-abspos-staticpos-*` 测试（552 个子断言）100% 通过。
+### Phase 898 — `calc-numbers.html` 与 `calc-angle-values.html` 闭环
+- 定位 `rotate(calc(50grad)` 失败根因：内联 `style` 属性带末尾 `;` 且因外层括号未闭合未被分号切分，补全括号后 `45deg;` 未匹配 `toRad` 而落入 `serializeComputedTransform` 被 `parseFloat` 当作 45 弧度；剥离末尾 `;` 并配对补全括号后两项测试全绿。
