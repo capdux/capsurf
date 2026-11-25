@@ -3394,3 +3394,5 @@
 - 从 `window.js` `nonNegLenProps` 移除物理 `scroll-margin-{top,right,bottom,left}` 的误夹紧，使负值 `calc(10px - 0.5em)` 正确计算为 `-10px`，`/css/css-scroll-snap/parsing/` 25/25 全绿。
 ### Phase 777 — `/css/css-ruby/inheritance.html` 8/8 PASS 与多样式表 `@layer` 合并级联
 - 在 `cssom.js` `KNOWN_PROPS` 补全 `ruby-*` 属性，恢复 `/css/css-ruby/inheritance.html` 8/8 **PASS**；同时在 `window.js` `collectRawComputedMap` 将多样式表合并后单次级联以共享 `@layer` 顺序。
+### Phase 778 — `/css/css-display/` 伪元素 `display` 规范化与 4 项 `FAIL→PASS` 收紧
+- 在 `window.js` 补全 `::first-letter`/`::first-line` 与 `::before`/`::after` `math` 伪元素 `display` 规范化，`display-first-line-001`、`display-math-on-pseudo-elements-001` 及 `reading-flow` 2 项共计 4 项 **FAIL→PASS**（基线增至 `7,217`）。

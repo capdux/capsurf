@@ -2598,8 +2598,8 @@
     "reason": "T18 enrollment (css-display): measured PASS"
   },
   "/css/css-display/display-first-line-001.html": {
-    "expected": "FAIL",
-    "reason": "T18 enrollment (css-display): 0/1 subtests pass"
+    "expected": "PASS",
+    "reason": null
   },
   "/css/css-display/display-inline-dynamic-001.html": {
     "expected": "PASS",
@@ -2614,8 +2614,8 @@
     "reason": "Phase 625: display:math computes to inline/block on non-MathML elements"
   },
   "/css/css-display/display-math-on-pseudo-elements-001.html": {
-    "expected": "FAIL",
-    "reason": "T18 enrollment (css-display): 3/6 subtests pass"
+    "expected": "PASS",
+    "reason": null
   },
   "/css/css-display/display-with-float-dynamic.html": {
     "expected": "PASS",
@@ -2670,8 +2670,8 @@
     "reason": "T18 enrollment (css-display): measured PASS"
   },
   "/css/css-display/reading-flow/tentative/reading-flow-valid.html": {
-    "expected": "FAIL",
-    "reason": "T18 enrollment (css-display): 0/7 subtests pass"
+    "expected": "PASS",
+    "reason": null
   },
   "/css/css-display/reading-flow/tentative/reading-order-computed.html": {
     "expected": "PASS",
@@ -2682,8 +2682,8 @@
     "reason": "T18 enrollment (css-display): measured PASS"
   },
   "/css/css-display/reading-flow/tentative/reading-order-valid.html": {
-    "expected": "FAIL",
-    "reason": "T18 enrollment (css-display): 0/4 subtests pass"
+    "expected": "PASS",
+    "reason": null
   },
   "/css/css-display/textarea-display.html": {
     "expected": "PASS",

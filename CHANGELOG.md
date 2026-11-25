@@ -4233,3 +4233,7 @@
   - `src/js/shim/cssom.js`: `KNOWN_PROPS` 补全 `ruby-align`、`ruby-merge`、`ruby-overhang`、`ruby-position`。
   - `src/js/shim/window.js`: `collectRawComputedMap` 合并多样式表级联解析以共享 `@layer` 注册顺序。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 778**:
+  - `src/js/shim/window.js`: `applyUsedValuesToComputedMap` 补全 `::first-letter`/`::first-line` 与 `::before`/`::after` `math` 伪元素 `display` 规范化。
+  - `test/wpt/wpt-expectations.json`: 收紧 `display-first-line-001`、`display-math-on-pseudo-elements-001`、`reading-flow/tentative/{reading-flow-valid,reading-order-valid}` 4 项为 `PASS`（`7,217` PASS）。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

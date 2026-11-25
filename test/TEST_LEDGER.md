@@ -2444,3 +2444,4 @@
 | Phase 775 | WPT `clamp(none, ...)` 整数求值与 `monospace` `ch` 度量对齐 | `src/layout/layout.cp`, `src/js/shim/cssom.js`, `src/js/shim/window.js` | `clamp-integer-computed` (6/6 **PASS**), `bidi-line-break-001` **PASS**; `--smoke` 3/3 PASS |
 | Phase 776 | WPT `/css/css-scroll-snap/parsing/` 负值 `scroll-margin` 计算（25/25 PASS） | `src/js/shim/window.js` | `scroll-margin-computed` **PASS** (**`/css/css-scroll-snap/parsing/` 25/25 100% PASS**); `--smoke` 3/3 PASS |
 | Phase 777 | WPT `ruby-*` 继承恢复与多样式表 `@layer` 合并级联 | `src/js/shim/cssom.js`, `src/js/shim/window.js` | `/css/css-ruby/inheritance.html` (8/8 **PASS**); `--smoke` 3/3 PASS |
+| Phase 778 | WPT `/css/css-display/` 伪元素 `display` 规范化与 `reading-flow` 收紧 | `src/js/shim/window.js`, `test/wpt/wpt-expectations.json` | `display-first-line-001`, `display-math-on-pseudo-elements-001`, `reading-flow-valid`, `reading-order-valid` **4/4 FAIL→PASS** (`7,217` PASS); `--smoke` 3/3 PASS |

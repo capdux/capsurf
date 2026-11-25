@@ -46523,6 +46523,22 @@
             if (px !== null && isFinite(px)) computedMap.set(smProp, formatCssPx(px));
           }
         }
+        if (normalizedPseudo === "::first-letter" || normalizedPseudo === "::first-line") {
+          const flt = (computedMap.get("float") || "none").trim().toLowerCase();
+          const pos = (computedMap.get("position") || "static").trim().toLowerCase();
+          const disp = (computedMap.get("display") || "inline").trim().toLowerCase();
+          if (disp === "none") {
+            computedMap.set("display", "none");
+          } else if (normalizedPseudo === "::first-letter" && ((flt && flt !== "none") || pos === "absolute" || pos === "fixed")) {
+            computedMap.set("display", "block");
+          } else {
+            computedMap.set("display", "inline");
+          }
+        } else if (normalizedPseudo === "::before" || normalizedPseudo === "::after") {
+          const disp = (computedMap.get("display") || "").trim().toLowerCase();
+          if (disp === "block math") computedMap.set("display", "block");
+          else if (disp === "math" || disp === "inline math") computedMap.set("display", "inline");
+        }
         if (normalizedPseudo === "::marker") {
           computedMap.set("display", "inline");
           computedMap.set("position", "static");
