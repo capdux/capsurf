@@ -2532,3 +2532,4 @@
 | Phase 863 | 原生 CSS 变量多段 `var()` / `!important` 级联 / 失效回退 | `stylesheet.cp`, `src/css/cascade.cp` | `variable-reference-01..11,13..15` **14/14 PASS**; `--smoke` 3/3 PASS |
 | Phase 864 | CSS 变量转义/EOF 隐式闭合/重复 `!important`/自引用循环 | `stylesheet.cp`, `src/css/cascade.cp` | `variable-reference-21,23..30,39` **10/10 PASS**; `--smoke` 3/3 PASS |
 | Phase 865 | `@supports` 括号嵌套 / CDO `<!--` / 转义自定义属性全量修复 | `stylesheet.cp`, `supports.cp`, `src/css/cascade.cp` | `variable-supports-01..67` **67/67 PASS**; `--smoke` 3/3 PASS |
+| Phase 866 | `scrollbar-color` 双色序列化 & 绝对定位 `initial` 尺寸修复 | `cssom.js`, `window.js` | `scrollbar-color-parsing.html`, `css-scrollbars/inheritance.html`, `css-sizing/inheritance-002.html` **3/3 PASS**; `--smoke` 3/3 PASS |

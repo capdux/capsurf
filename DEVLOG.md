@@ -3570,3 +3570,5 @@
 - 在 `cascade.cp` 与 `cap:css` (`stylesheet.cp`) 中补齐 CSS Syntax Level 3 EOF 隐式闭合（未闭合规则块 `{`、`var(` 与 `/*` 注释）、十六进制转义与孤立代理项 `U+FFFD` 映射、重复 `!important` 语法拒绝及 `var()` 自引用循环检测。
 ### Phase 865 — `@supports` 与 CSS 变量声明校验全量打通
 - 修复了 `stylesheet.cp` 规则切分未追踪 `()`/`[]` 嵌套导致的 `@supports` 内部 `;`/`{}` 误切分，以及 `supports.cp` 与 `cascade.cp` 对转义自定义属性名、空值 `--a:`、CDO `<!--`、`VAR-*` 的判定，使得 `variable-supports-01..67` **67/67** 全部通过。
+### Phase 866 — `scrollbar-color` 双色序列化与 `getComputedStyle` 懒尺寸计算修复
+- 修复了 `cssom.js` 单色快路径截断 `scrollbar-color` 第二个颜色的问题，以及 `window.js` `getComputedStyle` Proxy 属性访问绕过 `_lazyWidth`/`_lazyHeight` 的问题，使得 `/css/css-scrollbars/` 解析与继承全绿、`/css/css-sizing/inheritance-002.html` 转绿。

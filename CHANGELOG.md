@@ -4545,3 +4545,6 @@
 - `/data/dev/cp/lib/css/stylesheet.cp`: `parseRule` 与 `parseStylesheet` 追踪圆括号与方括号嵌套深度，避免 `@supports (color: { [ var(--a) ] })` 与 `(color: var(--a);)` 被提前分割。
 - `/data/dev/cp/lib/css/supports.cp`: `isValidPropIdent` 支持反斜杠转义，`parseInParens` 放行合法 `--*` 空/空白值并拦截孤立 `--`。
 - `src/css/cascade.cp`: `isValidDeclValueInner` 放行 CDO `<!--` token；`supportsDeclPredicate` 拦截 `--` 与 `VAR-*` 伪自定义属性；`variable-supports-01..67` **67/67 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 866 — `scrollbar-color` 双色序列化与绝对定位 `initial` 尺寸计算值修复
+- `src/js/shim/cssom.js`: `normalizeCssSpecifiedValue` 仅在单 token 时走 `normalizeSingleColor` 快路径，`wrapComputedStyleDecl` 统一使用 `normalizePropColors` 处理多色属性 `scrollbar-color`。
+- `src/js/shim/window.js`: `computeElementUsedWidthPx`/`computeElementUsedHeightPx` 将 `initial`/`unset`/`revert` 规范化为 `auto`，补齐 `_lazyHeight` 触发条件及 `declTarget` Proxy `get` 路径的懒计算触发；`scrollbar-color-parsing.html`、`css-scrollbars/inheritance.html`、`css-sizing/inheritance-002.html` **3/3 PASS**，`--smoke` 3/3 **PASS**。

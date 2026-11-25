@@ -5580,8 +5580,8 @@
         });
       }
       if (/\blight-dark\(/i.test(cs)) return cs.toLowerCase();
-      if (/^(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(/i.test(cs)) return normalizeSingleColor(cs);
       const toks = splitCssTokens(cs);
+      if (toks.length === 1 && /^(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(/i.test(cs)) return normalizeSingleColor(cs);
       return toks.map((t) => {
         const tl = t.toLowerCase();
         if (tl === "auto" || tl === "currentcolor" || tl === "transparent") return tl;
@@ -11901,7 +11901,7 @@
               const k = rawName.startsWith("--") ? rawName : rawName.toLowerCase();
               if (linkOverrides && Object.prototype.hasOwnProperty.call(linkOverrides, k)) {
                 let ov = resolveCssVars(element, linkOverrides[k]);
-                if (k === "color" || k.endsWith("-color")) ov = normalizeCssColor(ov);
+                if (k === "color" || k.endsWith("-color")) ov = normalizePropColors(k, ov, receiver.color);
                 return ov;
               }
               if (k === "-webkit-transform" || k === "transform") {
@@ -11950,7 +11950,7 @@
 
           if (linkOverrides && Object.prototype.hasOwnProperty.call(linkOverrides, kebab)) {
             let ov = resolveCssVars(element, linkOverrides[kebab]);
-            if (kebab === "color" || kebab.endsWith("-color")) ov = normalizeCssColor(ov);
+            if (kebab === "color" || kebab.endsWith("-color")) ov = normalizePropColors(kebab, ov, receiver.color);
             return ov;
           }
 

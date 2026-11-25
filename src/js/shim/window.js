@@ -7802,7 +7802,8 @@ function installWindow(global) {
       const fontSize = evalCssLengthExpr(rawMap.get("font-size") || "16px", 16, 16) || 16;
       const parentEl = element.parentElement || element.parentNode;
       const cbW = (parentEl && parentEl.nodeType === 1) ? computeElementUsedWidthPx(parentEl, depth + 1, visited) : 800;
-      const wRaw = (rawMap.get("width") || "auto").trim().toLowerCase();
+      let wRaw = (rawMap.get("width") || "auto").trim().toLowerCase();
+      if (wRaw === "initial" || wRaw === "unset" || wRaw === "revert" || wRaw === "revert-layer") wRaw = "auto";
       let w = null;
       const posRaw = (rawMap.get("position") || "static").trim().toLowerCase();
       const isAbsAuto = (posRaw === "absolute" || posRaw === "fixed") && (!rawMap.has("left") || !rawMap.has("right"));
@@ -7848,7 +7849,8 @@ function installWindow(global) {
     const rawMap = collectRawComputedMap(element, "");
     const fontSize = evalCssLengthExpr(rawMap.get("font-size") || "16px", 16, 16) || 16;
     const bs = (rawMap.get("block-size") || "").trim().toLowerCase();
-    const hRaw = (bs || rawMap.get("height") || "auto").trim().toLowerCase();
+    let hRaw = (bs || rawMap.get("height") || "auto").trim().toLowerCase();
+    if (hRaw === "initial" || hRaw === "unset" || hRaw === "revert" || hRaw === "revert-layer") hRaw = "auto";
     if (hRaw && hRaw !== "auto" && hRaw !== "min-content" && hRaw !== "max-content") {
       const parentEl = element.parentElement || element.parentNode;
       const cbH = (parentEl && parentEl.nodeType === 1) ? computeElementUsedHeightPx(parentEl, depth + 1) : 600;
@@ -8782,7 +8784,7 @@ function installWindow(global) {
         computedMap._lazyWidth = true;
       }
       const hRaw = (computedMap.get("height") || "").trim().toLowerCase();
-      if (hRaw === "" && disp === "block") {
+      if ((hRaw === "" && disp === "block") || hRaw !== "") {
         computedMap._lazyHeight = true;
       }
 
@@ -12229,6 +12231,13 @@ function installWindow(global) {
           }
           const shDirect = getShorthandComputed(prop);
           if (shDirect !== null) return shDirect;
+          if (prop === "width" && computedMap._lazyWidth) {
+            computedMap._lazyWidth = false;
+            computedMap.set("width", formatCssPx(computeElementUsedWidthPx(element, 0)));
+          } else if (prop === "height" && computedMap._lazyHeight) {
+            computedMap._lazyHeight = false;
+            computedMap.set("height", formatCssPx(computeElementUsedHeightPx(element, 0)));
+          }
           if (prop === "cssFloat") return computedMap.get("float") || "";
           if (computedMap.has(prop)) return computedMap.get(prop);
           if (prop.startsWith("--")) return "";
