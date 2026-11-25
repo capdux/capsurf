@@ -3496,3 +3496,5 @@
 - 通过 `collectRawComputedMap` `baseMap` 缓存与 `applyUsedValuesToComputedMap` 懒求值/前置守卫将 200 次 `cs.color` 从 `4,580ms` 压至 `768ms`；同步将不透明 sRGB/HSL/HWB 解析下沉至 `cap:css` `__capsurf_parse_color`，并修复 `lib/css/color.cp` `fromHwb` 浮点精度与 `cssom.js` `hwb` `none` `%` 序列化，`/css/css-color/parsing/color-computed-hwb.html` (56/56) 全绿 **PASS**。
 ### Phase 828 — 原生 `object-fit` / `object-position` 与 `background-size: contain|cover` 集群攻坚
 - 在 `cascade.cp` 与 `painter.cp` 完整实现 `object-fit` (`fill`/`contain`/`cover`/`none`/`scale-down`)、`object-position`（含 3/4 token 边缘偏移语法）以及 `background-size: contain|cover` + `background-position` 绘制与裁剪，一次性通过 `/css/css-images/object-fit-*` **171/173** 项 WPT Reftest。
+### Phase 829 — `ListStylePosition` (`inside`/`outside`)、预定义列表标记与行内预留
+- 在 `cascade.cp`、`layout.cp`、`painter.cp` 统一实现 `list-style-position: inside|outside` 继承与首行宽度预留、`DecimalLeadingZero`/`LowerRoman`/`UpperRoman`/`LowerAlpha`/`UpperAlpha` 格式化与基线对齐绘制（`--smoke` 3/3 **PASS**）。

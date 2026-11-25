@@ -25,7 +25,9 @@ import {
     ClearMode,
     VerticalAlignKind,
     WhiteSpace,
-    IntrinsicSizeKeyword
+    IntrinsicSizeKeyword,
+    ListStylePosition,
+    formatListMarker
 } from "../css/cascade.cp";
 
 pub struct Rect {
@@ -3503,6 +3505,16 @@ pub struct LayoutTree {
             // Break items into lines and flush each line
             let line_start: usize = 0;
             let line_x: f32 = 0.0;
+            if (doc.nodes.items[@as(usize, parent_id)].hasTag("li") && pstyle_blk.list_style_position == ListStylePosition.Inside && run_start_y == content_y) {
+                let mbuf: [32]u8 = undefined;
+                const mstr = formatListMarker(doc, styles, parent_id, &mbuf);
+                if (mstr.len > 0) {
+                    let mbuf_sp: [33]u8 = undefined;
+                    std.mem.copyForwards(u8, mbuf_sp[0..mstr.len], mstr);
+                    mbuf_sp[mstr.len] = ' ';
+                    line_x = LayoutTree.measureTextSegmentWithTabs(mbuf_sp[0 .. mstr.len + 1], pstyle_blk, 0.0);
+                }
+            }
             let line_has_inflow = false;
             let last_break_idx: usize = 0;
             let has_break_opp = false;

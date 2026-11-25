@@ -4431,3 +4431,7 @@
 - **Phase 828**:
   - `src/css/cascade.cp`: 新增 `ObjectFit`、`BgSizeKeyword`、`ObjectPos` 及其 1~4 token 边缘偏移解析，接入 `object-fit`、`object-position`、`background-size: contain|cover`、`background-position`。
   - `src/render/painter.cp`: 新增 `computePlacedImageRect`、`intersectBoxClip`、`computeNodeContentRect`、`computeNodePaddingRect`，为 `<img>`、`<canvas>` 与 `background-image` 实现原生内容区/内边距区裁剪与 `object-fit`/`object-position` 绘制。
+- **Phase 829**:
+  - `src/css/cascade.cp`: 新增 `ListStylePosition` 继承及 `list-style-position`/`list-style` 解析；扩展 `ListStyleType`（`DecimalLeadingZero`/`LowerRoman`/`LowerAlpha`/`UpperAlpha`）并实现共享 `formatListMarker`。
+  - `src/layout/layout.cp`: `layoutBlockContainer` 为 `list-style-position: inside` 的 `<li>` 首行预留 `marker + " "` 行内宽度。
+  - `src/render/painter.cp`: 抽取 `findFirstTextRect`，使用 `formatListMarker` 与 `0.75 * fontSize` 字号按 `inside`/`outside` 绘制列表标记。

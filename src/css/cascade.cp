@@ -34,20 +34,152 @@ pub enum DisplayKeyword {
     Contents,
 }
 
+pub enum ListStylePosition {
+    Outside,
+    Inside,
+
+    static fn parse(raw: []const u8): ListStylePosition? {
+        const s = std.mem.trim(u8, raw, " \t\r\n");
+        if (std.ascii.eqlIgnoreCase(s, "outside")) return ListStylePosition.Outside;
+        if (std.ascii.eqlIgnoreCase(s, "inside")) return ListStylePosition.Inside;
+        return null;
+    }
+}
+
 pub enum ListStyleType {
     Decimal,
+    DecimalLeadingZero,
     UpperRoman,
     LowerRoman,
+    LowerAlpha,
+    UpperAlpha,
     None,
 
     static fn parse(raw: []const u8): ListStyleType? {
         const s = std.mem.trim(u8, raw, " \t\r\n");
         if (std.ascii.eqlIgnoreCase(s, "none")) return ListStyleType.None;
         if (std.ascii.eqlIgnoreCase(s, "decimal")) return ListStyleType.Decimal;
+        if (std.ascii.eqlIgnoreCase(s, "decimal-leading-zero")) return ListStyleType.DecimalLeadingZero;
         if (std.ascii.eqlIgnoreCase(s, "upper-roman")) return ListStyleType.UpperRoman;
         if (std.ascii.eqlIgnoreCase(s, "lower-roman")) return ListStyleType.LowerRoman;
+        if (std.ascii.eqlIgnoreCase(s, "lower-alpha") || std.ascii.eqlIgnoreCase(s, "lower-latin")) return ListStyleType.LowerAlpha;
+        if (std.ascii.eqlIgnoreCase(s, "upper-alpha") || std.ascii.eqlIgnoreCase(s, "upper-latin")) return ListStyleType.UpperAlpha;
         return null;
     }
+}
+
+fn appendRomanStr(out_buf: []u8, pos_in: usize, n_in: i32, upper: bool): usize {
+    let pos = pos_in;
+    const vals: [13]i32 = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1];
+    const upper_syms: [13][]const u8 = ["M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I"];
+    const lower_syms: [13][]const u8 = ["m", "cm", "d", "cd", "c", "xc", "l", "xl", "x", "ix", "v", "iv", "i"];
+    let rem = n_in;
+    let ri: usize = 0;
+    while (ri < 13) : (ri += 1) {
+        while (rem >= vals[ri]) {
+            const sym = if (upper) upper_syms[ri] else lower_syms[ri];
+            if (pos + sym.len < out_buf.len) {
+                std.mem.copyForwards(u8, out_buf[pos .. pos + sym.len], sym);
+                pos += sym.len;
+            }
+            rem -= vals[ri];
+        }
+    }
+    return pos;
+}
+
+fn appendAlphabeticStr(out_buf: []u8, pos_in: usize, n_in: i32, upper: bool): usize {
+    let pos = pos_in;
+    let tmp: [16]u8 = undefined;
+    let tlen: usize = 0;
+    let n = n_in;
+    while (n > 0 && tlen < 16) {
+        n -= 1;
+        const rem: u8 = @intCast(@mod(n, 26));
+        const base_ch: u8 = if (upper) 'A' else 'a';
+        tmp[tlen] = base_ch + rem;
+        tlen += 1;
+        n = @divTrunc(n, 26);
+    }
+    let ti: usize = tlen;
+    while (ti > 0) {
+        ti -= 1;
+        if (pos < out_buf.len) {
+            out_buf[pos] = tmp[ti];
+            pos += 1;
+        }
+    }
+    return pos;
+}
+
+pub fn formatListMarker(doc: *const Document, styles: []const ComputedStyle, node_id: NodeId, out_buf: []u8): []const u8 {
+    if (@as(usize, node_id) >= doc.nodes.items.len || @as(usize, node_id) >= styles.len) return "";
+    const node = &doc.nodes.items[@as(usize, node_id)];
+    const style = &styles[@as(usize, node_id)];
+    if (node.parent == NULL_NODE || @as(usize, node.parent) >= doc.nodes.items.len) return "";
+    const pnode = &doc.nodes.items[@as(usize, node.parent)];
+    if (!pnode.hasTag("ol") && !pnode.hasTag("ul")) return "";
+    const p_lt = if (@as(usize, node.parent) < styles.len) styles[@as(usize, node.parent)].list_style_type else ListStyleType.Decimal;
+    const eff_lt = if (style.list_style_type != ListStyleType.Decimal) style.list_style_type else p_lt;
+    if (eff_lt == ListStyleType.None) return "";
+    if (pnode.hasTag("ul") && style.list_style_type == ListStyleType.Decimal && p_lt == ListStyleType.Decimal) return "*";
+
+    const is_rev = pnode.hasAttribute("reversed");
+    let cur_num: i32 = 1;
+    if (s_attr := pnode.getAttribute("start")) {
+        cur_num = std.fmt.parseInt(i32, std.mem.trim(u8, s_attr, " \t\r\n"), 10) catch 1;
+    } else if (is_rev) {
+        let total_li: i32 = 0;
+        let s0 = pnode.first_child;
+        while (s0 != NULL_NODE && @as(usize, s0) < doc.nodes.items.len) {
+            const sn0 = &doc.nodes.items[@as(usize, s0)];
+            if (sn0.hasTag("li")) total_li += 1;
+            s0 = sn0.next_sibling;
+        }
+        cur_num = total_li;
+    }
+    let sib = pnode.first_child;
+    while (sib != NULL_NODE && @as(usize, sib) < doc.nodes.items.len) {
+        const sn = &doc.nodes.items[@as(usize, sib)];
+        if (sn.hasTag("li")) {
+            if (v_attr := sn.getAttribute("value")) {
+                cur_num = std.fmt.parseInt(i32, std.mem.trim(u8, v_attr, " \t\r\n"), 10) catch cur_num;
+            }
+            if (sib == node_id) break;
+            cur_num += if (is_rev) @as(i32, -1) else @as(i32, 1);
+        }
+        sib = sn.next_sibling;
+    }
+
+    let rlen: usize = 0;
+    if ((eff_lt == ListStyleType.UpperRoman || eff_lt == ListStyleType.LowerRoman) && cur_num != 0 && cur_num > -4000 && cur_num < 4000) {
+        if (cur_num < 0 && rlen < out_buf.len) {
+            out_buf[rlen] = '-';
+            rlen += 1;
+        }
+        const abs_n = if (cur_num < 0) -cur_num else cur_num;
+        rlen = appendRomanStr(out_buf, rlen, abs_n, eff_lt == ListStyleType.UpperRoman);
+        if (rlen < out_buf.len) {
+            out_buf[rlen] = '.';
+            rlen += 1;
+        }
+        return out_buf[0..rlen];
+    }
+    if ((eff_lt == ListStyleType.LowerAlpha || eff_lt == ListStyleType.UpperAlpha) && cur_num > 0) {
+        rlen = appendAlphabeticStr(out_buf, 0, cur_num, eff_lt == ListStyleType.UpperAlpha);
+        if (rlen < out_buf.len) {
+            out_buf[rlen] = '.';
+            rlen += 1;
+        }
+        return out_buf[0..rlen];
+    }
+    if (eff_lt == ListStyleType.DecimalLeadingZero && cur_num > -10 && cur_num < 10) {
+        if (cur_num < 0) {
+            return std.fmt.bufPrint(out_buf, "-0{d}.", .{-cur_num}) catch "-01.";
+        }
+        return std.fmt.bufPrint(out_buf, "0{d}.", .{cur_num}) catch "01.";
+    }
+    return std.fmt.bufPrint(out_buf, "{d}.", .{cur_num}) catch "1.";
 }
 
 pub enum DisplayOutside {
@@ -2122,6 +2254,7 @@ pub struct ComputedStyle {
     after_content_expr_buf: [128]u8 = [0; 128],
     after_content_expr_len: usize = 0,
     list_style_type: ListStyleType = ListStyleType.Decimal,
+    list_style_position: ListStylePosition = ListStylePosition.Outside,
     has_counter_reset: bool = false,
     counter_reset_name: [32]u8 = [0; 32],
     counter_reset_len: usize = 0,
@@ -2436,6 +2569,7 @@ pub struct ComputedStyle {
             _.visibility = p.visibility;
             _.direction = p.direction;
             _.list_style_type = p.list_style_type;
+            _.list_style_position = p.list_style_position;
             if (!node.hasTag("pre")) {
                 _.white_space = p.white_space;
             }
@@ -2864,9 +2998,26 @@ pub struct ComputedStyle {
             }
             return;
         }
-        if (std.ascii.eqlIgnoreCase(name, "list-style-type") || std.ascii.eqlIgnoreCase(name, "list-style")) {
+        if (std.ascii.eqlIgnoreCase(name, "list-style-type")) {
             if (lt := ListStyleType.parse(val)) {
                 _.list_style_type = lt;
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "list-style-position")) {
+            if (lp := ListStylePosition.parse(val)) {
+                _.list_style_position = lp;
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "list-style")) {
+            let lit = std.mem.tokenizeAny(u8, val, " \t\r\n");
+            while (ltok := lit.next()) {
+                if (lp := ListStylePosition.parse(ltok)) {
+                    _.list_style_position = lp;
+                } else if (lt := ListStyleType.parse(ltok)) {
+                    _.list_style_type = lt;
+                }
             }
             return;
         }
