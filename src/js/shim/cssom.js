@@ -591,6 +591,117 @@
     return "image-set(" + outItems.join(", ") + ")";
   }
 
+  function parseAndNormalizeFontShorthand(trimmed) {
+    const low = trimmed.toLowerCase();
+    if (/(?:^|[^a-z0-9_-])var\(/i.test(low)) return trimmed;
+    const SYS_FONTS = new Set(["caption", "icon", "menu", "message-box", "small-caption", "status-bar"]);
+    if (SYS_FONTS.has(low)) return low;
+    const toks = [];
+    let cur = "", d = 0, q = "";
+    for (let i = 0; i < trimmed.length; i++) {
+      const ch = trimmed[i];
+      if (q) { cur += ch; if (ch === "\\" && i + 1 < trimmed.length) cur += trimmed[++i]; else if (ch === q) q = ""; continue; }
+      if (ch === '"' || ch === "'") { q = ch; cur += ch; continue; }
+      if (ch === "(") { d++; cur += ch; continue; }
+      if (ch === ")" && d > 0) { d--; cur += ch; continue; }
+      if (d === 0 && /\s/.test(ch)) { if (cur) { toks.push(cur); cur = ""; } continue; }
+      if (d === 0 && ch === "/") { if (cur) { toks.push(cur); cur = ""; } toks.push("/"); continue; }
+      cur += ch;
+    }
+    if (cur) toks.push(cur);
+    if (q || d !== 0 || toks.length < 2) return null;
+
+    const STRETCH_KW = new Set(["ultra-condensed", "extra-condensed", "condensed", "semi-condensed", "semi-expanded", "expanded", "extra-expanded", "ultra-expanded"]);
+    const SIZE_KW = new Set(["xx-small", "x-small", "small", "medium", "large", "x-large", "xx-large", "xxx-large", "smaller", "larger"]);
+    const isLenPctTok = (t) => {
+      const tl = t.toLowerCase();
+      if (/^(?:calc|min|max|clamp)\(/i.test(tl)) return true;
+      if (tl === "0" || tl === "+0") return true;
+      return /^(?:\+?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|%)$/i.test(tl);
+    };
+    const isFontSizeTok = (t) => SIZE_KW.has(t.toLowerCase()) || isLenPctTok(t);
+    const isLineHeightTok = (t) => {
+      const tl = t.toLowerCase();
+      if (tl === "normal") return true;
+      if (/^(?:\d+(?:\.\d+)?|\.\d+)$/.test(tl) && parseFloat(tl) >= 0) return true;
+      return isLenPctTok(t);
+    };
+
+    let idx = 0;
+    let styleVal = "", variantVal = "", weightVal = "", stretchVal = "";
+    let hasStyle = false, hasVariant = false, hasWeight = false, hasStretch = false, normalCount = 0;
+    while (idx < toks.length) {
+      const t = toks[idx];
+      const tl = t.toLowerCase();
+      if (tl === "normal") {
+        normalCount++;
+        if ((hasStyle ? 1 : 0) + (hasVariant ? 1 : 0) + (hasWeight ? 1 : 0) + (hasStretch ? 1 : 0) + normalCount > 4) return null;
+        idx++;
+        continue;
+      }
+      if (tl === "italic" || tl === "oblique") {
+        if (hasStyle) return null;
+        hasStyle = true;
+        styleVal = tl;
+        idx++;
+        if (tl === "oblique" && idx < toks.length && /^-?(?:\d+(?:\.\d+)?|\.\d+)(?:deg|rad|grad|turn)$/i.test(toks[idx])) {
+          styleVal += " " + toks[idx].toLowerCase();
+          idx++;
+        }
+        continue;
+      }
+      if (tl === "small-caps") {
+        if (hasVariant) return null;
+        hasVariant = true;
+        variantVal = "small-caps";
+        idx++;
+        continue;
+      }
+      if (tl === "bold" || tl === "bolder" || tl === "lighter" || (/^(?:\d+(?:\.\d+)?|\.\d+)$/.test(tl) && parseFloat(tl) >= 1 && parseFloat(tl) <= 1000)) {
+        if (hasWeight) return null;
+        hasWeight = true;
+        weightVal = tl;
+        idx++;
+        continue;
+      }
+      if (STRETCH_KW.has(tl)) {
+        if (hasStretch) return null;
+        hasStretch = true;
+        stretchVal = tl;
+        idx++;
+        continue;
+      }
+      break;
+    }
+
+    if ((hasStyle ? 1 : 0) + (hasVariant ? 1 : 0) + (hasWeight ? 1 : 0) + (hasStretch ? 1 : 0) + normalCount > 4) return null;
+    if (idx >= toks.length || !isFontSizeTok(toks[idx])) return null;
+    const sizeTok = toks[idx++];
+    let lhTok = "";
+    if (idx < toks.length && toks[idx] === "/") {
+      idx++;
+      if (idx >= toks.length || !isLineHeightTok(toks[idx])) return null;
+      const rawLh = toks[idx++];
+      if (rawLh.toLowerCase() !== "normal") lhTok = rawLh;
+    }
+    if (idx >= toks.length) return null;
+    for (let j = idx; j < toks.length; j++) {
+      if (toks[j] === "/") return null;
+    }
+    const out = [];
+    if (styleVal) out.push(styleVal);
+    if (variantVal) out.push(variantVal);
+    if (weightVal) out.push(weightVal);
+    if (stretchVal) out.push(stretchVal);
+    out.push(/^calc\(/i.test(sizeTok) ? canonicalizeCalcToken(sizeTok) : sizeTok.toLowerCase());
+    if (lhTok) {
+      out.push("/");
+      out.push(/^calc\(/i.test(lhTok) ? canonicalizeCalcToken(lhTok) : lhTok.toLowerCase());
+    }
+    for (let j = idx; j < toks.length; j++) out.push(toks[j]);
+    return out.join(" ");
+  }
+
   function isValidCssValue(prop, value) {
     if (typeof value !== "string") value = String(value);
     const trimmed = value.trim();
@@ -608,6 +719,10 @@
 
     if (prop === "display") {
       return !!canonicalizeDisplayValue(trimmed);
+    }
+
+    if (prop === "font") {
+      return !!parseAndNormalizeFontShorthand(trimmed);
     }
 
     if (prop === "border-color" || prop === "border-block-color" || prop === "border-inline-color") {
@@ -4175,6 +4290,7 @@
     const s = String(raw).trim();
     if (/^(?:inherit|initial|unset|revert|revert-layer)$/i.test(s)) return s.toLowerCase();
     if (key === "display") return canonicalizeDisplayValue(s) || s.toLowerCase();
+    if (key === "font") return parseAndNormalizeFontShorthand(s) || s;
     if (/\bvar\(/i.test(s)) return s;
     if (NUM_NORM_PROPS.has(key) && /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(s)) {
       const n = Number(s);
@@ -8660,7 +8776,11 @@
     return { name: nameRaw, descriptors };
   }
 
+  const _cssCounterStyleInternal = Symbol("CSSCounterStyleRuleInternal");
   function CSSCounterStyleRule() {
+    if (arguments[0] !== _cssCounterStyleInternal) {
+      throw new TypeError("Illegal constructor");
+    }
     CSSRule.call(this);
     this._type = 11;
     this._name = "";
@@ -9283,7 +9403,7 @@
       const csData = parseCounterStyleRule(parsed.cssText);
       if (!csData) return null;
 
-      const rule = new CSSCounterStyleRule();
+      const rule = new CSSCounterStyleRule(_cssCounterStyleInternal);
       rule.parentRule = parentRule || null;
       rule.parentStyleSheet = parentSheet || null;
       rule._onMutate = onMutate || null;

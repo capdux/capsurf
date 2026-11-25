@@ -4348,3 +4348,6 @@
   - `src/js/shim/element/html-element.js`: 新增 `HTMLElement.prototype.{showPopover,hidePopover,togglePopover}`。
   - `src/js/shim/selector.js`: 新增 `:popover-open` 伪类匹配。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 807**:
+  - `src/js/shim/cssom.js`: 新增 `parseAndNormalizeFontShorthand` 校验并规范化 `font` 简写；`CSSCounterStyleRule` 改为内部 Symbol 令牌拦截 `new CSSCounterStyleRule()` 并保持 `length === 0`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

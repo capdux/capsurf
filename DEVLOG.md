@@ -3452,3 +3452,5 @@
 - 在 `selector.js` 补全 `:has-slotted(...)` 函数式伪类匹配，并在 `window.js` `collectRawComputedMap` 为 `<details>` 非 `<summary>` 子代收集 `::details-content` 继承属性，`shadow-host-removal-invalidation`、`shadow-shared-style-cache-001`、`slotted-user-agent-part-invalidation` 3/3 **PASS**。
 ### Phase 806 — Popover API (`showPopover`/`hidePopover`/`togglePopover`/`:popover-open`) 与 `::slotted(dialog)::backdrop`
 - 补全 `HTMLElement.prototype.{showPopover,hidePopover,togglePopover}` 与 `:popover-open` 伪类匹配，`backdrop-tree-abiding-slotted.html` 与 `overlay/overlay-user-agent-rules.html` **PASS**（`overlay-transition` 子测试 1 通过）。
+### Phase 807 — `font` 简写校验/规范化与 `CSSCounterStyleRule` 非法构造拦截
+- 在 `cssom.js` 新增 `parseAndNormalizeFontShorthand` 实现 `font` 简写 4 槽位前缀、尺寸/行高及字体族校验与规范化序列化，并为 `CSSCounterStyleRule` 补充非法构造拦截（保持 `length === 0`），`css-counter-styles/idlharness.html` (37/37) 与 `css-fonts/parsing/font-invalid.html` (16/16) 均 **PASS**。
