@@ -3609,3 +3609,5 @@
 - 修复 `solveCubicBezier` 在 `t <= 0` / `t >= 1` 直接钳位返回 `0` / `1` 的缺陷，严格按 CSS Easing 规范处理有限与垂直切线外推，并补全 `AnimationEffect.prototype.getTiming()`。
 ### Phase 884 — `_rawBaseCache` 焦点状态失效与 `grid-lanes` 显示值放行
 - 修复 `element.focus()` 仅变更 `document.activeElement` 而未使 `element._rawBaseCache` 失效导致 `getComputedStyle(e)` 仍返回失焦样式的问题，并放行 CSS Grid 3 试验值 `grid-lanes`/`inline-grid-lanes`。
+### Phase 885 — `flex` 简写 `sign()`/`cqw` 放行与 `grid-*` 标识符转义保留
+- 修复 `window.js` `flex` 简写展开与 `cssom.js` `valCheckProps` 拦截 `calc(10 + (sign(20cqw - 10px) * 5))` 导致回落 `"0 1 1px"` 的问题，并跳过 `grid-*` 计算值的 `normalizeCssColor` 解义，保住 `\31 st` 转义序列化。

@@ -2074,7 +2074,8 @@
       return true;
     }
     if (prop === "flex-grow" || prop === "flex-shrink") {
-      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_flex_number === "function") {
+      if (vLower.indexOf("sign(") === -1 && vLower.indexOf("sibling-") === -1 &&
+          typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_flex_number === "function") {
         return globalThis.__capsurf_is_valid_css_flex_number(vLower);
       }
       const toks = splitCssTokens(vLower);
@@ -12043,6 +12044,9 @@
   function normalizePropColors(k, val, curColor) {
     if (!val || typeof val !== "string") return val;
     if (k === "outline-color" && val.trim().toLowerCase() === "auto") return "auto";
+    if (k === "animation-name" || k === "font-family" || k === "content" || k === "quotes" ||
+        k === "grid-row-start" || k === "grid-row-end" || k === "grid-column-start" || k === "grid-column-end" ||
+        k === "grid-row" || k === "grid-column" || k === "grid-area") return val;
     if (MULTI_COLOR_PROPS.has(k)) {
       return splitCssTokens(val).map((t) => {
         const tl = t.trim().toLowerCase();
@@ -12208,7 +12212,9 @@
           let val = target[prop];
           if (typeof val === "string") {
             val = resolveCssVars(element, val);
-            if (!prop.startsWith("--") && kebab !== "animation-name" && kebab !== "font-family" && kebab !== "content" && kebab !== "quotes") {
+            if (!prop.startsWith("--") && kebab !== "animation-name" && kebab !== "font-family" && kebab !== "content" && kebab !== "quotes" &&
+                kebab !== "grid-row-start" && kebab !== "grid-row-end" && kebab !== "grid-column-start" && kebab !== "grid-column-end" &&
+                kebab !== "grid-row" && kebab !== "grid-column" && kebab !== "grid-area") {
               val = normalizeCssColor(val);
             }
           }

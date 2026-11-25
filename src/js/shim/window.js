@@ -6141,7 +6141,8 @@ function installWindow(global) {
           // ignore invalid flex shorthand
         } else {
         const parts = splitCssTopLevelWhitespace(val);
-        const isNum = (s) => /^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(s);
+        const isNum = (s) => /^[+]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(s) ||
+          (/^(?:calc|min|max|clamp)\(/i.test(s) && !/(?:px|em|rem|ex|ch|vw|vh|cqw|cqh|cqi|cqb|cqmin|cqmax|vmin|vmax|cm|mm|q|in|pt|pc|%)/i.test(s.replace(/sign\([^()]+\)/gi, "")));
         if (parts.length === 1 && parts[0].toLowerCase() === "none") {
           setDecl("flex-grow", "0", isImp);
           setDecl("flex-shrink", "0", isImp);
@@ -9426,6 +9427,10 @@ function installWindow(global) {
             }
             return expr;
           });
+        }
+        const spanNegM = /^span\s+([+-]?\d+)$/i.exec(gNorm.trim());
+        if (spanNegM && Number(spanNegM[1]) < 1) {
+          gNorm = "span 1";
         }
         computedMap.set(gp, gNorm);
       }
