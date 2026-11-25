@@ -3623,3 +3623,5 @@
 - 补全 `layoutFlexContainer` 中 `position: absolute` 子项的静态位置对齐计算，并统一收敛至 `layoutFlexAbsChild` 避免 `item_count == 0` 与主路径逻辑重复，`position-absolute-015.html` 一次性通过。
 ### Phase 891 — Flexbox `abspos` 静态位置内容盒基准修正
 - 修正 `layoutFlexAbsChild` 误用 `padding-box` (`abs_cb`) 尺寸计算 `justify-content`/`align-items` 静态位置偏移的问题，改用 `content_box` (`container_w`/`container_h`) 后 `flex-abspos-staticpos-justify-content-001.html` 全量 24 项子测试通过。
+### Phase 892 — `justify-content` 逻辑与物理关键字在 `row-reverse` 下的精确区分
+- 将 `JustifyContent` 中原先混并的 `start`/`left`/`end`/`right` 拆分为独立枚举变体，使 `flex-abspos-staticpos-justify-content-003.html`（`row-reverse`）全部 24 项子测试通过。

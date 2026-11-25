@@ -4618,3 +4618,6 @@
 - `src/layout/layout.cp`: 抽离 `layoutFlexAbsChild` 统一处理 `item_count == 0` 与常规分支的 `abspos` 子项，按 `justify-content`、`align-items` 及主轴反转计算静态位置；通过 `cpc fix` + `cpc brief` 门禁，`position-absolute-015.html` **PASS**，`--smoke` 3/3 **PASS**。
 ### Phase 891 — Flexbox 绝对定位静态位置内容盒基准修正
 - `src/layout/layout.cp`: `layoutFlexAbsChild` 改用弹性容器内容盒（`content_x`/`content_y`/`container_w`/`container_h`）计算 `justify-content` 与 `align-items` 静态位置偏移（同时保持包含块为 `abs_cb`）；通过 `cpc fix` + `cpc brief` 门禁，`flex-abspos-staticpos-justify-content-001.html`（24/24）与 `position-absolute-015.html` **PASS**，`--smoke` 3/3 **PASS**。
+### Phase 892 — `JustifyContent` `Start`/`End`/`Left`/`Right` 语义区分与 `row-reverse` 静态对齐
+- `src/css/cascade.cp`: `JustifyContent` 拆分 `Start`/`End`/`Left`/`Right` 并支持 `normal`/`stretch`。
+- `src/layout/layout.cp`: 新增 `LayoutTree.justifyMainOffset` 区分 `flex-start`/`flex-end`（受 `row-reverse` 翻转）与 `start`/`end`/`left`/`right`；通过 `cpc fix` + `cpc brief` 门禁，`flex-abspos-staticpos-justify-content-001/003` **2/2 PASS**，`--smoke` 3/3 **PASS**。

@@ -4015,6 +4015,17 @@ pub struct LayoutTree {
         }
     }
 
+    static fn justifyMainOffset(jc: JustifyContent, is_row: bool, is_rev: bool, rem: f32): f32 {
+        return switch (jc) {
+            .FlexStart, .SpaceBetween => if (is_rev) rem else 0.0,
+            .FlexEnd => if (is_rev) 0.0 else rem,
+            .Start, .Left => 0.0,
+            .End => rem,
+            .Right => if (is_row) rem else 0.0,
+            .Center, .SpaceAround, .SpaceEvenly => rem / 2.0,
+        };
+    }
+
     fn layoutFlexAbsChild(
         *_,
         doc: *const Document,
@@ -4039,11 +4050,7 @@ pub struct LayoutTree {
         const is_rev = (pstyle.flex_direction == FlexDirection.RowReverse || pstyle.flex_direction == FlexDirection.ColumnReverse);
         const rem_main = if (is_row) (container_w - mb_w) else (container_h - mb_h);
         const rem_cross = if (is_row) (container_h - mb_h) else (container_w - mb_w);
-        const main_off: f32 = switch (pstyle.justify_content) {
-            .FlexStart, .SpaceBetween => if (is_rev) rem_main else 0.0,
-            .FlexEnd => if (is_rev) 0.0 else rem_main,
-            .Center, .SpaceAround, .SpaceEvenly => rem_main / 2.0,
-        };
+        const main_off = LayoutTree.justifyMainOffset(pstyle.justify_content, is_row, is_rev, rem_main);
         const cross_off: f32 = switch (pstyle.align_items) {
             .FlexEnd => rem_cross,
             .Center => rem_cross / 2.0,
@@ -4340,6 +4347,9 @@ pub struct LayoutTree {
             const start_offset: f32 = switch (pstyle.justify_content) {
                 .FlexStart => if (is_rev) remaining_main else 0.0,
                 .FlexEnd => if (is_rev) 0.0 else remaining_main,
+                .Start, .Left => 0.0,
+                .End => remaining_main,
+                .Right => if (is_row) remaining_main else 0.0,
                 .Center => remaining_main / 2.0,
                 .SpaceAround => (remaining_main / count_f) / 2.0,
                 .SpaceEvenly => remaining_main / count_plus_1,

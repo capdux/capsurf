@@ -2559,3 +2559,4 @@
 | Phase 889 | 多行 Flexbox `align-content: stretch` 行交叉轴拉伸 | `src/layout/layout.cp` | `/css/css-flexbox/flexbox-lines-must-be-stretched-by-default.html` **PASS**; `--smoke` 3/3 PASS |
 | Phase 890 | Flexbox 绝对定位子项静态位置对齐 (`layoutFlexAbsChild`) | `src/layout/layout.cp` | `/css/css-flexbox/abspos/position-absolute-015.html` **PASS**; `--smoke` 3/3 PASS |
 | Phase 891 | Flexbox `abspos` 静态位置内容盒基准修正 | `src/layout/layout.cp` | `flex-abspos-staticpos-justify-content-001` (24/24 **PASS**), `position-absolute-015` **PASS**; `--smoke` 3/3 PASS |
+| Phase 892 | `JustifyContent` `Start`/`End`/`Left`/`Right` 拆分与 `row-reverse` 对齐 | `cascade.cp`, `layout.cp` | `flex-abspos-staticpos-justify-content-001/003` (48/48 **PASS**); `--smoke` 3/3 PASS |

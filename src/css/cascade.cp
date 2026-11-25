@@ -725,6 +725,10 @@ pub enum FlexDirection {
 pub enum JustifyContent {
     FlexStart,
     FlexEnd,
+    Start,
+    End,
+    Left,
+    Right,
     Center,
     SpaceBetween,
     SpaceAround,
@@ -732,12 +736,14 @@ pub enum JustifyContent {
 
     static fn parse(raw: []const u8): JustifyContent? {
         const s = std.mem.trim(u8, raw, " \t\r\n");
-        if (std.ascii.eqlIgnoreCase(s, "flex-start") || std.ascii.eqlIgnoreCase(s, "start") || std.ascii.eqlIgnoreCase(s, "left")) {
+        if (std.ascii.eqlIgnoreCase(s, "flex-start") || std.ascii.eqlIgnoreCase(s, "normal") || std.ascii.eqlIgnoreCase(s, "stretch")) {
             return JustifyContent.FlexStart;
         }
-        if (std.ascii.eqlIgnoreCase(s, "flex-end") || std.ascii.eqlIgnoreCase(s, "end") || std.ascii.eqlIgnoreCase(s, "right")) {
-            return JustifyContent.FlexEnd;
-        }
+        if (std.ascii.eqlIgnoreCase(s, "flex-end")) return JustifyContent.FlexEnd;
+        if (std.ascii.eqlIgnoreCase(s, "start")) return JustifyContent.Start;
+        if (std.ascii.eqlIgnoreCase(s, "end")) return JustifyContent.End;
+        if (std.ascii.eqlIgnoreCase(s, "left")) return JustifyContent.Left;
+        if (std.ascii.eqlIgnoreCase(s, "right")) return JustifyContent.Right;
         if (std.ascii.eqlIgnoreCase(s, "center")) return JustifyContent.Center;
         if (std.ascii.eqlIgnoreCase(s, "space-between")) return JustifyContent.SpaceBetween;
         if (std.ascii.eqlIgnoreCase(s, "space-around")) return JustifyContent.SpaceAround;
