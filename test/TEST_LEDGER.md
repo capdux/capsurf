@@ -2493,3 +2493,4 @@
 | Phase 824 | WPT 孤立节点/`documentElement` 子索引伪类与未挂载 `computedStyleMap` | `src/js/shim/selector.js`, `src/js/shim/element/element.js`, `src/js/shim/window.js` | `child-indexed-pseudo-class` (57/57 **PASS**), `get-disconnected-element` (**PASS**); `--smoke` 3/3 PASS |
 | Phase 825 | WPT 替换元素固有宽度纵横比传递与 `cap:css` 声明注释剥离 | `src/layout/layout.cp`, `/data/dev/cp/lib/css/stylesheet.cp` | `intrinsic-percent-replaced-033` (9/9 **PASS**); `--smoke` 3/3 PASS |
 | Phase 826 | WPT `initial-letter` 解析/序列化与 `sign()`/`calc()` 计算值 | `src/js/shim/cssom.js`, `src/js/shim/window.js` | `initial-letter-{valid,invalid,computed,sign-function}` 4/4 **PASS**; `--smoke` 3/3 PASS |
+| Phase 827 | `getComputedStyle` 6x 提速与 `cap:css` `CssColor` 下沉/HWB 精度修复 | `src/js/shim/window.js`, `src/js/shim/cssom.js`, `/data/dev/cp/lib/css/color.cp` | `color-computed-hwb` (56/56 **PASS**), `200x cs.color` 4580ms→768ms; `--smoke` 3/3 PASS |

@@ -4423,3 +4423,8 @@
   - `src/js/shim/cssom.js`: 新增 `initial-letter` 属性注册、完整语法校验 (`normal | <number [1,∞]> <integer [1,∞]> | <number [1,∞]> && [ drop | raise ]?`) 与 `drop`/`raise` 后置规范化。
   - `src/js/shim/window.js`: `evalSignCalls` 补充 `rem` 单位解析；新增 `initial-letter` 计算值 `calc()`/`sign()` 求值、初始值 `"normal"` 及 `STANDARD_COMPUTED_LONGHANDS` 注册。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 827**:
+  - `src/js/shim/window.js`: `collectRawComputedMap` 缓存 `(domEpoch, sheetKey)` `baseMap`；`applyUsedValuesToComputedMap` 延迟 `cbW`/`cbH`/`width`/`height` 与 `isInsideReplacedContent` 判定，200x `cs.color` 耗时由 4,580ms 降至 768ms。
+  - `src/js/shim/cssom.js`: `normalizeSingleColor` 接入 `__capsurf_parse_color` (`cap:css` `CssColor.parse`) 快路径，并修复 `hwb(... none)` 保留 `%` 后缀。
+  - `/data/dev/cp/lib/css/color.cp`: `CssColor.fromHwb` 消除 `fromHsl` 中间 `u8` 量化及 `1.0 - w - bl` 浮点误差。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

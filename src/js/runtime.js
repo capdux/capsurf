@@ -14535,6 +14535,14 @@
       if (Object.prototype.hasOwnProperty.call(NAMED_COLORS_MAP, s)) {
         return NAMED_COLORS_MAP[s];
       }
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_parse_color === "function" &&
+          (((s.startsWith("#") && (s.length === 4 || s.length === 7))) ||
+           (/^(?:rgb|hsl|hwb)\(/.test(s) && s.indexOf("/") === -1 && s.indexOf(",") === -1)) &&
+          s.indexOf("none") === -1 && s.indexOf("calc(") === -1 && s.indexOf("var(") === -1 &&
+          s.indexOf("env(") === -1 && s.indexOf("nan") === -1 && s.indexOf("infinity") === -1) {
+        const nativeCol = globalThis.__capsurf_parse_color(s);
+        if (nativeCol) return nativeCol;
+      }
       if (s.startsWith("#")) {
         const hex = s.slice(1);
         if (hex.length === 3) {
@@ -14791,7 +14799,7 @@
               if (/^calc\(/i.test(ev)) return canonCalcColor(ev);
               if (ev.toLowerCase() === "none") return "none";
               const v = parseFloat(ev);
-              return isFinite(v) ? String(Number(v.toFixed(6))) : ev;
+              return isFinite(v) ? (String(Number(v.toFixed(6))) + "%") : ev;
             };
             const aOut = evA ? normAlphaOut(slash[1]) : "";
             return "hwb(" + normHueDeg(ev0) + " " + fmtWb(ev1) + " " + fmtWb(ev2) + aOut + ")";
@@ -47812,7 +47820,7 @@
               innerImpSet.add(ok);
             }
           }
-          if (!normalizedPseudo) {
+          if (!normalizedPseudo && !targetMap._skipInline) {
             const rawInline = element.getAttribute ? element.getAttribute("style") : "";
             if (rawInline && rawInline.toLowerCase().indexOf("!important") !== -1) {
               parseDeclarationsBlockInto(element, rawInline, targetMap, "important");
@@ -47828,7 +47836,7 @@
           return;
         }
       }
-      if (!normalizedPseudo) {
+      if (!normalizedPseudo && !targetMap._skipInline) {
         const rawInline = element.getAttribute ? element.getAttribute("style") : "";
         if (rawInline) {
           parseDeclarationsBlockInto(element, rawInline, targetMap);
@@ -47852,7 +47860,33 @@
 
     function collectRawComputedMap(element, normalizedPseudo) {
       const styleNodes = getStyleNodesForElement(element);
-      const computedMap = new Map();
+      const curDomEpoch = (typeof globalThis !== "undefined" && globalThis.__capsurf_domMutationEpoch) || 0;
+      const rawInlineSelf = (!normalizedPseudo && element && element.getAttribute) ? (element.getAttribute("style") || "") : "";
+      const hasInlineImp = rawInlineSelf.toLowerCase().indexOf("!important") !== -1;
+      let sheetKey = "";
+      let computedMap = null;
+      let hitBaseCache = false;
+      if (!normalizedPseudo && !hasInlineImp && styleNodes.length <= 16) {
+        for (let si = 0; si < styleNodes.length; si++) {
+          const sn = styleNodes[si];
+          if (!sn) continue;
+          const t = (sn._sheet && typeof sn._sheet._cascadeCssText === "string") ? sn._sheet._cascadeCssText : (sn.textContent || "");
+          sheetKey += t.length + ":" + t.slice(0, 64) + "|";
+        }
+        const bCache = element._rawBaseCache;
+        if (bCache && bCache.domEpoch === curDomEpoch && bCache.sheetKey === sheetKey) {
+          computedMap = new Map(bCache.baseMap);
+          if (bCache.impKeys && bCache.impKeys.size > 0) computedMap._importantKeys = new Set(bCache.impKeys);
+          if (rawInlineSelf) parseDeclarationsBlockInto(element, rawInlineSelf, computedMap);
+          hitBaseCache = true;
+        }
+      }
+      if (!computedMap) {
+        computedMap = new Map();
+        if (!normalizedPseudo && !hasInlineImp && styleNodes.length <= 16) {
+          computedMap._skipInline = true;
+        }
+      }
 
       // Collect ancestors from root down to parent for inherited properties & custom properties
       const ancestors = [];
@@ -47864,35 +47898,38 @@
         if (pn && pn.nodeType === 11 && pn.host) return pn.host;
         return pn && pn.nodeType === 1 ? pn : null;
       };
-      let p = getFlatParent(element);
-      while (p && p.nodeType === 1) {
-        ancestors.push(p);
-        p = getFlatParent(p);
-      }
-      const elRootForAnc = typeof element.getRootNode === "function" ? element.getRootNode() : null;
-      const isHlPseudo = normalizedPseudo === "::selection" || normalizedPseudo === "::target-text" || normalizedPseudo === "::search-text" || normalizedPseudo === "::spelling-error" || normalizedPseudo === "::grammar-error" || (normalizedPseudo && normalizedPseudo.startsWith("::highlight("));
-      for (let i = ancestors.length - 1; i >= 0; i--) {
-        const anc = ancestors[i];
-        const ancRoot = typeof anc.getRootNode === "function" ? anc.getRootNode() : null;
-        const ancStyleNodes = (ancRoot === elRootForAnc) ? styleNodes : getStyleNodesForElement(anc);
-        const ancMap = new Map();
-        collectElementOwnDeclarations(anc, ancStyleNodes, "", ancMap);
-        for (const [k, v] of ancMap.entries()) {
-          if (k.startsWith("--") || INHERITED_CSS_PROPS.has(k)) {
-            computedMap.set(k, v);
+      if (!hitBaseCache) {
+        const p = getFlatParent(element);
+        let ancCur = p;
+        while (ancCur && ancCur.nodeType === 1) {
+          ancestors.push(ancCur);
+          ancCur = getFlatParent(ancCur);
+        }
+        const elRootForAnc = typeof element.getRootNode === "function" ? element.getRootNode() : null;
+        const isHlPseudo = normalizedPseudo === "::selection" || normalizedPseudo === "::target-text" || normalizedPseudo === "::search-text" || normalizedPseudo === "::spelling-error" || normalizedPseudo === "::grammar-error" || (normalizedPseudo && normalizedPseudo.startsWith("::highlight("));
+        for (let i = ancestors.length - 1; i >= 0; i--) {
+          const anc = ancestors[i];
+          const ancRoot = typeof anc.getRootNode === "function" ? anc.getRootNode() : null;
+          const ancStyleNodes = (ancRoot === elRootForAnc) ? styleNodes : getStyleNodesForElement(anc);
+          const ancMap = new Map();
+          collectElementOwnDeclarations(anc, ancStyleNodes, "", ancMap);
+          for (const [k, v] of ancMap.entries()) {
+            if (k.startsWith("--") || INHERITED_CSS_PROPS.has(k)) {
+              computedMap.set(k, v);
+            }
           }
-        }
-        if (isHlPseudo) {
-          collectElementOwnDeclarations(anc, ancStyleNodes, normalizedPseudo, computedMap);
-        }
-        if (String(anc.localName || anc.tagName || "").toLowerCase() === "details") {
-          const directChild = ancestors[i - 1] || element;
-          if (String(directChild.localName || directChild.tagName || "").toLowerCase() !== "summary") {
-            const dcMap = new Map();
-            collectElementOwnDeclarations(anc, ancStyleNodes, "::details-content", dcMap);
-            for (const [k, v] of dcMap.entries()) {
-              if (k.startsWith("--") || INHERITED_CSS_PROPS.has(k)) {
-                computedMap.set(k, v);
+          if (isHlPseudo) {
+            collectElementOwnDeclarations(anc, ancStyleNodes, normalizedPseudo, computedMap);
+          }
+          if (String(anc.localName || anc.tagName || "").toLowerCase() === "details") {
+            const directChild = ancestors[i - 1] || element;
+            if (String(directChild.localName || directChild.tagName || "").toLowerCase() !== "summary") {
+              const dcMap = new Map();
+              collectElementOwnDeclarations(anc, ancStyleNodes, "::details-content", dcMap);
+              for (const [k, v] of dcMap.entries()) {
+                if (k.startsWith("--") || INHERITED_CSS_PROPS.has(k)) {
+                  computedMap.set(k, v);
+                }
               }
             }
           }
@@ -47915,7 +47952,12 @@
         const vp = valCheckProps[vi];
         if (computedMap.has(vp)) preOwn.set(vp, computedMap.get(vp));
       }
-      if (normalizedPseudo === "::marker") {
+      if (hitBaseCache) {
+        const bCache = element._rawBaseCache;
+        if (bCache && bCache.ancestors) {
+          for (let ai = 0; ai < bCache.ancestors.length; ai++) ancestors.push(bCache.ancestors[ai]);
+        }
+      } else if (normalizedPseudo === "::marker") {
         const savedList = {};
         for (const lk of ["list-style-image", "list-style-position", "list-style-type"]) {
           if (computedMap.has(lk)) savedList[lk] = computedMap.get(lk);
@@ -47980,11 +48022,21 @@
         }
       }
 
+      if (computedMap._skipInline) {
+        delete computedMap._skipInline;
+        const baseSnap = new Map(computedMap);
+        const impSnap = computedMap._importantKeys ? new Set(computedMap._importantKeys) : null;
+        element._rawBaseCache = { domEpoch: curDomEpoch, sheetKey: sheetKey, baseMap: baseSnap, impKeys: impSnap, ancestors: ancestors };
+        if (rawInlineSelf) parseDeclarationsBlockInto(element, rawInlineSelf, computedMap);
+      }
+
       // Resolve var() references using the complete (inherited + own) map
       resolveVarsInMap(computedMap);
 
       // Sync CSS Transitions and CSS @keyframes Animations (updates before-change snapshot & overlays interpolated values)
-      if (!normalizedPseudo && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_syncCssTransitionsAndAnimations === "function") {
+      const mayHaveAnimOrTrans = computedMap.has("transition-property") || computedMap.has("transition-duration") ||
+        computedMap.has("transition") || computedMap.has("animation-name") || computedMap.has("animation");
+      if (mayHaveAnimOrTrans && !normalizedPseudo && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_syncCssTransitionsAndAnimations === "function") {
         globalThis.__capsurf_syncCssTransitionsAndAnimations(element, computedMap, styleNodes);
       }
 
@@ -49040,19 +49092,28 @@
       } else if (pos === "fixed") {
         cbEl = null;
       }
-      const cbW = (cbEl && cbEl.nodeType === 1) ? computeElementUsedWidthPx(cbEl, 0) : 800;
+      let _cbW = null;
+      const getCbW = () => {
+        if (_cbW === null) _cbW = (cbEl && cbEl.nodeType === 1) ? computeElementUsedWidthPx(cbEl, 0) : 800;
+        return _cbW;
+      };
 
       // Check if an ancestor is replaced via CSS `content: url(...)` / gradient / image-set (CSS Content 3)
       let isInsideReplacedContent = false;
       {
+        const sheetHasContent = Array.isArray(collectRawComputedMap._sheetTexts) &&
+          collectRawComputedMap._sheetTexts.some((t) => t.indexOf("content") !== -1);
         let anc = element.parentElement || element.parentNode;
         while (anc && anc.nodeType === 1) {
-          const ancMap = collectRawComputedMap(anc, "");
-          const ancContent = (ancMap.get("content") || "").trim().toLowerCase();
-          if (ancContent && ancContent !== "normal" && ancContent !== "none" &&
-              /^(?:url|linear-gradient|radial-gradient|conic-gradient|repeating-linear-gradient|repeating-radial-gradient|repeating-conic-gradient|image-set|cross-fade)\(/i.test(ancContent)) {
-            isInsideReplacedContent = true;
-            break;
+          const ancSt = anc.getAttribute ? (anc.getAttribute("style") || "") : "";
+          if (sheetHasContent || ancSt.indexOf("content") !== -1) {
+            const ancMap = collectRawComputedMap(anc, "");
+            const ancContent = (ancMap.get("content") || "").trim().toLowerCase();
+            if (ancContent && ancContent !== "normal" && ancContent !== "none" &&
+                /^(?:url|linear-gradient|radial-gradient|conic-gradient|repeating-linear-gradient|repeating-radial-gradient|repeating-conic-gradient|image-set|cross-fade)\(/i.test(ancContent)) {
+              isInsideReplacedContent = true;
+              break;
+            }
           }
           anc = anc.parentElement || anc.parentNode;
         }
@@ -49061,15 +49122,12 @@
       // Resolve width for elements with a box (except non-replaced inline)
       if (!isNonReplacedInline && !isInsideReplacedContent) {
         const wRaw = (computedMap.get("width") || "").trim().toLowerCase();
-        if (wRaw === "" && disp === "block") {
-          computedMap.set("width", formatCssPx(computeElementUsedWidthPx(element, 0)));
-        } else if (wRaw !== "") {
-          const usedW = computeElementUsedWidthPx(element, 0);
-          computedMap.set("width", formatCssPx(usedW));
+        if ((wRaw === "" && disp === "block") || wRaw !== "") {
+          computedMap._lazyWidth = true;
         }
         const hRaw = (computedMap.get("height") || "").trim().toLowerCase();
         if (hRaw === "" && disp === "block") {
-          computedMap.set("height", formatCssPx(computeElementUsedHeightPx(element, 0)));
+          computedMap._lazyHeight = true;
         }
 
         // Resolve padding-* percentages / calc / relative units against cbW
@@ -49081,23 +49139,27 @@
           const pk = padProps[i];
           const pv = computedMap.get(pk);
           if (pv && !/^[+-]?(?:\d+\.?\d*|\.\d+)px$/i.test(pv.trim())) {
-            const px = evalCssLengthExpr(pv, cbW, fontSize);
+            const px = evalCssLengthExpr(pv, getCbW(), fontSize);
             if (px !== null) computedMap.set(pk, formatCssPx(Math.max(0, px)));
           }
         }
 
         // Resolve block-size, inline-size, min/max logical sizes
-        const cbH = (parentEl && parentEl.nodeType === 1) ? computeElementUsedHeightPx(parentEl, 0) : 600;
+        let _cbH = null;
+        const getCbH = () => {
+          if (_cbH === null) _cbH = (parentEl && parentEl.nodeType === 1) ? computeElementUsedHeightPx(parentEl, 0) : 600;
+          return _cbH;
+        };
         const bsRaw = (computedMap.get("block-size") || "").trim().toLowerCase();
         if (bsRaw === "auto" || bsRaw === "min-content" || bsRaw === "max-content") {
           computedMap.set("block-size", formatCssPx(computeElementUsedHeightPx(element, 0)));
         } else if (bsRaw) {
-          const px = evalCssLengthExpr(bsRaw, cbH, fontSize);
+          const px = evalCssLengthExpr(bsRaw, getCbH(), fontSize);
           if (px !== null && isFinite(px)) computedMap.set("block-size", formatCssPx(Math.max(0, px)));
         }
         const isRaw = (computedMap.get("inline-size") || "").trim().toLowerCase();
         if (isRaw === "auto") {
-          computedMap.set("inline-size", formatCssPx(cbW));
+          computedMap.set("inline-size", formatCssPx(getCbW()));
         } else if (isRaw === "min-content" || isRaw === "max-content") {
           const ch = element.children || [];
           let maxW = 0;
@@ -49107,7 +49169,7 @@
           }
           computedMap.set("inline-size", formatCssPx(maxW));
         } else if (isRaw) {
-          const px = evalCssLengthExpr(isRaw, cbW, fontSize);
+          const px = evalCssLengthExpr(isRaw, getCbW(), fontSize);
           if (px !== null && isFinite(px)) computedMap.set("inline-size", formatCssPx(Math.max(0, px)));
         }
         const logMinMax = ["min-block-size", "max-block-size", "min-inline-size", "max-inline-size"];
@@ -49134,7 +49196,7 @@
             const mk = marProps[i];
             const mv = computedMap.get(mk);
             if (mv && !/^[+-]?(?:\d+\.?\d*|\.\d+)px$/i.test(mv.trim())) {
-              const px = evalCssLengthExpr(mv, cbW, fontSize);
+              const px = evalCssLengthExpr(mv, getCbW(), fontSize);
               if (px !== null) computedMap.set(mk, formatCssPx(px));
             }
           }
@@ -52377,6 +52439,13 @@
         if (element && element.isConnected === false) return "";
         const p = String(prop).trim();
         const pLow = p.toLowerCase();
+        if (pLow === "width" && computedMap._lazyWidth) {
+          computedMap._lazyWidth = false;
+          computedMap.set("width", formatCssPx(computeElementUsedWidthPx(element, 0)));
+        } else if (pLow === "height" && computedMap._lazyHeight) {
+          computedMap._lazyHeight = false;
+          computedMap.set("height", formatCssPx(computeElementUsedHeightPx(element, 0)));
+        }
         if (pLow === "size" || pLow === "page-orientation") {
           return "";
         }

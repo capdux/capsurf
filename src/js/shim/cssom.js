@@ -10640,6 +10640,14 @@
     if (Object.prototype.hasOwnProperty.call(NAMED_COLORS_MAP, s)) {
       return NAMED_COLORS_MAP[s];
     }
+    if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_parse_color === "function" &&
+        (((s.startsWith("#") && (s.length === 4 || s.length === 7))) ||
+         (/^(?:rgb|hsl|hwb)\(/.test(s) && s.indexOf("/") === -1 && s.indexOf(",") === -1)) &&
+        s.indexOf("none") === -1 && s.indexOf("calc(") === -1 && s.indexOf("var(") === -1 &&
+        s.indexOf("env(") === -1 && s.indexOf("nan") === -1 && s.indexOf("infinity") === -1) {
+      const nativeCol = globalThis.__capsurf_parse_color(s);
+      if (nativeCol) return nativeCol;
+    }
     if (s.startsWith("#")) {
       const hex = s.slice(1);
       if (hex.length === 3) {
@@ -10896,7 +10904,7 @@
             if (/^calc\(/i.test(ev)) return canonCalcColor(ev);
             if (ev.toLowerCase() === "none") return "none";
             const v = parseFloat(ev);
-            return isFinite(v) ? String(Number(v.toFixed(6))) : ev;
+            return isFinite(v) ? (String(Number(v.toFixed(6))) + "%") : ev;
           };
           const aOut = evA ? normAlphaOut(slash[1]) : "";
           return "hwb(" + normHueDeg(ev0) + " " + fmtWb(ev1) + " " + fmtWb(ev2) + aOut + ")";
