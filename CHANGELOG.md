@@ -4311,3 +4311,7 @@
 - **Phase 797**:
   - `src/js/shim/selector.js`: `KNOWN_PSEUDO_ELEMENTS` 与 `REQUIRED_FUNC_PSEUDOS` 补充 `::cue` 及 `::view-transition-{group,image-pair,new,old}`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 798**:
+  - `src/js/shim/element/element.js`: `proto.matches` 拦截外部树 `::slotted()`。
+  - `src/js/shim/selector.js`: 支持 `ShadowRoot` 作用域内 `:host` 匹配、`getParentOrHost` 穿透及 `DocumentFragment` `querySelector`/`querySelectorAll` 透传 `scopeRoot`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

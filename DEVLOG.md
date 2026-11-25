@@ -3434,3 +3434,5 @@
 - 在 `selector.js` 实现 `::part()` 未加引号反斜杠转义跳过、空白折叠（保留 `\ ` 尾随转义空格）及 `::part()` 后接结构/树信息伪类（含 `:not()` 透传）校验，并在 `cssom.js` 严格模式拦截 `::part():is/:where` 中的非法伪类，`part/serialization.html` (3/3) 与 `part/pseudo-classes-after-part.html` (67/67) 均 **PASS**。
 ### Phase 797 — `::cue` 与 `::view-transition-*` 伪元素解析补全
 - 在 `selector.js` 补全 `::cue` 与 4 个 `::view-transition-*` 函数式伪元素，`pseudo-elements-after-part.html` 全部 23 项解析子测试通过（17/44→23/44 PASS）。
+### Phase 798 — ShadowRoot `:host` DOM API 匹配与 `::slotted()` 外部树隔离
+- 在 `element.js` 拦截 `matches()` 对 `::slotted()` 的误匹配，并在 `selector.js` 为 `ShadowRoot` 作用域内的 `querySelector`/`matches` 打通 `:host` 匹配与 `getParentOrHost` 穿透，`slotted-matches.html` 与 `host-dom-001.html` 均 **PASS**。

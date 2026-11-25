@@ -2142,6 +2142,7 @@ function installElementExtensions(proto) {
       }
       return getNodeDirectionality(this) === targetDir;
     }
+    if (/::slotted\(/i.test(s) && s.indexOf(":not(") === -1) return false;
     if (origProtoMatches) {
       try {
         if (origProtoMatches.call(this, selector)) return true;

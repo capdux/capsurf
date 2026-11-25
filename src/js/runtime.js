@@ -17392,6 +17392,12 @@
         if (pseudo === ":checked") { if (!el.checked && !(String(el.tagName || "").toUpperCase() === "OPTION" && el.selected)) return false; }
         else if (pseudo === ":disabled") { if (!el.disabled) return false; }
         else if (pseudo === ":enabled") { if (el.disabled) return false; }
+        else if (pseudo === ":host") {
+          if (!scopeRoot || !scopeRoot.host) return false;
+          const h = scopeRoot.host;
+          const same = el === h || (typeof el._nid === "number" && typeof h._nid === "number" && el._nid > 0 && el._nid === h._nid);
+          if (!same) return false;
+        }
         else if (pseudo === ":scope") {
           const sr = scopeRoot || (typeof document !== "undefined" ? document.documentElement : null);
           if (!sr) return false;
@@ -17498,23 +17504,26 @@
     if (!matchesCompoundSelector(el, parts[parts.length - 1], scopeRoot)) return false;
     if (parts.length === 1) return true;
 
+    function getParentOrHost(n) {
+      return n.parentElement || (n.parentNode && n.parentNode.nodeType === 1 ? n.parentNode : (n.parentNode && n.parentNode === scopeRoot && scopeRoot.host ? scopeRoot.host : null));
+    }
     function matchFrom(node, idx) {
       if (idx < 0) return true;
       const comb = parts[idx];
       const targetCompound = parts[idx - 1];
       if (comb === " ") {
-        let anc = node.parentElement || (node.parentNode && node.parentNode.nodeType === 1 ? node.parentNode : null);
+        let anc = getParentOrHost(node);
         while (anc) {
           if (matchesCompoundSelector(anc, targetCompound, scopeRoot) && matchFrom(anc, idx - 2)) {
             return true;
           }
           if (scopeRoot && (anc === scopeRoot || (typeof anc._nid === "number" && anc._nid > 0 && anc._nid === scopeRoot._nid))) break;
-          anc = anc.parentElement || (anc.parentNode && anc.parentNode.nodeType === 1 ? anc.parentNode : null);
+          anc = getParentOrHost(anc);
         }
         return false;
       }
       if (comb === ">") {
-        const p = node.parentElement || (node.parentNode && node.parentNode.nodeType === 1 ? node.parentNode : null);
+        const p = getParentOrHost(node);
         if (!p) return false;
         return matchesCompoundSelector(p, targetCompound, scopeRoot) && matchFrom(p, idx - 2);
       }
@@ -17673,16 +17682,18 @@
     markNative(DocumentFragment.prototype.getElementById, "getElementById");
 
     DocumentFragment.prototype.querySelector = wrapQuerySelector(function (sel) {
+      const self = this;
       const found = findInSubtree(this, function (el) {
-        return matchesElementSelector(el, sel);
+        return matchesElementSelector(el, sel, self);
       }, true);
       return found ? (typeof upgradeElement === "function" ? upgradeElement(found) : found) : null;
     });
     markNative(DocumentFragment.prototype.querySelector, "querySelector");
 
     DocumentFragment.prototype.querySelectorAll = wrapQuerySelectorAll(function (sel) {
+      const self = this;
       return findInSubtree(this, function (el) {
-        return matchesElementSelector(el, sel);
+        return matchesElementSelector(el, sel, self);
       }, false) || [];
     });
     markNative(DocumentFragment.prototype.querySelectorAll, "querySelectorAll");
@@ -19835,6 +19846,7 @@
         }
         return getNodeDirectionality(this) === targetDir;
       }
+      if (/::slotted\(/i.test(s) && s.indexOf(":not(") === -1) return false;
       if (origProtoMatches) {
         try {
           if (origProtoMatches.call(this, selector)) return true;

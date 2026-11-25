@@ -2464,3 +2464,4 @@
 | Phase 795 | WPT `::slotted()` 后接伪元素与宽容选择器链式解析（36/36） | `src/js/shim/selector.js`, `src/js/shim/cssom.js` | `slotted-parsing.html` (**36/36 PASS**); `--smoke` 3/3 PASS |
 | Phase 796 | WPT `::part()` 序列化与后接伪类校验（70/70） | `src/js/shim/selector.js`, `src/js/shim/cssom.js` | `part/serialization` (3/3 **PASS**)、`part/pseudo-classes-after-part` (67/67 **PASS**); `--smoke` 3/3 PASS |
 | Phase 797 | WPT `::cue` 与 `::view-transition-*` 伪元素解析补全 | `src/js/shim/selector.js` | `pseudo-elements-after-part.html` 全部 23 项解析子测试通过 (23/44 PASS); `--smoke` 3/3 PASS |
+| Phase 798 | WPT ShadowRoot `:host` DOM API 匹配与 `::slotted()` 外部树隔离 | `src/js/shim/element/element.js`, `src/js/shim/selector.js` | `slotted-matches.html` **PASS**、`host-dom-001.html` **PASS**; `--smoke` 3/3 PASS |
