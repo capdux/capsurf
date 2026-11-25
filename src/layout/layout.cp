@@ -4015,6 +4015,43 @@ pub struct LayoutTree {
         }
     }
 
+    fn layoutFlexAbsChild(
+        *_,
+        doc: *const Document,
+        styles: []const ComputedStyle,
+        pstyle: *const ComputedStyle,
+        is_row: bool,
+        aid: NodeId,
+        content_x: f32,
+        content_y: f32,
+    ) {
+        const astyle = &styles[@as(usize, aid)];
+        if (astyle.position == CssPosition.Fixed) {
+            _.layoutNodeEx(doc, styles, aid, 0.0, 0.0, _.viewport_width, _.viewport_height, content_x, content_y, true);
+            return;
+        }
+        _.resolveBoxMetrics(doc, styles, aid, astyle, _.abs_cb_w, _.abs_cb_h, true);
+        const abox = &_.boxes.items[@as(usize, aid)];
+        const mb_w = abox.borderBoxWidth() + abox.marginHorizontal();
+        const mb_h = abox.borderBoxHeight() + abox.marginVertical();
+        const is_rev = (pstyle.flex_direction == FlexDirection.RowReverse || pstyle.flex_direction == FlexDirection.ColumnReverse);
+        const rem_main = if (is_row) (_.abs_cb_w - mb_w) else (_.abs_cb_h - mb_h);
+        const rem_cross = if (is_row) (_.abs_cb_h - mb_h) else (_.abs_cb_w - mb_w);
+        const main_off: f32 = switch (pstyle.justify_content) {
+            .FlexStart, .SpaceBetween => if (is_rev) rem_main else 0.0,
+            .FlexEnd => if (is_rev) 0.0 else rem_main,
+            .Center, .SpaceAround, .SpaceEvenly => rem_main / 2.0,
+        };
+        const cross_off: f32 = switch (pstyle.align_items) {
+            .FlexEnd => rem_cross,
+            .Center => rem_cross / 2.0,
+            * => 0.0,
+        };
+        const sx = _.abs_cb_x + (if (is_row) main_off else cross_off);
+        const sy = _.abs_cb_y + (if (is_row) cross_off else main_off);
+        _.layoutNodeEx(doc, styles, aid, _.abs_cb_x, _.abs_cb_y, _.abs_cb_w, _.abs_cb_h, sx, sy, true);
+    }
+
     /// Flexbox layout: implements W3C Flexbox Level 1 main-axis distribution and cross-axis alignment.
     fn layoutFlexContainer(
         *_,
@@ -4134,12 +4171,7 @@ pub struct LayoutTree {
             // Still lay out any out-of-flow absolute/fixed children relative to their containing block
             let ai: usize = 0;
             while (ai < abs_count) : (ai += 1) {
-                const aid = abs_children[ai];
-                if (styles[@as(usize, aid)].position == CssPosition.Fixed) {
-                    _.layoutNodeEx(doc, styles, aid, 0.0, 0.0, _.viewport_width, _.viewport_height, content_x, content_y, true);
-                } else {
-                    _.layoutNodeEx(doc, styles, aid, _.abs_cb_x, _.abs_cb_y, _.abs_cb_w, _.abs_cb_h, content_x, content_y, true);
-                }
+                _.layoutFlexAbsChild(doc, styles, pstyle, is_row, abs_children[ai], content_x, content_y);
             }
             return;
         }
@@ -4447,12 +4479,7 @@ pub struct LayoutTree {
         if (abs_count > 0) {
             let ai: usize = 0;
             while (ai < abs_count) : (ai += 1) {
-                const aid = abs_children[ai];
-                if (styles[@as(usize, aid)].position == CssPosition.Fixed) {
-                    _.layoutNodeEx(doc, styles, aid, 0.0, 0.0, _.viewport_width, _.viewport_height, content_x, content_y, true);
-                } else {
-                    _.layoutNodeEx(doc, styles, aid, _.abs_cb_x, _.abs_cb_y, _.abs_cb_w, _.abs_cb_h, content_x, content_y, true);
-                }
+                _.layoutFlexAbsChild(doc, styles, pstyle, is_row, abs_children[ai], content_x, content_y);
             }
         }
 

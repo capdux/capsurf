@@ -3619,3 +3619,5 @@
 - 补全 `layoutFlexContainer` 对 `height: auto; max-height: ...` 纵轴多行换行的支持、`flex-grow` 触达 `max-height`/`max-width` 后的冻结再分配（CSS Flexbox §9.7），以及 `forced_height` 向下透传。
 ### Phase 889 — 多行 Flexbox 交叉轴行拉伸 (`line_cross_avail`)
 - 修复 `layoutFlexContainer` 在 `line_count > 1` 时将 `line_cross_avail` 硬编码为 `0.0` 导致 `align-content: stretch` 失效的问题，`flexbox-lines-must-be-stretched-by-default.html` 一次性通过。
+### Phase 890 — Flexbox `abspos` 静态位置对齐计算
+- 补全 `layoutFlexContainer` 中 `position: absolute` 子项的静态位置对齐计算，并统一收敛至 `layoutFlexAbsChild` 避免 `item_count == 0` 与主路径逻辑重复，`position-absolute-015.html` 一次性通过。
