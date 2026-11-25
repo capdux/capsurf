@@ -3657,3 +3657,5 @@
 - 复用 Phase 906 的 WebIDL 构造规范补全 `AnimationEvent`，在 `CSSKeyframesRule` 拦截 `-10%`/`120%` 非法关键帧选择器，并在 `window.js` `timeProps` 解析分支联动 `animation-timeline == "auto"` 将 `animation-duration: auto` 计算为 `0s`，三项测试一次全绿。
 ### Phase 908 — `css-fonts` 4 项快速回归全绿闭环
 - 修复 `layout.cp` 中 `font_size_px == 0` 误回退 16px 默认字号的问题，补齐 `INHERITED_CSS_PROPS`、`expandCssShorthand("font")` 与 `CSSFontFeatureValuesRule` Map 构建，`font_feature_values_map_iteration`、`font-palette-vs-shorthand`、`font-size-zero-ligatures` 与 `font-variation-settings-inherit` 全部一次通过。
+### Phase 909 — `@scope` 隐式 `:scope` 特异度修正
+- 区分匹配用选择器 `curSel`（带 `:scope `）与计算权重用选择器 `specSel`（原始 `> .a`），解决 `@scope (#main) { > .a }` 误计为 `(0, 2, 0)` 压过 `div:where(#main) > .a` `(0, 1, 1)` 的问题，`scope-specificity.html` 11/11 全绿。

@@ -2576,3 +2576,4 @@
 | Phase 906 | `TransitionEvent` WebIDL 构造/原型 & `@starting-style` 解析/序列化 | `cssom.js`, `event.js`, `index.js` | `transitionevent-interface` (42/42), `starting-style-parsing` (5/5) **2/2 PASS**; `idlharness` 48/64; `--smoke` 3/3 PASS |
 | Phase 907 | `AnimationEvent` WebIDL、`@keyframes` `[0%,100%]` & `animation-duration: auto` | `event.js`, `index.js`, `cssom.js`, `window.js` | `keyframe-selectors`, `animation-duration-computed`, `animationevent-interface` **3/3 PASS**; `--smoke` 3/3 PASS |
 | Phase 908 | `font_size_px==0` 归零、`font` 简写展开、`font-variation-settings` 继承 & `CSSFontFeatureValuesRule` | `layout.cp`, `window.js`, `cssom.js` | `font_feature_values_map_iteration`, `font-palette-vs-shorthand`, `font-size-zero-ligatures`, `font-variation-settings-inherit` **4/4 PASS**; `--smoke` 3/3 PASS |
+| Phase 909 | `@scope` 隐式 `:scope` 不计伪类特异度 | `src/js/shim/window.js` | `scope-specificity.html` **PASS** (11/11); `--smoke` 3/3 PASS |

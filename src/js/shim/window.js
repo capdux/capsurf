@@ -6654,10 +6654,12 @@ function installWindow(global) {
           } else if (sel) {
             const collectNested = (rawCurSel, dText, nestDepth) => {
               if (nestDepth > 12) return;
-              const curSel = (scopeRoot && /^[>+~]/.test(rawCurSel)) ? (":scope " + rawCurSel) : rawCurSel;
+              const implicitScope = !!(scopeRoot && /^[>+~]/.test(rawCurSel));
+              const curSel = implicitScope ? (":scope " + rawCurSel) : rawCurSel;
+              const specSel = implicitScope ? rawCurSel : curSel;
               if (dText.indexOf("{") === -1) {
                 if (matchesSelector(element, curSel, normalizedPseudo, scopeRoot)) {
-                  matched.push({ decl: dText, layer: layerPrefix || "", spec: calcMatchedSelectorSpecificity(element, curSel, normalizedPseudo), prox: curProx, order: seq++ });
+                  matched.push({ decl: dText, layer: layerPrefix || "", spec: calcMatchedSelectorSpecificity(element, specSel, normalizedPseudo), prox: curProx, order: seq++ });
                 }
                 return;
               }
@@ -6677,7 +6679,7 @@ function installWindow(global) {
                 }
               }
               if (ownDecls.length > 0 && matchesSelector(element, curSel, normalizedPseudo, scopeRoot)) {
-                matched.push({ decl: ownDecls.join(";"), layer: layerPrefix || "", spec: calcMatchedSelectorSpecificity(element, curSel, normalizedPseudo), prox: curProx, order: seq++ });
+                matched.push({ decl: ownDecls.join(";"), layer: layerPrefix || "", spec: calcMatchedSelectorSpecificity(element, specSel, normalizedPseudo), prox: curProx, order: seq++ });
               }
             };
             collectNested(sel, r.declText || "", 0);
