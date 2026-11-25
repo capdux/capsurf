@@ -2498,3 +2498,4 @@
 | Phase 829 | `ListStylePosition` (`inside`/`outside`) 与预定义列表标记 (`formatListMarker`) | `src/css/cascade.cp`, `src/layout/layout.cp`, `src/render/painter.cp` | `formatListMarker` + `inside` 布局对齐; `--smoke` 3/3 PASS |
 | Phase 830 | Grid 自动外边距与行内 `align-items` 对齐 | `src/layout/layout.cp` | `grid-*-alignment-auto-margins*` **17/23 PASS**; `--smoke` 3/3 PASS |
 | Phase 831 | CSS Syntax CDO/CDC、未闭合 `url(` 与嵌套规则恢复 | `src/js/shim/cssom.js`, `src/js/shim/element/element.js` | `unclosed-url-at-eof`, `cdc-vs-ident-tokens`, `invalid-nested-rules` 3/3 **PASS**; `--smoke` 3/3 PASS |
+| Phase 832 | 相邻块级兄弟外边距折叠 (`layoutBlockContainer`) | `src/layout/layout.cp` | `css-color/{hex,hsl,hsla,rgb,rgba}-*` **36/36 PASS**; `--smoke` 3/3 PASS |

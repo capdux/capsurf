@@ -4441,3 +4441,5 @@
   - `src/js/shim/cssom.js`: `splitStylesheetRules` 剥离顶层 `<!--`/`-->`；`serializeCssValue` 补全未闭合 `url(`；`constructRule` 为 `CSSStyleRule` 填充嵌套 `cssRules` 并按 `allowNesting=true` 过滤非法嵌套规则。
   - `src/js/shim/element/element.js`: `serializeInlineSpecifiedValue` 闭合 EOF 未闭合 `url(`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 832**:
+  - `src/layout/layout.cp`: `layoutBlockContainer` 实现相邻块级兄弟正外边距折叠（忽略块间纯空白行内片段对折叠链的打断）。

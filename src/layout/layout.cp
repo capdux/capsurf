@@ -3398,6 +3398,8 @@ pub struct LayoutTree {
             !pstyle_blk.top.is_auto && !pstyle_blk.top.is_none &&
             !pstyle_blk.bottom.is_auto && !pstyle_blk.bottom.is_none;
         const child_h_definite = !parent_box.height_is_auto || parent_pinned_v;
+        let prev_block_mb: f32 = 0.0;
+        let has_prev_block_mb: bool = false;
 
         let child = doc.nodes.items[@as(usize, parent_id)].first_child;
         while (child != NULL_NODE && @as(usize, child) < doc.nodes.items.len) {
@@ -3448,14 +3450,21 @@ pub struct LayoutTree {
 
                     // Handle CSS clear
                     if (cstyle.clear_mode == ClearMode.Left || cstyle.clear_mode == ClearMode.Both) {
-                        if (float_left_bottom > cursor_y) cursor_y = float_left_bottom;
+                        if (float_left_bottom > cursor_y) { cursor_y = float_left_bottom; has_prev_block_mb = false; }
                     }
                     if (cstyle.clear_mode == ClearMode.Right || cstyle.clear_mode == ClearMode.Both) {
-                        if (float_right_bottom > cursor_y) cursor_y = float_right_bottom;
+                        if (float_right_bottom > cursor_y) { cursor_y = float_right_bottom; has_prev_block_mb = false; }
                     }
 
                     _.layoutNodeEx(doc, styles, child, content_x, cursor_y, content_w, content_h, content_x, cursor_y, child_h_definite);
                     const cbox = &_.boxes.items[@as(usize, child)];
+                    if (has_prev_block_mb && prev_block_mb > 0.0 && cbox.margin_top > 0.0) {
+                        const overlap = @min(prev_block_mb, cbox.margin_top);
+                        if (overlap > 0.0) {
+                            _.shiftSubtree(doc, child, 0.0, -overlap);
+                            cursor_y -= overlap;
+                        }
+                    }
 
                     if (cstyle.margin_left.is_auto && cstyle.margin_right.is_auto) {
                         const bw = cbox.borderBoxWidth();
@@ -3471,6 +3480,8 @@ pub struct LayoutTree {
                         last_baseline_rel = (cursor_y + cbox.margin_top + cbox.baseline_offset) - parent_border_top_y;
                     }
                     cursor_y += cbox.outerHeight();
+                    prev_block_mb = cbox.margin_bottom;
+                    has_prev_block_mb = true;
                     const cr = _.boxes.items[@as(usize, child)].rect.right();
                     if (cr > max_child_right) {
                         max_child_right = cr;
@@ -3647,6 +3658,9 @@ pub struct LayoutTree {
                     }
                     emitted_lines += used_l;
                 }
+            }
+            if (cursor_y > run_start_y) {
+                has_prev_block_mb = false;
             }
 
             // Compute bounding rects for inline wrappers bottom-up (deepest first)

@@ -3502,3 +3502,5 @@
 - 在 `layout.cp` `layoutGridContainer` 传入显式行高 `cell_row_h` 并实现网格子项水平/垂直 `auto` 外边距与 `align-items: center|flex-end` 偏移对齐，`/css/css-grid/alignment/*auto-margins*` 跃升至 **17/23 PASS**（`block-axis` 9/9 全绿），`--smoke` 3/3 **PASS**。
 ### Phase 831 — CSS Syntax CDO/CDC、EOF 未闭合 `url(` 与嵌套规则错误恢复
 - 修复 `splitStylesheetRules` 顶层 `<!--`/`-->` 剥离、`serializeCssValue`/`serializeInlineSpecifiedValue` EOF 未闭合 `url(` 补全，以及 `CSSStyleRule` 嵌套 `cssRules` 按 `allowNesting=true` 校验过滤非法嵌套规则，`/css/css-syntax/{unclosed-url-at-eof,cdc-vs-ident-tokens,invalid-nested-rules}` 3/3 全绿 **PASS**。
+### Phase 832 — 相邻块级兄弟外边距折叠 (`margin collapsing`) 一次性清零 36 项颜色 Reftest
+- 在 `layout.cp` `layoutBlockContainer` 实现相邻块级兄弟元素正外边距折叠，并修正块间纯空白文本节点误重置 `has_prev_block_mb` 的问题，`/css/css-color/` 下 `hex-001..004`、`hsl-001..008`、`hsla-001..008`、`rgb-001..008`、`rgba-001..008` **36/36** 全绿 **PASS**，`--smoke` 3/3 **PASS**。
