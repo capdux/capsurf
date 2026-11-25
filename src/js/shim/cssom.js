@@ -68,7 +68,7 @@
     "mask-mode", "mask-origin", "mask-position", "mask-repeat", "mask-size", "mask-type", "max-lines",
     "nav-down", "nav-left", "nav-right", "nav-up",
     "max-block-size", "max-height", "max-inline-size", "max-width", "min-block-size",
-    "min-height", "min-inline-size", "min-width", "mix-blend-mode", "object-fit",
+    "min-height", "min-inline-size", "min-width", "mix-blend-mode", "object-fit", "object-view-box",
     "object-position", "offset", "offset-anchor", "offset-distance", "offset-path",
     "offset-position", "offset-rotate", "opacity", "order", "orphans", "outline",
     "outline-color", "outline-offset", "outline-style", "outline-width", "overflow",
@@ -3368,6 +3368,28 @@
         }
       }
       return true;
+    }
+    if (prop === "object-view-box") {
+      if (vLower === "none") return true;
+      const m = /^(inset|xywh|rect)\((.+)\)$/i.exec(trimmed);
+      if (!m) return false;
+      const fn = m[1].toLowerCase();
+      const body = m[2].trim();
+      if (fn === "inset") {
+        const parts = splitCssTokens(body.split(/\s+round\s+/i)[0].trim());
+        return parts.length >= 1 && parts.length <= 4 && parts.every((p) => isValidLenPct(p, true));
+      }
+      if (fn === "xywh") {
+        const parts = splitCssTokens(body.split(/\s+round\s+/i)[0].trim());
+        return parts.length === 4 &&
+          isValidLenPct(parts[0], true) && isValidLenPct(parts[1], true) &&
+          isValidLenPct(parts[2], false) && isValidLenPct(parts[3], false);
+      }
+      if (fn === "rect") {
+        const parts = splitCssTokens(body.split(/\s+round\s+/i)[0].trim());
+        return parts.length === 4 && parts.every((p) => p.toLowerCase() === "auto" || isValidLenPct(p, true));
+      }
+      return false;
     }
     if (prop === "object-fit") {
       const toks = splitCssTokens(vLower);
@@ -7139,6 +7161,9 @@
     };
   }
 
+  if (typeof CSS.elementSources === "undefined") {
+    CSS.elementSources = new Map();
+  }
   global.CSS = CSS;
   if (typeof globalThis !== "undefined") globalThis.CSS = CSS;
   if (typeof window !== "undefined") window.CSS = CSS;

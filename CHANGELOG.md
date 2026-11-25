@@ -4274,3 +4274,7 @@
   - `src/js/shim/window.js`: `collectElementOwnDeclarations` 在读取 `<style>` 节点 `sn._sheet._cascadeCssText` 前先调用 `_syncFromOwner()`，并改用 `typeof ... === "string"` 判定以避免空串假值回退。
   - `test/wpt/wpt-expectations.json`: 收紧 `/css/css-cascade/layer-cssom-order-reverse.html` 为 `PASS`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 788**:
+  - `src/js/shim/cssom.js`: 新增 `CSS.elementSources`，并在 `KNOWN_PROPS` 与 `isValidCssValue` 补全 `object-view-box`（`none | inset() | xywh() | rect()`）校验。
+  - `src/js/shim/window.js`: `INITIAL_VALUES` 与 `ALL_KNOWN_PROPS` 补全 `object-view-box`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

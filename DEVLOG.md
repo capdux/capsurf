@@ -3414,3 +3414,5 @@
 - 清理 `dom_binding.cp` 中与 `element.js` 冲突的 `:dir()` 覆写，补全 `Element.prototype.dir` 属性反射、`input[type=tel]` 无 `dir` 属性固定 `ltr`、以及 `text/search/tel/url/email/password/submit/reset/button/hidden` 的 `dir="auto"` 值扫描，`/css/selectors/dir-pseudo-on-input-element.html` **FAIL→PASS**，实现 `/css/selectors/` 目录 0 FAIL 清零。
 ### Phase 787 — `<style>` `deleteRule` 空串级联同步修复及 `/css/css-cascade/` 目录清零
 - 修复 `window.js` `collectElementOwnDeclarations` 在读取 `<style>` 节点 `sn._sheet._cascadeCssText` 时未先调用 `_syncFromOwner()` 且将空串 `""` 误判为假值回退至旧 `textContent` 的问题，`/css/css-cascade/layer-cssom-order-reverse.html` **FAIL→PASS**，实现 `/css/css-cascade/` 目录 0 FAIL 清零。
+### Phase 788 — `CSS.elementSources` 与 `object-view-box` 校验打通
+- 在 `cssom.js` 补全 `CSS.elementSources` 命名空间属性与 `object-view-box`（接受 `none | inset() | xywh() | rect()`，拒绝 `circle()`/`ellipse()`/`polygon()`/`path()` 等非法形状），并在 `window.js` 补全初始值注册，`css-images/idlharness.html`、`object-view-box-parsing.html`、`object-view-box-transition-mutation.html` 3/3 **PASS**。
