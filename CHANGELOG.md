@@ -4569,3 +4569,6 @@
 ### Phase 874 — `clip: rect(...)` 分隔符校验、`clip`/`mask-border-mode` 初始值与继承全绿
 - `src/css/cascade.cp`: `clip: rect(...)` 严格区分逗号分隔与空格分隔，拒绝混用并避免无效值占槽。
 - `src/js/shim/{window.js,cssom.js}`: 补齐 `clip: auto` 与 `mask-border-mode: alpha` 初始值及 CSSOM 属性白名单；`clip-rect-comma-003/004` 与 `css-masking/inheritance.sub.html`（**FAIL→PASS**）**3/3 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 875 — `rgb()` 混用百分比拦截与逻辑属性初始值全量补齐
+- `src/js/shim/cssom.js`: `isValidColor` 拦截逗号分隔 `rgb()`/`rgba()` 混用百分比与数值的非法语法。
+- `src/js/shim/window.js`: 默认计算样式表补齐 `min/max-{block,inline}-size`、`inset-{block,inline}-*`、`border-{block,inline}-*-style`、`border-*-*-radius` 共 16 个逻辑属性初始值，并补全 `block-size`/`inline-size` 空值计算；`border-{block,inline}-color-invalid.html` **PASS**、`css-logical/inheritance.html` **PASS (68/68)**，`--smoke` 3/3 **PASS**。

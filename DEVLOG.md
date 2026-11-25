@@ -3588,3 +3588,5 @@
 - 修复了 `cssom.js` `isValidLenPct` 下沉 `__capsurf_is_valid_css_len_pct` 时绕过 JS 侧 `calc(1 / 2px)` 除数维度拦截的问题，`/css/css-box/parsing/width-invalid.html` 转绿。
 ### Phase 874 — `css-masking` `clip` 与继承全量修复
 - 修复了 `cascade.cp` 解析 `clip: rect(...)` 允许逗号与空格混用及无效声明占槽的问题，并补齐 `clip` 与 `mask-border-mode` 的初始值及 CSSOM 校验，使 `css-masking/inheritance.sub.html`（36/36）与 `clip-rect-comma-003/004` 转绿。
+### Phase 875 — `css-logical` 解析校验与 68 项继承测试全绿
+- 修复了逗号分隔 `rgb()`/`rgba()` 混用百分比与数字未被拒绝的问题，并补齐了 18 个逻辑属性的默认初始计算值，`/css/css-logical/inheritance.html`（68/68）与颜色非法测试全部通过。

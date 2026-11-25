@@ -4054,6 +4054,13 @@
     let _isValidCalcSyntax = null;
     let _parseAndNormalizeShape = null;
     function isValidColor(val) {
+      const rgbCommaM = /^rgba?\(\s*([^,]+)\s*,\s*([^,]+)\s*,\s*([^,)]+)(?:\s*,\s*[^)]+)?\s*\)$/i.exec(String(val || "").trim());
+      if (rgbCommaM) {
+        const hasPct0 = rgbCommaM[1].includes("%");
+        const hasPct1 = rgbCommaM[2].includes("%");
+        const hasPct2 = rgbCommaM[3].includes("%");
+        if ((hasPct0 !== hasPct1) || (hasPct1 !== hasPct2)) return false;
+      }
       if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_color === "function" &&
           !/\b(?:from|contrast-color|device-cmyk|calc)\b/i.test(val)) {
         return globalThis.__capsurf_is_valid_css_color(val);
@@ -49787,14 +49794,14 @@
           return _cbH;
         };
         const bsRaw = (computedMap.get("block-size") || "").trim().toLowerCase();
-        if (bsRaw === "auto" || bsRaw === "min-content" || bsRaw === "max-content") {
+        if (bsRaw === "" || bsRaw === "auto" || bsRaw === "min-content" || bsRaw === "max-content") {
           computedMap.set("block-size", formatCssPx(computeElementUsedHeightPx(element, 0)));
         } else if (bsRaw) {
           const px = evalCssLengthExpr(bsRaw, getCbH(), fontSize);
           if (px !== null && isFinite(px)) computedMap.set("block-size", formatCssPx(Math.max(0, px)));
         }
         const isRaw = (computedMap.get("inline-size") || "").trim().toLowerCase();
-        if (isRaw === "auto") {
+        if (isRaw === "" || isRaw === "auto") {
           computedMap.set("inline-size", formatCssPx(getCbW()));
         } else if (isRaw === "min-content" || isRaw === "max-content") {
           const ch = element.children || [];
@@ -51233,6 +51240,22 @@
         ["border-top-right-radius", "0px"],
         ["border-bottom-right-radius", "0px"],
         ["border-bottom-left-radius", "0px"],
+        ["min-block-size", "0px"],
+        ["min-inline-size", "0px"],
+        ["max-block-size", "none"],
+        ["max-inline-size", "none"],
+        ["inset-block-start", "auto"],
+        ["inset-block-end", "auto"],
+        ["inset-inline-start", "auto"],
+        ["inset-inline-end", "auto"],
+        ["border-block-start-style", "none"],
+        ["border-block-end-style", "none"],
+        ["border-inline-start-style", "none"],
+        ["border-inline-end-style", "none"],
+        ["border-start-start-radius", "0px"],
+        ["border-start-end-radius", "0px"],
+        ["border-end-start-radius", "0px"],
+        ["border-end-end-radius", "0px"],
         ["overscroll-behavior-block", "auto"],
         ["overscroll-behavior-inline", "auto"],
         ["overscroll-behavior-x", "auto"],

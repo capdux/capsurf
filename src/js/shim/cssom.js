@@ -159,6 +159,13 @@
   let _isValidCalcSyntax = null;
   let _parseAndNormalizeShape = null;
   function isValidColor(val) {
+    const rgbCommaM = /^rgba?\(\s*([^,]+)\s*,\s*([^,]+)\s*,\s*([^,)]+)(?:\s*,\s*[^)]+)?\s*\)$/i.exec(String(val || "").trim());
+    if (rgbCommaM) {
+      const hasPct0 = rgbCommaM[1].includes("%");
+      const hasPct1 = rgbCommaM[2].includes("%");
+      const hasPct2 = rgbCommaM[3].includes("%");
+      if ((hasPct0 !== hasPct1) || (hasPct1 !== hasPct2)) return false;
+    }
     if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_color === "function" &&
         !/\b(?:from|contrast-color|device-cmyk|calc)\b/i.test(val)) {
       return globalThis.__capsurf_is_valid_css_color(val);

@@ -2541,3 +2541,4 @@
 | Phase 872 | `BgGradient` 角度校验 & `painter.cp` `z-index` 三遍堆叠绘制 | `cascade.cp`, `painter.cp`, `window.js` | `angle-units-001..005.html` **5/5 PASS**; `--smoke` 3/3 PASS |
 | Phase 873 | `calc()` 除数维度校验前置拦截 | `src/js/shim/cssom.js` | `/css/css-box/parsing/width-invalid.html` **PASS**; `--smoke` 3/3 PASS |
 | Phase 874 | `clip: rect(...)` 分隔符校验 & `clip`/`mask-border-mode` 继承 | `cascade.cp`, `window.js`, `cssom.js` | `clip-rect-comma-003/004` **PASS**, `css-masking/inheritance.sub.html` **FAIL→PASS**; `--smoke` 3/3 PASS |
+| Phase 875 | `rgb()` 混用拦截 & 逻辑属性初始值补齐（68/68 PASS） | `cssom.js`, `window.js` | `border-{block,inline}-color-invalid.html` **PASS**, `css-logical/inheritance.html` **PASS (68/68)**; `--smoke` 3/3 PASS |
