@@ -4315,3 +4315,6 @@
   - `src/js/shim/element/element.js`: `proto.matches` 拦截外部树 `::slotted()`。
   - `src/js/shim/selector.js`: 支持 `ShadowRoot` 作用域内 `:host` 匹配、`getParentOrHost` 穿透及 `DocumentFragment` `querySelector`/`querySelectorAll` 透传 `scopeRoot`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 799**:
+  - `src/js/shim/window.js`: `collectElementOwnDeclarations` 新增跨 Shadow DOM `::part(...)` 与 `exportparts` 级联匹配及 ShadowRoot 内 `:host::part(...)` 支持。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

@@ -3436,3 +3436,5 @@
 - 在 `selector.js` 补全 `::cue` 与 4 个 `::view-transition-*` 函数式伪元素，`pseudo-elements-after-part.html` 全部 23 项解析子测试通过（17/44→23/44 PASS）。
 ### Phase 798 — ShadowRoot `:host` DOM API 匹配与 `::slotted()` 外部树隔离
 - 在 `element.js` 拦截 `matches()` 对 `::slotted()` 的误匹配，并在 `selector.js` 为 `ShadowRoot` 作用域内的 `querySelector`/`matches` 打通 `:host` 匹配与 `getParentOrHost` 穿透，`slotted-matches.html` 与 `host-dom-001.html` 均 **PASS**。
+### Phase 799 — 跨 Shadow DOM `::part()` / `exportparts` 与 `:host::part()` 级联匹配
+- 在 `window.js` `collectElementOwnDeclarations` 中实现沿 `ShadowRoot.host` 向上穿透的 `::part(...)` 与 `exportparts` 映射级联匹配，并补充当前 ShadowRoot 内部 `:host::part(...)` 规则收集，`all-hosts.html`、`both-part-and-exportparts.html`、`host-part-001.html`、`invalidation-change-exportparts-forward.html` 4/4 **PASS**。

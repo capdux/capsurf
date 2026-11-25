@@ -46466,6 +46466,160 @@
         collectRawComputedMap._sheetTexts = null;
         parseCssRulesInto(element, combined, targetMap, normalizedPseudo);
       }
+      if (element && element.nodeType === 1 && typeof element.getAttribute === "function") {
+        const rawPartAttr = (element.getAttribute("part") || "").trim();
+        const elRoot = typeof element.getRootNode === "function" ? element.getRootNode() : null;
+        if (rawPartAttr && elRoot && elRoot.nodeType === 11 && elRoot.host) {
+          let exposedParts = new Set(rawPartAttr.split(/\s+/).filter(Boolean));
+          let curHost = elRoot.host;
+          const collectScopeCssText = (sc) => {
+            const texts = [];
+            const scan = (nd) => {
+              if (!nd) return;
+              const tg = nd.tagName ? String(nd.tagName).toLowerCase() : "";
+              if (tg === "style") {
+                if (nd._sheet && typeof nd._sheet._syncFromOwner === "function") nd._sheet._syncFromOwner();
+                const t = (nd._sheet && typeof nd._sheet._cascadeCssText === "string") ? nd._sheet._cascadeCssText : (nd.textContent || "");
+                if (t) texts.push(t);
+              } else if (tg === "link") {
+                const rel = String((nd.getAttribute && nd.getAttribute("rel")) || "").trim().toLowerCase().split(/\s+/);
+                if (rel.includes("stylesheet") && nd.sheet) {
+                  if (typeof nd.sheet._syncFromOwner === "function") nd.sheet._syncFromOwner();
+                  if (nd.sheet._cascadeCssText) texts.push(nd.sheet._cascadeCssText);
+                }
+              }
+              if (nd.childNodes && nd.childNodes.length) {
+                for (let ci = 0; ci < nd.childNodes.length; ci++) scan(nd.childNodes[ci]);
+              }
+            };
+            if (sc.nodeType === 11) scan(sc);
+            else { if (sc.head) scan(sc.head); if (sc.body) scan(sc.body); }
+            if (Array.isArray(sc.adoptedStyleSheets)) {
+              for (let ai = 0; ai < sc.adoptedStyleSheets.length; ai++) {
+                const sh = sc.adoptedStyleSheets[ai];
+                if (sh && !sh.disabled && sh._cascadeCssText) texts.push(sh._cascadeCssText);
+              }
+            }
+            return texts.join("\n");
+          };
+          const matchPartSelector = (selStr, hostEl, scopeNode, requireHostPseudo) => {
+            const pm = /^(.*?)::part\(\s*([^)]+)\s*\)(.*)$/i.exec(selStr.trim());
+            if (!pm) return false;
+            const hostSel = pm[1].trim();
+            const reqParts = pm[2].trim().split(/\s+/).filter(Boolean);
+            const tail = pm[3].trim();
+            if (reqParts.length === 0) return false;
+            if (requireHostPseudo && hostSel !== ":host" && !(hostSel.startsWith(":host(") && hostSel.endsWith(")"))) {
+              return false;
+            }
+            for (let ri = 0; ri < reqParts.length; ri++) {
+              const rp = reqParts[ri].replace(/\\(.)/g, "$1");
+              if (!exposedParts.has(rp)) return false;
+            }
+            if (hostSel) {
+              if (hostSel === ":host") {
+                if (!scopeNode || scopeNode.nodeType !== 11 || scopeNode.host !== hostEl) return false;
+              } else if (hostSel.startsWith(":host(") && hostSel.endsWith(")")) {
+                if (!scopeNode || scopeNode.nodeType !== 11 || scopeNode.host !== hostEl) return false;
+                if (!matchesSelector(hostEl, hostSel.slice(6, -1), "")) return false;
+              } else {
+                if (!matchesSelector(hostEl, hostSel, "")) return false;
+              }
+            }
+            let tailPseudoEl = "";
+            let tailClasses = tail;
+            const peIdx = tail.indexOf("::");
+            if (peIdx !== -1) {
+              tailClasses = tail.slice(0, peIdx).trim();
+              tailPseudoEl = tail.slice(peIdx).trim().toLowerCase();
+            }
+            if (tailPseudoEl !== (normalizedPseudo || "")) return false;
+            if (tailClasses && !matchesSelector(element, "*" + tailClasses, "")) return false;
+            return true;
+          };
+          const outerLayers = [];
+          const collectMatchingPartDecls = (scopeNode, hostEl, requireHostPseudo) => {
+            const cssTxt = collectScopeCssText(scopeNode);
+            if (!cssTxt || cssTxt.indexOf("::part(") === -1) return;
+            const parseFn = global.splitStylesheetRules || (typeof globalThis !== "undefined" && globalThis.splitStylesheetRules);
+            if (typeof parseFn !== "function") return;
+            const cleanTxt = cssTxt.indexOf("/*") !== -1 ? cssTxt.replace(/\/\*[\s\S]*?\*\//g, "") : cssTxt;
+            const rules = parseFn(cleanTxt);
+            const matchedDecls = [];
+            const visitRules = (list) => {
+              for (let ri = 0; ri < list.length; ri++) {
+                const r = list[ri];
+                if (!r) continue;
+                const stText = String(r.selectorText || "").trim();
+                if (!stText.startsWith("@")) {
+                  const sels = [];
+                  let sc = "", sd = 0, sb = 0, sq = "";
+                  for (let k = 0; k < stText.length; k++) {
+                    const ch = stText[k];
+                    if (sq) { sc += ch; if (ch === sq && stText[k - 1] !== "\\") sq = ""; continue; }
+                    if (ch === "\"" || ch === "'") { sq = ch; sc += ch; continue; }
+                    if (ch === "(") sd++; else if (ch === ")" && sd > 0) sd--;
+                    else if (ch === "[") sb++; else if (ch === "]" && sb > 0) sb--;
+                    if (sd === 0 && sb === 0 && ch === ",") { if (sc.trim()) sels.push(sc.trim()); sc = ""; }
+                    else sc += ch;
+                  }
+                  if (sc.trim()) sels.push(sc.trim());
+                  for (let si = 0; si < sels.length; si++) {
+                    if (sels[si].indexOf("::part(") !== -1 && matchPartSelector(sels[si], hostEl, scopeNode, requireHostPseudo)) {
+                      matchedDecls.push(r.declText || "");
+                      break;
+                    }
+                  }
+                } else if (/^@(?:media|supports|layer)\b/i.test(stText)) {
+                  if (/^@media\b/i.test(stText) && !evaluateMediaQuery(stText.replace(/^@media/i, "").trim())) continue;
+                  if (/^@supports\b/i.test(stText) && !evaluateSupportsCondition(stText.replace(/^@supports/i, "").trim())) continue;
+                  const sub = parseFn(r.declText || "");
+                  visitRules(sub);
+                }
+              }
+            };
+            visitRules(rules);
+            if (matchedDecls.length > 0) outerLayers.push(matchedDecls);
+          };
+          collectMatchingPartDecls(elRoot, curHost, true);
+          while (curHost && exposedParts.size > 0) {
+            const curScope = typeof curHost.getRootNode === "function" ? curHost.getRootNode() : (curHost.ownerDocument || null);
+            if (!curScope) break;
+            collectMatchingPartDecls(curScope, curHost, false);
+            if (curScope.nodeType === 11 && curScope.host) {
+              const expAttr = (curHost.getAttribute && curHost.getAttribute("exportparts")) || "";
+              const nextParts = new Set();
+              if (expAttr.trim()) {
+                const segs = expAttr.split(",");
+                for (let ei = 0; ei < segs.length; ei++) {
+                  const seg = segs[ei].trim();
+                  if (!seg) continue;
+                  const colonIdx = seg.indexOf(":");
+                  if (colonIdx !== -1) {
+                    const inName = seg.slice(0, colonIdx).trim();
+                    const outName = seg.slice(colonIdx + 1).trim();
+                    if (inName && outName && exposedParts.has(inName)) nextParts.add(outName);
+                  } else {
+                    if (exposedParts.has(seg)) nextParts.add(seg);
+                  }
+                }
+              }
+              exposedParts = nextParts;
+              curHost = curScope.host;
+            } else {
+              break;
+            }
+          }
+          for (let oi = 0; oi < outerLayers.length; oi++) {
+            for (let di = 0; di < outerLayers[oi].length; di++) {
+              parseDeclarationsBlockInto(element, outerLayers[oi][di], targetMap, "normal");
+              if (outerLayers[oi][di].toLowerCase().indexOf("!important") !== -1) {
+                parseDeclarationsBlockInto(element, outerLayers[oi][di], targetMap, "important");
+              }
+            }
+          }
+        }
+      }
       if (!normalizedPseudo) {
         const rawInline = element.getAttribute ? element.getAttribute("style") : "";
         if (rawInline) {
