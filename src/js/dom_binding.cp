@@ -783,9 +783,8 @@ fn linkMediaMatchesScreen(media_raw: []const u8): bool {
     defer if (color_slice.len > 0) std.heap.page_allocator.free(color_slice);
     const trimmed = std.mem.trim(u8, color_slice, " \t\r\n");
     if (trimmed.len == 0) return jsNull();
-    if (col := CssColor.parse(trimmed)) {
-        let out_buf: [64]u8 = undefined;
-        const formatted = col.toRgbString(&out_buf);
+    let out_buf: [128]u8 = undefined;
+    if (formatted := CssColor.parseColorToCssomString(trimmed, &out_buf)) {
         if (formatted.len > 0) return jsNewString(ctx, formatted);
     }
     return jsNull();

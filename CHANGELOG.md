@@ -4490,3 +4490,7 @@
 ### Phase 847 — `isValidCssMathSyntax` 语法校验下沉 `cap:css`
 - `/data/dev/cp/lib/css/mathFunc.cp` & `index.cp`: 新增并导出 `isValidCssMathSyntax`，支持 21 种 CSS Math Level 4 函数、参数个数校验与 50 种 W3C 单位白名单。
 - `src/js/dom_binding.cp` & `src/js/shim/cssom.js`: 暴露 `__capsurf_is_valid_css_math` 并接入 `isValidCalcSyntax`；`acos-asin-atan-atan2-computed` (52/52)、`exp-log-{compute,invalid}`、`sin-cos-tan-computed`、`minmax-time-{computed,invalid}`、`clamp-integer-computed` **7/7 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 848 — `cap:css` CSS Color 4 CSSOM 序列化下沉与 `transform`/`opacity` 数学语法校验收紧
+- `/data/dev/cp/lib/css/color.cp`: 新增 `CssColor.parseColorToCssomString`、`toCssomString`、`stripCssComments` 与 `CalcParser`，修复 `CalcVal?` 可空解包 (`?? return null`)。
+- `src/js/dom_binding.cp`: `__capsurf_parse_color` 接入 `CssColor.parseColorToCssomString`。
+- `src/js/shim/cssom.js`: `transform` 函数参数接入 `cap:css` `isValidCalcSyntax` 校验并拒绝 `rotate*`/`skew*` 返回 `<number>` 的函数；`opacity` 拒绝 `fr` 与混合百分比；`sin-cos-tan-invalid` (42/42)、`minmax-number-invalid` (48/48)、`exp-log-invalid`、`signs-abs-invalid` **PASS**，`--smoke` 3/3 **PASS**。

@@ -5415,7 +5415,18 @@
         if (/^(?:var|env)\(/i.test(t)) return true;
         if (/^(?:calc|min|max|clamp)\(/i.test(t)) {
           if (!isValidCalcSyntax(t)) return false;
-          return !/(?:\d|\.)(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|deg|rad|grad|turn|s|ms|hz|khz|dpi|dpcm|dppx)\b/i.test(t);
+          if (/(?:\d|\.)(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|deg|rad|grad|turn|s|ms|hz|khz|dpi|dpcm|dppx|fr)\b/i.test(t)) return false;
+          if (/^(?:min|max|clamp)\(/i.test(t) && t.includes("%")) {
+            const args = splitTopLevelComma(t.slice(t.indexOf("(") + 1, -1));
+            let hasPct = false, hasNum = false;
+            for (let ai = 0; ai < args.length; ai++) {
+              const a = args[ai].trim();
+              if (a.includes("%")) hasPct = true;
+              else if (a !== "none") hasNum = true;
+            }
+            if (hasPct && hasNum) return false;
+          }
+          return true;
         }
         return /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?%?$/i.test(t);
       }
@@ -6003,7 +6014,10 @@
           args.push(cur.trim());
           if (args.some(a => !a) || args.length < range[0] || args.length > range[1]) return false;
           for (let ai = 0; ai < args.length; ai++) {
-            if (/^(?:calc|min|max|clamp)\(/i.test(args[ai]) && !isValidCalcSyntax(args[ai])) return false;
+            if (/^(?:calc|min|max|clamp|round|mod|rem|abs|sign|sin|cos|tan|asin|acos|atan|atan2|pow|sqrt|hypot|log|exp)\(/i.test(args[ai]) && !isValidCalcSyntax(args[ai])) return false;
+            if ((fn.startsWith("rotate") || fn.startsWith("skew")) && !(fn === "rotate3d" && ai < 3)) {
+              if (/^(?:sin|cos|tan|pow|sqrt|log|exp)\(/i.test(args[ai])) return false;
+            }
           }
           if (fn === "perspective" && args[0] !== "none" && !/^(?:calc|min|max|clamp|var|env)\(/i.test(args[0])) {
             if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(args[0]) && args[0] !== "0") return false;
