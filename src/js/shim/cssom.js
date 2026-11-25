@@ -9442,12 +9442,17 @@
   CSSStyleSheet.prototype = Object.create(StyleSheet.prototype);
   CSSStyleSheet.prototype.constructor = CSSStyleSheet;
 
-  ["ownerNode", "ownerRule", "parentStyleSheet", "title", "media", "disabled", "_rules", "_lastParsedText", "_loadedHref", "_originClean", "_cascadeCssText"].forEach(function (prop) {
+  ["ownerNode", "ownerRule", "parentStyleSheet", "media", "disabled", "_rules", "_lastParsedText", "_loadedHref", "_originClean", "_cascadeCssText"].forEach(function (prop) {
     Object.defineProperty(CSSStyleSheet.prototype, prop, {
       get: function () { return getSheetSt(this)[prop]; },
       set: function (v) { getSheetSt(this)[prop] = v; },
       configurable: true,
     });
+  });
+
+  Object.defineProperty(CSSStyleSheet.prototype, "title", {
+    get: function () { return getSheetSt(this).title; },
+    configurable: true,
   });
 
   Object.defineProperty(CSSStyleSheet.prototype, "href", {

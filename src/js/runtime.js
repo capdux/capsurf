@@ -13337,12 +13337,17 @@
     CSSStyleSheet.prototype = Object.create(StyleSheet.prototype);
     CSSStyleSheet.prototype.constructor = CSSStyleSheet;
 
-    ["ownerNode", "ownerRule", "parentStyleSheet", "title", "media", "disabled", "_rules", "_lastParsedText", "_loadedHref", "_originClean", "_cascadeCssText"].forEach(function (prop) {
+    ["ownerNode", "ownerRule", "parentStyleSheet", "media", "disabled", "_rules", "_lastParsedText", "_loadedHref", "_originClean", "_cascadeCssText"].forEach(function (prop) {
       Object.defineProperty(CSSStyleSheet.prototype, prop, {
         get: function () { return getSheetSt(this)[prop]; },
         set: function (v) { getSheetSt(this)[prop] = v; },
         configurable: true,
       });
+    });
+
+    Object.defineProperty(CSSStyleSheet.prototype, "title", {
+      get: function () { return getSheetSt(this).title; },
+      configurable: true,
     });
 
     Object.defineProperty(CSSStyleSheet.prototype, "href", {
@@ -16813,11 +16818,11 @@
 
   const FUNC_SELECTOR_PSEUDOS = new Set([":not", ":is", ":where", ":has", "::slotted"]);
   const REQUIRED_FUNC_PSEUDOS = new Set([
-    ":not", ":is", ":where", ":has", ":state", ":lang", ":dir",
+    ":not", ":is", ":where", ":has", ":state", ":lang", ":dir", ":host-context",
     ":nth-child", ":nth-last-child", ":nth-of-type", ":nth-last-of-type",
     "::slotted", "::part", "::scroll-button"
   ]);
-  const NON_EMPTY_FUNC_PSEUDOS = new Set([":not", ":has", ":state", "::slotted", "::part", ":lang", ":dir"]);
+  const NON_EMPTY_FUNC_PSEUDOS = new Set([":not", ":has", ":state", ":host-context", "::slotted", "::part", ":lang", ":dir"]);
   const KNOWN_PSEUDO_CLASSES = new Set([
     ":hover", ":active", ":focus", ":focus-visible", ":focus-within", ":target",
     ":visited", ":link", ":any-link", ":local-link", ":enabled", ":disabled",

@@ -2460,3 +2460,4 @@
 | Phase 791 | WPT `image-set()` / `-webkit-image-set()` 解析与规范序列化（144/144） | `src/js/shim/cssom.js` | `image-set-parsing.html` (**144/144 PASS**); `--smoke` 3/3 PASS |
 | Phase 792 | WPT `overlay` 属性校验/计算值与 `::backdrop` UA 默认样式 | `src/js/shim/cssom.js`, `src/js/shim/window.js` | `overlay-computed` (6/6 **PASS**)、`overlay-invalid` (6/6 **PASS**)、`backdrop-ua-style` (**PASS**); `--smoke` 3/3 PASS |
 | Phase 793 | WPT `::backdrop` 继承匹配与 `dialog.showModal()` 顶层 `sticky → absolute` | `src/js/shim/element/dialog.js`, `src/js/shim/window.js` | `backdrop-inherit-computed` (4/4 **PASS**)、`sticky-dialog` (**PASS**); `--smoke` 3/3 PASS |
+| Phase 794 | WPT `CSSStyleSheet.title` 只读与 `:host-context` 必选括号校验 | `src/js/shim/cssom.js`, `src/js/shim/selector.js` | `stylesheet-title-002` **PASS**、`host-context-parsing` **PASS**; `--smoke` 3/3 PASS |

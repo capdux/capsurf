@@ -3426,3 +3426,5 @@
 - 在 `cssom.js` 与 `window.js` 补全 `overlay`（`none | auto` 校验与非顶层 UA `none` 夹紧）及 `::backdrop` 伪元素默认 `position: fixed; top/right/bottom/left: 0px`，`overlay-computed.html`、`overlay-invalid.html` 与 `backdrop-ua-style.html` 3/3 **PASS**。
 ### Phase 793 — `::backdrop` 伪元素继承与 `dialog.showModal()` 顶层 `sticky → absolute` 打通
 - 在 `window.js` `matchesSelector` 补全 `::backdrop` 识别（使 `dialog::backdrop` 规则与 `inherit`/自定义属性继承生效），并在 `dialog.js` 维护 `_isModalDialog` 使顶层 `position: sticky` 计算为 `absolute`，`backdrop-inherit-computed.html` (4/4) 与 `sticky-dialog.html` 均 **PASS**。
+### Phase 794 — `CSSStyleSheet.title` 只读约束与 `:host-context` 解析校验
+- 将 `CSSStyleSheet.prototype.title` 改为只读 getter 并为 `:host-context` 补全函数式伪类必选括号校验，`stylesheet-title-002.html` 与 `host-context-parsing.html` 均 **PASS**。

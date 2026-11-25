@@ -4296,3 +4296,7 @@
   - `src/js/shim/element/dialog.js`: `dialogShowModal`/`dialogShow`/`dialogClose` 同步维护 `_isModalDialog` 顶层标志。
   - `src/js/shim/window.js`: `matchesSelector` 补全 `::backdrop` 伪元素识别，且顶层元素将 `position: sticky` 降级计算为 `absolute`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 794**:
+  - `src/js/shim/cssom.js`: `CSSStyleSheet.prototype.title` 改为只读 getter。
+  - `src/js/shim/selector.js`: `REQUIRED_FUNC_PSEUDOS` 与 `NON_EMPTY_FUNC_PSEUDOS` 补充 `:host-context`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
