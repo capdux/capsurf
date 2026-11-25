@@ -2537,3 +2537,4 @@
 | Phase 868 | `element.style` 转发 `cssText` & 后代计算样式缓存失效 | `element.js`, `cssom.js` | `content-visibility-036.html` **PASS**; `--smoke` 3/3 PASS |
 | Phase 869 | `<select><option>` `childNodes`/`options` 无限递归死循环修复 | `select.js` | 4 项 `<select>` 卡死/TIMEOUT **4/4 PASS**; `--smoke` 3/3 PASS |
 | Phase 870 | 内联 CSS-wide 关键字二次展开（`/css/css-transforms/` 100%） | `src/js/shim/window.js` | `/css/css-transforms/` **31/31 PASS (100%)**, `css-images/inheritance.html` **PASS**; `--smoke` 3/3 PASS |
+| Phase 871 | `border-image-outset` EOF 容错 & `border-*` 初始值补齐 | `cssom.js`, `window.js` | `border-image-outset-computed.html` **PASS**, `css-backgrounds/inheritance.sub.html` **PASS (64/64)**; `--smoke` 3/3 PASS |

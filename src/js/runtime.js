@@ -7781,7 +7781,14 @@
         return true;
       }
       if (prop === "border-image-outset") {
-        const toks = splitCssTokens(vLower);
+        let boStr = vLower;
+        let op = 0;
+        for (let k = 0; k < boStr.length; k++) {
+          if (boStr[k] === "(") op++;
+          else if (boStr[k] === ")" && op > 0) op--;
+        }
+        while (op > 0) { boStr += ")"; op--; }
+        const toks = splitCssTokens(boStr);
         if (toks.length < 1 || toks.length > 4) return false;
         for (let i = 0; i < toks.length; i++) {
           const t = toks[i];
@@ -50021,7 +50028,10 @@
           }
         }
         const lv = (computedMap.get(lk) || "").trim().toLowerCase();
-        if (!lv) continue;
+        if (!lv) {
+          if (bsProp) computedMap.set(lk, "3px");
+          continue;
+        }
         if (lv in lineWidthMap) {
           computedMap.set(lk, lineWidthMap[lv] + "px");
         } else {
@@ -51208,6 +51218,14 @@
         ["border-image-slice", "100%"],
         ["border-image-source", "none"],
         ["border-image-width", "1"],
+        ["border-top-style", "none"],
+        ["border-right-style", "none"],
+        ["border-bottom-style", "none"],
+        ["border-left-style", "none"],
+        ["border-top-left-radius", "0px"],
+        ["border-top-right-radius", "0px"],
+        ["border-bottom-right-radius", "0px"],
+        ["border-bottom-left-radius", "0px"],
         ["overscroll-behavior-block", "auto"],
         ["overscroll-behavior-inline", "auto"],
         ["overscroll-behavior-x", "auto"],

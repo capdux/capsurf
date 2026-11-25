@@ -3886,7 +3886,14 @@
       return true;
     }
     if (prop === "border-image-outset") {
-      const toks = splitCssTokens(vLower);
+      let boStr = vLower;
+      let op = 0;
+      for (let k = 0; k < boStr.length; k++) {
+        if (boStr[k] === "(") op++;
+        else if (boStr[k] === ")" && op > 0) op--;
+      }
+      while (op > 0) { boStr += ")"; op--; }
+      const toks = splitCssTokens(boStr);
       if (toks.length < 1 || toks.length > 4) return false;
       for (let i = 0; i < toks.length; i++) {
         const t = toks[i];

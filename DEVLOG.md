@@ -3580,3 +3580,5 @@
 - 通过最小 CDP 复现与 GDB Thread 1 栈追踪定位 `HTMLSelectElement.prototype.childNodes` 与 `getSelectOptions` 间的循环调用，加入 `_inSelectChildNodes` 重入守卫后彻底消除 4 项跨模块（`css-flexbox`、`css-contain`）引擎卡死问题。
 ### Phase 870 — 内联 `inherit`/`initial`/`unset`/`revert` 展开顺序修复（`/css/css-transforms/` 达成 100%）
 - 修复了 `collectRawComputedMap` 开启 `_skipInline` 时先展开 CSS-wide 关键字、后解析内联 `style` 导致内联 `inherit`/`initial`/`unset` 未被展开的全局缺陷，一次性打通 `/css/css-transforms/`（31/31）及 `/css/css-images/inheritance.html`。
+### Phase 871 — `css-backgrounds` 剩余失败项全部转绿
+- 补齐了 `border-image-outset` EOF 未闭合括号校验及 `border-*-{style,width,radius}` 的 `initial` 默认值，`/css/css-backgrounds/` 全量 115 项功能断言均已通过（`inheritance.sub.html` 64/64 PASS）。
