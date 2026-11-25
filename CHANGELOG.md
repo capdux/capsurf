@@ -4674,3 +4674,5 @@
 - `src/js/shim/cssom.js`, `src/js/shim/element/element.js`, `src/js/shim/window.js`: `cross-fade()` 数学百分比校验剥离 `sign()`/`abs()`/`progress()` 内部单位，补齐 `gap` `foldPairs` CSS-wide 折叠与 `pendingVar` 返回，`legacy-gap-aliases-001.html` 与 `cross-fade-computed-value.html` **2/2 PASS**，`--smoke` 3/3 **PASS**。
 ### Phase 918 — `CSSStyleRule.style` `[PutForwards]`、table-cell `min/max-width` 夹紧与 `gap` 校验全绿（8 项 PASS）
 - `src/layout/layout.cp`, `src/js/shim/cssom.js`, `src/js/shim/window.js`: 补齐 `CSSStyleRule.prototype.style` `[PutForwards=cssText]` 与声明合法性过滤、table-cell `min/max-width` 夹紧及 6 项 `gap` 属性整条校验与 `calc(% + px)` 规范化；通过 `cpc fix` + `cpc brief` 4 门禁，8 项 WPT **8/8 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 919 — `shape-outside` / `clip-path` 声明合法性过滤（15 项 `shape-outside-invalid-*` 全绿）
+- `src/js/shim/window.js`: 将 `shape-outside` 与 `clip-path` 接入 `valCheckProps` 校验过滤，15 项 `shape-outside-invalid-*.html` **15/15 PASS**，`--smoke` 3/3 **PASS**。

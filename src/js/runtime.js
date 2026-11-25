@@ -49425,7 +49425,7 @@
           }
         }
       }
-      const valCheckProps = ["text-combine-upright", "text-orientation", "align-items", "align-self", "flex-direction", "flex-grow", "flex-shrink", "flex-basis", "flex-wrap", "order", "column-gap", "row-gap", "gap", "grid-column-gap", "grid-row-gap", "grid-gap"];
+      const valCheckProps = ["text-combine-upright", "text-orientation", "align-items", "align-self", "flex-direction", "flex-grow", "flex-shrink", "flex-basis", "flex-wrap", "order", "column-gap", "row-gap", "gap", "grid-column-gap", "grid-row-gap", "grid-gap", "shape-outside", "clip-path"];
       const preOwn = new Map();
       for (let vi = 0; vi < valCheckProps.length; vi++) {
         const vp = valCheckProps[vi];

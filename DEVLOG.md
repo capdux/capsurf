@@ -3677,3 +3677,5 @@
 - `cssom.js` `cross-fade()` 校验误将 `sign(1em - 10000px)` 内长度单位当成顶层百分比表达式拒绝，剥离后 `evalCfPct` 立即精确算出 `49%`；`element.js` 将 `gap` 加入 `foldPairs` 并在 `lookupPropertyValue` 返回 `pendingVar` 后，`grid-gap` 全面对齐新标准别名语义。
 ### Phase 918 — `CSSStyleRule.style` `[PutForwards]` 与 `gap`/`table-cell` 全绿修复
 - 发现 `cssRule.style = "..."` 直接覆盖数据属性为字符串，在 `CSSStyleRule.prototype` 定义 `[PutForwards=cssText]` 并于 `parseDeclarationsBlockInto` 启用 `isValidCssValue` 过滤后 `logicalprops-quirklength.html` 10/10 全绿；同步为 `layoutTableContainer` 补齐 `min/max-width` 夹紧并将 `gap`/`row-gap`/`column-gap` 接入 `valCheckProps` 与 `calc(% + px)` 排序，8 项 WPT 全绿。
+### Phase 919 — 接入 `shape-outside`/`clip-path` `valCheckProps` 扫平 15 项非法声明测试
+- `cssom.js` 已具备完整的 `inset()`/`circle()`/`ellipse()` 参数校验，但 `window.js` `collectRawComputedMap` 的 `valCheckProps` 漏列 `shape-outside`/`clip-path`，补入后 15 个 `shape-outside-invalid-*.html` 全部一次通过。
