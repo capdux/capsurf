@@ -3416,3 +3416,5 @@
 - 修复 `window.js` `collectElementOwnDeclarations` 在读取 `<style>` 节点 `sn._sheet._cascadeCssText` 时未先调用 `_syncFromOwner()` 且将空串 `""` 误判为假值回退至旧 `textContent` 的问题，`/css/css-cascade/layer-cssom-order-reverse.html` **FAIL→PASS**，实现 `/css/css-cascade/` 目录 0 FAIL 清零。
 ### Phase 788 — `CSS.elementSources` 与 `object-view-box` 校验打通
 - 在 `cssom.js` 补全 `CSS.elementSources` 命名空间属性与 `object-view-box`（接受 `none | inset() | xywh() | rect()`，拒绝 `circle()`/`ellipse()`/`polygon()`/`path()` 等非法形状），并在 `window.js` 补全初始值注册，`css-images/idlharness.html`、`object-view-box-parsing.html`、`object-view-box-transition-mutation.html` 3/3 **PASS**。
+### Phase 789 — `Element.prototype.part` IDL 与 `DOMTokenList` 同步实现
+- 在 `element.js` 为 `Element.prototype` 补全 `part`（`[SameObject, PutForwards=value]` 反射 `"part"` 属性的 `DOMTokenList`，含原型访问 `TypeError` 校验），`css-shadow/idlharness.html` 与 `part/part-name-idl.html` 均 **PASS**。

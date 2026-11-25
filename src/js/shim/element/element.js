@@ -1024,6 +1024,36 @@ function installElementExtensions(proto) {
     configurable: true,
   });
 
+  // part getter/setter ([SameObject, PutForwards=value] readonly attribute DOMTokenList part)
+  Object.defineProperty(proto, "part", {
+    get: function () {
+      if (!this || this === proto || typeof this.getAttribute !== "function") {
+        throw new TypeError("Illegal invocation");
+      }
+      if (!this._partList) {
+        const self = this;
+        this._partList = new DOMTokenList(
+          function () { return self.getAttribute("part") || ""; },
+          function (val) {
+            if (self.setAttribute) self.setAttribute("part", String(val));
+            if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_notifyCssStyleChange === "function") {
+              globalThis.__capsurf_notifyCssStyleChange(self);
+            }
+          }
+        );
+      }
+      return this._partList;
+    },
+    set: function (v) {
+      if (!this || this === proto || typeof this.getAttribute !== "function") {
+        throw new TypeError("Illegal invocation");
+      }
+      this.part.value = v == null ? "" : String(v);
+    },
+    enumerable: true,
+    configurable: true,
+  });
+
   // relList getter/setter (HTML a/area/link, SVG a, MathML a)
   Object.defineProperty(proto, "relList", {
     get: function () {

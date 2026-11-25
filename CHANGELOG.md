@@ -4278,3 +4278,6 @@
   - `src/js/shim/cssom.js`: 新增 `CSS.elementSources`，并在 `KNOWN_PROPS` 与 `isValidCssValue` 补全 `object-view-box`（`none | inset() | xywh() | rect()`）校验。
   - `src/js/shim/window.js`: `INITIAL_VALUES` 与 `ALL_KNOWN_PROPS` 补全 `object-view-box`。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 789**:
+  - `src/js/shim/element/element.js`: 新增 `Element.prototype.part`（`DOMTokenList` 属性同步、`[PutForwards=value]`、`enumerable: true` 与原型 `TypeError` 校验）。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
