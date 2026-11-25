@@ -11887,7 +11887,7 @@ function installWindow(global) {
   }
 
   const STANDARD_COMPUTED_LONGHANDS = [
-    "align-content", "align-items", "align-self", "alignment-baseline", "anchor-scope", "animation-composition", "animation-delay", "animation-direction",
+    "align-content", "align-items", "align-self", "alignment-baseline", "anchor-name", "anchor-scope", "animation-composition", "animation-delay", "animation-direction",
     "animation-duration", "animation-fill-mode", "animation-iteration-count", "animation-name",
     "animation-play-state", "animation-range-end", "animation-range-start", "animation-timeline", "animation-timing-function", "appearance", "aspect-ratio",
     "backdrop-filter", "backface-visibility", "background-attachment", "background-blend-mode",
@@ -11931,7 +11931,7 @@ function installWindow(global) {
     "overflow-anchor", "overflow-block", "overflow-clip-margin", "overflow-inline", "overflow-wrap", "overflow-x", "overflow-y",
     "padding-block-end", "padding-block-start", "padding-bottom", "padding-inline-end", "padding-inline-start",
     "padding-left", "padding-right", "padding-top", "page", "perspective", "perspective-origin", "pointer-events",
-    "position", "position-try-fallbacks", "position-try-order", "position-visibility", "quotes", "reading-flow", "reading-order", "resize", "right", "rotate", "row-gap",
+    "position", "position-anchor", "position-try-fallbacks", "position-try-order", "position-visibility", "quotes", "reading-flow", "reading-order", "resize", "right", "rotate", "row-gap",
     "ruby-align", "ruby-merge", "ruby-overhang", "ruby-position", "row-rule-color", "row-rule-style", "row-rule-width", "rule-color", "rule-style", "rule-width", "scale", "scroll-behavior", "scroll-marker-group", "scroll-target-group", "scrollbar-color", "scrollbar-gutter", "scrollbar-width",
     "-webkit-transform", "-moz-transform",
     "scroll-margin-block-end", "scroll-margin-block-start", "scroll-margin-bottom",
@@ -11941,7 +11941,7 @@ function installWindow(global) {
     "scroll-padding-inline-end", "scroll-padding-inline-start", "scroll-padding-left",
     "scroll-padding-right", "scroll-padding-top",
     "scroll-snap-align", "scroll-snap-stop", "scroll-snap-type", "shape-image-threshold", "shape-margin", "shape-outside",
-    "tab-size", "table-layout", "text-align", "text-align-all", "text-align-last", "text-autospace", "text-combine-upright", "text-decoration-color", "text-decoration-inset", "text-decoration-line",
+    "tab-size", "table-layout", "text-align", "text-align-all", "text-align-last", "text-autospace", "text-box-edge", "text-combine-upright", "text-decoration-color", "text-decoration-inset", "text-decoration-line",
     "text-decoration-skip-ink", "text-decoration-skip-spaces", "text-decoration-style", "text-decoration-thickness",
     "text-emphasis-color", "text-emphasis-position", "text-emphasis-style", "text-fit", "text-group-align", "text-indent", "text-justify", "text-orientation", "text-overflow", "text-shadow", "text-spacing-trim", "text-transform",
     "text-underline-offset", "text-underline-position",
@@ -12363,6 +12363,9 @@ function installWindow(global) {
         if (lower === "contain-intrinsic-size") return getShorthandComputed("contain-intrinsic-size") || "none";
         return "none";
       }
+      if (lower === "anchor-name") return "none";
+      if (lower === "position-anchor") return "normal";
+      if (lower === "text-box-edge") return "auto";
       if (lower === "text-combine-upright") return "none";
       if (lower === "text-orientation") return "mixed";
       if (lower === "perspective-origin" || lower === "transform-origin") return getDefaultOriginComputed();

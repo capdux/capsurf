@@ -4634,3 +4634,5 @@
 - `src/css/cascade.cp`, `src/layout/layout.cp`: 拆分 `AlignSelf.SelfStart`/`SelfEnd` 并基于子元素自身 `astyle.direction` 计算跨轴偏移；通过 `cpc fix` + `cpc brief` 门禁，`flex-abspos-staticpos-align-self-rtl-004.html` **PASS**（全部 23 项 `flex-abspos-staticpos-*` 用例 552/552 子测试全绿），`--smoke` 3/3 **PASS**。
 ### Phase 898 — `tab-size` 混合单位拒绝与 `transform` 未闭合括号角度求值
 - `src/js/shim/cssom.js`, `src/js/shim/window.js`: `tab-size` 校验拒绝加减混合无单位数与长度单位的 `calc()`（如 `calc(1 + 1px)`）；`transform` 解析与计算阶段剥离末尾 `;` 并自动补全 EOF 未闭合括号，`serializeComputedTransform` 改用括号配对扫描与 `evalTransformAngleExprRad` 支持嵌套 `calc()` 角度；`calc-numbers.html` & `calc-angle-values.html` **2/2 PASS**，`--smoke` 3/3 **PASS**。
+### Phase 899 — `calc-letter-spacing`、`text-box-edge` 与 `anchor-size` 零回退全绿
+- `src/js/shim/cssom.js`, `src/js/shim/window.js`: 修复 `isValidLenPct` 中 `%\b` 正则漏洞并递归校验 `anchor()`/`anchor-size()` fallback（拒绝无单位 `calc(0)`）；注册 `text-box-edge`、`anchor-name`、`position-anchor`；`calc-letter-spacing.html`、`various-values-important.html`、`anchor-function-zero-fallback.html` **3/3 PASS**，`--smoke` 3/3 **PASS**。

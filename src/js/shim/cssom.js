@@ -12,7 +12,7 @@
     "accent-color", "align-content", "align-items", "align-self", "alignment-baseline", "all",
     "anchor-scope",
     "animation", "animation-composition", "animation-delay", "animation-direction",
-    "animation-duration", "animation-fill-mode", "animation-iteration-count",
+    "anchor-name", "animation-duration", "animation-fill-mode", "animation-iteration-count",
     "animation-name", "animation-play-state", "animation-range", "animation-range-end", "animation-range-start",
     "animation-timeline", "animation-timing-function",
     "appearance", "aspect-ratio", "backdrop-filter", "backface-visibility",
@@ -80,7 +80,7 @@
     "padding-inline-end", "padding-inline-start", "padding-left", "padding-right",
     "padding-top", "page", "page-break-after", "page-break-before", "page-break-inside",
     "paint-order", "perspective", "perspective-origin", "place-content", "place-items",
-    "place-self", "pointer-events", "position", "position-try", "position-try-fallbacks", "position-try-order", "position-visibility", "quotes", "reading-flow", "reading-order", "resize", "right", "rotate",
+    "place-self", "pointer-events", "position", "position-anchor", "position-try", "position-try-fallbacks", "position-try-order", "position-visibility", "quotes", "reading-flow", "reading-order", "resize", "right", "rotate",
     "row-gap", "row-rule", "row-rule-color", "row-rule-style", "row-rule-width", "ruby-align", "ruby-merge", "ruby-overhang", "ruby-position", "rule", "rule-color", "rule-style", "rule-width", "scale", "scroll-behavior", "scroll-margin", "scroll-margin-block",
     "scroll-margin-block-end", "scroll-margin-block-start", "scroll-margin-bottom",
     "scroll-margin-inline", "scroll-margin-inline-end", "scroll-margin-inline-start",
@@ -92,7 +92,7 @@
     "scrollbar-color", "scrollbar-gutter", "scrollbar-width", "shape-image-threshold",
     "shape-margin", "shape-outside", "size", "src", "tab-size", "table-layout",
     "text-align", "text-align-all", "text-align-last", "text-autospace", "text-combine-upright", "text-decoration",
-    "text-decoration-color", "text-decoration-inset", "text-decoration-line", "text-decoration-skip-ink",
+    "text-box-edge", "text-decoration-color", "text-decoration-inset", "text-decoration-line", "text-decoration-skip-ink",
     "text-decoration-skip-spaces", "text-decoration-style", "text-decoration-thickness", "text-emphasis",
     "text-emphasis-color", "text-emphasis-position", "text-emphasis-style", "text-fit", "text-group-align", "text-indent",
     "text-justify", "text-orientation", "text-overflow", "text-rendering", "text-shadow", "text-spacing", "text-spacing-trim",
@@ -1306,6 +1306,33 @@
     _isValidCalcSyntax = isValidCalcSyntax;
 
     function isValidLenPct(tok, allowNegative) {
+      if (/^(?:var|attr)\(/i.test(tok)) return true;
+      if (/^(?:anchor|anchor-size)\(/i.test(tok)) {
+        const openIdx = tok.indexOf("(");
+        const closeIdx = tok.lastIndexOf(")");
+        if (openIdx === -1 || closeIdx <= openIdx) return false;
+        const inner = tok.slice(openIdx + 1, closeIdx);
+        let pd = 0, commaIdx = -1;
+        for (let i = 0; i < inner.length; i++) {
+          const c = inner[i];
+          if (c === "(") pd++;
+          else if (c === ")" && pd > 0) pd--;
+          else if (c === "," && pd === 0) { commaIdx = i; break; }
+        }
+        if (commaIdx !== -1) {
+          const fb = inner.slice(commaIdx + 1).trim();
+          if (!fb) return false;
+          return isValidLenPct(fb, allowNegative);
+        }
+        return true;
+      }
+      if (/^(?:calc|min|max|clamp)\(/i.test(tok) && !/\b(?:var|env|attr|anchor|anchor-size|sign|abs|sibling-)/i.test(tok)) {
+        const inner = tok.replace(/^(?:calc|min|max|clamp)\((.*)\)$/i, "$1");
+        const hasLenPct = /(?:\d|\.)(?:(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc)\b|%)/i.test(inner);
+        if (!hasLenPct) return false;
+        const folded = canonicalizeCalcToken(tok);
+        if (/(?:^|[(+\-,\s])(?:\d+\.?\d*|\.\d+)\s*[+\-]|[+\-]\s*(?:\d+\.?\d*|\.\d+)(?=$|[\s),+\-])/.test(folded)) return false;
+      }
       if (/^(?:calc|min|max|clamp)\(/i.test(tok)) {
         let bal = 0;
         for (let bi = 0; bi < tok.length; bi++) {
@@ -1549,6 +1576,27 @@
       if (/^(?:calc|min|max|clamp)\(/i.test(t) && isValidCalcSyntax(t)) {
         return !/[%a-z]/i.test(t.replace(/\b(?:calc|min|max|clamp|round|mod|rem|abs|sign|e|pi|infinity|nan|none)\b/gi, ""));
       }
+      return false;
+    }
+    if (prop === "anchor-name") {
+      if (vLower === "none") return true;
+      const parts = splitTopLevelComma(vLower);
+      if (parts.length === 0) return false;
+      for (let i = 0; i < parts.length; i++) {
+        const p = parts[i].trim();
+        if (!/^--[^\s,;()]+$/.test(p)) return false;
+      }
+      return true;
+    }
+    if (prop === "position-anchor") {
+      if (vLower === "normal" || vLower === "none" || vLower === "auto") return true;
+      return /^--[^\s,;()]+$/.test(vLower);
+    }
+    if (prop === "text-box-edge") {
+      if (vLower === "auto") return true;
+      const toks = splitCssTokens(vLower);
+      if (toks.length === 1) return /^(?:text|cap|ex|ideographic|ideographic-ink)$/.test(toks[0]);
+      if (toks.length === 2) return /^(?:text|cap|ex|ideographic|ideographic-ink)$/.test(toks[0]) && /^(?:text|alphabetic|ideographic|ideographic-ink)$/.test(toks[1]);
       return false;
     }
     if (prop === "tab-size") {

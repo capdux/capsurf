@@ -3637,3 +3637,5 @@
 - 区分 `start`/`end`（参考弹性容器 `pstyle.direction`）与 `self-start`/`self-end`（参考子元素 `astyle.direction`），攻克 `flex-abspos-staticpos-align-self-rtl-004.html`，实现全套 23 个 `flex-abspos-staticpos-*` 测试（552 个子断言）100% 通过。
 ### Phase 898 — `calc-numbers.html` 与 `calc-angle-values.html` 闭环
 - 定位 `rotate(calc(50grad)` 失败根因：内联 `style` 属性带末尾 `;` 且因外层括号未闭合未被分号切分，补全括号后 `45deg;` 未匹配 `toRad` 而落入 `serializeComputedTransform` 被 `parseFloat` 当作 45 弧度；剥离末尾 `;` 并配对补全括号后两项测试全绿。
+### Phase 899 — `calc-letter-spacing` 与 `anchor-function-zero-fallback` 闭环
+- 定位 `calc(1 + 100%)` 漏过原因为 `%\b` 在非单词字符 `%` 后无法匹配；调整为 `(?:px|...|)\b|%` 并校验 `anchor-size()` fallback 维度，一次性通过 `calc-letter-spacing.html`、`various-values-important.html`、`anchor-function-zero-fallback.html`。
