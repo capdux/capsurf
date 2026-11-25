@@ -3460,3 +3460,5 @@
 - 在 `cssom.js` 放开 `auto-fill`/`auto-fit` 多轨道与 `calc()` 次数校验，并在 `window.js` 实现网格容器轨道 `repeat()` 展开、`auto-fit` 空轨折叠与非网格容器 `repeat()` 保留求值，`grid-template-{columns,rows}-computed` 及 `-nogrid` 4/4 **PASS**。
 ### Phase 810 — `grid` 简写校验/展开/重组与 `auto-flow` 规范化
 - 在 `cssom.js` 新增 `parseGridShorthand` 与 `SHORTHAND_EXPAND_LONGHANDS["grid"]` 实现 `grid` 简写全套解析、展开及 `dense` 规范化序列化，`grid-shorthand` (63/63)、`grid-shorthand-valid` (49/49)、`grid-shorthand-invalid` (34/34) 全绿 **PASS**（连同 `grid-row-*` 3/3 与 `grid-template-areas-*` 4/4）。
+### Phase 811 — `rgb`/`hsl`/`hwb` 含 `calc()`/`sign()` 颜色表达式规范化序列化
+- 在 `cssom.js` 统一 `rgb`/`hsl`/`hwb` 含未求值 `calc(...)`/`sign(...)` 通道时的规范化序列化（现代空格语法、乘子前置 `N * sign(...)`、通道裁剪与 alpha 简化），`color-valid-{hwb,hsl,rgb}` 3/3（167/167 子测试）全绿 **PASS**。

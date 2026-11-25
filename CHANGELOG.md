@@ -4362,3 +4362,6 @@
 - **Phase 810**:
   - `src/js/shim/cssom.js`: 新增 `parseGridShorthand` 实现 `grid` 简写校验、6 项长属性展开（含 `auto-flow`/`dense` 规范化）及重组序列化。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 811**:
+  - `src/js/shim/cssom.js`: `normalizeColorSpecified` 统一处理 `rgb`/`hsl`/`hwb` 含 `calc(...)`/`sign(...)` 表达式的规范化序列化。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

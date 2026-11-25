@@ -14576,24 +14576,48 @@
         if (isNaN(res.v)) return "0" + res.u;
         return String(res.v) + res.u;
       };
+      const canonCalcColor = (t) => t.replace(/\(\s*(sign\([^()]+\))\s*\*\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:px|em|rem|%|deg|rad|grad|turn)?)\s*\)/gi, "($2 * $1)");
+      const normHueDeg = (t) => {
+        if (/^calc\(/i.test(t)) return canonCalcColor(t);
+        if (t.toLowerCase() === "none") return "none";
+        let h = parseFloat(t);
+        if (t.endsWith("rad")) h = h * 180 / Math.PI;
+        else if (t.endsWith("grad")) h = h * 0.9;
+        else if (t.endsWith("turn")) h = h * 360;
+        if (!isFinite(h)) return "0";
+        const deg = ((h % 360) + 360) % 360;
+        return String(Number(deg.toFixed(6)));
+      };
+      const normAlphaOut = (atRaw) => {
+        const at = evalColorExpr(atRaw);
+        if (/^calc\(/i.test(at)) return " / " + canonCalcColor(at);
+        if (at.toLowerCase() === "none") return " / none";
+        const av = Math.max(0, Math.min(1, at.endsWith("%") ? (parseFloat(at) / 100) : parseFloat(at)));
+        if (!isFinite(av) || av >= 1) return "";
+        return " / " + String(Number(av.toFixed(6)));
+      };
       const rgbM = /^rgba?\(\s*(.+)\s*\)$/i.exec(s);
       if (rgbM && !/\bfrom\b/i.test(rgbM[1])) {
         const slash = splitTopSlash(rgbM[1]);
         const chParts = splitColorCh(slash[0]);
         if (chParts.length === 3 || (chParts.length === 4 && slash.length === 1)) {
-          const parseCh = (raw) => {
-            const t = evalColorExpr(raw);
-            return t.endsWith("%") ? (parseFloat(t) * 2.55) : parseFloat(t);
-          };
-          const r = parseCh(chParts[0]), g = parseCh(chParts[1]), b = parseCh(chParts[2]);
-          let a = 1;
-          if (slash.length === 2) {
-            const at = evalColorExpr(slash[1]);
-            a = at.endsWith("%") ? (parseFloat(at) / 100) : parseFloat(at);
-          } else if (chParts.length === 4) {
-            const at = evalColorExpr(chParts[3]);
-            a = at.endsWith("%") ? (parseFloat(at) / 100) : parseFloat(at);
+          const ev0 = evalColorExpr(chParts[0]), ev1 = evalColorExpr(chParts[1]), ev2 = evalColorExpr(chParts[2]);
+          const evA = slash.length === 2 ? evalColorExpr(slash[1]) : (chParts.length === 4 ? evalColorExpr(chParts[3]) : "");
+          if (/^calc\(/i.test(ev0) || /^calc\(/i.test(ev1) || /^calc\(/i.test(ev2) || /^calc\(/i.test(evA)) {
+            const fmtRgbCh = (ev) => {
+              if (/^calc\(/i.test(ev)) return canonCalcColor(ev);
+              if (ev.toLowerCase() === "none") return "none";
+              const v = ev.endsWith("%") ? (parseFloat(ev) * 2.55) : parseFloat(ev);
+              if (!isFinite(v)) return "0";
+              return String(Number(Math.max(0, Math.min(255, v)).toFixed(6)));
+            };
+            const aOut = evA ? normAlphaOut(slash.length === 2 ? slash[1] : chParts[3]) : "";
+            return "rgb(" + fmtRgbCh(ev0) + " " + fmtRgbCh(ev1) + " " + fmtRgbCh(ev2) + aOut + ")";
           }
+          const parseCh = (t) => t.endsWith("%") ? (parseFloat(t) * 2.55) : parseFloat(t);
+          const r = parseCh(ev0), g = parseCh(ev1), b = parseCh(ev2);
+          let a = 1;
+          if (evA) a = evA.endsWith("%") ? (parseFloat(evA) / 100) : parseFloat(evA);
           if (!isNaN(r) && !isNaN(g) && !isNaN(b) && !isNaN(a)) return fmtRgb(r, g, b, a);
         }
       }
@@ -14602,38 +14626,31 @@
         const slash = splitTopSlash(hslM[1]);
         const chParts = splitColorCh(slash[0]);
         if (chParts.length === 3 || (chParts.length === 4 && slash.length === 1)) {
-          if (/\bnone\b/i.test(hslM[1]) && chParts.length === 3) {
-            const stripPct = (t) => t.toLowerCase() === "none" ? "none" : (t.endsWith("%") ? String(Number(parseFloat(t).toFixed(6))) : t);
-            const hOut = chParts[0].toLowerCase() === "none" ? "none" : chParts[0];
-            let aOut = "";
-            if (slash.length === 2) {
-              const at = evalColorExpr(slash[1]);
-              if (at === "none") aOut = " / none";
-              else {
-                const av = Math.max(0, Math.min(1, at.endsWith("%") ? (parseFloat(at) / 100) : parseFloat(at)));
-                if (isFinite(av) && av < 1) aOut = " / " + String(Number(av.toFixed(6)));
-              }
-            }
-            return "hsl(" + hOut + " " + stripPct(chParts[1]) + " " + stripPct(chParts[2]) + aOut + ")";
+          const ev0 = evalColorExpr(chParts[0]), ev1 = evalColorExpr(chParts[1]), ev2 = evalColorExpr(chParts[2]);
+          const evA = slash.length === 2 ? evalColorExpr(slash[1]) : (chParts.length === 4 ? evalColorExpr(chParts[3]) : "");
+          if (/\bnone\b/i.test(hslM[1]) || /^calc\(/i.test(ev0) || /^calc\(/i.test(ev1) || /^calc\(/i.test(ev2) || /^calc\(/i.test(evA)) {
+            const fmtSl = (ev, clampZero) => {
+              if (/^calc\(/i.test(ev)) return canonCalcColor(ev);
+              if (ev.toLowerCase() === "none") return "none";
+              let v = parseFloat(ev);
+              if (!isFinite(v)) return "0";
+              if (clampZero && v < 0) v = 0;
+              return String(Number(v.toFixed(6)));
+            };
+            const aOut = evA ? normAlphaOut(slash.length === 2 ? slash[1] : chParts[3]) : "";
+            return "hsl(" + normHueDeg(ev0) + " " + fmtSl(ev1, true) + " " + fmtSl(ev2, false) + aOut + ")";
           }
-          const hTok = evalColorExpr(chParts[0]);
-          let h = parseFloat(hTok);
-          if (hTok.endsWith("rad")) h = h * 180 / Math.PI;
-          else if (hTok.endsWith("grad")) h = h * 0.9;
-          else if (hTok.endsWith("turn")) h = h * 360;
-          h = isFinite(h) ? (((h % 360) + 360) % 360) : (!/^calc\(/i.test(hTok) ? 0 : NaN);
-          const satRaw = parseFloat(evalColorExpr(chParts[1])) / 100;
-          const litRaw = parseFloat(evalColorExpr(chParts[2])) / 100;
+          let h = parseFloat(ev0);
+          if (ev0.endsWith("rad")) h = h * 180 / Math.PI;
+          else if (ev0.endsWith("grad")) h = h * 0.9;
+          else if (ev0.endsWith("turn")) h = h * 360;
+          h = isFinite(h) ? (((h % 360) + 360) % 360) : 0;
+          const satRaw = parseFloat(ev1) / 100;
+          const litRaw = parseFloat(ev2) / 100;
           const sat = isNaN(satRaw) ? 0 : Math.max(0, Math.min(1, satRaw));
           const lit = isNaN(litRaw) ? 0 : Math.max(0, Math.min(1, litRaw));
           let a = 1;
-          if (slash.length === 2) {
-            const at = evalColorExpr(slash[1]);
-            a = at.endsWith("%") ? (parseFloat(at) / 100) : parseFloat(at);
-          } else if (chParts.length === 4) {
-            const at = evalColorExpr(chParts[3]);
-            a = at.endsWith("%") ? (parseFloat(at) / 100) : parseFloat(at);
-          }
+          if (evA) a = evA.endsWith("%") ? (parseFloat(evA) / 100) : parseFloat(evA);
           if (isFinite(h) && !isNaN(sat) && !isNaN(lit) && !isNaN(a)) {
             const c = (1 - Math.abs(2 * lit - 1)) * sat;
             const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
@@ -14654,38 +14671,29 @@
         const slash = splitTopSlash(hwbM[1]);
         const chParts = splitColorCh(slash[0]);
         if (chParts.length === 3 && slash.length <= 2) {
-          if (/\bnone\b/i.test(hwbM[1])) {
-            const stripPct = (t) => {
-              const ev = evalColorExpr(t);
-              return ev.toLowerCase() === "none" ? "none" : (ev.endsWith("%") ? String(Number(parseFloat(ev).toFixed(6))) : ev);
+          const ev0 = evalColorExpr(chParts[0]), ev1 = evalColorExpr(chParts[1]), ev2 = evalColorExpr(chParts[2]);
+          const evA = slash.length === 2 ? evalColorExpr(slash[1]) : "";
+          if (/\bnone\b/i.test(hwbM[1]) || /^calc\(/i.test(ev0) || /^calc\(/i.test(ev1) || /^calc\(/i.test(ev2) || /^calc\(/i.test(evA)) {
+            const fmtWb = (ev) => {
+              if (/^calc\(/i.test(ev)) return canonCalcColor(ev);
+              if (ev.toLowerCase() === "none") return "none";
+              const v = parseFloat(ev);
+              return isFinite(v) ? String(Number(v.toFixed(6))) : ev;
             };
-            const hOut = chParts[0].toLowerCase() === "none" ? "none" : chParts[0];
-            let aOut = "";
-            if (slash.length === 2) {
-              const at = evalColorExpr(slash[1]);
-              if (at === "none") aOut = " / none";
-              else {
-                const av = Math.max(0, Math.min(1, at.endsWith("%") ? (parseFloat(at) / 100) : parseFloat(at)));
-                if (isFinite(av) && av < 1) aOut = " / " + String(Number(av.toFixed(6)));
-              }
-            }
-            return "hwb(" + hOut + " " + stripPct(chParts[1]) + " " + stripPct(chParts[2]) + aOut + ")";
+            const aOut = evA ? normAlphaOut(slash[1]) : "";
+            return "hwb(" + normHueDeg(ev0) + " " + fmtWb(ev1) + " " + fmtWb(ev2) + aOut + ")";
           }
-          const hTok = evalColorExpr(chParts[0]);
-          let h = parseFloat(hTok);
-          if (hTok.endsWith("rad")) h = h * 180 / Math.PI;
-          else if (hTok.endsWith("grad")) h = h * 0.9;
-          else if (hTok.endsWith("turn")) h = h * 360;
-          h = isFinite(h) ? (((h % 360) + 360) % 360) : (!/^calc\(/i.test(hTok) ? 0 : NaN);
-          const wRaw = parseFloat(evalColorExpr(chParts[1])) / 100;
-          const bkRaw = parseFloat(evalColorExpr(chParts[2])) / 100;
+          let h = parseFloat(ev0);
+          if (ev0.endsWith("rad")) h = h * 180 / Math.PI;
+          else if (ev0.endsWith("grad")) h = h * 0.9;
+          else if (ev0.endsWith("turn")) h = h * 360;
+          h = isFinite(h) ? (((h % 360) + 360) % 360) : 0;
+          const wRaw = parseFloat(ev1) / 100;
+          const bkRaw = parseFloat(ev2) / 100;
           const w = isNaN(wRaw) ? 0 : Math.max(0, wRaw);
           const bk = isNaN(bkRaw) ? 0 : Math.max(0, bkRaw);
           let a = 1;
-          if (slash.length === 2) {
-            const at = evalColorExpr(slash[1]);
-            a = at.endsWith("%") ? (parseFloat(at) / 100) : parseFloat(at);
-          }
+          if (evA) a = evA.endsWith("%") ? (parseFloat(evA) / 100) : parseFloat(evA);
           if (isFinite(h) && !isNaN(w) && !isNaN(bk) && !isNaN(a)) {
             if (w + bk >= 1) {
               const g = (w === Infinity && bk === Infinity) ? 127.5 : (w === Infinity ? 255 : (bk === Infinity ? 0 : Number((w / (w + bk)).toFixed(10)) * 255));

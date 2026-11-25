@@ -2477,3 +2477,4 @@
 | Phase 808 | WPT `grid-template` 简写全套与未挂载节点 `getComputedStyle` | `src/js/shim/cssom.js`, `src/js/shim/window.js` | `grid-template-{node-not-connected,shorthand,shorthand-invalid,shorthand-valid,shorthand-composition,shorthand-areas-valid}` (6/6 **PASS**); `--smoke` 3/3 PASS |
 | Phase 809 | WPT `grid-template-columns`/`rows` `repeat()` 展开与计算值求值 | `src/js/shim/cssom.js`, `src/js/shim/window.js` | `grid-template-{columns,rows}-computed{,-nogrid}` (4/4 **PASS**); `--smoke` 3/3 PASS |
 | Phase 810 | WPT `grid` 简写全套 (`auto-flow`/`dense`/展开/重组) | `src/js/shim/cssom.js` | `grid-shorthand{,-valid,-invalid}` (146/146 **PASS**), `grid-row-*` (3/3), `grid-template-areas-*` (4/4); `--smoke` 3/3 PASS |
+| Phase 811 | WPT `rgb`/`hsl`/`hwb` `calc()`/`sign()` 颜色序列化 | `src/js/shim/cssom.js` | `color-valid-{hwb,hsl,rgb}` (167/167 **PASS**); `--smoke` 3/3 PASS |
