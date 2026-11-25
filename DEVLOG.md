@@ -3592,3 +3592,6 @@
 - 修复了逗号分隔 `rgb()`/`rgba()` 混用百分比与数字未被拒绝的问题，并补齐了 18 个逻辑属性的默认初始计算值，`/css/css-logical/inheritance.html`（68/68）与颜色非法测试全部通过。
 ### Phase 876 — `block-size`/`inline-size` 懒计算性能优化
 - 将 Phase 875 新增的 `block-size`/`inline-size` 空值尺寸计算改为 `_lazyBlockSize`/`_lazyInlineSize` 按需触发，避免无关 `getComputedStyle` 调用触发全树递归求值。
+
+### Phase 877 — `animation-name` 转义丢失根因定位与 `sign()`/`cq*` 数学函数放行
+- 定位 `getComputedStyle(d).animationName` 丢失 `multi\ word\ string` 反斜杠转义的根因：`wrapComputedStyleDecl` 对所有非自定义属性无条件调用 `normalizeCssColor()`，其内部反斜杠解义将 `\ ` 剥离；跳过 `animation-name` 等标识符/字符串属性后全量 27 项子测试通过。

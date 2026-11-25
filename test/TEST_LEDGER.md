@@ -2543,3 +2543,5 @@
 | Phase 874 | `clip: rect(...)` 分隔符校验 & `clip`/`mask-border-mode` 继承 | `cascade.cp`, `window.js`, `cssom.js` | `clip-rect-comma-003/004` **PASS**, `css-masking/inheritance.sub.html` **FAIL→PASS**; `--smoke` 3/3 PASS |
 | Phase 875 | `rgb()` 混用拦截 & 逻辑属性初始值补齐（68/68 PASS） | `cssom.js`, `window.js` | `border-{block,inline}-color-invalid.html` **PASS**, `css-logical/inheritance.html` **PASS (68/68)**; `--smoke` 3/3 PASS |
 | Phase 876 | `block-size`/`inline-size` 按需懒计算性能优化 | `src/js/shim/window.js` | `css-logical/inheritance.html` 10.9s→5.2s (`68/68` 功能 PASS); `--smoke` 3/3 PASS |
+
+| Phase 877 | `animation-{iteration-count,delay,name}` 计算值与反斜杠转义修复 | `src/js/shim/cssom.js` | `animation-{iteration-count,delay,name}-computed.html` **3/3 PASS**; `--smoke` 3/3 PASS |

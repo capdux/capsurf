@@ -4574,3 +4574,6 @@
 - `src/js/shim/window.js`: 默认计算样式表补齐 `min/max-{block,inline}-size`、`inset-{block,inline}-*`、`border-{block,inline}-*-style`、`border-*-*-radius` 共 16 个逻辑属性初始值，并补全 `block-size`/`inline-size` 空值计算；`border-{block,inline}-color-invalid.html` **PASS**、`css-logical/inheritance.html` **PASS (68/68)**，`--smoke` 3/3 **PASS**。
 ### Phase 876 — `block-size`/`inline-size` 按需懒计算优化
 - `src/js/shim/window.js`: 引入 `_lazyBlockSize` 与 `_lazyInlineSize`，仅在访问 `block-size`/`inline-size` 时按需计算使用值，`css-logical/inheritance.html` 耗时由 10.9s 降至 5.2s~6.6s，`--smoke` 3/3 **PASS**。
+
+### Phase 877 — `animation-{iteration-count,delay,name}` 计算值序列化与转义保留
+- `src/js/shim/cssom.js`: `animation-iteration-count` 与 `animation-{delay,duration}`/`transition-{delay,duration}` 含 `sign()`/`cq*` 时绕过 `cap:css` 并剥离 `sign()`；`animation-name` 规范化保留反斜杠转义；`wrapComputedStyleDecl` 对 `animation-name`/`font-family`/`content`/`quotes` 跳过 `normalizeCssColor`；`src/js/{runtime.js,runtime_source.cp}` 重新打包；3 项 `animation-*-computed.html` **3/3 PASS**，`--smoke` 3/3 **PASS**。

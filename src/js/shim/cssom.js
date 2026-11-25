@@ -2230,7 +2230,8 @@
       return true;
     }
     if (prop === "animation-iteration-count") {
-      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_anim_iter_count === "function") {
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_anim_iter_count === "function" &&
+          !/\b(?:sign|cqw|cqh|cqi|cqb|cqmin|cqmax)\b/i.test(vLower)) {
         return globalThis.__capsurf_is_valid_css_anim_iter_count(vLower);
       }
       const layers = splitTopLevelComma(vLower);
@@ -2246,7 +2247,8 @@
     if (prop === "animation-duration" || prop === "transition-duration" || prop === "animation-delay" || prop === "transition-delay") {
       const allowNeg = prop.endsWith("-delay");
       const allowAuto = prop === "animation-duration";
-      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_time_list === "function") {
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_time_list === "function" &&
+          !/\b(?:sign|cqw|cqh|cqi|cqb|cqmin|cqmax)\b/i.test(vLower)) {
         return globalThis.__capsurf_is_valid_css_time_list(vLower, allowNeg, allowAuto);
       }
       const layers = splitTopLevelComma(vLower);
@@ -2258,8 +2260,9 @@
         if (/^(?:var|env)\(/i.test(t)) continue;
         if (/^(?:calc|min|max|clamp)\(/i.test(t)) {
           if (!isValidCalcSyntax(t)) return false;
-          if (/(?:\d|\.)(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|%|deg|rad|grad|turn|hz|khz|dpi|dpcm|dppx)\b/i.test(t)) return false;
-          if (!/(?:\d|\.)(?:ms|s)\b/i.test(t) && !/\b(?:var|env)\(/i.test(t)) return false;
+          const tNoSign = t.replace(/\bsign\([^()]+\)/gi, "1");
+          if (/(?:\d|\.)(?:px|em|rem|ex|rex|cap|rcap|ch|rch|ic|ric|lh|rlh|vw|vh|vi|vb|vmin|vmax|svw|svh|lvw|lvh|dvw|dvh|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pt|pc|%|deg|rad|grad|turn|hz|khz|dpi|dpcm|dppx)\b/i.test(tNoSign)) return false;
+          if (!/(?:\d|\.)(?:ms|s)\b/i.test(tNoSign) && !/\b(?:var|env)\(/i.test(tNoSign)) return false;
           if (/^(?:min|max|clamp)\(/i.test(t)) {
             const inner = t.slice(t.indexOf("(") + 1, -1);
             const args = splitTopLevelComma(inner);
@@ -5809,7 +5812,9 @@
           if (RESTRICTED.has(inner.toLowerCase())) return '"' + inner + '"';
           return inner.replace(/([ "\'\\])/g, "\\$1");
         }
-        return part.toLowerCase() === "none" ? "none" : part;
+        if (part.toLowerCase() === "none") return "none";
+        const unesc = part.replace(/\\(.)/g, "$1");
+        return unesc.replace(/([ "'\\])/g, "\\$1");
       }).join(", ");
     }
     if (key === "animation-range-start" || key === "animation-range-end") {
@@ -12057,7 +12062,7 @@
           let val = target[prop];
           if (typeof val === "string") {
             val = resolveCssVars(element, val);
-            if (!prop.startsWith("--")) {
+            if (!prop.startsWith("--") && kebab !== "animation-name" && kebab !== "font-family" && kebab !== "content" && kebab !== "quotes") {
               val = normalizeCssColor(val);
             }
           }
