@@ -63,7 +63,7 @@
     "margin-block", "margin-block-end", "margin-block-start", "margin-bottom",
     "margin-inline", "margin-inline-end", "margin-inline-start", "margin-left",
     "margin-right", "margin-top", "margin-trim", "mask",
-    "mask-border-outset", "mask-border-repeat", "mask-border-slice", "mask-border-source", "mask-border-width",
+    "mask-border-mode", "mask-border-outset", "mask-border-repeat", "mask-border-slice", "mask-border-source", "mask-border-width",
     "mask-clip", "mask-composite", "mask-image",
     "mask-mode", "mask-origin", "mask-position", "mask-repeat", "mask-size", "mask-type", "max-lines",
     "nav-down", "nav-left", "nav-right", "nav-up",
@@ -1148,6 +1148,7 @@
       "content-visibility": ["visible", "auto", "hidden"],
       "overflow-anchor": ["auto", "none"],
       "scroll-snap-stop": ["normal", "always"],
+      "mask-border-mode": ["alpha", "luminance"],
     };
     const allowedKeywords = KEYWORD_CSS_PROPS[prop];
     if (prop === "position" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_position === "function") return globalThis.__capsurf_is_valid_css_position(vLower);

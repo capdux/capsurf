@@ -3586,3 +3586,5 @@
 - 修复了 `painter.cp` `paintNodeRecursive` 未按 `z-index` 排序绘制子节点导致 `z-index: -1` 元素覆盖前置普通流元素的全局渲染缺陷，并同步修复 `BgGradient.parse` 忽略非法角度参数的问题，`/css/css-values/angle-units-001..005` 全部转绿。
 ### Phase 873 — `calc()` 除数长度单位校验前置修复
 - 修复了 `cssom.js` `isValidLenPct` 下沉 `__capsurf_is_valid_css_len_pct` 时绕过 JS 侧 `calc(1 / 2px)` 除数维度拦截的问题，`/css/css-box/parsing/width-invalid.html` 转绿。
+### Phase 874 — `css-masking` `clip` 与继承全量修复
+- 修复了 `cascade.cp` 解析 `clip: rect(...)` 允许逗号与空格混用及无效声明占槽的问题，并补齐 `clip` 与 `mask-border-mode` 的初始值及 CSSOM 校验，使 `css-masking/inheritance.sub.html`（36/36）与 `clip-rect-comma-003/004` 转绿。

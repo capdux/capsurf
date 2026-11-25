@@ -10254,6 +10254,8 @@ function installWindow(global) {
       ["table-layout", "auto"],
       ["unicode-bidi", "normal"],
       ["writing-mode", "horizontal-tb"],
+      ["clip", "auto"],
+      ["mask-border-mode", "alpha"],
       ["border-image-outset", "0"],
       ["border-image-repeat", "stretch"],
       ["border-image-slice", "100%"],

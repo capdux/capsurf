@@ -4566,3 +4566,6 @@
 - `src/js/shim/window.js`: `BLOCKIFY` 补齐 `table-*` 与 `ruby-*` 映射；`angle-units-001..005.html` **5/5 PASS**，`--smoke` 3/3 **PASS**。
 ### Phase 873 — `calc()` 除数维度校验前置拦截（`width-invalid.html` PASS）
 - `src/js/shim/cssom.js`: `isValidLenPct` 将 `calc()` 除数带长度单位检查前置到 `__capsurf_is_valid_css_len_pct` 之前；`/css/css-box/parsing/width-invalid.html` **PASS**，`--smoke` 3/3 **PASS**。
+### Phase 874 — `clip: rect(...)` 分隔符校验、`clip`/`mask-border-mode` 初始值与继承全绿
+- `src/css/cascade.cp`: `clip: rect(...)` 严格区分逗号分隔与空格分隔，拒绝混用并避免无效值占槽。
+- `src/js/shim/{window.js,cssom.js}`: 补齐 `clip: auto` 与 `mask-border-mode: alpha` 初始值及 CSSOM 属性白名单；`clip-rect-comma-003/004` 与 `css-masking/inheritance.sub.html`（**FAIL→PASS**）**3/3 PASS**，`--smoke` 3/3 **PASS**。

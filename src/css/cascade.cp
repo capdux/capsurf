@@ -4021,26 +4021,50 @@ pub struct ComputedStyle {
             return;
         }
         if (std.ascii.eqlIgnoreCase(name, "clip")) {
-            if (_.tryClaimSlot(PROP_CLIP, weight)) {
-                const s = std.mem.trim(u8, val, " \t\r\n");
-                if (std.ascii.eqlIgnoreCase(s, "auto") || std.ascii.eqlIgnoreCase(s, "none")) {
+            const s = std.mem.trim(u8, val, " \t\r\n");
+            if (std.ascii.eqlIgnoreCase(s, "auto") || std.ascii.eqlIgnoreCase(s, "none")) {
+                if (_.tryClaimSlot(PROP_CLIP, weight)) {
                     _.legacy_clip = LegacyClipRect{};
-                } else if (std.ascii.startsWithIgnoreCase(s, "rect(")) {
-                    if (close_idx := std.mem.lastIndexOfScalar(u8, s, ')')) {
-                        if (close_idx > 5) {
-                            const inner = s[5..close_idx];
-                            let args: [4]LengthPercentageOrAuto = [LengthPercentageOrAuto.autoVal(); 4];
-                            let cnt: usize = 0;
-                            let it = std.mem.tokenizeAny(u8, inner, ", \t\r\n");
-                            while (cnt < 4) {
-                                const tok_opt = it.next();
-                                if (tok_opt == null) break;
-                                if (lpa := LengthPercentageOrAuto.parse(tok_opt.?)) {
+                }
+            } else if (std.ascii.startsWithIgnoreCase(s, "rect(")) {
+                if (close_idx := std.mem.lastIndexOfScalar(u8, s, ')')) {
+                    if (close_idx > 5) {
+                        const inner = s[5..close_idx];
+                        let args: [4]LengthPercentageOrAuto = [LengthPercentageOrAuto.autoVal(); 4];
+                        let cnt: usize = 0;
+                        let valid = true;
+                        if (std.mem.indexOfScalar(u8, inner, ',') != null) {
+                            let cit = std.mem.splitScalar(u8, inner, ',');
+                            while (raw_seg := cit.next()) {
+                                if (cnt >= 4) { valid = false; break; }
+                                const seg = std.mem.trim(u8, raw_seg, " \t\r\n");
+                                if (seg.len == 0 || std.mem.indexOfAny(u8, seg, " \t\r\n") != null) {
+                                    valid = false;
+                                    break;
+                                }
+                                if (lpa := LengthPercentageOrAuto.parse(seg)) {
                                     args[cnt] = lpa;
                                     cnt += 1;
+                                } else {
+                                    valid = false;
+                                    break;
                                 }
                             }
-                            if (cnt == 4) {
+                        } else {
+                            let it = std.mem.tokenizeAny(u8, inner, " \t\r\n");
+                            while (tok_opt := it.next()) {
+                                if (cnt >= 4) { valid = false; break; }
+                                if (lpa := LengthPercentageOrAuto.parse(tok_opt)) {
+                                    args[cnt] = lpa;
+                                    cnt += 1;
+                                } else {
+                                    valid = false;
+                                    break;
+                                }
+                            }
+                        }
+                        if (valid && cnt == 4) {
+                            if (_.tryClaimSlot(PROP_CLIP, weight)) {
                                 _.legacy_clip = LegacyClipRect {
                                     has_clip: true,
                                     top: args[0],
