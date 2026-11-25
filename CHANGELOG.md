@@ -4219,3 +4219,5 @@
   - `src/js/shim/element/element.js`: 含 `var()` 简写属性展开为 `pendingVar` 标记长写（长写返回 `""`，全长写同源时返回原简写，支持 `!important` 优先级）。
   - `test/wpt/wpt-expectations.json`: 收紧 `/css/css-variables/variable-reference-shorthands.html` 为 `PASS`（`7,213` PASS）。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 774**:
+  - `src/js/dom_binding.cp`: 引入 `cap:css` `SupportsTree`/`SupportsKind`，实现 Kleene 三值逻辑求值器 `evalSupportsNodeTri` 并暴露 `__capsurf_eval_supports`。

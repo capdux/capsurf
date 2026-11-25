@@ -2440,3 +2440,4 @@
 | Phase 771 | WPT `/css/css-text-decor/` 初始值 `auto` 补全（非动画 45/45 PASS） | `src/js/shim/window.js` | `text-decoration-thickness-initial`, `text-underline-offset-initial` **PASS**; `--smoke` 3/3 PASS |
 | Phase 772 | WPT `var()` 语法校验与自定义属性循环引用三色 DFS 检测 | `src/js/shim/window.js`, `src/js/shim/element/element.js`, `test/wpt/wpt-expectations.json` | `variable-cycles` (11/11 **PASS**), `var-parsing` **FAIL→PASS** (`7,212` PASS); `--smoke` 3/3 PASS |
 | Phase 773 | WPT 含 `var()` 简写属性 `pendingVar` 展开与 `!important` 保留 | `src/js/shim/element/element.js`, `test/wpt/wpt-expectations.json` | `variable-reference-shorthands` (16/16 **FAIL→PASS**, `7,213` PASS); `--smoke` 3/3 PASS |
+| Phase 774 | 二八分层 CSS 下沉 Batch 3：`SupportsTree` Kleene 三值原生桥接 | `src/js/dom_binding.cp` | `CSS-supports-CSSStyleDeclaration`, `user-modify-03` **PASS**; `cpc brief` PASS; `--smoke` 3/3 PASS |

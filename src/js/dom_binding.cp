@@ -55,7 +55,7 @@ import {
 import { Document, NodeId, NULL_NODE, NodeType } from "../dom/dom.cp";
 import { Matcher } from "../css/matcher.cp";
 import { StyleSheet, Cascade, ComputedStyle, CssPosition } from "../css/cascade.cp";
-import { MediaQueryList, MediaEnv, MediaType, CssColor } from "cap:css";
+import { MediaQueryList, MediaEnv, MediaType, CssColor, SupportsTree, SupportsKind } from "cap:css";
 import { LayoutTree, Rect } from "../layout/layout.cp";
 import { RUNTIME_CHUNKS } from "./runtime_source.cp";
 import { MockFixtures } from "../net/mock_fixtures.cp";
@@ -787,6 +787,86 @@ fn linkMediaMatchesScreen(media_raw: []const u8): bool {
         let out_buf: [64]u8 = undefined;
         const formatted = col.toRgbString(&out_buf);
         if (formatted.len > 0) return jsNewString(ctx, formatted);
+    }
+    return jsNull();
+}
+
+fn evalSupportsNodeTri(
+    ctx: *JSContext,
+    tree: *const SupportsTree,
+    idx: u16,
+    decl_fn: JSValue,
+    sel_fn: JSValue,
+): u8 {
+    // 0 = false, 1 = true, 2 = unknown (Kleene 3-valued logic)
+    const n = tree.nodes[idx];
+    switch (n.kind) {
+        .declaration => {
+            const p_val = jsNewString(ctx, n.prop);
+            const v_val = jsNewString(ctx, n.value);
+            const args: [2]JSValue = [p_val, v_val];
+            const res = JS_Call(ctx, decl_fn, jsNull(), 2, unsafe { @ptrCast(&args) });
+            JS_FreeValue(ctx, p_val);
+            JS_FreeValue(ctx, v_val);
+            defer JS_FreeValue(ctx, res);
+            let b: i32 = 0;
+            if (JS_ToInt32(ctx, &b, res) == 0 && b != 0) return 1;
+            return 0;
+        },
+        .selector => {
+            const s_val = jsNewString(ctx, n.prop);
+            const args: [1]JSValue = [s_val];
+            const res = JS_Call(ctx, sel_fn, jsNull(), 1, unsafe { @ptrCast(&args) });
+            JS_FreeValue(ctx, s_val);
+            defer JS_FreeValue(ctx, res);
+            let b: i32 = 0;
+            if (JS_ToInt32(ctx, &b, res) == 0 && b != 0) return 1;
+            return 0;
+        },
+        .unknown => return 2,
+        .not_cond => {
+            const c = evalSupportsNodeTri(ctx, tree, n.first_child, decl_fn, sel_fn);
+            if (c == 2) return 2;
+            return if (c == 0) 1 else 0;
+        },
+        .and_cond => {
+            let has_unknown = false;
+            let i: u16 = 0;
+            while (i < n.child_count) : (i += 1) {
+                const c = evalSupportsNodeTri(ctx, tree, tree.children[n.first_child + i], decl_fn, sel_fn);
+                if (c == 0) return 0;
+                if (c == 2) has_unknown = true;
+            }
+            return if (has_unknown) 2 else 1;
+        },
+        .or_cond => {
+            let has_unknown = false;
+            let i: u16 = 0;
+            while (i < n.child_count) : (i += 1) {
+                const c = evalSupportsNodeTri(ctx, tree, tree.children[n.first_child + i], decl_fn, sel_fn);
+                if (c == 1) return 1;
+                if (c == 2) has_unknown = true;
+            }
+            return if (has_unknown) 2 else 0;
+        },
+    }
+}
+
+@c fn js_capsurf_eval_supports(
+    ctx: *JSContext,
+    this_val: JSValue,
+    argc: i32,
+    argv: [*]const JSValue!,
+): JSValue {
+    * = this_val;
+    if (argc < 3) return jsNull();
+    const cond_slice = jsToSlice(ctx, unsafe { argv[0] });
+    defer if (cond_slice.len > 0) std.heap.page_allocator.free(cond_slice);
+    const trimmed = std.mem.trim(u8, cond_slice, " \t\r\n");
+    if (trimmed.len == 0) return jsBool(false);
+    if (tree := SupportsTree.parse(trimmed)) {
+        const tri = evalSupportsNodeTri(ctx, &tree, tree.root, unsafe { argv[1] }, unsafe { argv[2] });
+        return jsBool(tri == 1);
     }
     return jsNull();
 }
@@ -2755,6 +2835,7 @@ pub fn mountDom(
     defineMethod(raw_ctx, global_obj, "__capsurf_set_quirks_mode", js_capsurf_set_quirks_mode, 1);
     defineMethod(raw_ctx, global_obj, "__capsurf_eval_media_query", js_capsurf_eval_media_query, 4);
     defineMethod(raw_ctx, global_obj, "__capsurf_parse_color", js_capsurf_parse_color, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_eval_supports", js_capsurf_eval_supports, 3);
 
     // Assemble and evaluate modular runtime shim
     let total_len: usize = 0;

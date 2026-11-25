@@ -3386,3 +3386,5 @@
 - 在 `window.js` `resolveVarsInMap` 实现三色栈式 DFS 循环检测，解决自环/互环/嵌套次级环未标记 guaranteed-invalid 的问题（`variable-cycles.html` 11/11 全绿）；移除 `element.js` `var(` 短接漏洞，打通 `var-parsing.html`（`FAIL→PASS`，基线增至 `7,212`）。
 ### Phase 773 — 含 `var()` 简写属性长写展开与重构规范化（`variable-reference-shorthands.html` 16/16 PASS）
 - 在 `element.js` 实现含 `var()` 简写的 `pendingVar` 延迟替换展开与重构规则（长写读取 `""`，部分长写被覆盖后简写返回 `""`，`!important` 优先级不被普通长写覆盖），`variable-reference-shorthands.html` **FAIL→PASS**（基线增至 `7,213`）。
+### Phase 774 — 二八分层 CSS 原生下沉 Batch 3：`SupportsTree` Kleene 三值桥接
+- 在 `dom_binding.cp` 基于 `cap:css` `SupportsTree`/`SupportsKind` 实现 Kleene 三值逻辑原生求值并暴露 `__capsurf_eval_supports`；验证对比表明高频细粒度 `CSS.supports` 保持 JS 零跨界求值更优（`CSS-supports-CSSStyleDeclaration.html` 568ms PASS），`--smoke` 3/3 PASS。
