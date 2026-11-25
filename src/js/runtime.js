@@ -5053,6 +5053,9 @@
       if ((prop === "overflow-wrap" || prop === "word-wrap") && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_overflow_wrap === "function") return globalThis.__capsurf_is_valid_css_overflow_wrap(vLower);
       if (prop === "flex-direction" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_flex_direction === "function") return globalThis.__capsurf_is_valid_css_flex_direction(vLower);
       if (prop === "flex-wrap" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_flex_wrap === "function") return globalThis.__capsurf_is_valid_css_flex_wrap(vLower);
+      if (prop === "pointer-events" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_pointer_events === "function") return globalThis.__capsurf_is_valid_css_pointer_events(vLower);
+      if (prop === "user-select" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_user_select === "function") return globalThis.__capsurf_is_valid_css_user_select(vLower);
+      if (prop === "resize" && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_resize === "function") return globalThis.__capsurf_is_valid_css_resize(vLower);
       if (allowedKeywords) {
         return allowedKeywords.indexOf(vLower) !== -1;
       }
@@ -6804,6 +6807,9 @@
         return consumeAlign(toks, 0, prop) === toks.length;
       }
       if (prop === "grid-auto-flow") {
+        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_is_valid_css_grid_auto_flow === "function") {
+          return globalThis.__capsurf_is_valid_css_grid_auto_flow(vLower);
+        }
         const toks = splitCssTokens(vLower);
         if (toks.length < 1 || toks.length > 2) return false;
         let seenAxis = false, seenDense = false;

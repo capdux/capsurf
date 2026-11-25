@@ -105,6 +105,10 @@ import {
     isValidCssFlexWrapValue,
     isValidCssAlignSelfOrItemsValue,
     isValidCssContentDistributionValue,
+    isValidCssGridAutoFlowValue,
+    isValidCssPointerEventsValue,
+    isValidCssUserSelectValue,
+    isValidCssResizeValue,
 } from "cap:css";
 import { LayoutTree, Rect } from "../layout/layout.cp";
 import { RUNTIME_CHUNKS } from "./runtime_source.cp";
@@ -1071,6 +1075,22 @@ fn callStrValidator1(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, pred: 
     if (trimmed.len == 0) return jsFalse();
     const is_justify = if (argc >= 2) jsToBool(ctx, unsafe { argv[1] }) else false;
     return jsBool(isValidCssContentDistributionValue(trimmed, is_justify));
+}
+@c fn js_capsurf_is_valid_css_grid_auto_flow(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssGridAutoFlowValue);
+}
+@c fn js_capsurf_is_valid_css_pointer_events(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssPointerEventsValue);
+}
+@c fn js_capsurf_is_valid_css_user_select(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssUserSelectValue);
+}
+@c fn js_capsurf_is_valid_css_resize(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return callStrValidator1(ctx, argc, argv, isValidCssResizeValue);
 }
 @c fn js_capsurf_is_valid_css_len_pct(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     * = this_val;
@@ -3193,6 +3213,10 @@ pub fn mountDom(
     defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_flex_wrap", js_capsurf_is_valid_css_flex_wrap, 1);
     defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_align_self_or_items", js_capsurf_is_valid_css_align_self_or_items, 2);
     defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_content_dist", js_capsurf_is_valid_css_content_dist, 2);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_grid_auto_flow", js_capsurf_is_valid_css_grid_auto_flow, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_pointer_events", js_capsurf_is_valid_css_pointer_events, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_user_select", js_capsurf_is_valid_css_user_select, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_is_valid_css_resize", js_capsurf_is_valid_css_resize, 1);
 
     // Assemble and evaluate modular runtime shim
     let total_len: usize = 0;

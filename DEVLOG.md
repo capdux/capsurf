@@ -3556,3 +3556,5 @@
 - 将布局关键字与文本换行对齐校验收口至 `cap:css` (`display.cp` & `text.cp`) 并全量通过 12 项对应 WPT 解析测试，累计已有 **37 个** CSSOM 高频语法校验/求值/序列化入口完成 `cap:css` 下沉。
 ### Phase 858 — `flex-direction` / `flex-wrap` / `align-*` / `justify-content` 下沉 `cap:css`
 - 将 Flexbox 方向/换行与 Box Alignment 校验收口至 `cap:css` (`boxAlign.cp`) 并全量通过 12 项对应 WPT 解析测试，累计已有 **41 个** CSSOM 高频语法校验/求值/序列化入口完成 `cap:css` 下沉。
+### Phase 859 — `grid-auto-flow` / `pointer-events` / `user-select` / `resize` 下沉 `cap:css`
+- 将 `grid-auto-flow`、`pointer-events`、`user-select`、`resize` 校验收口至 `cap:css` (`grid.cp` & `ui.cp`) 并全量通过 6 项对应 WPT 解析测试，累计已有 **45 个** CSSOM 高频语法校验/求值/序列化入口完成 `cap:css` 下沉。
