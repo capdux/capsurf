@@ -46639,14 +46639,96 @@
         return texts.join("\n");
       };
       const slottedImpLayers = [];
+      const hostImpLayers = [];
+      if (element && element.nodeType === 1 && element._shadowRoot) {
+        const ownShadow = element._shadowRoot;
+        const parseFnHost = global.splitStylesheetRules || (typeof globalThis !== "undefined" && globalThis.splitStylesheetRules);
+        const cssTxtHost = collectScopeCssText(ownShadow);
+        if (cssTxtHost && cssTxtHost.indexOf(":host") !== -1 && typeof parseFnHost === "function") {
+          const cleanHost = cssTxtHost.indexOf("/*") !== -1 ? cssTxtHost.replace(/\/\*[\s\S]*?\*\//g, "") : cssTxtHost;
+          const rulesHost = parseFnHost(cleanHost);
+          const matchOwnHostSel = (selStr) => {
+            const hm = /^:host(?:\(([^)]*)\))?(.*)$/i.exec(selStr.trim());
+            if (!hm) return false;
+            const cond = hm[1];
+            const tail = (hm[2] || "").trim();
+            if (tail.indexOf("::part(") !== -1 || /^\s/.test(hm[2] || "")) return false;
+            let tailPseudoEl = "";
+            let tailClasses = tail;
+            const peIdx = tail.indexOf("::");
+            if (peIdx !== -1) {
+              tailClasses = tail.slice(0, peIdx).trim();
+              tailPseudoEl = tail.slice(peIdx).trim().toLowerCase();
+            }
+            if (tailPseudoEl !== (normalizedPseudo || "")) return false;
+            if (cond !== undefined) {
+              const cTrim = cond.trim();
+              if (!cTrim) return false;
+              try {
+                if (typeof element.matches === "function") {
+                  if (!element.matches(cTrim)) return false;
+                } else if (!matchesSelector(element, cTrim, "")) return false;
+              } catch (e) { return false; }
+            }
+            if (tailClasses) {
+              try {
+                if (typeof element.matches === "function") {
+                  if (!element.matches("*" + tailClasses)) return false;
+                } else if (!matchesSelector(element, "*" + tailClasses, "")) return false;
+              } catch (e) { return false; }
+            }
+            return true;
+          };
+          const matchedHostDecls = [];
+          const visitHost = (list) => {
+            for (let ri = 0; ri < list.length; ri++) {
+              const r = list[ri];
+              if (!r) continue;
+              const stText = String(r.selectorText || "").trim();
+              if (!stText.startsWith("@")) {
+                const sels = [];
+                let sc = "", sd = 0, sb = 0, sq = "";
+                for (let k = 0; k < stText.length; k++) {
+                  const ch = stText[k];
+                  if (sq) { sc += ch; if (ch === sq && stText[k - 1] !== "\\") sq = ""; continue; }
+                  if (ch === "\"" || ch === "'") { sq = ch; sc += ch; continue; }
+                  if (ch === "(") sd++; else if (ch === ")" && sd > 0) sd--;
+                  else if (ch === "[") sb++; else if (ch === "]" && sb > 0) sb--;
+                  if (sd === 0 && sb === 0 && ch === ",") { if (sc.trim()) sels.push(sc.trim()); sc = ""; }
+                  else sc += ch;
+                }
+                if (sc.trim()) sels.push(sc.trim());
+                for (let ssi = 0; ssi < sels.length; ssi++) {
+                  if (sels[ssi].indexOf(":host") !== -1 && matchOwnHostSel(sels[ssi])) {
+                    matchedHostDecls.push(r.declText || "");
+                    break;
+                  }
+                }
+              } else if (/^@(?:media|supports|layer)\b/i.test(stText)) {
+                if (/^@media\b/i.test(stText) && !evaluateMediaQuery(stText.replace(/^@media/i, "").trim())) continue;
+                if (/^@supports\b/i.test(stText) && !evaluateSupportsCondition(stText.replace(/^@supports/i, "").trim())) continue;
+                visitHost(parseFnHost(r.declText || ""));
+              }
+            }
+          };
+          visitHost(rulesHost);
+          if (matchedHostDecls.length > 0) {
+            for (let di = 0; di < matchedHostDecls.length; di++) {
+              parseDeclarationsBlockInto(element, matchedHostDecls[di], targetMap, "normal");
+            }
+            hostImpLayers.push(matchedHostDecls);
+          }
+        }
+      }
       if (element && element.nodeType === 1 && String(element.localName || element.tagName || "").toLowerCase() !== "slot") {
         const slotChain = [];
-        let curSlot = element.assignedSlot;
+        const getSlotFn = typeof global.__capsurf_findAssignedSlot === "function" ? global.__capsurf_findAssignedSlot : null;
+        let curSlot = getSlotFn ? getSlotFn(element, true) : element.assignedSlot;
         const seenSlots = new Set();
         while (curSlot && !seenSlots.has(curSlot)) {
           seenSlots.add(curSlot);
           slotChain.push(curSlot);
-          curSlot = curSlot.assignedSlot;
+          curSlot = getSlotFn ? getSlotFn(curSlot, true) : curSlot.assignedSlot;
         }
         if (slotChain.length > 0) {
           const parseFn = global.splitStylesheetRules || (typeof globalThis !== "undefined" && globalThis.splitStylesheetRules);
@@ -46905,6 +46987,13 @@
         for (let di = 0; di < slottedImpLayers[si].length; di++) {
           if (slottedImpLayers[si][di].toLowerCase().indexOf("!important") !== -1) {
             parseDeclarationsBlockInto(element, slottedImpLayers[si][di], targetMap, "important");
+          }
+        }
+      }
+      for (let hi = 0; hi < hostImpLayers.length; hi++) {
+        for (let di = 0; di < hostImpLayers[hi].length; di++) {
+          if (hostImpLayers[hi][di].toLowerCase().indexOf("!important") !== -1) {
+            parseDeclarationsBlockInto(element, hostImpLayers[hi][di], targetMap, "important");
           }
         }
       }

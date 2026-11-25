@@ -4337,3 +4337,6 @@
   - `src/js/shim/element/html-classes.js`: 实现手动插槽分配（`slotAssignment: "manual"` 与 `HTMLSlotElement.prototype.assign`）及 `__capsurf_domMutationEpoch` 递增。
   - `src/js/shim/window.js`: `matchesSingleSelector` 优先使用 `getRootNode()` 作用域，`ensureLiveComputed` 监听 `__capsurf_domMutationEpoch` 自动刷新。
   - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
+- **Phase 804**:
+  - `src/js/shim/window.js`: `collectElementOwnDeclarations` 新增宿主 `_shadowRoot` `:host` / `:host(...)` 规则与 `!important` 级联，并支持 `closed` ShadowRoot 插槽链。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。
