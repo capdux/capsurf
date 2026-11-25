@@ -4437,3 +4437,7 @@
   - `src/render/painter.cp`: 抽取 `findFirstTextRect`，使用 `formatListMarker` 与 `0.75 * fontSize` 字号按 `inside`/`outside` 绘制列表标记。
 - **Phase 830**:
   - `src/layout/layout.cp`: `layoutGridContainer` 传入显式行高 `cell_row_h`，支持网格子项水平/垂直 `auto` 外边距对齐与 `align-items: center|flex-end`。
+- **Phase 831**:
+  - `src/js/shim/cssom.js`: `splitStylesheetRules` 剥离顶层 `<!--`/`-->`；`serializeCssValue` 补全未闭合 `url(`；`constructRule` 为 `CSSStyleRule` 填充嵌套 `cssRules` 并按 `allowNesting=true` 过滤非法嵌套规则。
+  - `src/js/shim/element/element.js`: `serializeInlineSpecifiedValue` 闭合 EOF 未闭合 `url(`。
+  - `src/js/runtime.js`, `src/js/runtime_source.cp`: 重新打包同步。

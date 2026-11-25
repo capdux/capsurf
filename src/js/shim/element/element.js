@@ -118,6 +118,7 @@ function isValidInlinePropValue(key, val) {
 function serializeInlineSpecifiedValue(key, val) {
   if (!val || typeof val !== "string") return val || "";
   const v = val.trim();
+  if (/^url\([^)]*$/i.test(v)) return v + ")";
   // CSS Color 4: legacy rgb()/rgba() with `none` channel serializes `none` as `0` for specified value
   if ((key === "color" || key.endsWith("-color")) && /^rgba?\s*\(/i.test(v) && /\bnone\b/i.test(v)) {
     const m = v.match(/^rgba?\(\s*([^\s,/]+)\s+([^\s,/]+)\s+([^\s,/]+)(?:\s*\/\s*([^\s)]+))?\s*\)$/i);

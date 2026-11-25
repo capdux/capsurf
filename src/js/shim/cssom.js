@@ -7821,7 +7821,7 @@
   }
 
   function serializeCssValue(val) {
-    const out = String(val).replace(/url\(\s*(?:(['"])(.*?)\1|([^)]+?))\s*\)/gi, (_, q, qs, uq) => 'url("' + (q ? qs : uq.trim()) + '")');
+    const out = String(val).replace(/url\(\s*(?:(['"])(.*?)(?:\1|$)|([^)]*?))(?:\)|$)/gi, (_, q, qs, uq) => 'url("' + (q ? qs : (uq || "").trim()) + '")');
     const nm = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))([a-z%]*)$/i.exec(out.trim());
     if (nm) {
       const n = Number(nm[1]);
@@ -9514,7 +9514,10 @@
       if (ch === "}") {
         depth--;
         if (depth === 0 && braceOpenAt >= 0) {
-          const selectorText = text.slice(chunkStart, braceOpenAt).trim();
+          let selectorText = text.slice(chunkStart, braceOpenAt).trim();
+          while (/^(?:<!--|-->)/.test(selectorText)) {
+            selectorText = selectorText.replace(/^(?:<!--|-->)\s*/, "");
+          }
           const declText = text.slice(braceOpenAt + 1, i).trim();
           const cssText = selectorText
             ? selectorText + " { " + declText + " }"
@@ -9676,6 +9679,32 @@
       const style = makeRuleStyleDeclaration(parsed.declText || "", "style", null, onMutate);
       style._parentRule = rule;
       rule.style = style;
+      if ((parsed.declText || "").indexOf("{") !== -1) {
+        const nestedParts = splitStylesheetRules(parsed.declText || "");
+        for (let ni = 0; ni < nestedParts.length; ni++) {
+          const np = nestedParts[ni];
+          const nKind = classifyRuleKind(np);
+          if (nKind === "style") {
+            let validNested = true;
+            if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_canonicalizeSelector === "function") {
+              if (globalThis.__capsurf_canonicalizeSelector(np.selectorText, true) === null) validNested = false;
+            } else {
+              try { validateRuleForInsert(np); } catch (_) { validNested = false; }
+            }
+            if (validNested) {
+              const nr = constructRule(np, parentSheet, rule, onMutate);
+              if (nr) rule.cssRules.push(nr);
+            }
+          } else if (nKind === "media" || nKind === "supports" || nKind === "container" || nKind === "layer-block" || nKind === "scope" || nKind === "starting-style") {
+            let validNested = true;
+            try { validateRuleForInsert(np); } catch (_) { validNested = false; }
+            if (validNested) {
+              const nr = constructRule(np, parentSheet, rule, onMutate);
+              if (nr) rule.cssRules.push(nr);
+            }
+          }
+        }
+      }
       rule._serialize = function () {
         let d = style.cssText;
         if (d && !d.endsWith(";")) d += ";";
