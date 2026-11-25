@@ -2450,3 +2450,4 @@
 | Phase 781 | WPT `:focus` 实时样式刷新与 `font`/`font-variant` 联动序列化 | `src/js/shim/window.js`, `src/js/shim/element/element.js`, `test/wpt/wpt-expectations.json` | `display-contents-focusable-001` **PASS**、`font-shorthand-variant` **FAIL→PASS**; `--smoke` 3/3 PASS |
 | Phase 782 | WPT `column-height`/`column-wrap` 与 `columns` `/` 简写重置/计算值 | `src/js/shim/cssom.js`, `src/js/shim/window.js` | `columns-shorthand-reset-wrap` (3/3 **PASS**)、`columns-computed` (27/27 **PASS**); `--smoke` 3/3 PASS |
 | Phase 783 | WPT `caret-shape` 与 `nav-*` 补全及 `/css/css-ui/` 清零 | `src/js/shim/cssom.js`, `src/js/shim/window.js`, `test/wpt/wpt-expectations.json` | `/css/css-ui/inheritance.html` **FAIL→PASS**（`/css/css-ui/` 0 FAIL，`7,212` PASS）; `--smoke` 3/3 PASS |
+| Phase 784 | WPT `filter`/`backdrop-filter` 滤镜函数计算值规范化 | `src/js/shim/window.js`, `test/wpt/wpt-expectations.json` | `/css/filter-effects/parsing/backdrop-filter-computed.html` **FAIL→PASS**（`7,213` PASS）; `--smoke` 3/3 PASS |

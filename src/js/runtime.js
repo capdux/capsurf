@@ -48921,6 +48921,138 @@
       if (bsftRaw && !/^(?:sub|super|top|center|bottom)$/i.test(bsftRaw)) {
         computedMap.set("baseline-shift", evalLinLenPctTok(bsftRaw));
       }
+      const evalFilterArgNum = (rawArg, isPctClamped01, isNonNeg) => {
+        let s = String(rawArg || "").trim();
+        if (!s) return 1;
+        s = s.replace(/\bsign\(([^()]+)\)/gi, (m, inn) => {
+          const sv = evalCssLengthExpr(inn, 0, fontSize);
+          return sv !== null ? String(Math.sign(sv)) : m;
+        });
+        let isPct = false;
+        if (/^(?:calc|min|max|clamp)\(/i.test(s)) {
+          const inner = s.slice(s.indexOf("(") + 1, -1).trim();
+          if (inner.includes("%")) {
+            isPct = true;
+            const v = evalCssLengthExpr("calc(" + inner.replace(/%/g, "px") + ")", 0, fontSize);
+            if (v !== null && isFinite(v)) {
+              let n = v / 100;
+              if (isPctClamped01) n = Math.min(1, Math.max(0, n));
+              else if (isNonNeg) n = Math.max(0, n);
+              return Number(n.toFixed(6));
+            }
+          } else {
+            const v = evalCssLengthExpr(s, 0, fontSize);
+            if (v !== null && isFinite(v)) {
+              let n = v;
+              if (isPctClamped01) n = Math.min(1, Math.max(0, n));
+              else if (isNonNeg) n = Math.max(0, n);
+              return Number(n.toFixed(6));
+            }
+          }
+        }
+        if (s.endsWith("%")) {
+          isPct = true;
+          const n0 = parseFloat(s.slice(0, -1));
+          if (!isNaN(n0)) {
+            let n = n0 / 100;
+            if (isPctClamped01) n = Math.min(1, Math.max(0, n));
+            else if (isNonNeg) n = Math.max(0, n);
+            return Number(n.toFixed(6));
+          }
+        }
+        const n0 = parseFloat(s);
+        if (!isNaN(n0)) {
+          let n = isPct ? (n0 / 100) : n0;
+          if (isPctClamped01) n = Math.min(1, Math.max(0, n));
+          else if (isNonNeg) n = Math.max(0, n);
+          return Number(n.toFixed(6));
+        }
+        return rawArg;
+      };
+      const evalFilterAngleDeg = (rawArg) => {
+        const s = String(rawArg || "").trim().toLowerCase();
+        if (!s || s === "0") return "0deg";
+        const m = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)(deg|rad|grad|turn)$/.exec(s);
+        if (!m) return rawArg;
+        const v = parseFloat(m[1]), u = m[2];
+        let deg = v;
+        if (u === "rad") deg = v * 180 / Math.PI;
+        else if (u === "grad") deg = v * 0.9;
+        else if (u === "turn") deg = v * 360;
+        return Number(deg.toFixed(6)) + "deg";
+      };
+      for (const fltProp of ["filter", "backdrop-filter"]) {
+        const fltRaw = (computedMap.get(fltProp) || "").trim();
+        if (!fltRaw || fltRaw.toLowerCase() === "none") continue;
+        const fltToks = [];
+        let fc = "", fd = 0, fq = "";
+        for (let i = 0; i < fltRaw.length; i++) {
+          const ch = fltRaw[i];
+          if (fq) { fc += ch; if (ch === fq && fltRaw[i - 1] !== "\\") fq = ""; continue; }
+          if (ch === "\"" || ch === "'") { fq = ch; fc += ch; continue; }
+          if (ch === "(") fd++;
+          else if (ch === ")" && fd > 0) fd--;
+          if (fd === 0 && /\s/.test(ch)) { if (fc) { fltToks.push(fc); fc = ""; } }
+          else fc += ch;
+        }
+        if (fc) fltToks.push(fc);
+        const fltOut = fltToks.map((tok) => {
+          const lp = tok.indexOf("(");
+          if (lp === -1 || !tok.endsWith(")")) return tok;
+          const fn = tok.slice(0, lp).toLowerCase();
+          const body = tok.slice(lp + 1, -1).trim();
+          if (fn === "blur") {
+            if (!body) return "blur(0px)";
+            const ev = evalLinLenPctTok(body.replace(/\bsign\(([^()]+)\)/gi, (m, inn) => {
+              const sv = evalCssLengthExpr(inn, 0, fontSize);
+              return sv !== null ? String(Math.sign(sv)) : m;
+            }));
+            return "blur(" + (/^-[\d.]+px$/.test(ev) ? "0px" : ev) + ")";
+          }
+          if (fn === "brightness" || fn === "contrast" || fn === "saturate") {
+            return fn + "(" + evalFilterArgNum(body, false, true) + ")";
+          }
+          if (fn === "grayscale" || fn === "invert" || fn === "opacity" || fn === "sepia") {
+            return fn + "(" + evalFilterArgNum(body, true, true) + ")";
+          }
+          if (fn === "hue-rotate") {
+            return "hue-rotate(" + evalFilterAngleDeg(body) + ")";
+          }
+          if (fn === "drop-shadow") {
+            const dsToks = [];
+            let dc = "", dd = 0, dq = "";
+            for (let j = 0; j < body.length; j++) {
+              const ch = body[j];
+              if (dq) { dc += ch; if (ch === dq && body[j - 1] !== "\\") dq = ""; continue; }
+              if (ch === "\"" || ch === "'") { dq = ch; dc += ch; continue; }
+              if (ch === "(") dd++;
+              else if (ch === ")" && dd > 0) dd--;
+              if (dd === 0 && /\s/.test(ch)) { if (dc) { dsToks.push(dc); dc = ""; } }
+              else dc += ch;
+            }
+            if (dc) dsToks.push(dc);
+            let col = elColor;
+            const lens = [];
+            for (let j = 0; j < dsToks.length; j++) {
+              const dt = dsToks[j], dtl = dt.toLowerCase();
+              if (/^(?:0|[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:px|em|rem|pt|pc|in|cm|mm|q|vw|vh|ch|lh)|(?:calc|min|max|clamp)\()/i.test(dtl)) {
+                lens.push(evalLinLenPctTok(dt.replace(/\bsign\(([^()]+)\)/gi, (m, inn) => {
+                  const sv = evalCssLengthExpr(inn, 0, fontSize);
+                  return sv !== null ? String(Math.sign(sv)) : m;
+                })));
+              } else {
+                col = dtl === "currentcolor" ? elColor : normCol(dt);
+              }
+            }
+            if (lens.length >= 2) {
+              const blur = lens.length >= 3 ? (/^-[\d.]+px$/.test(lens[2]) ? "0px" : lens[2]) : "0px";
+              return "drop-shadow(" + col + " " + lens[0] + " " + lens[1] + " " + blur + ")";
+            }
+          }
+          return tok;
+        });
+        computedMap.set(fltProp, fltOut.join(" "));
+      }
       const ffsRaw = (computedMap.get("font-feature-settings") || "").trim();
       if (ffsRaw && ffsRaw.toLowerCase() !== "normal") {
         const ffsItems = [];

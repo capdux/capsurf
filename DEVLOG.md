@@ -3406,3 +3406,5 @@
 - 在 `cssom.js` 与 `window.js` 中补全 `column-height`（非负长度/`auto`）与 `column-wrap`（`auto | nowrap | wrap`）注册，并在 `columns` 简写展开与 `makeRuleStyleDeclaration` 初始解析中同步重置 `column-wrap: auto`，`columns-shorthand-reset-wrap.html` 与 `columns-computed.html` (27/27) 均恢复 **PASS**。
 ### Phase 783 — `caret-shape` 与 `nav-*` 空间导航属性补全及 `/css/css-ui/` 主目录清零
 - 在 `cssom.js` 与 `window.js` 中补全 `caret-shape`（可继承，初始 `auto`，支持 `auto | bar | block | underscore`）与 `nav-{down,left,right,up}`（非继承，初始 `auto`，支持 `#id [current|root|<string>]`），`/css/css-ui/inheritance.html` **FAIL→PASS**，实现 `/css/css-ui/` 主目录 0 FAIL 清零。
+### Phase 784 — `filter` / `backdrop-filter` 滤镜函数计算值规范化
+- 在 `window.js` `applyUsedValuesToComputedMap` 中实现 `blur`/`brightness`/`contrast`/`grayscale`/`invert`/`opacity`/`saturate`/`sepia`/`hue-rotate`/`drop-shadow` 的缺省参数、百分比转小数、角度转 `deg`、`drop-shadow` 颜色补全及 `[0,1]`/`>=0` 夹紧，`/css/filter-effects/parsing/backdrop-filter-computed.html` **FAIL→PASS**。

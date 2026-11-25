@@ -9403,7 +9403,7 @@
     "reason": "T18 enrollment (filter-effects): measured PASS"
   },
   "/css/filter-effects/parsing/backdrop-filter-computed.html": {
-    "expected": "FAIL",
+    "expected": "PASS",
     "reason": "T18 enrollment (filter-effects): 27/28 subtests pass"
   },
   "/css/filter-effects/parsing/backdrop-filter-parsing-invalid.html": {
