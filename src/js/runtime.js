@@ -460,6 +460,9 @@
   const _transitionEventState = new WeakMap();
   const _animationEventState = new WeakMap();
   const _beforeUnloadEventState = new WeakMap();
+  const _touchState = new WeakMap();
+  const _touchListState = new WeakMap();
+  const _touchEventState = new WeakMap();
 
   const _internalConstruct = Symbol("internalConstruct");
 
@@ -1889,6 +1892,144 @@
     },
     enumerable: false,
     configurable: true,
+  });
+
+  // -------------------------------------------------------------
+  // Touch, TouchList, TouchEvent
+  // -------------------------------------------------------------
+  function Touch(init) {
+    if (arguments.length === 0 || init === null || typeof init !== "object") {
+      throw new TypeError("Failed to construct 'Touch': 1 argument required, and it must be an object.");
+    }
+    if (init.identifier === undefined || init.target === null || typeof init.target !== "object") {
+      throw new TypeError("Failed to construct 'Touch': 'identifier' and 'target' are required.");
+    }
+    _touchState.set(this, {
+      identifier: Number(init.identifier) || 0,
+      target: init.target,
+      clientX: Number(init.clientX) || 0,
+      clientY: Number(init.clientY) || 0,
+      screenX: Number(init.screenX) || 0,
+      screenY: Number(init.screenY) || 0,
+      pageX: Number(init.pageX) || 0,
+      pageY: Number(init.pageY) || 0,
+      radiusX: Number(init.radiusX) || 0,
+      radiusY: Number(init.radiusY) || 0,
+      rotationAngle: Number(init.rotationAngle) || 0,
+      force: Number(init.force) || 0,
+    });
+  }
+  Object.defineProperty(Touch.prototype, Symbol.toStringTag, {
+    value: "Touch",
+    writable: false,
+    enumerable: false,
+    configurable: true,
+  });
+  markNative(Touch, "Touch");
+
+  ["identifier", "target", "clientX", "clientY", "screenX", "screenY", "pageX", "pageY", "radiusX", "radiusY", "rotationAngle", "force"].forEach(function (prop) {
+    Object.defineProperty(Touch.prototype, prop, {
+      get: function () {
+        const s = _touchState.get(this);
+        if (!s) throw new TypeError("Illegal invocation");
+        return s[prop];
+      },
+      enumerable: true,
+      configurable: true,
+    });
+  });
+
+  function TouchList(token, touches) {
+    if (token !== _internalConstruct) {
+      throw new TypeError("Illegal constructor");
+    }
+    const list = Array.isArray(touches) ? touches.slice() : [];
+    _touchListState.set(this, list);
+    for (let i = 0; i < list.length; i++) {
+      Object.defineProperty(this, i, {
+        value: list[i],
+        writable: false,
+        enumerable: true,
+        configurable: true,
+      });
+    }
+  }
+  Object.defineProperty(TouchList.prototype, Symbol.toStringTag, {
+    value: "TouchList",
+    writable: false,
+    enumerable: false,
+    configurable: true,
+  });
+  markNative(TouchList, "TouchList");
+
+  Object.defineProperty(TouchList.prototype, "length", {
+    get: function () {
+      const s = _touchListState.get(this);
+      if (!s) throw new TypeError("Illegal invocation");
+      return s.length;
+    },
+    enumerable: true,
+    configurable: true,
+  });
+
+  TouchList.prototype.item = function (index) {
+    const s = _touchListState.get(this);
+    if (!s) throw new TypeError("Illegal invocation");
+    const idx = index >>> 0;
+    return idx < s.length ? s[idx] : null;
+  };
+  markNative(TouchList.prototype.item, "item");
+
+  TouchList.prototype[Symbol.iterator] = function () {
+    const s = _touchListState.get(this);
+    if (!s) throw new TypeError("Illegal invocation");
+    return s[Symbol.iterator]();
+  };
+
+  function _toTouchList(input) {
+    if (input instanceof TouchList) return input;
+    if (input && typeof input[Symbol.iterator] === "function") {
+      return new TouchList(_internalConstruct, Array.from(input));
+    }
+    return new TouchList(_internalConstruct, []);
+  }
+
+  function TouchEvent(type, options) {
+    if (arguments.length === 0) {
+      throw new TypeError("Failed to construct 'TouchEvent': 1 argument required, but only 0 present.");
+    }
+    UIEvent.call(this, type, options);
+    const opts = (options !== null && typeof options === "object") ? options : {};
+    _touchEventState.set(this, {
+      touches: _toTouchList(opts.touches),
+      targetTouches: _toTouchList(opts.targetTouches),
+      changedTouches: _toTouchList(opts.changedTouches),
+      altKey: Boolean(opts.altKey),
+      metaKey: Boolean(opts.metaKey),
+      ctrlKey: Boolean(opts.ctrlKey),
+      shiftKey: Boolean(opts.shiftKey),
+    });
+  }
+  TouchEvent.prototype = Object.create(UIEvent.prototype);
+  TouchEvent.prototype.constructor = TouchEvent;
+  Object.defineProperty(TouchEvent.prototype, Symbol.toStringTag, {
+    value: "TouchEvent",
+    writable: false,
+    enumerable: false,
+    configurable: true,
+  });
+  markNative(TouchEvent, "TouchEvent");
+
+  ["touches", "targetTouches", "changedTouches", "altKey", "metaKey", "ctrlKey", "shiftKey"].forEach(function (prop) {
+    Object.defineProperty(TouchEvent.prototype, prop, {
+      get: function () {
+        const s = _touchEventState.get(this);
+        if (!s) throw new TypeError("Illegal invocation");
+        return s[prop];
+      },
+      enumerable: true,
+      configurable: true,
+    });
   });
 
   // =============================================================
@@ -3420,12 +3561,14 @@
 
   function getSelectOptions(selectEl) {
     const opts = [];
+    const seen = new Set();
     const up = typeof upgradeElement === "function" ? upgradeElement : (typeof globalThis !== "undefined" && globalThis.upgradeElement);
     function collect(node) {
       if (!node) return;
       if (node.firstChild !== undefined) {
         let child = node.firstChild;
-        while (child) {
+        while (child && !seen.has(child)) {
+          seen.add(child);
           const tag = (child.tagName || "").toLowerCase();
           if (tag === "option") {
             if (up) up(child);
@@ -6662,7 +6805,8 @@
       if (prop === "outline-color") {
         const toks = splitCssTokens(trimmed);
         if (toks.length !== 1) return false;
-        if (toks[0].toLowerCase() === "auto") return true;
+        const tl = toks[0].toLowerCase();
+        if (tl === "auto" || tl === "invert") return true;
         return isValidColor(toks[0]);
       }
       if (prop === "caret-color") {
@@ -7832,7 +7976,7 @@
           } else if (tl === "thin" || tl === "medium" || tl === "thick" || tl === "hairline" ||
                      (!tl.endsWith("%") && !(/^(?:calc|min|max|clamp)\(/i.test(tl) && tl.includes("%")) && isValidLenPct(tl, false))) {
             if (seenW) return false; seenW = true;
-          } else if (isValidColor(t)) {
+          } else if (isValidColor(t) || (prop === "outline" && tl === "invert")) {
             if (seenC) return false; seenC = true;
           } else {
             return false;
@@ -9343,7 +9487,7 @@
           if (STY.has(tl)) st = tl;
           else if (tl === "thin" || tl === "medium" || tl === "thick" || tl === "hairline" || /^[+-]?(?:\d|\.)/.test(tl) || /^(?:calc|min|max|clamp)\(/i.test(tl)) {
             w = (tl === "0" || tl === "+0" || tl === "-0") ? "0px" : (/^calc\(/i.test(t) ? canonicalizeCalcToken(t) : t);
-          } else c = t;
+          } else c = (key === "outline" && tl === "invert") ? "invert" : t;
         }
         if (key === "outline") {
           const oc = c.toLowerCase() === "currentcolor" ? "" : c;
@@ -10897,7 +11041,7 @@
               }
               if (!isValidCssValue("background-position", pToks.join(" "))) return false;
               pos = normalizeCssSpecifiedValue("background-position", pToks.join(" "));
-            } else if (isValidColor(t)) {
+            } else if (isValidColor(t) || (prop === "outline" && tl === "invert")) {
               if (li < layers.length - 1 || seenCol) return false;
               seenCol = true;
               color = t;
@@ -11649,7 +11793,7 @@
           if (STY.has(tl)) st = tl;
           else if (tl === "thin" || tl === "medium" || tl === "thick" || tl === "hairline" || /^[+-]?(?:\d|\.)/.test(tl) || /^(?:calc|min|max|clamp)\(/i.test(tl)) {
             w = (tl === "0" || tl === "+0" || tl === "-0") ? "0px" : (/^calc\(/i.test(t) ? canonicalizeCalcToken(t) : t);
-          } else c = t;
+          } else c = (key === "outline" && tl === "invert") ? "invert" : t;
         }
         if (key !== "border") return [[key + "-width", w], [key + "-style", st], [key + "-color", c]];
         return [
@@ -11673,7 +11817,7 @@
           if (STY.has(tl)) st = tl;
           else if (tl === "thin" || tl === "medium" || tl === "thick" || tl === "hairline" || /^[+-]?(?:\d|\.)/.test(tl) || /^(?:calc|min|max|clamp)\(/i.test(tl)) {
             w = (tl === "0" || tl === "+0" || tl === "-0") ? "0px" : (/^calc\(/i.test(t) ? canonicalizeCalcToken(t) : t);
-          } else c = t;
+          } else c = (key === "outline" && tl === "invert") ? "invert" : t;
         }
         return [[key + "-width", w], [key + "-style", st], [key + "-color", c]];
       }
@@ -11808,7 +11952,7 @@
           if (STY.has(tl)) st = tl;
           else if (tl === "thin" || tl === "medium" || tl === "thick" || tl === "hairline" || /^[+-]?(?:\d|\.)/.test(tl) || /^(?:calc|min|max|clamp)\(/i.test(tl)) {
             w = (tl === "0" || tl === "+0" || tl === "-0") ? "0px" : (/^calc\(/i.test(t) ? canonicalizeCalcToken(t) : t);
-          } else c = t;
+          } else c = (key === "outline" && tl === "invert") ? "invert" : t;
         }
         if (key === "border-block" || key === "border-inline") {
           return [
@@ -12572,7 +12716,9 @@
 
     const CSS = {
       escape(ident) {
-        return String(ident).replace(/[^a-zA-Z0-9_-]/g, (c) => "\\" + c);
+        const s = String(ident);
+        if (s === "-") return "\\-";
+        return s.replace(/[^a-zA-Z0-9_-]/g, (c) => "\\" + c).replace(/^-?[0-9]/, (m) => (m.length === 2 ? "-\\3" + m[1] + " " : "\\3" + m[0] + " "));
       },
       supports(propertyOrCondition, value) {
         if (typeof propertyOrCondition === "string" && typeof value === "string") {
@@ -15259,14 +15405,70 @@
       this._cascadeCssText = text;
     };
 
+    const _docShadowRootsMap = new WeakMap();
+
+    function syncAdoptedAndInvalidate(doc) {
+      try {
+        globalThis.__capsurf_cssom_epoch = (globalThis.__capsurf_cssom_epoch || 0) + 1;
+        globalThis.__capsurf_domMutationEpoch = (globalThis.__capsurf_domMutationEpoch || 0) + 1;
+        const isShadow = !!(doc && doc.host);
+        const targetDoc = isShadow
+          ? (doc.host.ownerDocument || doc.ownerDocument || global.document || (typeof document !== "undefined" ? document : null))
+          : (doc || global.document || (typeof document !== "undefined" ? document : null));
+        if (isShadow && targetDoc) {
+          let srSet = _docShadowRootsMap.get(targetDoc);
+          if (!srSet) {
+            srSet = new Set();
+            _docShadowRootsMap.set(targetDoc, srSet);
+          }
+          srSet.add(doc);
+        }
+        if (typeof globalThis.__capsurf_set_adopted_css === "function") {
+          const parts = [];
+          const sheets = targetDoc ? getAdoptedStyleSheets(targetDoc) : [];
+          for (let i = 0; i < sheets.length; i++) {
+            const s = sheets[i];
+            if (s && !s.disabled && s._cascadeCssText) {
+              parts.push(s._cascadeCssText);
+            }
+          }
+          const srSet = targetDoc ? _docShadowRootsMap.get(targetDoc) : null;
+          if (srSet) {
+            for (const sr of srSet) {
+              const srSheets = getAdoptedStyleSheets(sr);
+              for (let i = 0; i < srSheets.length; i++) {
+                const s = srSheets[i];
+                if (s && !s.disabled && s._cascadeCssText) {
+                  parts.push(s._cascadeCssText);
+                }
+              }
+            }
+          } else if (isShadow) {
+            const srSheets = getAdoptedStyleSheets(doc);
+            for (let i = 0; i < srSheets.length; i++) {
+              const s = srSheets[i];
+              if (s && !s.disabled && s._cascadeCssText) {
+                parts.push(s._cascadeCssText);
+              }
+            }
+          }
+          globalThis.__capsurf_set_adopted_css(parts.join("\n"));
+        }
+      } catch (e) {}
+    }
+
     CSSStyleSheet.prototype._remirror = function () {
       const text = this._rules.map((r) => r.cssText).join("\n");
       this._cascadeCssText = text;
-      if (!this.ownerNode) return;
+      if (!this.ownerNode) {
+        syncAdoptedAndInvalidate(null);
+        return;
+      }
       const tag = String(this.ownerNode.localName || this.ownerNode.tagName || "").toLowerCase();
       if (tag !== "link") {
         this._lastParsedText = String(this.ownerNode.textContent || "");
       }
+      syncAdoptedAndInvalidate(this.ownerNode.ownerDocument || null);
     };
 
     CSSStyleSheet.prototype._isCrossOriginOpaque = function () {
@@ -15524,10 +15726,26 @@
     }
 
     const _adoptedSheetsMap = new WeakMap();
+    function wrapAdoptedSheetArray(target, arr) {
+      const mutators = ["push", "pop", "splice", "shift", "unshift"];
+      for (let i = 0; i < mutators.length; i++) {
+        const m = mutators[i];
+        Object.defineProperty(arr, m, {
+          value: function () {
+            const res = Array.prototype[m].apply(this, arguments);
+            syncAdoptedAndInvalidate(target);
+            return res;
+          },
+          writable: true,
+          configurable: true,
+        });
+      }
+      return arr;
+    }
     function getAdoptedStyleSheets(doc) {
       let arr = _adoptedSheetsMap.get(doc);
       if (!arr) {
-        arr = [];
+        arr = wrapAdoptedSheetArray(doc, []);
         _adoptedSheetsMap.set(doc, arr);
       }
       return arr;
@@ -15542,21 +15760,28 @@
           throw new TypeError("Failed to set 'adoptedStyleSheets': Failed to convert value to 'CSSStyleSheet'.");
         }
       }
-      _adoptedSheetsMap.set(doc, next);
+      _adoptedSheetsMap.set(doc, wrapAdoptedSheetArray(doc, next));
+      syncAdoptedAndInvalidate(doc);
     }
+    function defineAdoptedStyleSheets(targetProto) {
+      if (targetProto && !Object.getOwnPropertyDescriptor(targetProto, "adoptedStyleSheets")) {
+        Object.defineProperty(targetProto, "adoptedStyleSheets", {
+          get: function () { return getAdoptedStyleSheets(this); },
+          set: function (v) { setAdoptedStyleSheets(this, v); },
+          configurable: true,
+        });
+      }
+    }
+    global.__capsurf_defineAdoptedStyleSheets = defineAdoptedStyleSheets;
     if (docProtoForStylesheets && !Object.getOwnPropertyDescriptor(docProtoForStylesheets, "adoptedStyleSheets")) {
-      Object.defineProperty(docProtoForStylesheets, "adoptedStyleSheets", {
-        get: function () { return getAdoptedStyleSheets(this); },
-        set: function (v) { setAdoptedStyleSheets(this, v); },
-        configurable: true,
-      });
+      defineAdoptedStyleSheets(docProtoForStylesheets);
     }
     if (global.document && !Object.getOwnPropertyDescriptor(global.document, "adoptedStyleSheets")) {
-      Object.defineProperty(global.document, "adoptedStyleSheets", {
-        get: function () { return getAdoptedStyleSheets(this); },
-        set: function (v) { setAdoptedStyleSheets(this, v); },
-        configurable: true,
-      });
+      defineAdoptedStyleSheets(global.document);
+    }
+    const shadowRootProtoForStylesheets = (global.ShadowRoot && global.ShadowRoot.prototype) ? global.ShadowRoot.prototype : null;
+    if (shadowRootProtoForStylesheets) {
+      defineAdoptedStyleSheets(shadowRootProtoForStylesheets);
     }
 
     // =========================================================================
@@ -16730,7 +16955,10 @@
     const MULTI_COLOR_PROPS = new Set(["border-color", "border-block-color", "border-inline-color", "caret-color", "scrollbar-color"]);
     function normalizePropColors(k, val, curColor) {
       if (!val || typeof val !== "string") return val;
-      if (k === "outline-color" && val.trim().toLowerCase() === "auto") return "auto";
+      if (k === "outline-color") {
+        const vl = val.trim().toLowerCase();
+        if (vl === "auto" || vl === "invert") return vl;
+      }
       if (k === "animation-name" || k === "font-family" || k === "content" || k === "quotes" ||
           k === "grid-row-start" || k === "grid-row-end" || k === "grid-column-start" || k === "grid-column-end" ||
           k === "grid-row" || k === "grid-column" || k === "grid-area") return val;
@@ -16752,9 +16980,10 @@
       return out;
     }
 
-    function wrapComputedStyleDecl(decl, element) {
+    function wrapComputedStyleDecl(decl, element, pseudoElt) {
       if (!decl || typeof decl !== "object") return decl;
-      const linkOverrides = getDynamicLinkOverrides(element);
+      const hasPseudo = String(pseudoElt || "").trim().length > 0;
+      const linkOverrides = hasPseudo ? null : getDynamicLinkOverrides(element);
       return new Proxy(decl, {
         get: function (target, prop, receiver) {
           if (typeof prop === "symbol") return target[prop];
@@ -16766,7 +16995,8 @@
                 const k = rawName.startsWith("--") ? rawName : rawName.toLowerCase();
                 if (linkOverrides && Object.prototype.hasOwnProperty.call(linkOverrides, k)) {
                   let ov = resolveCssVars(element, linkOverrides[k]);
-                  if (k === "color" || k.endsWith("-color")) ov = normalizePropColors(k, ov, receiver.color);
+                  const curCol = (k === "color") ? ((target.getPropertyValue ? target.getPropertyValue("color") : target.color) || "rgb(0, 0, 0)") : receiver.color;
+                  if (k === "color" || k.endsWith("-color")) ov = normalizePropColors(k, ov, curCol);
                   return ov;
                 }
                 if (k === "-webkit-transform" || k === "transform") {
@@ -16815,7 +17045,8 @@
 
             if (linkOverrides && Object.prototype.hasOwnProperty.call(linkOverrides, kebab)) {
               let ov = resolveCssVars(element, linkOverrides[kebab]);
-              if (kebab === "color" || kebab.endsWith("-color")) ov = normalizePropColors(kebab, ov, receiver.color);
+              const curCol = (kebab === "color") ? ((target.getPropertyValue ? target.getPropertyValue("color") : target.color) || "rgb(0, 0, 0)") : receiver.color;
+              if (kebab === "color" || kebab.endsWith("-color")) ov = normalizePropColors(kebab, ov, curCol);
               return ov;
             }
 
@@ -16924,7 +17155,7 @@
         throw new TypeError("getComputedStyle is not initialized");
       }
       const raw = _capturedGetComputedStyle.call(this, element, pseudoElt);
-      return wrapComputedStyleDecl(raw, element);
+      return wrapComputedStyleDecl(raw, element, pseudoElt);
     }
     markNative(enhancedGetComputedStyle, "getComputedStyle");
 
@@ -17029,7 +17260,7 @@
     get: function () {
       const p = this.parentNode;
       if (!p) return null;
-      const kids = (p.childNodes && p.childNodes.length) ? p.childNodes : p._children;
+      const kids = ensureChildren(p);
       if (!kids || !kids.length) return null;
       const nid = typeof this._nid === "number" && this._nid > 0 ? this._nid : 0;
       for (let i = 0; i < kids.length; i++) {
@@ -17047,7 +17278,7 @@
     get: function () {
       const p = this.parentNode;
       if (!p) return null;
-      const kids = (p.childNodes && p.childNodes.length) ? p.childNodes : p._children;
+      const kids = ensureChildren(p);
       if (!kids || !kids.length) return null;
       const nid = typeof this._nid === "number" && this._nid > 0 ? this._nid : 0;
       for (let i = 0; i < kids.length; i++) {
@@ -17147,10 +17378,14 @@
       return typeof document !== "undefined" ? document : null;
     },
     set: function (doc) {
-      this._ownerDocument = doc;
+      Object.defineProperty(this, "_ownerDocument", { value: doc, writable: true, configurable: true, enumerable: false });
     },
     configurable: true,
   });
+
+  Node.prototype.toJSON = function () {
+    return {};
+  };
 
   Node.prototype.contains = function (other) {
     if (!other) return false;
@@ -17331,6 +17566,11 @@
   const nativeElementFirstChild = (typeof Element !== "undefined" && Element.prototype) ? Object.getOwnPropertyDescriptor(Element.prototype, "firstChild")?.get : null;
   const nativeElementNextSibling = (typeof Element !== "undefined" && Element.prototype) ? Object.getOwnPropertyDescriptor(Element.prototype, "nextSibling")?.get : null;
 
+  function _setHidden(obj, k, v) {
+    Object.defineProperty(obj, k, { value: v, writable: true, configurable: true, enumerable: false });
+    return v;
+  }
+
   function ensureChildren(node) {
     if (!node || typeof node !== "object") return [];
     const tag = String(node.localName || node.tagName || "").toLowerCase();
@@ -17338,11 +17578,11 @@
       if (typeof node.content !== "undefined") {
         const _ = node.content;
       }
-      if (!node._children) node._children = [];
+      if (!node._children) _setHidden(node, "_children", []);
       return node._children;
     }
     if (!node._children) {
-      node._children = [];
+      _setHidden(node, "_children", []);
       try {
         let child = null;
         if (node.nodeType === 9) { // DOCUMENT_NODE
@@ -17594,9 +17834,9 @@
       try {
         child._ownerFragment.removeChild(child);
       } catch (e) {}
-      child._ownerFragment = null;
+      _setHidden(child, "_ownerFragment", null);
     }
-    if (child.parentNode && child.parentNode !== this && typeof child.parentNode.removeChild === "function") {
+    if (child.parentNode && typeof child.parentNode.removeChild === "function") {
       try {
         child.parentNode.removeChild(child);
       } catch (e) {}
@@ -17625,6 +17865,11 @@
         nativeElementAppendChild.call(this, child);
       } catch (e) {}
     }
+    if (typeof this._nid === "number" && this._nid > 0 && this.nodeType === DOCUMENT_FRAGMENT_NODE && typeof global.__capsurf_node_append_child === "function") {
+      try {
+        global.__capsurf_node_append_child(this._nid, child);
+      } catch (e) {}
+    }
 
     if (typeof notifyMutation === "function") {
       const rec = new MutationRecord("childList", this);
@@ -17640,12 +17885,16 @@
     notifyConnectedCustomElements(child);
     if (child && child.nodeType === 1 && child.isConnected) {
       const ctag = String(child.localName || child.tagName || "").toLowerCase();
-      if (ctag === "iframe" && typeof global !== "undefined" && typeof global.__capsurf_on_iframe_connected === "function") {
+      if ((ctag === "iframe" || ctag === "frame") && typeof global !== "undefined" && typeof global.__capsurf_on_iframe_connected === "function") {
         global.__capsurf_on_iframe_connected(child);
       }
     }
     if (this.isConnected && typeof global !== "undefined" && typeof global.__capsurf_syncNamedGlobals === "function") {
-      global.__capsurf_syncNamedGlobals();
+      const mayHaveNamed = child && child.nodeType === 1 && (
+        (typeof child.hasAttribute === "function" && (child.hasAttribute("id") || child.hasAttribute("name"))) ||
+        !!(child._children && child._children.some && child._children.some(function (k) { return k && k.nodeType === 1; }))
+      );
+      if (mayHaveNamed) global.__capsurf_syncNamedGlobals();
     }
 
     return child;
@@ -17673,6 +17922,10 @@
       throw err;
     }
 
+    if (newChild === refChild) {
+      return newChild;
+    }
+
     if (newChild.nodeType === DOCUMENT_FRAGMENT_NODE) {
       const kids = Array.from(newChild.childNodes || newChild._children || []);
       for (let i = 0; i < kids.length; i++) {
@@ -17688,7 +17941,7 @@
       } catch (e) {}
       newChild._ownerFragment = null;
     }
-    if (newChild.parentNode && newChild.parentNode !== this && typeof newChild.parentNode.removeChild === "function") {
+    if (newChild.parentNode && typeof newChild.parentNode.removeChild === "function") {
       try {
         newChild.parentNode.removeChild(newChild);
       } catch (e) {}
@@ -17713,6 +17966,11 @@
         nativeElementInsertBefore.call(this, newChild, refChild);
       } catch (e) {}
     }
+    if (typeof this._nid === "number" && this._nid > 0 && this.nodeType === DOCUMENT_FRAGMENT_NODE && typeof global.__capsurf_node_insert_before === "function") {
+      try {
+        global.__capsurf_node_insert_before(this._nid, newChild, refChild);
+      } catch (e) {}
+    }
 
     if (typeof notifyMutation === "function") {
       const rec = new MutationRecord("childList", this);
@@ -17728,12 +17986,16 @@
     notifyConnectedCustomElements(newChild);
     if (newChild && newChild.nodeType === 1 && newChild.isConnected) {
       const ctag = String(newChild.localName || newChild.tagName || "").toLowerCase();
-      if (ctag === "iframe" && typeof global !== "undefined" && typeof global.__capsurf_on_iframe_connected === "function") {
+      if ((ctag === "iframe" || ctag === "frame") && typeof global !== "undefined" && typeof global.__capsurf_on_iframe_connected === "function") {
         global.__capsurf_on_iframe_connected(newChild);
       }
     }
     if (this.isConnected && typeof global !== "undefined" && typeof global.__capsurf_syncNamedGlobals === "function") {
-      global.__capsurf_syncNamedGlobals();
+      const mayHaveNamed = newChild && newChild.nodeType === 1 && (
+        (typeof newChild.hasAttribute === "function" && (newChild.hasAttribute("id") || newChild.hasAttribute("name"))) ||
+        !!(newChild._children && newChild._children.some && newChild._children.some(function (k) { return k && k.nodeType === 1; }))
+      );
+      if (mayHaveNamed) global.__capsurf_syncNamedGlobals();
     }
 
     return newChild;
@@ -17771,6 +18033,11 @@
         nativeElementRemoveChild.call(this, child);
       } catch (e) {}
     }
+    if (typeof this._nid === "number" && this._nid > 0 && this.nodeType === DOCUMENT_FRAGMENT_NODE && typeof global.__capsurf_node_remove_child === "function") {
+      try {
+        global.__capsurf_node_remove_child(this._nid, child);
+      } catch (e) {}
+    }
 
     if (typeof notifyMutation === "function") {
       const rec = new MutationRecord("childList", this);
@@ -17782,7 +18049,11 @@
       global.__capsurf_scheduleSlotChange(this);
     }
     if (this.isConnected && typeof global !== "undefined" && typeof global.__capsurf_syncNamedGlobals === "function") {
-      global.__capsurf_syncNamedGlobals();
+      const mayHaveNamed = child && child.nodeType === 1 && (
+        (typeof child.hasAttribute === "function" && (child.hasAttribute("id") || child.hasAttribute("name"))) ||
+        !!(child._children && child._children.some && child._children.some(function (k) { return k && k.nodeType === 1; }))
+      );
+      if (mayHaveNamed) global.__capsurf_syncNamedGlobals();
     }
 
     return child;
@@ -17826,7 +18097,7 @@
       } catch (e) {}
       newChild._ownerFragment = null;
     }
-    if (newChild.parentNode && newChild.parentNode !== this && typeof newChild.parentNode.removeChild === "function") {
+    if (newChild.parentNode && typeof newChild.parentNode.removeChild === "function") {
       try {
         newChild.parentNode.removeChild(newChild);
       } catch (e) {}
@@ -17939,7 +18210,7 @@
             nativeElementSetTextContent.call(this, val);
           } catch (e) {}
         }
-        this._children = [];
+        _setHidden(this, "_children", []);
         const newKids = [];
         if (val.length > 0) {
           const t = new Text(val);
@@ -18385,9 +18656,9 @@
     if (child.parentNode && child.parentNode !== this && typeof child.parentNode.removeChild === "function") {
       try { child.parentNode.removeChild(child); } catch (e) {}
     }
-    child._ownerFragment = this;
+    _setHidden(child, "_ownerFragment", this);
     const res = Node.prototype.appendChild.call(this, child);
-    child._ownerFragment = this;
+    _setHidden(child, "_ownerFragment", this);
     return res;
   };
   DocumentFragment.prototype.insertBefore = function (newChild, refChild) {
@@ -18418,6 +18689,11 @@
     if (idx >= 0) kids.splice(idx, 1);
     if (child._ownerFragment === this) child._ownerFragment = null;
     child.parentNode = null;
+    if (typeof this._nid === "number" && this._nid > 0 && typeof global.__capsurf_node_remove_child === "function") {
+      try {
+        global.__capsurf_node_remove_child(this._nid, child);
+      } catch (e) {}
+    }
     return child;
   };
   DocumentFragment.prototype.replaceChild = function (newChild, oldChild) {
@@ -18685,6 +18961,10 @@
     get: function () { return "#document-fragment"; },
     configurable: true,
   });
+  Object.defineProperty(ShadowRoot.prototype, "parentNode", {
+    get: function () { return null; },
+    configurable: true,
+  });
   Object.defineProperty(ShadowRoot.prototype, "host", {
     get: function () {
       const st = shadowRootState.get(this);
@@ -18803,6 +19083,9 @@
   global.ShadowRoot = ShadowRoot;
   if (typeof globalThis !== "undefined") {
     globalThis.ShadowRoot = ShadowRoot;
+  }
+  if (typeof global.__capsurf_defineAdoptedStyleSheets === "function") {
+    global.__capsurf_defineAdoptedStyleSheets(ShadowRoot.prototype);
   }
 
   if (typeof Document !== "undefined" && Document.prototype) {
@@ -18969,6 +19252,13 @@
       atStart = false;
       prevWasCombinator = false;
       if (atSimpleStart && /[0-9]/.test(s[i])) return null;
+      if (s[i] === "\\") {
+        const nx = consumeCssEscape(s, i);
+        if (nx < 0) return null;
+        out += s.slice(i, nx);
+        i = nx;
+        continue;
+      }
 
       // Attribute selector [...]
       if (s[i] === "[") {
@@ -19379,8 +19669,8 @@
       } else if (ch === "#") {
         i++;
         const start = i;
-        while (i < len && !/[.#:\[\s]/.test(s[i])) i++;
-        const id = s.slice(start, i);
+        i = scanIdentWithEscapes(s, i);
+        const id = unescapeCssIdent(s.slice(start, i));
         const doc = el.ownerDocument || (typeof document !== "undefined" ? document : null);
         const quirks = doc && doc.compatMode === "BackCompat";
         const actualId = el.id || (typeof el.getAttribute === "function" ? el.getAttribute("id") : "") || "";
@@ -19390,8 +19680,8 @@
       } else if (ch === ".") {
         i++;
         const start = i;
-        while (i < len && !/[.#:\[\s]/.test(s[i])) i++;
-        const cls = s.slice(start, i);
+        i = scanIdentWithEscapes(s, i);
+        const cls = unescapeCssIdent(s.slice(start, i));
         const doc = el.ownerDocument || (typeof document !== "undefined" ? document : null);
         const quirks = doc && doc.compatMode === "BackCompat";
         const clsStr = ((el.className || (typeof el.getAttribute === "function" && el.getAttribute("class")) || "") + "");
@@ -19467,6 +19757,25 @@
         else if (pseudo === ":popover-open") { if (!el._popoverOpen) return false; }
         else if (pseudo === ":disabled") { if (!el.disabled) return false; }
         else if (pseudo === ":enabled") { if (el.disabled) return false; }
+        else if (pseudo === ":focus") {
+          const doc = el.ownerDocument || (typeof document !== "undefined" ? document : null);
+          const ae = doc && (doc.activeElement || doc._activeElement);
+          if (!ae || (ae !== el && !(typeof ae._nid === "number" && typeof el._nid === "number" && ae._nid > 0 && ae._nid === el._nid))) return false;
+        }
+        else if (pseudo === ":hover") {
+          const hn = (typeof globalThis !== "undefined" ? Number(globalThis.__capsurf_hovered_nid) : 0) | 0;
+          if (!el || hn <= 0) return false;
+          let matchedHover = (el._nid === hn);
+          if (!matchedHover && typeof globalThis.__capsurf_find_node_by_id === "function") {
+            let cur = globalThis.__capsurf_find_node_by_id(hn);
+            let g = 0;
+            while (cur && g++ < 128) {
+              if (cur === el || (typeof cur._nid === "number" && typeof el._nid === "number" && cur._nid > 0 && cur._nid === el._nid)) { matchedHover = true; break; }
+              cur = cur.parentElement || (cur.parentNode && cur.parentNode.nodeType === 1 ? cur.parentNode : (cur.parentNode && cur.parentNode.host ? cur.parentNode.host : null));
+            }
+          }
+          if (!matchedHover) return false;
+        }
         else if (pseudo === ":host") {
           if (!scopeRoot || !scopeRoot.host) return false;
           const h = scopeRoot.host;
@@ -19583,13 +19892,46 @@
         i++;
       } else {
         const start = i;
-        while (i < len && !/[.#:\[\s]/.test(s[i])) i++;
-        const tag = s.slice(start, i).toLowerCase();
+        i = scanIdentWithEscapes(s, i);
+        const tag = unescapeCssIdent(s.slice(start, i)).toLowerCase();
         const elTag = String(el.localName || el.tagName || "").toLowerCase();
         if (elTag !== tag) return false;
       }
     }
     return true;
+  }
+
+  function consumeCssEscape(s, i) {
+    if (s[i] !== "\\" || i + 1 >= s.length) return -1;
+    const hm = /^[0-9a-fA-F]{1,6}[ \t\r\n\f]?/.exec(s.slice(i + 1));
+    if (hm) return i + 1 + hm[0].length;
+    if (s[i + 1] === "\n" || s[i + 1] === "\r" || s[i + 1] === "\f") return -1;
+    return i + 2;
+  }
+
+  function unescapeCssIdent(raw) {
+    if (!raw || raw.indexOf("\\") === -1) return raw;
+    return raw.replace(/\\([0-9a-fA-F]{1,6})[ \t\r\n\f]?|\\(.)/g, function (_, hex, ch) {
+      if (hex) {
+        const cp = parseInt(hex, 16);
+        if (cp === 0 || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff)) return "\uFFFD";
+        return String.fromCodePoint(cp);
+      }
+      return ch;
+    });
+  }
+
+  function scanIdentWithEscapes(s, i) {
+    const len = s.length;
+    while (i < len) {
+      if (s[i] === "\\") {
+        const nx = consumeCssEscape(s, i);
+        if (nx > i) { i = nx; continue; }
+      }
+      if (/[.#:\[\s]/.test(s[i])) break;
+      i++;
+    }
+    return i;
   }
 
   function splitComplexSelector(sel) {
@@ -19608,6 +19950,14 @@
         if (ch === quote) quote = "";
         i++;
         continue;
+      }
+      if (ch === "\\") {
+        const nx = consumeCssEscape(sel, i);
+        if (nx > i) {
+          buf += sel.slice(i, nx);
+          i = nx;
+          continue;
+        }
       }
       if (ch === '"' || ch === "'") {
         quote = ch;
@@ -19707,15 +20057,27 @@
       idx = 1;
       total = 1;
     } else {
-      const kids = p.children || p._children || p.childNodes || [];
       const elTag = ofType ? String(el.localName || el.tagName || "").toLowerCase() : "";
-      for (let k = 0; k < kids.length; k++) {
-        const ch = kids[k];
-        if (ch && ch.nodeType === 1) {
-          if (ofType && String(ch.localName || ch.tagName || "").toLowerCase() !== elTag) continue;
-          total++;
-          if (ch === el || (typeof el._nid === "number" && el._nid > 0 && ch._nid === el._nid)) {
-            idx = total;
+      if (p.firstChild) {
+        for (let ch = p.firstChild; ch; ch = ch.nextSibling) {
+          if (ch.nodeType === 1) {
+            if (ofType && String(ch.localName || ch.tagName || "").toLowerCase() !== elTag) continue;
+            total++;
+            if (ch === el || (typeof el._nid === "number" && el._nid > 0 && ch._nid === el._nid)) {
+              idx = total;
+            }
+          }
+        }
+      } else {
+        const kids = p._children || p.childNodes || [];
+        for (let k = 0; k < kids.length; k++) {
+          const ch = kids[k];
+          if (ch && ch.nodeType === 1) {
+            if (ofType && String(ch.localName || ch.tagName || "").toLowerCase() !== elTag) continue;
+            total++;
+            if (ch === el || (typeof el._nid === "number" && el._nid > 0 && ch._nid === el._nid)) {
+              idx = total;
+            }
           }
         }
       }
@@ -19798,13 +20160,11 @@
       let kids = null;
       if (node._children && node._children.length > 0) {
         kids = node._children;
-      } else if (node.childNodes && node.childNodes.length > 0) {
-        kids = node.childNodes;
-      } else if (node.children && node.children.length > 0) {
-        kids = node.children;
       } else if (node.firstChild) {
         kids = [];
         for (let c = node.firstChild; c; c = c.nextSibling) kids.push(c);
+      } else if (node.childNodes && node.childNodes.length > 0) {
+        kids = node.childNodes;
       }
       if (!kids) return false;
       for (let i = 0; i < kids.length; i++) {
@@ -19859,6 +20219,9 @@
   // =============================================================
   // src/js/shim/element/element.js
   // Aligned with vendor/kitesurf/packages/dom-shim/src/element/element.ts
+
+  const _elIsArray = Array.isArray;
+  const _elArrayFrom = Array.from;
 
   const STYLE_DECL_MEMBERS = new Set([
     "cssText", "length", "parentRule", "item", "setProperty",
@@ -20266,6 +20629,9 @@
     }
 
     function serializeStyleMap(map) {
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_ensureBeforeChangeSnapshot === "function") {
+        globalThis.__capsurf_ensureBeforeChangeSnapshot(element);
+      }
       const res = formatStyleMap(map);
       if (res.length > 0) {
         element.setAttribute("style", res);
@@ -21077,7 +21443,7 @@
         const isHtml = isHtmlElement(this);
         if (typeof this._getRawAttrs === "function") {
           const raw = this._getRawAttrs();
-          if (raw && Array.isArray(raw)) {
+          if (raw && _elIsArray(raw)) {
             for (let i = 0; i < raw.length; i++) {
               const item = raw[i];
               if (item && item.name) {
@@ -21162,6 +21528,9 @@
       const isHtml = isHtmlElement(this);
       const key = isHtml ? String(name).toLowerCase() : String(name);
       const val = String(value);
+      if ((key === "class" || key === "style") && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_ensureBeforeChangeSnapshot === "function") {
+        globalThis.__capsurf_ensureBeforeChangeSnapshot(this);
+      }
       if (!this._attrs) this._syncAttrs();
       let existing = null;
       if (this._attrList) {
@@ -21197,11 +21566,9 @@
         this._attrList.push(entry);
       }
       this._attrs.set(key, { name: key, value: val });
-      if (key === "style" || key === "class" || key === "id") {
-        if (typeof globalThis !== "undefined") {
-          globalThis.__capsurf_cssom_epoch = (globalThis.__capsurf_cssom_epoch || 0) + 1;
-          globalThis.__capsurf_domMutationEpoch = (globalThis.__capsurf_domMutationEpoch || 0) + 1;
-        }
+      if (typeof globalThis !== "undefined") {
+        globalThis.__capsurf_cssom_epoch = (globalThis.__capsurf_cssom_epoch || 0) + 1;
+        globalThis.__capsurf_domMutationEpoch = (globalThis.__capsurf_domMutationEpoch || 0) + 1;
       }
       if (key.toLowerCase() === "async") {
         if (typeof globalThis !== "undefined" && globalThis.__capsurf_clearScriptForceAsync) {
@@ -21277,6 +21644,9 @@
     proto.removeAttribute = function (name) {
       const isHtml = isHtmlElement(this);
       const key = isHtml ? String(name).toLowerCase() : String(name);
+      if ((key === "class" || key === "style") && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_ensureBeforeChangeSnapshot === "function") {
+        globalThis.__capsurf_ensureBeforeChangeSnapshot(this);
+      }
       if (!this._attrs) this._syncAttrs();
       let oldVal = null;
       if (this._attrList) {
@@ -21325,6 +21695,10 @@
 
       if (origRemoveAttribute) {
         origRemoveAttribute.call(this, name);
+      }
+      if (typeof globalThis !== "undefined") {
+        globalThis.__capsurf_cssom_epoch = (globalThis.__capsurf_cssom_epoch || 0) + 1;
+        globalThis.__capsurf_domMutationEpoch = (globalThis.__capsurf_domMutationEpoch || 0) + 1;
       }
       if (this._attributesMap) {
         this._attributesMap._sync();
@@ -21728,6 +22102,9 @@
         return this.getAttribute("class") || "";
       },
       set: function (v) {
+        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_ensureBeforeChangeSnapshot === "function") {
+          globalThis.__capsurf_ensureBeforeChangeSnapshot(this);
+        }
         if (!isHtmlElement(this) && typeof v === "object" && v !== null && v.baseVal !== undefined) {
           v = v.baseVal;
         }
@@ -22478,7 +22855,7 @@
           this._inShadowRect = true;
           let shadowH = 0;
           try {
-            const sKids = Array.from(this._shadowRoot.childNodes || this._shadowRoot._children || []);
+            const sKids = _elArrayFrom(this._shadowRoot.childNodes || this._shadowRoot._children || []);
             for (let i = 0; i < sKids.length; i++) {
               const sk = sKids[i];
               if (sk && sk.nodeType === 1) {
@@ -22490,6 +22867,8 @@
                 } else if (getShadowEffectiveText(sk).length > 0) {
                   shadowH += 16;
                 }
+              } else if (sk && sk.nodeType === 3 && String(sk.textContent || "").trim().length > 0) {
+                shadowH += 16;
               }
             }
           } finally {
@@ -22569,7 +22948,7 @@
           } else {
             pr = parent.getBoundingClientRect();
           }
-          if (!childW) childW = pr.width;
+          if (!childW && !(this.style && (this.style.width === "0" || this.style.width === "0px"))) childW = pr.width;
           let offsetTop = 0;
           if (!inSiblingOffsetCalc) {
             const siblings = (this.parentNode && (this.parentNode.children || this.parentNode._children || this.parentNode.childNodes)) ||
@@ -22709,8 +23088,10 @@
 
     Object.defineProperty(proto, "clientHeight", {
       get: function () {
-        if (this === document.documentElement || this === document.body) {
-          return (typeof window !== "undefined" && window.innerHeight) || 720;
+        const ownerDoc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
+        if (ownerDoc && (this === ownerDoc.documentElement || this === ownerDoc.body)) {
+          const win = ownerDoc.defaultView || (typeof window !== "undefined" ? window : null);
+          return (win && win.innerHeight) || 720;
         }
         if (isElementDisplayNone(this)) return 0;
         const r = origGetBoundingClientRect ? origGetBoundingClientRect.call(this) : this.getBoundingClientRect();
@@ -22723,8 +23104,10 @@
 
     Object.defineProperty(proto, "clientWidth", {
       get: function () {
-        if (this === document.documentElement || this === document.body) {
-          return (typeof window !== "undefined" && window.innerWidth) || 1280;
+        const ownerDoc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
+        if (ownerDoc && (this === ownerDoc.documentElement || this === ownerDoc.body)) {
+          const win = ownerDoc.defaultView || (typeof window !== "undefined" ? window : null);
+          return (win && win.innerWidth) || 1280;
         }
         if (isElementDisplayNone(this)) return 0;
         const r = origGetBoundingClientRect ? origGetBoundingClientRect.call(this) : this.getBoundingClientRect();
@@ -22772,6 +23155,20 @@
     function collectRootScrollExtents(rootEl, isDocEl) {
       const vw = (typeof window !== "undefined" && window.innerWidth) || 1280;
       const vh = (typeof window !== "undefined" && window.innerHeight) || 720;
+
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_get_root_scroll_size === "function" && rootEl && typeof rootEl._nid === "number") {
+        const epoch = globalThis.__capsurf_domMutationEpoch || 0;
+        const rootStyleAttr = (rootEl.getAttribute && rootEl.getAttribute("style")) || "";
+        const cache = globalThis.__capsurf_rootScrollCache;
+        if (cache && cache.epoch === epoch && cache.vw === vw && cache.vh === vh && cache.nid === rootEl._nid && cache.isDocEl === !!isDocEl && cache.styleAttr === rootStyleAttr) {
+          return cache.res;
+        }
+        const nativeRes = globalThis.__capsurf_get_root_scroll_size(rootEl._nid, isDocEl ? 1 : 0);
+        if (nativeRes && typeof nativeRes.width === "number" && typeof nativeRes.height === "number") {
+          globalThis.__capsurf_rootScrollCache = { epoch: epoch, vw: vw, vh: vh, nid: rootEl._nid, isDocEl: !!isDocEl, styleAttr: rootStyleAttr, res: nativeRes };
+          return nativeRes;
+        }
+      }
 
       let originX = 0;
       let originY = 0;
@@ -22829,7 +23226,7 @@
       let startYIsBottom = false;
       if (gcsFn) {
         try {
-          const elCs = gcsFn(el);
+          const elCs = gcsFn(rootEl);
           if (elCs) {
             const elOx = String(elCs.overflowX || elCs.overflow || "visible").trim().toLowerCase();
             const elOy = String(elCs.overflowY || elCs.overflow || "visible").trim().toLowerCase();
@@ -22857,7 +23254,9 @@
           let isFixed = false;
           let clipped = false;
           const inlineStyle = (child.getAttribute && child.getAttribute("style")) || "";
-          if (hasFixedOrOverflowCss || inlineStyle) {
+          const inlineLower = inlineStyle ? String(inlineStyle).toLowerCase() : "";
+          const hasInlinePosOrOverflow = inlineLower.indexOf("position") !== -1 || inlineLower.indexOf("overflow") !== -1;
+          if (hasFixedOrOverflowCss || hasInlinePosOrOverflow) {
             if (gcsFn) {
               try {
                 const cs = gcsFn(child);
@@ -22967,8 +23366,8 @@
           let r = relX + childW;
           let b = relY + childH;
           const outsideStart = elIsScrollContainer && (
-            (startXIsRight ? (relX >= maxRightBase) : (r <= 0)) ||
-            (startYIsBottom ? (relY >= maxBottomBase) : (b <= 0))
+            (startXIsRight ? (relX >= maxRight) : (r <= 0)) ||
+            (startYIsBottom ? (relY >= maxBottom) : (b <= 0))
           );
           if (!outsideStart) {
             if (limitRight !== null && r > limitRight) r = limitRight;
@@ -23065,6 +23464,14 @@
       if (!el) return;
       const vw = (typeof window !== "undefined" && window.innerWidth) || 1280;
       const vh = (typeof window !== "undefined" && window.innerHeight) || 720;
+      let isFixed = false;
+      try {
+        const st = (typeof window !== "undefined" && window.getComputedStyle) ? window.getComputedStyle(el) : el.style;
+        isFixed = st && st.position === "fixed";
+      } catch (_) {}
+      if (onlyIfNeeded && isFixed) {
+        return;
+      }
 
       const r = el.getBoundingClientRect();
       const inWin = (r.top >= 0 && r.bottom <= vh && r.left >= 0 && r.right <= vw);
@@ -23299,6 +23706,18 @@
       const ShadowRootCtor = typeof ShadowRoot !== "undefined" ? ShadowRoot : (global.ShadowRoot || null);
       const shadow = ShadowRootCtor ? new ShadowRootCtor(this, mode) : new DocumentFragment();
       shadow.slotAssignment = init.slotAssignment === "manual" ? "manual" : "named";
+      if (typeof global.__capsurf_attach_shadow_native === "function" && typeof this._nid === "number" && this._nid > 0) {
+        try {
+          const snid = global.__capsurf_attach_shadow_native(this);
+          if (typeof snid === "number" && snid > 0) {
+            Object.defineProperty(shadow, "_nid", {
+              value: snid,
+              writable: true,
+              configurable: true,
+            });
+          }
+        } catch (e) {}
+      }
       elementShadowRootMap.set(this, shadow);
       try {
         Object.defineProperty(this, "_shadowRoot", {
@@ -23475,9 +23894,17 @@
       configurable: true,
     });
 
+    const DISABLED_TAGS = new Set(["button", "fieldset", "input", "optgroup", "option", "select", "textarea"]);
     Object.defineProperty(proto, "disabled", {
-      get: function () { return this.hasAttribute("disabled"); },
-      set: function (v) { if (v) this.setAttribute("disabled", ""); else this.removeAttribute("disabled"); },
+      get: function () {
+        const t = String(this.localName || this.tagName || "").toLowerCase();
+        return DISABLED_TAGS.has(t) ? this.hasAttribute("disabled") : undefined;
+      },
+      set: function (v) {
+        const t = String(this.localName || this.tagName || "").toLowerCase();
+        if (!DISABLED_TAGS.has(t)) return;
+        if (v) this.setAttribute("disabled", ""); else this.removeAttribute("disabled");
+      },
       configurable: true,
     });
 
@@ -23695,6 +24122,25 @@
   // =============================================================
   // src/js/shim/element/html-element.js
   // Aligned with vendor/kitesurf/packages/dom-shim/src/element/html-element.ts
+
+  if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_notifyFileChooser !== "function") {
+    globalThis.__capsurf_notifyFileChooser = function (ctrl) {
+      if (!ctrl || ctrl.nodeType !== 1) return;
+      const tag = String(ctrl.localName || ctrl.tagName || "").toLowerCase();
+      if (tag !== "input") return;
+      const iType = String(ctrl.getAttribute ? (ctrl.getAttribute("type") || "text") : (ctrl.type || "text")).toLowerCase();
+      if (iType !== "file") return;
+      if (ctrl.disabled || (ctrl.hasAttribute && ctrl.hasAttribute("disabled"))) return;
+      if (!Array.isArray(globalThis.__capsurf_pending_file_choosers)) {
+        globalThis.__capsurf_pending_file_choosers = [];
+      }
+      globalThis.__capsurf_pending_file_choosers.push({
+        backendNodeId: Number(ctrl._nid) || 0,
+        mode: (ctrl.hasAttribute && (ctrl.hasAttribute("multiple") || ctrl.hasAttribute("webkitdirectory"))) ? "selectMultiple" : "selectSingle",
+        frameId: (ctrl.ownerDocument && ctrl.ownerDocument.defaultView && ctrl.ownerDocument.defaultView.__capsurf_frame_id) || (typeof window !== "undefined" && window.__capsurf_frame_id) || undefined
+      });
+    };
+  }
 
   function DOMStringMap() {}
   if (typeof global !== "undefined") global.DOMStringMap = DOMStringMap;
@@ -23974,6 +24420,10 @@
                       dispatchTrusted(cur, new Event("input", { bubbles: true, cancelable: false, composed: true }));
                       dispatchTrusted(cur, new Event("change", { bubbles: true, cancelable: false }));
                     }
+                  } else if (iType === "file") {
+                    if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_notifyFileChooser === "function") {
+                      globalThis.__capsurf_notifyFileChooser(cur);
+                    }
                   }
                 }
                 break;
@@ -24024,6 +24474,10 @@
                       if (!wasChecked) {
                         ctrl.dispatchEvent(new Event("input", { bubbles: true, cancelable: false, composed: true }));
                         ctrl.dispatchEvent(new Event("change", { bubbles: true, cancelable: false }));
+                      }
+                    } else if (iType === "file") {
+                      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_notifyFileChooser === "function") {
+                        globalThis.__capsurf_notifyFileChooser(ctrl);
                       }
                     }
                   }
@@ -24169,12 +24623,18 @@
               const o = others[i];
               if (o && o !== this && o._popoverOpen && String(o.getAttribute("popover") || "").toLowerCase() !== "manual") {
                 o._popoverOpen = false;
+                if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_set_popover_open === "function") {
+                  globalThis.__capsurf_set_popover_open(o, false);
+                }
               }
             }
           }
         }
         this._popoverOpen = true;
         if (typeof globalThis !== "undefined") {
+          if (typeof globalThis.__capsurf_set_popover_open === "function") {
+            globalThis.__capsurf_set_popover_open(this, true);
+          }
           globalThis.__capsurf_domMutationEpoch = (globalThis.__capsurf_domMutationEpoch || 0) + 1;
         }
       };
@@ -24184,6 +24644,9 @@
       proto.hidePopover = function () {
         this._popoverOpen = false;
         if (typeof globalThis !== "undefined") {
+          if (typeof globalThis.__capsurf_set_popover_open === "function") {
+            globalThis.__capsurf_set_popover_open(this, false);
+          }
           globalThis.__capsurf_domMutationEpoch = (globalThis.__capsurf_domMutationEpoch || 0) + 1;
         }
       };
@@ -24700,6 +25163,29 @@
         }
         if (frag.firstChild) {
           this.appendChild(frag);
+        }
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(HTMLElementProto, "draggable", {
+      get: function () {
+        const attr = this.getAttribute ? this.getAttribute("draggable") : null;
+        if (typeof attr === "string") {
+          const lower = attr.toLowerCase();
+          if (lower === "true") return true;
+          if (lower === "false") return false;
+        }
+        const tag = (this.localName || this.tagName || "").toLowerCase();
+        if (tag === "img") return true;
+        if (tag === "a" && (this.hasAttribute ? this.hasAttribute("href") : (this.getAttribute && this.getAttribute("href") !== null))) {
+          return true;
+        }
+        return false;
+      },
+      set: function (val) {
+        if (this.setAttribute) {
+          this.setAttribute("draggable", val ? "true" : "false");
         }
       },
       configurable: true,
@@ -26369,13 +26855,14 @@
       "Event", "MessageEvent", "CustomEvent", "NodeList", "HTMLCollection",
       "DOMParser", "Range", "StaticRange", "URL", "URLSearchParams",
       "Blob", "FormData", "Headers", "Request", "Response",
-      "AbortController", "AbortSignal", "HTMLElement", "HTMLIFrameElement",
+      "AbortController", "AbortSignal", "HTMLElement", "HTMLIFrameElement", "HTMLFrameElement", "HTMLFrameSetElement",
       "setTimeout", "clearTimeout", "setInterval", "clearInterval",
       "requestAnimationFrame", "cancelAnimationFrame", "console", "fetch",
       "History", "WebSocket", "CloseEvent", "XMLHttpRequest", "XMLHttpRequestEventTarget", "XMLHttpRequestUpload",
       "performance", "Performance", "PerformanceEntry", "PerformanceMark", "PerformanceMeasure",
       "PerformanceResourceTiming", "PerformanceNavigationTiming", "PerformanceTiming", "PerformanceNavigation",
-      "Worker", "SharedWorker", "ErrorEvent"
+      "Worker", "SharedWorker", "ErrorEvent",
+      "getComputedStyle", "CSS", "matchMedia"
     ];
 
     function decorateIframeWindow(win) {
@@ -26407,6 +26894,72 @@
       if (pageGlobal.fetch) {
         win.fetch = function (resource, init) {
           return pageGlobal.fetch.call(win, resource, init);
+        };
+      }
+      if (win.eval === undefined) {
+        win.eval = function (code) {
+          if (typeof code !== "string") return code;
+          const stack = global.__capsurf_active_window_stack;
+          if (Array.isArray(stack)) stack.push(win);
+          try {
+            const compileFn = function (body) {
+              return new Function(
+                "window", "document", "location", "fetch", "self", "globalThis",
+                "addEventListener", "removeEventListener", "postMessage",
+                "innerWidth", "innerHeight", "outerWidth", "outerHeight",
+                "parent", "top", "frames", "frameElement",
+                body
+              );
+            };
+            const trimmed = code.replace(/[\s;]+$/, "");
+            let fn = null;
+            if (trimmed) {
+              try {
+                fn = compileFn("return (" + code + ");");
+              } catch (e0) {
+                try {
+                  fn = compileFn("return (" + trimmed + ");");
+                } catch (e1) {}
+                if (!fn) {
+                  const semi = trimmed.lastIndexOf(";");
+                  if (semi !== -1) {
+                    const prefix = trimmed.slice(0, semi + 1);
+                    const last = trimmed.slice(semi + 1).trim();
+                    if (last) {
+                      try {
+                        fn = compileFn(prefix + "\nreturn (" + last + ");");
+                      } catch (e2) {}
+                    }
+                  }
+                }
+              }
+            }
+            if (!fn) {
+              fn = compileFn(code);
+            }
+            const args = [
+              win,
+              win.document,
+              win.location,
+              win.fetch,
+              win,
+              win,
+              win.addEventListener ? win.addEventListener.bind(win) : undefined,
+              win.removeEventListener ? win.removeEventListener.bind(win) : undefined,
+              win.postMessage ? win.postMessage.bind(win) : undefined,
+              win.innerWidth,
+              win.innerHeight,
+              win.outerWidth,
+              win.outerHeight,
+              win.parent,
+              win.top,
+              win.frames,
+              win.frameElement,
+            ];
+            return fn.apply(win, args);
+          } finally {
+            if (Array.isArray(stack)) stack.pop();
+          }
         };
       }
     }
@@ -26866,6 +27419,9 @@
       } catch (e) {}
 
       if (newDoc) {
+        if (!iframeEl._contentWindow) {
+          getOrCreateIframeWindow(iframeEl, { skipInitialNavigation: true });
+        }
         if (iframeEl._contentWindow) {
           iframeEl._contentWindow._opaqueSandbox = iframeEl._opaqueSandbox;
           iframeEl._contentWindow.document = newDoc;
@@ -26922,8 +27478,9 @@
       }
       const seq = (iframeEl._navSeq = (iframeEl._navSeq || 0) + 1);
 
-      if (!resolvedUrl || resolvedUrl === "about:blank" || resolvedUrl.startsWith("about:blank?") || resolvedUrl.startsWith("about:blank#")) {
-        const blankUrl = resolvedUrl || "about:blank";
+      const isJavascriptUrl = typeof resolvedUrl === "string" && resolvedUrl.trim().toLowerCase().startsWith("javascript:");
+      if (!resolvedUrl || isJavascriptUrl || resolvedUrl === "about:blank" || resolvedUrl.startsWith("about:blank?") || resolvedUrl.startsWith("about:blank#")) {
+        const blankUrl = isJavascriptUrl ? "about:blank" : (resolvedUrl || "about:blank");
         Promise.resolve().then(function () {
           if (iframeEl._navSeq !== seq) return;
           const doc = createIframePlaceholderDoc(blankUrl, iframeEl, false);
@@ -27076,7 +27633,7 @@
       try {
         initialUrl = (iframeEl.getAttribute && iframeEl.getAttribute("src")) || "";
       } catch (e) {}
-      if (!initialUrl || initialUrl === "about:blank") {
+      if (!initialUrl || initialUrl === "about:blank" || String(initialUrl).trim().toLowerCase().startsWith("javascript:")) {
         initialUrl = "about:blank";
       } else {
         try {
@@ -27205,6 +27762,21 @@
 
       contentWindow.self = contentWindow;
       contentWindow.window = contentWindow;
+      try {
+        Object.defineProperty(contentWindow, "__capsurf_frame_id", {
+          configurable: true,
+          enumerable: false,
+          get: function () {
+            return iframeEl._capsurf_frame_id || contentWindow._capsurf_frame_id_val || undefined;
+          },
+          set: function (v) {
+            contentWindow._capsurf_frame_id_val = v;
+            if (v && !iframeEl._capsurf_frame_id) {
+              iframeEl._capsurf_frame_id = v;
+            }
+          },
+        });
+      } catch (e) {}
 
       function getIframeViewportDim(el, axis) {
         try {
@@ -27305,6 +27877,11 @@
       }
       const rawSrc = (iframeEl.getAttribute && iframeEl.getAttribute("src")) || "";
       if (rawSrc && rawSrc !== "about:blank") {
+        if (String(rawSrc).trim().toLowerCase().startsWith("javascript:")) {
+          getOrCreateIframeWindow(iframeEl, { skipInitialNavigation: true });
+          handleIframeNavigation(iframeEl, "about:blank");
+          return;
+        }
         getOrCreateIframeWindow(iframeEl, { skipInitialNavigation: true });
         let resolved = rawSrc;
         try {
@@ -27436,6 +28013,106 @@
 
     markNative(HTMLIFrameElement, "HTMLIFrameElement");
     global.HTMLIFrameElement = HTMLIFrameElement;
+
+    function HTMLFrameElement() {}
+    HTMLFrameElement.prototype = Object.create(HTMLElementProto);
+    HTMLFrameElement.prototype.constructor = HTMLFrameElement;
+    Object.defineProperty(HTMLFrameElement.prototype, Symbol.toStringTag, {
+      value: "HTMLFrameElement",
+      configurable: true,
+    });
+
+    Object.defineProperty(HTMLFrameElement.prototype, "src", {
+      get: function () {
+        const raw = nativeGetAttribute.call(this, "src");
+        if (raw == null) return "";
+        try {
+          const base = (typeof document !== "undefined" && document.baseURI) ? document.baseURI : (global.location ? global.location.href : "http://localhost/");
+          return new URL(raw, base).href;
+        } catch (e) {
+          return raw;
+        }
+      },
+      set: function (v) {
+        const strVal = String(v);
+        this._suppressSetAttrNav = true;
+        try {
+          nativeSetAttribute.call(this, "src", strVal);
+        } finally {
+          this._suppressSetAttrNav = false;
+        }
+        if (this.isConnected) {
+          const base = (typeof document !== "undefined" && document.baseURI) ? document.baseURI : (global.location ? global.location.href : "about:blank");
+          let resolved = "about:blank";
+          try {
+            resolved = new URL(strVal, base).href;
+          } catch (e) {
+            resolved = strVal;
+          }
+          handleIframeNavigation(this, resolved);
+        }
+      },
+      configurable: true,
+      enumerable: true,
+    });
+
+    Object.defineProperty(HTMLFrameElement.prototype, "contentWindow", {
+      get: function () {
+        return getOrCreateIframeWindow(this);
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(HTMLFrameElement.prototype, "contentDocument", {
+      get: function () {
+        if (this._opaqueSandbox) return null;
+        if (isCrossOriginIframe(this)) return null;
+        const win = getOrCreateIframeWindow(this);
+        if (this._opaqueSandbox) return null;
+        if (isCrossOriginIframe(this)) return null;
+        return (win && win.document) || this._contentDocument || null;
+      },
+      configurable: true,
+    });
+
+    for (const [propName, attrName] of [
+      ["name", "name"],
+      ["scrolling", "scrolling"],
+      ["frameBorder", "frameborder"],
+      ["marginHeight", "marginheight"],
+      ["marginWidth", "marginwidth"],
+      ["longDesc", "longdesc"],
+    ]) {
+      Object.defineProperty(HTMLFrameElement.prototype, propName, {
+        get: function () {
+          const raw = nativeGetAttribute.call(this, attrName);
+          return raw == null ? "" : String(raw);
+        },
+        set: function (v) {
+          nativeSetAttribute.call(this, attrName, v == null ? "" : String(v));
+        },
+        enumerable: true,
+        configurable: true,
+      });
+    }
+
+    Object.defineProperty(HTMLFrameElement.prototype, "noResize", {
+      get: function () {
+        return nativeHasAttribute.call(this, "noresize");
+      },
+      set: function (v) {
+        if (v) {
+          nativeSetAttribute.call(this, "noresize", "");
+        } else {
+          nativeRemoveAttribute.call(this, "noresize");
+        }
+      },
+      enumerable: true,
+      configurable: true,
+    });
+
+    markNative(HTMLFrameElement, "HTMLFrameElement");
+    global.HTMLFrameElement = HTMLFrameElement;
 
     // 6. HTMLDataListElement & standard HTMLElement subclasses
     function HTMLDataListElement() {}
@@ -28165,6 +28842,22 @@
       });
     })();
 
+    if (typeof global.HTMLFrameSetElement === "function") {
+      for (const attr of ["rows", "cols"]) {
+        Object.defineProperty(global.HTMLFrameSetElement.prototype, attr, {
+          get: function () {
+            const raw = nativeGetAttribute.call(this, attr);
+            return raw == null ? "" : String(raw);
+          },
+          set: function (v) {
+            nativeSetAttribute.call(this, attr, v == null ? "" : String(v));
+          },
+          enumerable: true,
+          configurable: true,
+        });
+      }
+    }
+
     // Window-reflecting event handlers on HTMLBodyElement.prototype & HTMLFrameSetElement.prototype
     const _winHandlerTargets = [
       global.HTMLBodyElement && global.HTMLBodyElement.prototype,
@@ -28395,6 +29088,18 @@
         if (typeof val === "string") {
           this.setAttribute("class", val);
         }
+      },
+      configurable: true,
+      enumerable: true,
+    });
+    Object.defineProperty(SVGElement.prototype, "ownerSVGElement", {
+      get: function () {
+        let cur = this.parentNode || this.parentElement;
+        while (cur) {
+          if (String(cur.localName || cur.tagName || "").toLowerCase() === "svg") return cur;
+          cur = cur.parentNode || cur.parentElement;
+        }
+        return null;
       },
       configurable: true,
       enumerable: true,
@@ -30138,6 +30843,12 @@
       configurable: true,
     });
 
+    Object.defineProperty(HTMLInputElement.prototype, "webkitdirectory", {
+      get: function () { return this.hasAttribute("webkitdirectory"); },
+      set: function (v) { if (v) this.setAttribute("webkitdirectory", ""); else this.removeAttribute("webkitdirectory"); },
+      configurable: true,
+    });
+
     Object.defineProperty(HTMLInputElement.prototype, "autofocus", {
       get: function () { return this.hasAttribute("autofocus"); },
       set: function (v) { if (v) this.setAttribute("autofocus", ""); else this.removeAttribute("autofocus"); },
@@ -30595,7 +31306,7 @@
     if (selState.selectedIndex !== undefined) {
       return selState.selectedIndex;
     }
-    const opts = selectEl.options;
+    const opts = Array.prototype.slice.call(selectEl.options || []);
     if (opts.length === 0) return -1;
 
     if (selectEl.multiple) {
@@ -31005,11 +31716,14 @@
       this._customValidityMessage = String(msg || "");
     };
 
+    const _OrigSelectEvent = typeof Event === "function" ? Event : null;
+    const _OrigSelectInputEvent = typeof InputEvent === "function" ? InputEvent : null;
+
     HTMLSelectElement.prototype.checkValidity = function () {
       if (!this.willValidate) return true;
       if (!this.validity.valid) {
-        const evt = new Event("invalid", { bubbles: false, cancelable: true });
-        this.dispatchEvent(evt);
+        const Ev = typeof Event === "function" ? Event : _OrigSelectEvent;
+        if (Ev) this.dispatchEvent(new Ev("invalid", { bubbles: false, cancelable: true }));
         return false;
       }
       return true;
@@ -31196,11 +31910,12 @@
               if (changed) {
                 selectEl.selectedIndex = index;
                 try {
-                  const InEv = typeof InputEvent === "function" ? InputEvent : Event;
-                  selectEl.dispatchEvent(new InEv("input", { bubbles: true, cancelable: false }));
+                  const InEv = typeof InputEvent === "function" ? InputEvent : (_OrigSelectInputEvent || (typeof Event === "function" ? Event : _OrigSelectEvent));
+                  if (InEv) selectEl.dispatchEvent(new InEv("input", { bubbles: true, cancelable: false, composed: true }));
                 } catch (e) {}
                 try {
-                  selectEl.dispatchEvent(new Event("change", { bubbles: true, cancelable: false }));
+                  const ChEv = typeof Event === "function" ? Event : _OrigSelectEvent;
+                  if (ChEv) selectEl.dispatchEvent(new ChEv("change", { bubbles: true, cancelable: false }));
                 } catch (e) {}
               }
               closeSelectDropdown();
@@ -31719,6 +32434,7 @@
     } else if (method === "post") {
       const postUrl = targetUrl.split("#")[0];
       let bodyStr = encodedParams;
+      let bodyPayload = bodyStr;
       let contentType = "application/x-www-form-urlencoded";
       if (enctype === "text/plain") {
         const lines = [];
@@ -31726,32 +32442,52 @@
           lines.push(entries[ei].name + "=" + entries[ei].value + "\n");
         }
         bodyStr = lines.join("");
+        bodyPayload = bodyStr;
         contentType = "text/plain";
       } else if (enctype === "multipart/form-data") {
         const boundary = "----CapSurfFormBoundary7MA4YWxkTrZu0gW";
-        const parts = [];
+        const enc = new TextEncoder();
+        const chunks = [];
+        let totalLen = 0;
+        const pushBytes = function (u8) {
+          chunks.push(u8);
+          totalLen += u8.length;
+        };
+        const crlfBytes = enc.encode("\r\n");
         for (let ei = 0; ei < entries.length; ei++) {
           const ent = entries[ei];
           if (ent.file) {
             const fname = String(ent.file.name || "").replace(/"/g, "%22");
             const ftype = ent.file.type || "application/octet-stream";
-            const fbody = decodeFileBytesSync(ent.file);
-            parts.push(
+            const hdr =
               "--" + boundary + "\r\n" +
               'Content-Disposition: form-data; name="' + ent.name.replace(/"/g, "%22") + '"; filename="' + fname + '"\r\n' +
-              "Content-Type: " + ftype + "\r\n\r\n" +
-              fbody + "\r\n"
-            );
+              "Content-Type: " + ftype + "\r\n\r\n";
+            pushBytes(enc.encode(hdr));
+            const fbytes = ent.file._bytes;
+            if (fbytes && typeof fbytes.length === "number" && fbytes.length > 0) {
+              pushBytes(fbytes instanceof Uint8Array ? fbytes : new Uint8Array(fbytes));
+            }
+            pushBytes(crlfBytes);
           } else {
-            parts.push(
+            const partStr =
               "--" + boundary + "\r\n" +
               'Content-Disposition: form-data; name="' + ent.name.replace(/"/g, "%22") + '"\r\n\r\n' +
-              ent.value + "\r\n"
-            );
+              ent.value + "\r\n";
+            pushBytes(enc.encode(partStr));
           }
         }
-        parts.push("--" + boundary + "--\r\n");
-        bodyStr = parts.join("");
+        pushBytes(enc.encode("--" + boundary + "--\r\n"));
+        const out = new Uint8Array(totalLen);
+        let offset = 0;
+        for (let ci = 0; ci < chunks.length; ci++) {
+          out.set(chunks[ci], offset);
+          offset += chunks[ci].length;
+        }
+        bodyPayload = out;
+        if (targetIframe) {
+          bodyStr = typeof utf8ToString === "function" ? utf8ToString(out) : "";
+        }
         contentType = "multipart/form-data; boundary=" + boundary;
       }
       if (targetIframe && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_apply_iframe_html === "function") {
@@ -31785,7 +32521,7 @@
         globalThis.__capsurf_pending_navigation_post = {
           url: postUrl,
           method: "POST",
-          body: bodyStr,
+          body: bodyPayload,
           contentType: contentType,
         };
       }
@@ -32023,10 +32759,15 @@
           c._selectedIndex = undefined;
           const opts = c.options;
           if (opts) {
+            let anySel = false;
             for (let j = 0; j < opts.length; j++) {
-              if (typeof getOptionState === "function") getOptionState(opts[j]).selected = undefined;
-              opts[j]._selected = undefined;
-              opts[j].selected = typeof opts[j].hasAttribute === "function" ? opts[j].hasAttribute("selected") : false;
+              const hasSel = typeof opts[j].hasAttribute === "function" && opts[j].hasAttribute("selected");
+              if (hasSel) anySel = true;
+              if (typeof getOptionState === "function") getOptionState(opts[j]).selected = hasSel ? true : undefined;
+              opts[j]._selected = hasSel ? true : undefined;
+            }
+            if (!anySel && !c.multiple && opts.length > 0 && typeof getSelectState === "function") {
+              getSelectState(c).selectedIndex = undefined;
             }
           }
         }
@@ -32427,7 +33168,8 @@
         if (hasFor) {
           const forId = this.getAttribute("for");
           if (!forId) return null;
-          const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
+          const root = typeof this.getRootNode === "function" ? this.getRootNode() : null;
+          const doc = (root && typeof root.getElementById === "function") ? root : (this.ownerDocument || (typeof document !== "undefined" ? document : null));
           const el = doc && typeof doc.getElementById === "function" ? doc.getElementById(forId) : null;
           return (el && isLabelable(el)) ? el : null;
         }
@@ -32736,6 +33478,7 @@
 
     this._name = String(fileName);
     this._lastModified = options.lastModified != null ? Number(options.lastModified) : Date.now();
+    this._webkitRelativePath = (options && options.webkitRelativePath) ? String(options.webkitRelativePath) : "";
   }
 
   File.prototype = Object.create(Blob.prototype);
@@ -32754,7 +33497,7 @@
   });
 
   Object.defineProperty(File.prototype, "webkitRelativePath", {
-    get: function () { return ""; },
+    get: function () { return this._webkitRelativePath || ""; },
     configurable: true,
     enumerable: true,
   });
@@ -33763,16 +34506,19 @@
     });
   }
 
+  const _validDropEffects = new Set(["none", "copy", "link", "move"]);
+  const _validEffectAllowed = new Set(["none", "copy", "copyLink", "copyMove", "link", "linkMove", "move", "all", "uninitialized"]);
+
   Object.defineProperty(DataTransfer.prototype, "dropEffect", {
     get: function () { const st = _dtState.get(this); if (!st) throw new TypeError("Illegal invocation"); return st.dropEffect; },
-    set: function (v) { const st = _dtState.get(this); if (!st) throw new TypeError("Illegal invocation"); st.dropEffect = String(v); },
+    set: function (v) { const st = _dtState.get(this); if (!st) throw new TypeError("Illegal invocation"); const s = String(v); if (_validDropEffects.has(s)) st.dropEffect = s; },
     configurable: true,
     enumerable: true,
   });
 
   Object.defineProperty(DataTransfer.prototype, "effectAllowed", {
     get: function () { const st = _dtState.get(this); if (!st) throw new TypeError("Illegal invocation"); return st.effectAllowed; },
-    set: function (v) { const st = _dtState.get(this); if (!st) throw new TypeError("Illegal invocation"); st.effectAllowed = String(v); },
+    set: function (v) { const st = _dtState.get(this); if (!st) throw new TypeError("Illegal invocation"); const s = String(v); if (_validEffectAllowed.has(s)) st.effectAllowed = s; },
     configurable: true,
     enumerable: true,
   });
@@ -34859,7 +35605,64 @@
     return out;
   };
 
-  Range.prototype.deleteContents = function () {};
+  Range.prototype.deleteContents = function () {
+    if (this.collapsed || !this.startContainer || !this.endContainer) return;
+    const sc = this.startContainer;
+    const so = this.startOffset;
+    const ec = this.endContainer;
+    const eo = this.endOffset;
+    if (sc === ec) {
+      if (sc.nodeType === 3) {
+        const txt = String(sc.data !== undefined ? sc.data : (sc.textContent || ""));
+        const next = txt.slice(0, so) + txt.slice(eo);
+        if (typeof sc.data === "string") sc.data = next;
+        else sc.textContent = next;
+      } else if (sc.childNodes && sc.removeChild) {
+        for (let i = eo - 1; i >= so; i--) {
+          const ch = sc.childNodes[i];
+          if (ch) sc.removeChild(ch);
+        }
+      }
+      this.setEnd(sc, so);
+      return;
+    }
+    const root = this.commonAncestorContainer;
+    if (!root) return;
+    const toRemove = [];
+    function collect(n) {
+      if (!n) return;
+      if (n.nodeType === 3) {
+        const txt = String(n.data !== undefined ? n.data : (n.textContent || ""));
+        if (n === sc) {
+          const next = txt.slice(0, so);
+          if (typeof n.data === "string") n.data = next;
+          else n.textContent = next;
+        } else if (n === ec) {
+          const next = txt.slice(eo);
+          if (typeof n.data === "string") n.data = next;
+          else n.textContent = next;
+        } else if (compareBoundaryPoints(n, txt.length, sc, so) > 0 && compareBoundaryPoints(n, 0, ec, eo) < 0) {
+          toRemove.push(n);
+        }
+        return;
+      }
+      const cs = n.childNodes ? Array.prototype.slice.call(n.childNodes) : [];
+      for (let i = 0; i < cs.length; i++) collect(cs[i]);
+      if (n !== root && n !== sc && n !== ec && !n.contains(sc) && !n.contains(ec)) {
+        if (compareBoundaryPoints(n, 0, sc, so) >= 0 && compareBoundaryPoints(n, 0, ec, eo) < 0) {
+          toRemove.push(n);
+        }
+      }
+    }
+    collect(root);
+    for (let i = 0; i < toRemove.length; i++) {
+      const node = toRemove[i];
+      if (node.parentNode && node.parentNode.removeChild) {
+        node.parentNode.removeChild(node);
+      }
+    }
+    this.collapse(true);
+  };
   Range.prototype.extractContents = function () {
     return new DocumentFragment();
   };
@@ -35123,7 +35926,7 @@
     let curr = node;
     while (curr) {
       if (curr === doc) return true;
-      curr = curr.parentNode || curr.parentElement;
+      curr = curr.parentNode || curr.parentElement || (curr.nodeType === 11 ? curr.host : null);
     }
     return false;
   }
@@ -36139,6 +36942,56 @@
     return Array.from(this._attrCases.values());
   };
 
+  Object.defineProperty(ParsedElement.prototype, "attributes", {
+    get: function () {
+      const items = [];
+      const byName = new Map();
+      const map = {};
+      if (this._attrs instanceof Map) {
+        this._attrs.forEach((val, key) => {
+          const name = (this._attrCases && this._attrCases.get(key)) || key;
+          const attr = {
+            name: name,
+            value: val,
+            nodeName: name,
+            nodeValue: val,
+            specified: true,
+          };
+          map[items.length] = attr;
+          items.push(attr);
+          byName.set(String(key).toLowerCase(), attr);
+        });
+      }
+      Object.defineProperties(map, {
+        length: { value: items.length, enumerable: false, configurable: true },
+        item: {
+          value: function (i) {
+            const idx = Number(i);
+            return Number.isInteger(idx) && idx >= 0 && idx < items.length ? items[idx] : null;
+          },
+          enumerable: false,
+          configurable: true,
+        },
+        getNamedItem: {
+          value: function (name) {
+            return byName.get(String(name).toLowerCase()) || null;
+          },
+          enumerable: false,
+          configurable: true,
+        },
+        [Symbol.iterator]: {
+          value: function () {
+            return items[Symbol.iterator]();
+          },
+          enumerable: false,
+          configurable: true,
+        },
+      });
+      return map;
+    },
+    configurable: true,
+  });
+
   Object.defineProperty(ParsedElement.prototype, "nodeValue", {
     get: function () { return null; },
     set: function () {},
@@ -36353,6 +37206,11 @@
     child.parentNode = null;
     return child;
   };
+  ParsedElement.prototype.remove = function () {
+    if (this.parentNode && typeof this.parentNode.removeChild === "function") {
+      this.parentNode.removeChild(this);
+    }
+  };
   ParsedElement.prototype.replaceChild = function (newChild, oldChild) {
     this.insertBefore(newChild, oldChild);
     return this.removeChild(oldChild);
@@ -36441,6 +37299,44 @@
   Object.defineProperty(ParsedElement.prototype, "outerHTML", {
     get: function () {
       return serializeXmlNode(this, true);
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(ParsedElement.prototype, "innerHTML", {
+    get: function () {
+      const kids = this._children || [];
+      let out = "";
+      for (let i = 0; i < kids.length; i++) {
+        out += serializeXmlNode(kids[i]);
+      }
+      return out;
+    },
+    set: function (val) {
+      this._children = [];
+      const str = String(val);
+      if (!str) return;
+      const parsed = parseDocument(str, "text/html");
+      const rawNodes = (parsed.body && parsed.body._children && parsed.body._children.length > 0)
+        ? parsed.body._children
+        : ((parsed.head && parsed.head._children && parsed.head._children.length > 0)
+            ? parsed.head._children
+            : (parsed._children || []));
+      const nodes = rawNodes.slice();
+      const targetDoc = this.ownerDocument || null;
+      function setOwnerDoc(node, doc) {
+        if (!node || typeof node !== "object") return;
+        node.ownerDocument = doc;
+        const cs = node._children;
+        if (cs && cs.length) {
+          for (let i = 0; i < cs.length; i++) setOwnerDoc(cs[i], doc);
+        }
+      }
+      for (let i = 0; i < nodes.length; i++) {
+        const n = nodes[i];
+        this.appendChild(n);
+        if (targetDoc) setOwnerDoc(n, targetDoc);
+      }
     },
     configurable: true,
   });
@@ -41167,13 +42063,14 @@
   markNative(KeyframeEffect.prototype.getKeyframes, "getKeyframes");
 
   const registeredAnimations = new Set();
+  let _flushCssAnimHook = null;
 
   function Animation(effect, timeline) {
     EventTarget.call(this);
     this.id = "";
     this._effect = null;
     this.timeline = timeline || globalDocTimeline;
-    this.playbackRate = 1.0;
+    this._playbackRate = 1.0;
     this.startTime = null;
     this._holdTime = null;
     this._finishTimer = null;
@@ -41196,6 +42093,17 @@
   }
   Animation.prototype = Object.create(EventTarget.prototype);
   Animation.prototype.constructor = Animation;
+
+  Object.defineProperty(Animation.prototype, "playbackRate", {
+    get: function () {
+      return this._playbackRate;
+    },
+    set: function (val) {
+      if (this._playbackRate === val) return;
+      this.updatePlaybackRate(val);
+    },
+    configurable: true,
+  });
 
   Object.defineProperty(Animation.prototype, "effect", {
     get: function () {
@@ -41307,12 +42215,71 @@
     }
   };
 
+  function _dispatchCssLifecycleEvent(anim, transitionType, animationType, elapsedMs) {
+    const target = anim.effect && anim.effect.target;
+    if (!target) return;
+    const elapsedSec = (Number(elapsedMs) || 0) / 1000;
+    const pseudo = (anim.effect && anim.effect.pseudoElement) || "";
+    const dispatch = function (ev) {
+      try {
+        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_dispatchTrustedEvent === "function") {
+          globalThis.__capsurf_dispatchTrustedEvent(target, ev);
+        } else if (typeof target.dispatchEvent === "function") {
+          target.dispatchEvent(ev);
+        }
+      } catch (e) {}
+    };
+    if (anim._transitionProperty) {
+      let ev;
+      if (typeof TransitionEvent === "function") {
+        ev = new TransitionEvent(transitionType, {
+          bubbles: true,
+          cancelable: false,
+          propertyName: String(anim._transitionProperty),
+          elapsedTime: elapsedSec,
+          pseudoElement: pseudo,
+        });
+      } else {
+        ev = new Event(transitionType, { bubbles: true, cancelable: false });
+        try {
+          ev.propertyName = String(anim._transitionProperty);
+          ev.elapsedTime = elapsedSec;
+          ev.pseudoElement = pseudo;
+        } catch (e) {}
+      }
+      dispatch(ev);
+    }
+    if (anim._animationName) {
+      let ev;
+      if (typeof AnimationEvent === "function") {
+        ev = new AnimationEvent(animationType, {
+          bubbles: true,
+          cancelable: false,
+          animationName: String(anim._animationName),
+          elapsedTime: elapsedSec,
+          pseudoElement: pseudo,
+        });
+      } else {
+        ev = new Event(animationType, { bubbles: true, cancelable: false });
+        try {
+          ev.animationName = String(anim._animationName);
+          ev.elapsedTime = elapsedSec;
+          ev.pseudoElement = pseudo;
+        } catch (e) {}
+      }
+      dispatch(ev);
+    }
+  }
+
   Animation.prototype.finish = function () {
     this._clearFinishTimer();
     const endTime = this._getEndTime();
     this.playState = "finished";
     this._holdTime = isFinite(endTime) ? endTime : 0;
     this.startTime = null;
+    if (typeof this._onCssFinish === "function") {
+      try { this._onCssFinish(); } catch (e) {}
+    }
 
     if (this._finishedResolve) {
       const res = this._finishedResolve;
@@ -41326,32 +42293,100 @@
       evt.timelineTime = this.timeline ? this.timeline.currentTime : 0;
     } catch (e) {}
     this.dispatchEvent(evt);
+    let cssElapsedMs = this._holdTime;
+    if (this._effect && (this._transitionProperty || this._animationName)) {
+      const dur = typeof this._effect.duration === "number" ? this._effect.duration : 0;
+      const iters = this._effect.iterations;
+      cssElapsedMs = (iters === 0 || !isFinite(iters)) ? 0 : dur * iters;
+    }
+    _dispatchCssLifecycleEvent(this, "transitionend", "animationend", cssElapsedMs);
   };
 
   Animation.prototype.cancel = function () {
+    let cancelElapsedMs = 0;
+    if (this._holdTime !== null) {
+      cancelElapsedMs = this._holdTime;
+    } else if (this.startTime !== null && this.timeline) {
+      cancelElapsedMs = (this.timeline.currentTime - this.startTime) * this.playbackRate;
+    }
+    if (cancelElapsedMs < 0 || !isFinite(cancelElapsedMs)) cancelElapsedMs = 0;
+
     this._clearFinishTimer();
     this.playState = "idle";
     this._holdTime = null;
     this.startTime = null;
     registeredAnimations.delete(this);
+    if (typeof this._onCssCancel === "function") {
+      try { this._onCssCancel(); } catch (e) {}
+    }
     const evt = new Event("cancel");
     try {
       evt.currentTime = null;
       evt.timelineTime = this.timeline ? this.timeline.currentTime : 0;
     } catch (e) {}
     this.dispatchEvent(evt);
+    const delayMs = (this._effect && this._effect.delay) ? this._effect.delay : 0;
+    const cssCancelElapsedMs = Math.max(0, cancelElapsedMs - delayMs);
+    _dispatchCssLifecycleEvent(this, "transitioncancel", "animationcancel", cssCancelElapsedMs);
+  };
+
+  Animation.prototype.updatePlaybackRate = function (rate) {
+    const r = Number(rate);
+    if (!isFinite(r)) {
+      throw new TypeError("playbackRate must be a finite number.");
+    }
+    if (this.playState === "running" && this.timeline && this.startTime !== null) {
+      const prevTime = (this.timeline.currentTime - this.startTime) * this._playbackRate;
+      this._playbackRate = r;
+      if (r === 0) {
+        this._holdTime = prevTime;
+        this.startTime = null;
+        this._clearFinishTimer();
+      } else {
+        this._holdTime = null;
+        this.startTime = this.timeline.currentTime - prevTime / r;
+        this._scheduleFinish();
+      }
+    } else {
+      this._playbackRate = r;
+    }
   };
 
   Animation.prototype.reverse = function () {
-    this.playbackRate = -this.playbackRate;
+    this.updatePlaybackRate(-this._playbackRate);
     this.play();
   };
+
+  function CSSTransition(effect, timeline, transitionProperty) {
+    Animation.call(this, effect, timeline);
+    this.transitionProperty = String(transitionProperty || "");
+    this._transitionProperty = this.transitionProperty;
+  }
+  CSSTransition.prototype = Object.create(Animation.prototype);
+  CSSTransition.prototype.constructor = CSSTransition;
+  markNative(CSSTransition, "CSSTransition");
+
+  function CSSAnimation(effect, timeline, animationName) {
+    Animation.call(this, effect, timeline);
+    this.animationName = String(animationName || "");
+    this._animationName = this.animationName;
+    this.id = this.animationName;
+  }
+  CSSAnimation.prototype = Object.create(Animation.prototype);
+  CSSAnimation.prototype.constructor = CSSAnimation;
+  markNative(CSSAnimation, "CSSAnimation");
+
+  if (typeof globalThis !== "undefined") {
+    globalThis.CSSTransition = CSSTransition;
+    globalThis.CSSAnimation = CSSAnimation;
+  }
 
   markNative(Animation, "Animation");
   markNative(Animation.prototype.play, "play");
   markNative(Animation.prototype.pause, "pause");
   markNative(Animation.prototype.finish, "finish");
   markNative(Animation.prototype.cancel, "cancel");
+  markNative(Animation.prototype.updatePlaybackRate, "updatePlaybackRate");
 
   function animateElement(element, keyframes, options) {
     const effect = new KeyframeEffect(element, keyframes, options);
@@ -41378,6 +42413,9 @@
   }
 
   function animationsFor(root) {
+    if (typeof _flushCssAnimHook === "function") {
+      _flushCssAnimHook();
+    }
     const res = [];
     for (const anim of registeredAnimations) {
       if (!isAnimationRelevant(anim)) continue;
@@ -41394,6 +42432,7 @@
     const wantPseudo = String(pseudoElt || "").toLowerCase();
     for (const anim of registeredAnimations) {
       if (!anim || !anim.effect || anim.effect.target !== element) continue;
+      if (anim._transitionProperty || anim._animationName) continue;
       const animPseudo = String(anim.effect.pseudoElement || "").toLowerCase();
       if (animPseudo !== wantPseudo) continue;
       if (anim.playState === "idle") continue;
@@ -41600,6 +42639,33 @@
       return TIMING_KEYWORDS.has(l) || l.startsWith("cubic-bezier(") || l.startsWith("steps(");
     }
 
+    const FALLBACK_TRANSITION_SHORTHANDS = {
+      margin: ["margin-top", "margin-right", "margin-bottom", "margin-left"],
+      padding: ["padding-top", "padding-right", "padding-bottom", "padding-left"],
+      "border-width": ["border-top-width", "border-right-width", "border-bottom-width", "border-left-width"],
+      "border-color": ["border-top-color", "border-right-color", "border-bottom-color", "border-left-color"],
+      "border-style": ["border-top-style", "border-right-style", "border-bottom-style", "border-left-style"],
+      "border-radius": ["border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius", "border-bottom-left-radius"],
+      inset: ["top", "right", "bottom", "left"],
+      gap: ["row-gap", "column-gap"],
+      "grid-gap": ["row-gap", "column-gap"],
+      overflow: ["overflow-x", "overflow-y"],
+      outline: ["outline-color", "outline-style", "outline-width"],
+      flex: ["flex-grow", "flex-shrink", "flex-basis"],
+    };
+
+    function expandTransitionProp(prop) {
+      const shMap = (typeof globalThis !== "undefined" && globalThis.__capsurf_shorthandLonghands) || null;
+      if (shMap && Object.prototype.hasOwnProperty.call(shMap, prop)) {
+        const lhs = shMap[prop];
+        if (Array.isArray(lhs) && lhs.length > 0) return lhs;
+      }
+      if (Object.prototype.hasOwnProperty.call(FALLBACK_TRANSITION_SHORTHANDS, prop)) {
+        return FALLBACK_TRANSITION_SHORTHANDS[prop];
+      }
+      return [prop];
+    }
+
     function parseTransitionSpecs(computedMap) {
       const specs = [];
       const shorthand = computedMap.get("transition");
@@ -41787,7 +42853,17 @@
               if (col === -1) continue;
               const k = declParts[di].slice(0, col).trim().toLowerCase();
               const v = declParts[di].slice(col + 1).replace(/!important/i, "").trim();
-              if (k && v) props[k] = v;
+              if (k && v) {
+                const exp = (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_expandShorthand === "function") ? globalThis.__capsurf_expandShorthand(k, v) : null;
+                if (Array.isArray(exp) && exp.length > 0) {
+                  for (let ei = 0; ei < exp.length; ei++) {
+                    const pair = exp[ei];
+                    if (pair && pair[0] && pair[1] !== undefined) props[pair[0]] = String(pair[1]);
+                  }
+                } else {
+                  props[k] = v;
+                }
+              }
             }
             for (let si = 0; si < sels.length; si++) {
               let offset = null;
@@ -41808,8 +42884,23 @@
       return map;
     }
 
+    function kebabToCamelCase(prop) {
+      return String(prop).replace(/-([a-z])/g, function (_, c) { return c.toUpperCase(); });
+    }
+
+    function safeEasingForEffect(easing) {
+      try { return validateEasingString(easing); } catch (e) { return "ease"; }
+    }
+
     function evalTransitionValue(tr, now) {
-      const activeMs = (now - tr.startTime) - tr.delayMs;
+      let activeMs;
+      if (tr.anim) {
+        const curTime = tr.anim.currentTime;
+        if (curTime === null) return tr.toVal;
+        activeMs = curTime - tr.delayMs;
+      } else {
+        activeMs = (now - tr.startTime) - tr.delayMs;
+      }
       if (activeMs <= 0) return tr.fromVal;
       if (activeMs >= tr.durationMs) return tr.toVal;
       const rawT = activeMs / tr.durationMs;
@@ -41820,7 +42911,16 @@
     function evalCssAnimationStyles(anim, frames, now, baseStyles) {
       const out = {};
       if (!frames || frames.length === 0) return out;
-      const activeMs = (anim.playState === "paused" ? 0 : (now - anim.startTime)) - anim.delayMs;
+      let localTime;
+      if (anim.anim) {
+        if (anim.anim.playState === "idle") return out;
+        const curTime = anim.anim.currentTime;
+        if (curTime === null) return out;
+        localTime = curTime;
+      } else {
+        localTime = anim.playState === "paused" ? 0 : (now - anim.startTime);
+      }
+      const activeMs = localTime - anim.delayMs;
       const totalMs = anim.iterations === Infinity ? Infinity : anim.durationMs * anim.iterations;
       if (activeMs < 0 && anim.fill !== "backwards" && anim.fill !== "both") return out;
       if (activeMs >= totalMs && anim.fill !== "forwards" && anim.fill !== "both") return out;
@@ -41935,7 +43035,12 @@
         const specByProp = new Map();
         for (let i = 0; i < trSpecs.length; i++) {
           if (trSpecs[i].prop === "all") allSpec = trSpecs[i];
-          else specByProp.set(trSpecs[i].prop, trSpecs[i]);
+          else {
+            const expanded = expandTransitionProp(trSpecs[i].prop);
+            for (let j = 0; j < expanded.length; j++) {
+              specByProp.set(expanded[j], trSpecs[i]);
+            }
+          }
         }
 
         const candidateProps = new Set();
@@ -41959,18 +43064,31 @@
             if (existing.toVal === nextVal) return;
             // Retarget: cancel existing transition and start from its current interpolated value
             startFromVal = evalTransitionValue(existing, now);
-            if (existing.endTimer !== null) {
-              try { clearTimeout(existing.endTimer); } catch (e) {}
-              existing.endTimer = null;
-            }
             if (existing.startTimer !== null) {
               try { clearTimeout(existing.startTimer); } catch (e) {}
               existing.startTimer = null;
             }
-            const cancelElapsed = Math.max(0, Math.min(existing.durationMs, (now - existing.startTime) - existing.delayMs)) / 1000;
             st.transitions.delete(prop);
-            fireTransitionEvent(element, "transitioncancel", prop, cancelElapsed);
+            if (existing.anim) {
+              existing.anim.cancel();
+            } else {
+              const cancelElapsed = Math.max(0, Math.min(existing.durationMs, (now - existing.startTime) - existing.delayMs)) / 1000;
+              fireTransitionEvent(element, "transitioncancel", prop, cancelElapsed);
+            }
           }
+
+          const kfProp = kebabToCamelCase(prop);
+          const f0 = {};
+          f0[kfProp] = startFromVal;
+          const f1 = {};
+          f1[kfProp] = nextVal;
+          const trEffect = new KeyframeEffect(element, [f0, f1], {
+            duration: spec.durationMs,
+            delay: spec.delayMs,
+            easing: safeEasingForEffect(spec.easing),
+            fill: "backwards",
+          });
+          const trAnim = new CSSTransition(trEffect, globalDocTimeline, prop);
 
           const tr = {
             prop: prop,
@@ -41981,37 +43099,52 @@
             delayMs: spec.delayMs,
             easing: spec.easing,
             startTimer: null,
-            endTimer: null,
+            anim: trAnim,
+          };
+          trAnim._onCssFinish = function () {
+            if (tr.startTimer !== null) {
+              try { clearTimeout(tr.startTimer); } catch (e) {}
+              tr.startTimer = null;
+            }
+            if (st.transitions.get(prop) === tr) {
+              st.transitions.delete(prop);
+              if (st.transitions.size === 0 && st.animations.size === 0) {
+                _activeCssAnimElements.delete(element);
+              }
+            }
+          };
+          trAnim._onCssCancel = function () {
+            if (tr.startTimer !== null) {
+              try { clearTimeout(tr.startTimer); } catch (e) {}
+              tr.startTimer = null;
+            }
+            if (st.transitions.get(prop) === tr) {
+              st.transitions.delete(prop);
+              if (st.transitions.size === 0 && st.animations.size === 0) {
+                _activeCssAnimElements.delete(element);
+              }
+            }
           };
           st.transitions.set(prop, tr);
+          trAnim.play();
 
           const initialElapsed = Math.max(0, -tr.delayMs) / 1000;
-          const remainingMs = Math.max(0, tr.durationMs + tr.delayMs);
 
           // Fire transitionrun and transitionstart asynchronously (or in microtask / timer)
           Promise.resolve().then(function () {
-            if (st.transitions.get(prop) !== tr) return;
+            if (st.transitions.get(prop) !== tr || trAnim.playState === "idle") return;
             fireTransitionEvent(element, "transitionrun", prop, initialElapsed);
             if (tr.delayMs <= 0) {
-              if (st.transitions.get(prop) !== tr) return;
+              if (st.transitions.get(prop) !== tr || trAnim.playState === "idle") return;
               fireTransitionEvent(element, "transitionstart", prop, initialElapsed);
             } else if (typeof setTimeout === "function") {
               tr.startTimer = setTimeout(function () {
                 tr.startTimer = null;
-                if (st.transitions.get(prop) !== tr) return;
+                if (st.transitions.get(prop) !== tr || trAnim.playState === "idle") return;
                 fireTransitionEvent(element, "transitionstart", prop, 0);
               }, tr.delayMs);
             }
           });
-
-          if (typeof setTimeout === "function") {
-            tr.endTimer = setTimeout(function () {
-              tr.endTimer = null;
-              if (st.transitions.get(prop) !== tr) return;
-              st.transitions.delete(prop);
-              fireTransitionEvent(element, "transitionend", prop, tr.durationMs / 1000);
-            }, remainingMs);
-          }
         });
       }
 
@@ -42026,7 +43159,27 @@
       for (let i = 0; i < animSpecs.length; i++) {
         const sp = animSpecs[i];
         activeNames.add(sp.name);
-        if (!st.animations.has(sp.name)) {
+        const existingRec = st.animations.get(sp.name);
+        if (!existingRec) {
+          const frames = keyframesMap ? keyframesMap.get(sp.name) : null;
+          const kfList = frames ? frames.map(function (fr) {
+            const o = { offset: fr.offset };
+            for (const k in fr.props) {
+              if (Object.prototype.hasOwnProperty.call(fr.props, k)) {
+                o[kebabToCamelCase(k)] = fr.props[k];
+              }
+            }
+            return o;
+          }) : [];
+          const cssAnimEffect = new KeyframeEffect(element, kfList, {
+            duration: sp.durationMs,
+            delay: sp.delayMs,
+            easing: safeEasingForEffect(sp.easing),
+            iterations: sp.iterations,
+            direction: sp.direction,
+            fill: sp.fill,
+          });
+          const cssAnim = new CSSAnimation(cssAnimEffect, globalDocTimeline, sp.name);
           const animRec = {
             name: sp.name,
             startTime: now,
@@ -42037,23 +43190,43 @@
             direction: sp.direction,
             fill: sp.fill,
             playState: sp.playState || "running",
+            cssPlayState: sp.playState || "running",
             finished: false,
-            endTimer: null,
+            anim: cssAnim,
+          };
+          cssAnim._onCssFinish = function () {
+            animRec.finished = true;
+          };
+          cssAnim._onCssCancel = function () {
+            if (st.animations.get(sp.name) === animRec) {
+              st.animations.delete(sp.name);
+              if (st.transitions.size === 0 && st.animations.size === 0) {
+                _activeCssAnimElements.delete(element);
+              }
+            }
           };
           st.animations.set(sp.name, animRec);
+          if (animRec.playState === "paused") {
+            cssAnim.playState = "paused";
+            cssAnim._holdTime = 0;
+            cssAnim.startTime = null;
+          } else {
+            cssAnim.play();
+          }
           const initialElapsed = Math.max(0, -sp.delayMs) / 1000;
           Promise.resolve().then(function () {
-            if (st.animations.get(sp.name) !== animRec) return;
+            if (st.animations.get(sp.name) !== animRec || cssAnim.playState === "idle") return;
             fireAnimationEvent(element, "animationstart", sp.name, initialElapsed);
           });
-          if (sp.iterations !== Infinity && typeof setTimeout === "function") {
-            const totalMs = Math.max(0, sp.durationMs * sp.iterations + sp.delayMs);
-            animRec.endTimer = setTimeout(function () {
-              animRec.endTimer = null;
-              if (st.animations.get(sp.name) !== animRec) return;
-              animRec.finished = true;
-              fireAnimationEvent(element, "animationend", sp.name, (sp.durationMs * sp.iterations) / 1000);
-            }, totalMs);
+        } else if (existingRec.anim) {
+          const nextCssPlayState = sp.playState || "running";
+          if (nextCssPlayState !== existingRec.cssPlayState) {
+            existingRec.cssPlayState = nextCssPlayState;
+            if (nextCssPlayState === "paused") {
+              existingRec.anim.pause();
+            } else {
+              existingRec.anim.play();
+            }
           }
         }
       }
@@ -42061,12 +43234,18 @@
       // Cancel removed CSS animations
       st.animations.forEach(function (animRec, animName) {
         if (!activeNames.has(animName)) {
-          if (animRec.endTimer !== null) {
-            try { clearTimeout(animRec.endTimer); } catch (e) {}
-            animRec.endTimer = null;
-          }
           st.animations.delete(animName);
-          if (!animRec.finished) {
+          if (animRec.anim) {
+            if (!animRec.finished && animRec.anim.playState !== "finished" && animRec.anim.playState !== "idle") {
+              animRec.anim.cancel();
+            } else {
+              animRec.anim._clearFinishTimer();
+              animRec.anim.playState = "idle";
+              animRec.anim._holdTime = null;
+              animRec.anim.startTime = null;
+              registeredAnimations.delete(animRec.anim);
+            }
+          } else if (!animRec.finished) {
             const cancelElapsed = Math.max(0, (now - animRec.startTime) - animRec.delayMs) / 1000;
             fireAnimationEvent(element, "animationcancel", animName, cancelElapsed);
           }
@@ -42075,7 +43254,8 @@
 
       // 3. Overlay active CSS transitions onto computedMap
       st.transitions.forEach(function (tr, prop) {
-        const activeMs = (now - tr.startTime) - tr.delayMs;
+        const curTime = tr.anim ? tr.anim.currentTime : (now - tr.startTime);
+        const activeMs = (curTime !== null ? curTime : tr.durationMs + tr.delayMs) - tr.delayMs;
         if (activeMs >= tr.durationMs) {
           computedMap.set(prop, tr.toVal);
         } else {
@@ -42150,6 +43330,17 @@
           }
         } catch (e) {}
       }
+    }
+
+    function ensureBeforeChangeSnapshot(el) {
+      if (!_snapshotsInitialized || !el || el.nodeType !== 1) return;
+      const st = _cssAnimStateMap.get(el);
+      if (st && st.lastStyle !== null) return;
+      try {
+        if (typeof getComputedStyle === "function") {
+          getComputedStyle(el);
+        }
+      } catch (e) {}
     }
 
     function notifyCssStyleChange(el) {
@@ -42236,7 +43427,8 @@
         }
         const decls = [];
         st.transitions.forEach(function (tr, prop) {
-          const activeMs = (now - tr.startTime) - tr.delayMs;
+          const curTime = tr.anim ? tr.anim.currentTime : (now - tr.startTime);
+          const activeMs = (curTime !== null ? curTime : tr.durationMs + tr.delayMs) - tr.delayMs;
           if (activeMs >= tr.durationMs) {
             decls.push(prop + ":" + tr.toVal);
           } else {
@@ -42268,9 +43460,19 @@
       return lines.join("\n");
     }
 
+    _flushCssAnimHook = function () {
+      if (!_snapshotsInitialized) {
+        initCssTransitionSnapshots();
+      }
+      if (_pendingStyleCheckElements.size > 0) {
+        flushPendingStyleChecks();
+      }
+    };
+
     if (typeof globalThis !== "undefined") {
       globalThis.__capsurf_syncCssTransitionsAndAnimations = syncCssTransitionsAndAnimations;
       globalThis.__capsurf_notifyCssStyleChange = notifyCssStyleChange;
+      globalThis.__capsurf_ensureBeforeChangeSnapshot = ensureBeforeChangeSnapshot;
       globalThis.__capsurf_initCssTransitionSnapshots = initCssTransitionSnapshots;
       globalThis.__capsurf_sample_active_animations = sampleActiveAnimations;
     }
@@ -42283,6 +43485,10 @@
   // Aligned with vendor/kitesurf/packages/dom-shim/src/window.ts
 
   function installWindow(global) {
+    const _Array = Array;
+    const _isArray = Array.isArray;
+    const _arrayFrom = Array.from;
+    const _arraySlice = Array.prototype.slice;
     const _ne = global.__capsurf_nativeEvents || {};
     const _NativeEventCtor = _ne.Event || (typeof Event !== "undefined" ? Event : global.Event);
     const _NativeMouseEvent = _ne.MouseEvent || (typeof MouseEvent !== "undefined" ? MouseEvent : global.MouseEvent);
@@ -43668,8 +44874,8 @@
 
     // 2. Navigator: modern lightweight shield & Client Hints
     const navigatorObj = {
-      userAgent: "Kitesurf/0.0.1",
-      appVersion: "Kitesurf/0.0.1",
+      userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 CapSurf/1.0.0",
+      appVersion: "5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 CapSurf/1.0.0",
       platform: "Linux x86_64",
       appName: "Netscape",
       appCodeName: "Mozilla",
@@ -43684,23 +44890,112 @@
       hardwareConcurrency: 8,
       deviceMemory: 8,
       maxTouchPoints: 0,
-      webdriver: false, // Critical: anti-bot bot-detection override
+      webdriver: true,
       pdfViewerEnabled: true,
+      geolocation: {
+        getCurrentPosition: function (success, error) {
+          setTimeout(function () {
+            if (typeof error === "function") error({ code: 1, message: "User denied Geolocation", PERMISSION_DENIED: 1, POSITION_UNAVAILABLE: 2, TIMEOUT: 3 });
+            else if (typeof success === "function") success({ coords: { latitude: 0, longitude: 0, accuracy: 1 }, timestamp: Date.now() });
+          }, 0);
+        },
+        watchPosition: function (success, error) {
+          setTimeout(function () {
+            if (typeof error === "function") error({ code: 1, message: "User denied Geolocation", PERMISSION_DENIED: 1, POSITION_UNAVAILABLE: 2, TIMEOUT: 3 });
+          }, 0);
+          return 1;
+        },
+        clearWatch: function () {},
+      },
       sendBeacon: markNative(function (url, data) {
         if (arguments.length === 0) {
           throw new TypeError("Failed to execute 'sendBeacon' on 'Navigator': 1 argument required, but only 0 present.");
         }
         const base = (global.document && global.document.URL) || (global.location && global.location.href) || currentHref || "about:blank";
         const fullUrl = new URL(String(url), base).href;
-        const bodyStr = bodyToPostString(data);
+        const bodyBytes = bodyToPostBytes(data);
         if (typeof __capsurf_native_record_fetch === "function") {
-          __capsurf_native_record_fetch(fullUrl, "text/plain", "POST", bodyStr);
+          __capsurf_native_record_fetch(fullUrl, "text/plain", "POST", bodyBytes);
         } else if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_native_record_fetch === "function") {
-          globalThis.__capsurf_native_record_fetch(fullUrl, "text/plain", "POST", bodyStr);
+          globalThis.__capsurf_native_record_fetch(fullUrl, "text/plain", "POST", bodyBytes);
         }
         return true;
       }, "sendBeacon"),
     };
+
+    function encodePostUtf8(str) {
+      if (typeof TextEncoder === "function") {
+        return new TextEncoder().encode(str);
+      }
+      if (typeof stringToUtf8 === "function") {
+        return stringToUtf8(str);
+      }
+      const len = str.length;
+      const out = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        out[i] = str.charCodeAt(i) & 0xff;
+      }
+      return out;
+    }
+
+    function bodyToPostBytes(data) {
+      if (data === undefined || data === null) return null;
+      if (typeof data === "string") return data;
+      if (typeof FormData === "function" && data instanceof FormData) {
+        const bnd = (data._boundary && String(data._boundary)) || "----CapSurfFormBoundary7d9f";
+        const chunks = [];
+        let totalLength = 0;
+        const pushChunk = function (u8) {
+          if (u8 && u8.byteLength > 0) {
+            chunks.push(u8);
+            totalLength += u8.byteLength;
+          }
+        };
+        data.forEach(function (val, key) {
+          if ((typeof File === "function" && val instanceof File) || (typeof Blob === "function" && val instanceof Blob)) {
+            const fname = val.name || "blob";
+            const ctype = val.type || "application/octet-stream";
+            pushChunk(encodePostUtf8("--" + bnd + "\r\nContent-Disposition: form-data; name=\"" + key + "\"; filename=\"" + fname + "\"\r\nContent-Type: " + ctype + "\r\n\r\n"));
+            const inner = bodyToPostBytes(val);
+            if (inner instanceof Uint8Array) {
+              pushChunk(inner);
+            } else if (typeof inner === "string" && inner.length > 0) {
+              pushChunk(encodePostUtf8(inner));
+            }
+            pushChunk(encodePostUtf8("\r\n"));
+          } else {
+            pushChunk(encodePostUtf8("--" + bnd + "\r\nContent-Disposition: form-data; name=\"" + key + "\"\r\n\r\n" + String(val) + "\r\n"));
+          }
+        });
+        pushChunk(encodePostUtf8("--" + bnd + "--\r\n"));
+        const out = new Uint8Array(totalLength);
+        let offset = 0;
+        for (let i = 0; i < chunks.length; i++) {
+          out.set(chunks[i], offset);
+          offset += chunks[i].byteLength;
+        }
+        return out;
+      }
+      if (data instanceof Uint8Array) return data;
+      if (data._bytes && data._bytes.BYTES_PER_ELEMENT) {
+        return data._bytes instanceof Uint8Array
+          ? data._bytes
+          : new Uint8Array(data._bytes.buffer, data._bytes.byteOffset, data._bytes.byteLength);
+      }
+      if (ArrayBuffer.isView(data)) {
+        return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+      }
+      if (data instanceof ArrayBuffer) {
+        return new Uint8Array(data);
+      }
+      if (typeof Blob === "function" && data instanceof Blob) {
+        if (data._text !== undefined) {
+          return encodePostUtf8(String(data._text));
+        }
+        return new Uint8Array(0);
+      }
+      return String(data);
+    }
 
     function bodyToPostString(data) {
       if (data === undefined || data === null) return null;
@@ -43732,22 +45027,24 @@
     function setUserAgent(ua) {
       const rawUa = ua ? String(ua) : "";
       if (!rawUa) {
-        navigatorObj.userAgent = "Kitesurf/0.0.1";
-        navigatorObj.appVersion = "Kitesurf/0.0.1";
+        const defUa = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 CapSurf/1.0.0";
+        const defVer = "5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 CapSurf/1.0.0";
+        navigatorObj.userAgent = defUa;
+        navigatorObj.appVersion = defVer;
         delete navigatorObj.userAgentData;
         if (global.navigator) {
-          global.navigator.userAgent = "Kitesurf/0.0.1";
-          global.navigator.appVersion = "Kitesurf/0.0.1";
+          global.navigator.userAgent = defUa;
+          global.navigator.appVersion = defVer;
           delete global.navigator.userAgentData;
         }
         if (typeof window !== "undefined" && window.navigator) {
-          window.navigator.userAgent = "Kitesurf/0.0.1";
-          window.navigator.appVersion = "Kitesurf/0.0.1";
+          window.navigator.userAgent = defUa;
+          window.navigator.appVersion = defVer;
           delete window.navigator.userAgentData;
         }
         if (typeof globalThis !== "undefined" && globalThis.navigator) {
-          globalThis.navigator.userAgent = "Kitesurf/0.0.1";
-          globalThis.navigator.appVersion = "Kitesurf/0.0.1";
+          globalThis.navigator.userAgent = defUa;
+          globalThis.navigator.appVersion = defVer;
           delete globalThis.navigator.userAgentData;
         }
         return;
@@ -43911,6 +45208,18 @@
 
     function handleLocationNavigate(targetInput, isReplace) {
       const targetStr = String(targetInput);
+      const trimmedTarget = targetStr.trim();
+      if (/^javascript:/i.test(trimmedTarget)) {
+        const code = trimmedTarget.slice(11);
+        try {
+          (0, eval)(code);
+        } catch (e) {
+          try {
+            (0, eval)(decodeURIComponent(code));
+          } catch (e2) {}
+        }
+        return;
+      }
       let targetUrl;
       try {
         targetUrl = new HistoryURL(targetStr, currentHref).href;
@@ -44484,6 +45793,15 @@
 
         const prevNesting = global.__capsurf_timer_nesting || 0;
         global.__capsurf_timer_nesting = (item.nestingLevel || 0) + 1;
+        const prevIso = !!(typeof globalThis !== "undefined" && globalThis.__capsurf_in_isolated);
+        let restoredNode = false;
+        if (item.isIso && typeof globalThis !== "undefined") {
+          globalThis.__capsurf_in_isolated = true;
+          if (globalThis.Node === undefined && globalThis.__capsurf_orig_Node !== undefined) {
+            globalThis.Node = globalThis.__capsurf_orig_Node;
+            restoredNode = true;
+          }
+        }
         try {
           if (typeof item.cb === "function") {
             item.cb.apply(global, item.args);
@@ -44497,6 +45815,13 @@
             console.error(e);
           }
         } finally {
+          if (restoredNode && typeof globalThis !== "undefined") {
+            delete globalThis.Node;
+          }
+          if (item.isIso && typeof globalThis !== "undefined") {
+            globalThis.__capsurf_in_isolated = prevIso;
+            globalThis.__capsurf_iso_jobs_pending = true;
+          }
           global.__capsurf_timer_nesting = prevNesting;
         }
 
@@ -44525,7 +45850,7 @@
       const rawDelay = Math.max(0, Number(ms) || 0);
       const delay = (curNesting > 5 && rawDelay < 4) ? 4 : rawDelay;
       const due = nativeDateNow() + delay;
-      const args = Array.prototype.slice.call(arguments, 2);
+      const args = _arraySlice.call(arguments, 2);
       const item = {
         id: id,
         order: timerOrderCounter++,
@@ -44535,6 +45860,7 @@
         due: due,
         isInterval: false,
         nestingLevel: curNesting,
+        isIso: !!(typeof globalThis !== "undefined" && globalThis.__capsurf_in_isolated),
       };
       activeTimers.set(id, true);
       insertTimerTask(item);
@@ -44565,7 +45891,7 @@
       const rawDelay = Math.max(0, Number(ms) || 0);
       const delay = (curNesting > 5 && rawDelay < 4) ? 4 : rawDelay;
       const due = nativeDateNow() + delay;
-      const args = Array.prototype.slice.call(arguments, 2);
+      const args = _arraySlice.call(arguments, 2);
       const item = {
         id: id,
         order: timerOrderCounter++,
@@ -44613,6 +45939,41 @@
     }
     if (typeof globalThis !== "undefined") {
       globalThis.queueMicrotask = queueMicrotaskFn;
+    }
+
+    if (typeof Promise === "function" && Promise.prototype && typeof Promise.prototype.then === "function") {
+      const origPromiseThen = Promise.prototype.then;
+      const wrapIsoMicroCb = function (cb) {
+        if (typeof cb !== "function") return cb;
+        return function (v) {
+          const prevIso = !!(typeof globalThis !== "undefined" && globalThis.__capsurf_in_isolated);
+          let restoredNode = false;
+          if (typeof globalThis !== "undefined") {
+            globalThis.__capsurf_in_isolated = true;
+            if (globalThis.Node === undefined && globalThis.__capsurf_orig_Node !== undefined) {
+              globalThis.Node = globalThis.__capsurf_orig_Node;
+              restoredNode = true;
+            }
+          }
+          try {
+            return cb.call(this, v);
+          } finally {
+            if (restoredNode && typeof globalThis !== "undefined") {
+              delete globalThis.Node;
+            }
+            if (typeof globalThis !== "undefined") {
+              globalThis.__capsurf_in_isolated = prevIso;
+            }
+          }
+        };
+      };
+      Promise.prototype.then = markNative(function (onFulfilled, onRejected) {
+        const isIso = !!(typeof globalThis !== "undefined" && globalThis.__capsurf_in_isolated);
+        if (!isIso) {
+          return origPromiseThen.call(this, onFulfilled, onRejected);
+        }
+        return origPromiseThen.call(this, wrapIsoMicroCb(onFulfilled), wrapIsoMicroCb(onRejected));
+      }, "then");
     }
 
     // 5.1b AbortSignal & AbortController (WHATWG DOM)
@@ -45489,6 +46850,10 @@
       if (body instanceof ArrayBuffer) return body.byteLength;
       if (ArrayBuffer.isView(body)) return body.byteLength;
       if (typeof Blob !== "undefined" && body instanceof Blob) return body.size;
+      if (typeof FormData === "function" && body instanceof FormData) {
+        const fdBytes = bodyToPostBytes(body);
+        return fdBytes ? fdBytes.byteLength : 0;
+      }
       const s = String(body);
       if (typeof stringToUtf8 === "function") return stringToUtf8(s).byteLength;
       return s.length;
@@ -45536,6 +46901,89 @@
           return Promise.resolve(new Uint8Array(0).buffer);
         },
       };
+    }
+
+    const corsPreflightCache = new Map();
+
+    function verifyCorsPreflightResponse(preflightRes, expectedOrigin, reqMethodNorm, isSimpleMethod, acrhList, reqCredentials) {
+      if (preflightRes === null || preflightRes === undefined) {
+        return { ok: false, ttlMs: 0 };
+      }
+      let meta = null;
+      if (typeof preflightRes === "object") {
+        meta = preflightRes;
+      } else if (typeof preflightRes === "string") {
+        const trimmed = preflightRes.trim();
+        if (trimmed.length > 0 && trimmed[0] === "{") {
+          try {
+            const parsed = JSON.parse(trimmed);
+            if (parsed && typeof parsed === "object" && (parsed.status !== undefined || parsed.headers !== undefined || parsed.headersJson !== undefined)) {
+              meta = parsed;
+            }
+          } catch (e) {}
+        }
+      }
+      if (!meta) {
+        return { ok: true, ttlMs: 5000 };
+      }
+      if (meta.status !== undefined) {
+        const st = Number(meta.status);
+        if (!(st >= 200 && st < 300)) {
+          return { ok: false, ttlMs: 0 };
+        }
+      }
+      let rawHdrs = meta.headers || null;
+      if (!rawHdrs && meta.headersJson) {
+        try {
+          rawHdrs = typeof meta.headersJson === "string" ? JSON.parse(meta.headersJson) : meta.headersJson;
+        } catch (e) {}
+      }
+      if (!rawHdrs || typeof rawHdrs !== "object") {
+        return { ok: true, ttlMs: 5000 };
+      }
+      const hdrMap = {};
+      const hKeys = Object.keys(rawHdrs);
+      for (let i = 0; i < hKeys.length; i++) {
+        hdrMap[String(hKeys[i]).toLowerCase()] = String(rawHdrs[hKeys[i]]);
+      }
+      const acao = hdrMap["access-control-allow-origin"] !== undefined ? hdrMap["access-control-allow-origin"].trim() : null;
+      const acac = hdrMap["access-control-allow-credentials"] !== undefined ? hdrMap["access-control-allow-credentials"].trim() : null;
+      const acaoOk = (reqCredentials === "include")
+        ? (acao !== null && acao !== "*" && acao === expectedOrigin && acac === "true")
+        : (acao !== null && (acao === "*" || acao === expectedOrigin));
+      if (!acaoOk) {
+        return { ok: false, ttlMs: 0 };
+      }
+      if (!isSimpleMethod) {
+        const acamRaw = hdrMap["access-control-allow-methods"] || "";
+        const acamSet = new Set(acamRaw.split(",").map(function (s) { return s.trim().toUpperCase(); }).filter(Boolean));
+        const allowAnyMethod = acamSet.has("*") && reqCredentials !== "include";
+        if (!allowAnyMethod && !acamSet.has(reqMethodNorm)) {
+          return { ok: false, ttlMs: 0 };
+        }
+      }
+      if (acrhList.length > 0) {
+        const acahRaw = hdrMap["access-control-allow-headers"] || "";
+        const acahSet = new Set(acahRaw.split(",").map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean));
+        const allowAnyHeader = acahSet.has("*") && reqCredentials !== "include";
+        if (!allowAnyHeader) {
+          for (let hi = 0; hi < acrhList.length; hi++) {
+            if (!acahSet.has(acrhList[hi])) {
+              return { ok: false, ttlMs: 0 };
+            }
+          }
+        }
+      }
+      let ttlMs = 5000;
+      if (hdrMap["access-control-max-age"] !== undefined) {
+        const maxAgeSec = Number(hdrMap["access-control-max-age"]);
+        if (Number.isFinite(maxAgeSec) && maxAgeSec >= 0) {
+          ttlMs = Math.min(maxAgeSec * 1000, 7200000);
+        } else if (Number.isFinite(maxAgeSec) && maxAgeSec < 0) {
+          ttlMs = 0;
+        }
+      }
+      return { ok: true, ttlMs: ttlMs };
     }
 
     const fetchFn = markNative(function (resource, init) {
@@ -45707,7 +47155,12 @@
       const reqBody = (init && init.body !== undefined)
         ? init.body
         : (typeof Request !== "undefined" && resource instanceof Request && resource._body ? resource._body : undefined);
-      const bodyLen = computeBodyByteLength(reqBody);
+      if (typeof FormData === "function" && reqBody instanceof FormData && !reqHeaders["content-type"]) {
+        const fdBnd = (reqBody._boundary && String(reqBody._boundary)) || "----CapSurfFormBoundary7d9f";
+        reqHeaders["content-type"] = "multipart/form-data; boundary=" + fdBnd;
+      }
+      const serializedBody = bodyToPostBytes(reqBody);
+      const bodyLen = computeBodyByteLength(serializedBody);
       if (bodyLen !== null) {
         reqHeaders["content-length"] = String(bodyLen);
       }
@@ -45777,56 +47230,6 @@
       const cleanFullUrl = fullUrl.split("#")[0];
       const isRedirected = Boolean(init._redirected);
 
-      // Fetch interception hook (CDP Fetch.enable / page.setRequestInterception)
-      const fetchInterceptor = (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_fetch_interceptor === "function")
-        ? globalThis.__capsurf_fetch_interceptor
-        : null;
-      if (fetchInterceptor && !init._intercepted) {
-        const selfCtx = this;
-        const reqMethod = String((init && init.method) || (typeof Request !== "undefined" && resource instanceof Request ? resource.method : "GET") || "GET").toUpperCase();
-        return fetchInterceptor({
-          url: cleanFullUrl,
-          method: reqMethod,
-          headers: reqHeaders,
-          resourceType: "fetch",
-        }).then(function (verdict) {
-          if (!verdict || verdict.action === "continue") {
-            const nextUrl = (verdict && verdict.url) ? String(verdict.url) : cleanFullUrl;
-            const nextInit = Object.assign({}, init, { _intercepted: true });
-            if (verdict && verdict.method) nextInit.method = verdict.method;
-            if (verdict && verdict.headers) nextInit.headers = verdict.headers;
-            return fetchFn.call(selfCtx, nextUrl, nextInit);
-          }
-          if (verdict.action === "abort") {
-            return Promise.reject(new TypeError("Failed to fetch"));
-          }
-          if (verdict.action === "respond") {
-            const rHeaders = Object.assign({}, verdict.headers || {});
-            if (verdict.contentType && !rHeaders["content-type"]) {
-              rHeaders["content-type"] = verdict.contentType;
-            }
-            return makeFetchedResponse(verdict.body != null ? String(verdict.body) : "", {
-              status: verdict.status || 200,
-              statusText: verdict.statusText || "OK",
-              url: cleanFullUrl,
-              redirected: isRedirected,
-              headers: rHeaders,
-            });
-          }
-          return fetchFn.call(selfCtx, cleanFullUrl, Object.assign({}, init, { _intercepted: true }));
-        });
-      }
-
-      // Private Network Access: block public pages from reaching loopback addresses
-      if (isPublicPageLocation(loc)) {
-        try {
-          const targetParsed = new URL(cleanFullUrl);
-          if (isLoopbackHostname(targetParsed.hostname)) {
-            return Promise.reject(new TypeError("Failed to fetch: blocked private network access to loopback"));
-          }
-        } catch (e) {}
-      }
-
       let isSameOrigin = false;
       if (urlStr.startsWith("/")) {
         isSameOrigin = true;
@@ -45835,6 +47238,172 @@
           const u = new URL(cleanFullUrl);
           if (docOrigin && u.origin === docOrigin) {
             isSameOrigin = true;
+          }
+        } catch (e) {}
+      }
+
+      const reqCredentials = (init && init.credentials) || (typeof Request !== "undefined" && resource instanceof Request ? resource.credentials : null) || "same-origin";
+      const reqRedirect = (init && init.redirect) || (typeof Request !== "undefined" && resource instanceof Request ? resource.redirect : null) || "follow";
+
+      // Inject Origin header for cross-origin requests if not explicitly set
+      if (!isSameOrigin) {
+        let hasOriginHdr = false;
+        const rHdrNames = Object.keys(reqHeaders);
+        for (let oi = 0; oi < rHdrNames.length; oi++) {
+          if (rHdrNames[oi].toLowerCase() === "origin") {
+            hasOriginHdr = true;
+            break;
+          }
+        }
+        if (!hasOriginHdr) {
+          reqHeaders["origin"] = docOrigin || "null";
+        }
+      }
+
+      // Fetch interception hook (CDP Fetch.enable / page.setRequestInterception)
+      const fetchInterceptor = (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_fetch_interceptor === "function")
+        ? globalThis.__capsurf_fetch_interceptor
+        : null;
+      if (!init._intercepted) {
+        const selfCtx = this;
+        const reqMethod = String((init && init.method) || (typeof Request !== "undefined" && resource instanceof Request ? resource.method : "GET") || "GET").toUpperCase();
+        const rType = (init && init._resourceType) ? String(init._resourceType) : "fetch";
+        const rTypeLow = rType.toLowerCase();
+        const cdpRtype = rTypeLow === "xhr" ? "XHR"
+          : rTypeLow === "script" ? "Script"
+          : rTypeLow === "stylesheet" ? "Stylesheet"
+          : rTypeLow === "image" ? "Image"
+          : rTypeLow === "font" ? "Font"
+          : rTypeLow === "document" ? "Document"
+          : "Fetch";
+        let pausePromise = null;
+        if (fetchInterceptor) {
+          pausePromise = fetchInterceptor({
+            url: cleanFullUrl,
+            method: reqMethod,
+            headers: reqHeaders,
+            resourceType: rType,
+          });
+        } else if (
+          typeof globalThis !== "undefined" &&
+          typeof globalThis.__capsurf_should_intercept_fetch === "function" &&
+          globalThis.__capsurf_should_intercept_fetch(cleanFullUrl, cdpRtype) &&
+          typeof globalThis.__capsurf_fetch_pause === "function"
+        ) {
+          let hdrJson = "{}";
+          try { hdrJson = JSON.stringify(reqHeaders || {}); } catch (e) {}
+          pausePromise = globalThis.__capsurf_fetch_pause(cleanFullUrl, reqMethod, hdrJson, serializedBody, cdpRtype);
+        }
+        if (pausePromise && typeof pausePromise.then === "function") {
+          return pausePromise.then(function (verdict) {
+            if (!verdict || verdict.action === "continue") {
+              const nextUrl = (verdict && verdict.url) ? String(verdict.url) : cleanFullUrl;
+              const nextInit = Object.assign({}, init, { _intercepted: true });
+              if (verdict && verdict.method) nextInit.method = verdict.method;
+              if (verdict && verdict.headers) nextInit.headers = verdict.headers;
+              if (verdict && verdict.body !== undefined) nextInit.body = verdict.body;
+              return fetchFn.call(selfCtx, nextUrl, nextInit);
+            }
+            if (verdict.action === "abort") {
+              return Promise.reject(new TypeError("Failed to fetch"));
+            }
+            if (verdict.action === "respond") {
+              const rStatus = Number(verdict.status) || 200;
+              const rHeaders = Object.assign({}, verdict.headers || {});
+              if (verdict.contentType && !rHeaders["content-type"]) {
+                rHeaders["content-type"] = verdict.contentType;
+              }
+              const rHdrKeys = Object.keys(rHeaders);
+              let locationVal = null;
+              for (let hi = 0; hi < rHdrKeys.length; hi++) {
+                if (rHdrKeys[hi].toLowerCase() === "location") {
+                  locationVal = rHeaders[rHdrKeys[hi]];
+                  break;
+                }
+              }
+              const isRedirectStatus = rStatus === 301 || rStatus === 302 || rStatus === 303 || rStatus === 307 || rStatus === 308;
+              if (isRedirectStatus && locationVal !== null && locationVal !== undefined && String(locationVal) !== "") {
+                if (reqRedirect === "error") {
+                  return Promise.reject(new TypeError("Failed to fetch"));
+                }
+                if (reqRedirect === "manual") {
+                  return makeFetchedResponse("", {
+                    status: 0,
+                    statusText: "",
+                    type: "opaqueredirect",
+                    url: cleanFullUrl,
+                    redirected: false,
+                    headers: {},
+                  });
+                }
+                const redirectCount = Number(init._redirectCount || 0);
+                if (redirectCount >= 20) {
+                  return Promise.reject(new TypeError("Failed to fetch: too many redirects"));
+                }
+                let targetUrl = String(locationVal);
+                try {
+                  targetUrl = new URL(targetUrl, cleanFullUrl).href;
+                } catch (e) {}
+                const nextInit = Object.assign({}, init, {
+                  _redirected: true,
+                  _redirectCount: redirectCount + 1,
+                });
+                delete nextInit._intercepted;
+                if (((rStatus === 301 || rStatus === 302) && reqMethod === "POST") || (rStatus === 303 && reqMethod !== "GET" && reqMethod !== "HEAD")) {
+                  nextInit.method = "GET";
+                  delete nextInit.body;
+                  if (nextInit.headers) {
+                    const nextHdrs = Object.assign({}, nextInit.headers);
+                    const nhKeys = Object.keys(nextHdrs);
+                    for (let nhi = 0; nhi < nhKeys.length; nhi++) {
+                      const lk = nhKeys[nhi].toLowerCase();
+                      if (lk === "content-length" || lk === "content-type") {
+                        delete nextHdrs[nhKeys[nhi]];
+                      }
+                    }
+                    nextInit.headers = nextHdrs;
+                  }
+                } else {
+                  if (nextInit.method === undefined) nextInit.method = reqMethod;
+                  if (nextInit.body === undefined && reqBody !== undefined) nextInit.body = reqBody;
+                }
+                return fetchFn.call(selfCtx, targetUrl, nextInit);
+              }
+              if (reqMode === "cors" && !isSameOrigin) {
+                let acao = null;
+                let acac = null;
+                for (let hi = 0; hi < rHdrKeys.length; hi++) {
+                  const lk = rHdrKeys[hi].toLowerCase();
+                  if (lk === "access-control-allow-origin") acao = String(rHeaders[rHdrKeys[hi]]).trim();
+                  else if (lk === "access-control-allow-credentials") acac = String(rHeaders[rHdrKeys[hi]]).trim();
+                }
+                const expectedOrigin = docOrigin || "null";
+                const acaoOk = (reqCredentials === "include")
+                  ? (acao !== null && acao !== "*" && acao === expectedOrigin && acac === "true")
+                  : (acao !== null && (acao === "*" || acao === expectedOrigin));
+                if (!acaoOk) {
+                  return Promise.reject(new TypeError("Failed to fetch"));
+                }
+              }
+              return makeFetchedResponse(verdict.body != null ? String(verdict.body) : "", {
+                status: rStatus,
+                statusText: verdict.statusText || "OK",
+                url: cleanFullUrl,
+                redirected: isRedirected,
+                headers: rHeaders,
+              });
+            }
+            return fetchFn.call(selfCtx, cleanFullUrl, Object.assign({}, init, { _intercepted: true }));
+          });
+        }
+      }
+
+      // Private Network Access: block public pages from reaching loopback addresses
+      if (isPublicPageLocation(loc)) {
+        try {
+          const targetParsed = new URL(cleanFullUrl);
+          if (isLoopbackHostname(targetParsed.hostname)) {
+            return Promise.reject(new TypeError("Failed to fetch: blocked private network access to loopback"));
           }
         } catch (e) {}
       }
@@ -45848,11 +47417,10 @@
       else if (cleanFullUrl.indexOf(".html") !== -1 || cleanFullUrl.indexOf(".htm") !== -1) reqMime = "text/html; charset=utf-8";
       else if (cleanFullUrl.indexOf(".css") !== -1) reqMime = "text/css";
 
-      const postStr = bodyToPostString(reqBody);
       if (typeof __capsurf_native_record_fetch === "function") {
-        __capsurf_native_record_fetch(cleanFullUrl, reqMime, reqMethodNorm, postStr);
+        __capsurf_native_record_fetch(cleanFullUrl, reqMime, reqMethodNorm, serializedBody);
       } else if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_native_record_fetch === "function") {
-        globalThis.__capsurf_native_record_fetch(cleanFullUrl, reqMime, reqMethodNorm, postStr);
+        globalThis.__capsurf_native_record_fetch(cleanFullUrl, reqMime, reqMethodNorm, serializedBody);
       }
 
       const cred = init.credentials || (typeof Request !== "undefined" && resource instanceof Request ? resource.credentials : null) || "same-origin";
@@ -45912,6 +47480,7 @@
               redirected: false,
             }));
           }
+          if (typeof console !== "undefined" && typeof console.error === "function") console.error("Access to fetch at '" + cleanFullUrl + "' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.");
           return Promise.reject(new TypeError("Failed to fetch: CORS header 'Access-Control-Allow-Origin' missing"));
         }
         return Promise.resolve(makeFetchedResponse("", {
@@ -46177,7 +47746,8 @@
                 redirected: false,
               }));
             }
-            return Promise.reject(new TypeError("Failed to fetch: CORS header 'Access-Control-Allow-Origin' missing"));
+            if (typeof console !== "undefined" && typeof console.error === "function") console.error("Access to fetch at '" + cleanFullUrl + "' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.");
+          return Promise.reject(new TypeError("Failed to fetch: CORS header 'Access-Control-Allow-Origin' missing"));
           }
           const isHtml = urlStr.indexOf(".htm") !== -1 || urlStr.indexOf("html") !== -1;
           const isJson = urlStr.indexOf(".json") !== -1;
@@ -46194,19 +47764,6 @@
         }
       }
 
-      if (!isSameOrigin) {
-        if (init && init.mode === "no-cors") {
-          return Promise.resolve(makeFetchedResponse("", {
-            status: 0,
-            statusText: "",
-            type: "opaque",
-            url: "",
-            redirected: false,
-          }));
-        }
-        return Promise.reject(new TypeError("Failed to fetch: CORS header 'Access-Control-Allow-Origin' missing"));
-      }
-
       if (pathOnly.indexOf("/__fixtures/") !== -1) {
         return Promise.resolve(makeFetchedResponse("", {
           status: 404,
@@ -46216,9 +47773,84 @@
         }));
       }
 
-      if ((cleanFullUrl.startsWith("http://") || cleanFullUrl.startsWith("https://")) && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_http_get === "function") {
-        const realBody = globalThis.__capsurf_http_get(cleanFullUrl);
+      if ((cleanFullUrl.startsWith("http://") || cleanFullUrl.startsWith("https://")) && typeof globalThis !== "undefined" && (typeof globalThis.__capsurf_http_request === "function" || typeof globalThis.__capsurf_http_get === "function")) {
+        if (!isSameOrigin && reqMode !== "no-cors" && typeof globalThis.__capsurf_http_request === "function") {
+          const isSimpleMethod = reqMethodNorm === "GET" || reqMethodNorm === "HEAD" || reqMethodNorm === "POST";
+          const nonSafelist = getCorsNonSafelistHeaders();
+          if (!isSimpleMethod || nonSafelist.length > 0) {
+            const acrhSet = new Set();
+            for (let ai = 0; ai < nonSafelist.length; ai++) {
+              acrhSet.add(String(nonSafelist[ai]).toLowerCase());
+            }
+            const acrhList = Array.from(acrhSet).sort();
+            const acrhHeaderVal = acrhList.join(", ");
+            const preflightOrigin = (reqHeaders["origin"] !== undefined && reqHeaders["origin"] !== null)
+              ? String(reqHeaders["origin"])
+              : (docOrigin || "null");
+            const preflightCacheKey = preflightOrigin + "\0" + cleanFullUrl + "\0" + reqMethodNorm + "\0" + acrhList.join(",") + "\0" + reqCredentials;
+            const nowMs = Date.now();
+            const cachedPreflight = corsPreflightCache.get(preflightCacheKey);
+            let preflightHit = false;
+            if (cachedPreflight && nowMs < cachedPreflight.expiresAt) {
+              preflightHit = true;
+            } else if (cachedPreflight) {
+              corsPreflightCache.delete(preflightCacheKey);
+            }
+            if (!preflightHit) {
+              const preflightHeaders = {
+                "origin": preflightOrigin,
+                "access-control-request-method": reqMethodNorm,
+              };
+              if (reqHeaders["user-agent"]) preflightHeaders["user-agent"] = String(reqHeaders["user-agent"]);
+              if (reqHeaders["referer"]) preflightHeaders["referer"] = String(reqHeaders["referer"]);
+              if (acrhHeaderVal) {
+                preflightHeaders["access-control-request-headers"] = acrhHeaderVal;
+              }
+              const preflightRes = globalThis.__capsurf_http_request(
+                cleanFullUrl,
+                "OPTIONS",
+                "",
+                "",
+                JSON.stringify(preflightHeaders)
+              );
+              const pfVerdict = verifyCorsPreflightResponse(preflightRes, preflightOrigin, reqMethodNorm, isSimpleMethod, acrhList, reqCredentials);
+              if (!pfVerdict.ok) {
+                return Promise.reject(new TypeError("Failed to fetch: CORS preflight failed"));
+              }
+              if (pfVerdict.ttlMs > 0) {
+                corsPreflightCache.set(preflightCacheKey, { expiresAt: nowMs + pfVerdict.ttlMs });
+              }
+            }
+          }
+        }
+        const reqContentType = reqHeaders["content-type"] ? String(reqHeaders["content-type"]) : "";
+        let reqHeadersJson = "{}";
+        try {
+          const cleanReqHeaders = {};
+          const rhKeys = Object.keys(reqHeaders || {});
+          for (let hi = 0; hi < rhKeys.length; hi++) {
+            const hk = rhKeys[hi];
+            if (!hk || hk.charCodeAt(0) === 95) continue;
+            const hv = reqHeaders[hk];
+            if (hv !== undefined && hv !== null) {
+              cleanReqHeaders[hk] = String(hv);
+            }
+          }
+          reqHeadersJson = JSON.stringify(cleanReqHeaders);
+        } catch (e) {}
+        const realBody = typeof globalThis.__capsurf_http_request === "function"
+          ? globalThis.__capsurf_http_request(cleanFullUrl, reqMethodNorm, serializedBody, reqContentType, reqHeadersJson)
+          : globalThis.__capsurf_http_get(cleanFullUrl);
         if (realBody !== null && realBody !== undefined) {
+          if (!isSameOrigin && reqMode === "no-cors") {
+            return Promise.resolve(makeFetchedResponse("", {
+              status: 0,
+              statusText: "",
+              type: "opaque",
+              url: "",
+              redirected: false,
+            }));
+          }
           return Promise.resolve(makeFetchedResponse(String(realBody), {
             status: 200,
             statusText: "OK",
@@ -46233,6 +47865,20 @@
           url: cleanFullUrl,
           redirected: isRedirected,
         }));
+      }
+
+      if (!isSameOrigin) {
+        if (reqMode === "no-cors") {
+          return Promise.resolve(makeFetchedResponse("", {
+            status: 0,
+            statusText: "",
+            type: "opaque",
+            url: "",
+            redirected: false,
+          }));
+        }
+        if (typeof console !== "undefined" && typeof console.error === "function") console.error("Access to fetch at '" + cleanFullUrl + "' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.");
+        return Promise.reject(new TypeError("Failed to fetch: CORS header 'Access-Control-Allow-Origin' missing"));
       }
 
       return Promise.resolve(makeFetchedResponse("", {
@@ -47191,6 +48837,15 @@
         _rafEntries.delete(entry.id);
         if (entry.cancelled) continue;
         ran++;
+        const prevIso = !!(typeof globalThis !== "undefined" && globalThis.__capsurf_in_isolated);
+        let restoredNode = false;
+        if (entry.isIso && typeof globalThis !== "undefined") {
+          globalThis.__capsurf_in_isolated = true;
+          if (globalThis.Node === undefined && globalThis.__capsurf_orig_Node !== undefined) {
+            globalThis.Node = globalThis.__capsurf_orig_Node;
+            restoredNode = true;
+          }
+        }
         try {
           if (typeof entry.cb === "function") {
             entry.cb(ts);
@@ -47200,6 +48855,14 @@
             globalThis.__capsurf_report_exception(e);
           } else if (typeof console !== "undefined" && console.error) {
             console.error(e);
+          }
+        } finally {
+          if (restoredNode && typeof globalThis !== "undefined") {
+            delete globalThis.Node;
+          }
+          if (entry.isIso && typeof globalThis !== "undefined") {
+            globalThis.__capsurf_in_isolated = prevIso;
+            globalThis.__capsurf_iso_jobs_pending = true;
           }
         }
       }
@@ -47226,7 +48889,12 @@
     if (!global.requestAnimationFrame) {
       global.requestAnimationFrame = markNative(function (cb) {
         const id = _rafNextId++;
-        const entry = { id: id, cb: cb, cancelled: false };
+        const entry = {
+          id: id,
+          cb: cb,
+          cancelled: false,
+          isIso: !!(typeof globalThis !== "undefined" && globalThis.__capsurf_in_isolated),
+        };
         _rafEntries.set(id, entry);
         _rafQueue.push(entry);
         _scheduleRafFallbackTimer();
@@ -47408,7 +49076,11 @@
 
       const newEntries = [];
       for (const [target, tInfo] of st.targets.entries()) {
-        if (!target || !target.isConnected || (doc && target.ownerDocument && target.ownerDocument !== doc)) {
+        if (!target || !target.isConnected) {
+          continue;
+        }
+        const targetDoc = target.ownerDocument || doc;
+        if (st.root && st.root !== targetDoc && targetDoc && st.root.ownerDocument && st.root.ownerDocument !== targetDoc) {
           continue;
         }
         if (isIoNodeBoxless(target)) {
@@ -47621,10 +49293,10 @@
       const obs = this;
       if (!st.pendingMicrotask) {
         st.pendingMicrotask = true;
-        setTimeout(function () {
+        Promise.resolve().then(function () {
           st.pendingMicrotask = false;
           evaluateIntersectionObserver(obs);
-        }, 0);
+        });
       }
       scheduleIoTick();
     }, "observe");
@@ -47868,7 +49540,7 @@
       const dpr = (global.devicePixelRatio || (typeof window !== "undefined" ? window.devicePixelRatio : 1)) || 1;
       const curMedia = ((typeof globalThis !== "undefined" && globalThis.__capsurf_emulated_media) || "screen").toLowerCase();
       if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_eval_media_query === "function" &&
-          raw.indexOf("device-pixel-ratio") === -1 && raw.indexOf("resolution") === -1 && raw.indexOf("aspect-ratio") === -1) {
+          raw.indexOf("device-pixel-ratio") === -1 && raw.indexOf("resolution") === -1 && raw.indexOf("aspect-ratio") === -1 && raw.indexOf("prefers-") === -1) {
         const nativeRes = globalThis.__capsurf_eval_media_query(raw, w, h, curMedia);
         if (typeof nativeRes === "boolean") return nativeRes;
       }
@@ -47968,11 +49640,37 @@
     global.AudioContext = AudioContext;
     global.webkitAudioContext = AudioContext;
 
-    // 9. User Interaction Prompts (silent, non-throwing headless stubs)
-    const alertFn = markNative(function (msg) { return undefined; }, "alert");
-    const confirmFn = markNative(function (msg) { return false; }, "confirm");
-    const promptFn = markNative(function (msg, defaultText) { return null; }, "prompt");
-    const stopFn = markNative(function () {}, "stop");
+    // 9. User Interaction Prompts (delegates to native CDP dialog hook when present)
+    const alertFn = markNative(function (msg) {
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_dialog_open === "function") {
+        globalThis.__capsurf_dialog_open("alert", msg === undefined ? "" : String(msg), "");
+      }
+      return undefined;
+    }, "alert");
+    const confirmFn = markNative(function (msg) {
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_dialog_open === "function") {
+        return Boolean(globalThis.__capsurf_dialog_open("confirm", msg === undefined ? "" : String(msg), ""));
+      }
+      return false;
+    }, "confirm");
+    const promptFn = markNative(function (msg, defaultText) {
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_dialog_open === "function") {
+        return globalThis.__capsurf_dialog_open(
+          "prompt",
+          msg === undefined ? "" : String(msg),
+          defaultText === undefined ? "" : String(defaultText)
+        );
+      }
+      return null;
+    }, "prompt");
+    const stopFn = markNative(function () {
+      global.__capsurf_pending_navigation = "";
+      global.__capsurf_window_stopped = true;
+      if (typeof globalThis !== "undefined") {
+        globalThis.__capsurf_pending_navigation = "";
+        globalThis.__capsurf_window_stopped = true;
+      }
+    }, "stop");
 
     global.alert = alertFn;
     global.confirm = confirmFn;
@@ -48555,6 +50253,29 @@
         return matchesSingleSelector(el, base);
       }
 
+      // :hover support
+      const isElementHovered = function (node) {
+        const hn = (typeof globalThis !== "undefined" ? Number(globalThis.__capsurf_hovered_nid) : 0) | 0;
+        if (!node || hn <= 0) return false;
+        if (node._nid === hn) return true;
+        let cur = (typeof globalThis.__capsurf_find_node_by_id === "function") ? globalThis.__capsurf_find_node_by_id(hn) : null;
+        let guard = 0;
+        while (cur && guard++ < 128) {
+          if (cur === node || (typeof cur._nid === "number" && typeof node._nid === "number" && cur._nid > 0 && cur._nid === node._nid)) return true;
+          cur = cur.parentElement || (cur.parentNode && cur.parentNode.nodeType === 1 ? cur.parentNode : (cur.parentNode && cur.parentNode.host ? cur.parentNode.host : null));
+        }
+        return false;
+      };
+      if (s === ":hover") {
+        return isElementHovered(el);
+      }
+      if (s.endsWith(":hover")) {
+        if (!isElementHovered(el)) return false;
+        const base = s.slice(0, -6).trim();
+        if (!base || base === "*") return true;
+        return matchesSingleSelector(el, base);
+      }
+
       // Simple ID selector #id
       if (s.startsWith("#") && !s.includes(" ") && !s.includes(".") && !s.includes(">") && !s.includes(":") && !s.includes("[")) {
         const id = s.slice(1);
@@ -49058,7 +50779,7 @@
       "font-language-override", "font-optical-sizing", "font-palette", "font-variant-emoji", "font-variant-position", "font-variation-settings",
       "hanging-punctuation", "hyphens", "line-break", "overflow-wrap", "tab-size",
       "text-align-all", "text-align-last", "text-fit", "text-indent", "text-justify",
-      "text-transform", "word-break", "word-wrap", "clip-rule", "orphans", "widows", "quotes", "block-ellipsis",
+      "text-transform", "word-break", "word-wrap", "clip-rule", "orphans", "widows", "quotes", "block-ellipsis", "pointer-events",
     ]);
 
     function getDefaultDisplayForElement(element) {
@@ -49110,10 +50831,10 @@
             const rel = String(node.getAttribute ? (node.getAttribute("rel") || "") : "").trim().toLowerCase().split(/\s+/);
             if (rel.includes("stylesheet")) styleNodes.push(node);
           }
-          if (node.childNodes && node.childNodes.length) {
-            for (let i = 0; i < node.childNodes.length; i++) {
-              scanStyles(node.childNodes[i]);
-            }
+          if (node._children && node._children.length) {
+            for (let i = 0; i < node._children.length; i++) scanStyles(node._children[i]);
+          } else if (!node._children) {
+            for (let c = node.firstChild; c; c = c.nextSibling) scanStyles(c);
           }
         }
         if (styleScope.nodeType === 11) {
@@ -49710,12 +51431,17 @@
       const styleNodes = getStyleNodesForElement(element);
       const curDomEpoch = (typeof globalThis !== "undefined" && globalThis.__capsurf_domMutationEpoch) || 0;
       const curActiveEl = (element && element.ownerDocument ? element.ownerDocument.activeElement : (typeof document !== "undefined" ? document.activeElement : null)) || null;
-      const rawInlineSelf = (!normalizedPseudo && element && element.getAttribute) ? (element.getAttribute("style") || "") : "";
+      const curHoveredNid = (typeof globalThis !== "undefined" ? Number(globalThis.__capsurf_hovered_nid) : 0) | 0;
+      const isBeforeOrAfter = normalizedPseudo === "::before" || normalizedPseudo === "::after";
+      const cacheProp = !normalizedPseudo ? "_rawBaseCache" : (normalizedPseudo === "::before" ? "_rawBeforeCache" : (normalizedPseudo === "::after" ? "_rawAfterCache" : ""));
+      const elInlineSelf = (element && element.getAttribute) ? (element.getAttribute("style") || "") : "";
+      const rawInlineSelf = !normalizedPseudo ? elInlineSelf : "";
       const hasInlineImp = rawInlineSelf.toLowerCase().indexOf("!important") !== -1;
+      const canUseRawCache = !!cacheProp && (!hasInlineImp || isBeforeOrAfter) && styleNodes.length <= 16;
       let sheetKey = "";
       let computedMap = null;
       let hitBaseCache = false;
-      if (!normalizedPseudo && !hasInlineImp && styleNodes.length <= 16) {
+      if (canUseRawCache) {
         for (let si = 0; si < styleNodes.length; si++) {
           const sn = styleNodes[si];
           if (!sn) continue;
@@ -49726,8 +51452,8 @@
           }
           sheetKey += t.length + ":" + h.toString(36) + "|";
         }
-        const bCache = element._rawBaseCache;
-        if (bCache && bCache.domEpoch === curDomEpoch && bCache.sheetKey === sheetKey && bCache.activeEl === curActiveEl) {
+        const bCache = element[cacheProp];
+        if (bCache && bCache.domEpoch === curDomEpoch && bCache.sheetKey === sheetKey && bCache.activeEl === curActiveEl && bCache.hoveredNid === curHoveredNid && bCache.styleCount === styleNodes.length && (!isBeforeOrAfter || bCache.elInline === elInlineSelf)) {
           computedMap = new Map(bCache.baseMap);
           if (bCache.impKeys && bCache.impKeys.size > 0) computedMap._importantKeys = new Set(bCache.impKeys);
           if (rawInlineSelf) parseDeclarationsBlockInto(element, rawInlineSelf, computedMap);
@@ -49736,7 +51462,7 @@
       }
       if (!computedMap) {
         computedMap = new Map();
-        if (!normalizedPseudo && !hasInlineImp && styleNodes.length <= 16) {
+        if (canUseRawCache) {
           computedMap._skipInline = true;
         }
       }
@@ -49802,7 +51528,7 @@
       }
 
       // Own declarations (or pseudo-element declarations)
-      if (normalizedPseudo) {
+      if (!hitBaseCache && normalizedPseudo) {
         const elMap = new Map();
         collectElementOwnDeclarations(element, styleNodes, "", elMap);
         for (const [k, v] of elMap.entries()) {
@@ -49818,7 +51544,7 @@
         if (computedMap.has(vp)) preOwn.set(vp, computedMap.get(vp));
       }
       if (hitBaseCache) {
-        const bCache = element._rawBaseCache;
+        const bCache = element[cacheProp];
         if (bCache && bCache.ancestors) {
           for (let ai = 0; ai < bCache.ancestors.length; ai++) ancestors.push(bCache.ancestors[ai]);
         }
@@ -49890,11 +51616,11 @@
         }
       }
 
-      if (computedMap._skipInline) {
+      if (computedMap._skipInline && cacheProp) {
         delete computedMap._skipInline;
         const baseSnap = new Map(computedMap);
         const impSnap = computedMap._importantKeys ? new Set(computedMap._importantKeys) : null;
-        element._rawBaseCache = { domEpoch: curDomEpoch, sheetKey: sheetKey, activeEl: curActiveEl, baseMap: baseSnap, impKeys: impSnap, ancestors: ancestors };
+        element[cacheProp] = { domEpoch: curDomEpoch, sheetKey: sheetKey, activeEl: curActiveEl, hoveredNid: curHoveredNid, styleCount: styleNodes.length, elInline: elInlineSelf, baseMap: baseSnap, impKeys: impSnap, ancestors: ancestors };
         if (rawInlineSelf) {
           parseDeclarationsBlockInto(element, rawInlineSelf, computedMap);
           for (let vi = 0; vi < valCheckProps.length; vi++) {
@@ -50628,6 +52354,12 @@
       if (!computedMap.has("content-visibility")) {
         computedMap.set("content-visibility", "visible");
       }
+      if (!computedMap.has("visibility")) {
+        computedMap.set("visibility", "visible");
+      }
+      if (!computedMap.has("pointer-events")) {
+        computedMap.set("pointer-events", "auto");
+      }
       if (!computedMap.has("contain")) {
         computedMap.set("contain", "none");
       } else {
@@ -51196,7 +52928,7 @@
       // Check if an ancestor is replaced via CSS `content: url(...)` / gradient / image-set (CSS Content 3)
       let isInsideReplacedContent = false;
       {
-        const sheetHasContent = Array.isArray(collectRawComputedMap._sheetTexts) &&
+        const sheetHasContent = _isArray(collectRawComputedMap._sheetTexts) &&
           collectRawComputedMap._sheetTexts.some((t) => t.indexOf("content") !== -1);
         let anc = element.parentElement || element.parentNode;
         while (anc && anc.nodeType === 1) {
@@ -52724,6 +54456,8 @@
         } else if (ck === "outline-color" && (!cv || cvLow === "auto")) {
           const os = (computedMap.get("outline-style") || "none").trim().toLowerCase();
           computedMap.set(ck, os === "auto" ? "auto" : elColor);
+        } else if (ck === "outline-color" && cvLow === "invert") {
+          computedMap.set(ck, "invert");
         } else if (!cv || cvLow === "currentcolor") {
           computedMap.set(ck, elColor);
         } else {
@@ -52862,104 +54596,112 @@
       if (tuoRaw && tuoRaw.toLowerCase() !== "auto") {
         computedMap.set("text-underline-offset", evalLinLenPctTok(tuoRaw));
       }
-      const bisRaw = (computedMap.get("border-image-source") || "").trim();
-      if (bisRaw && /^(?:repeating-)?(?:linear|radial|conic)-gradient\(/i.test(bisRaw)) {
-        computedMap.set("border-image-source", evalGradientComputed(bisRaw).replace(/\bcurrentcolor\b/gi, elColor));
-      } else if (/^url\(\s*(['"]?)(.*?)\1\s*\)$/i.test(bisRaw)) {
-        const um = /^url\(\s*(['"]?)(.*?)\1\s*\)$/i.exec(bisRaw);
-        if (um && um[2]) {
-          try {
-            const base = (element && element.ownerDocument && element.ownerDocument.baseURI) || (typeof location !== "undefined" && location.href) || "";
-            if (base) computedMap.set("border-image-source", 'url("' + new URL(um[2], base).href + '")');
-          } catch (_) {}
-        }
-      }
-      const biwRaw = (computedMap.get("border-image-width") || "").trim();
-      if (biwRaw && biwRaw !== "1") {
-        const biwToks = [];
-        let bc = "", bd = 0;
-        for (let i = 0; i < biwRaw.length; i++) {
-          const ch = biwRaw[i];
-          if (ch === "(") bd++; else if (ch === ")" && bd > 0) bd--;
-          if (bd === 0 && /\s/.test(ch)) { if (bc) { biwToks.push(bc); bc = ""; } }
-          else bc += ch;
-        }
-        if (bc) biwToks.push(bc);
-        const biwOut = biwToks.map((t) => {
-          const tl = t.toLowerCase();
-          if (tl === "auto" || /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(tl)) return tl;
-          const ev = evalLinLenPctTok(t);
-          if (/^-[\d.]+px$/.test(ev)) return "0px";
-          return ev;
-        });
-        if (biwOut.length === 4 && biwOut[1] === biwOut[3]) biwOut.pop();
-        if (biwOut.length === 3 && biwOut[0] === biwOut[2]) biwOut.pop();
-        if (biwOut.length === 2 && biwOut[0] === biwOut[1]) biwOut.pop();
-        computedMap.set("border-image-width", biwOut.join(" "));
-      }
-      const bioRaw = (computedMap.get("border-image-outset") || "").trim();
-      if (bioRaw && bioRaw !== "0") {
-        const bioToks = [];
-        let bc = "", bd = 0;
-        for (let i = 0; i < bioRaw.length; i++) {
-          const ch = bioRaw[i];
-          if (ch === "(") bd++; else if (ch === ")" && bd > 0) bd--;
-          if (bd === 0 && /\s/.test(ch)) { if (bc) { bioToks.push(bc); bc = ""; } }
-          else bc += ch;
-        }
-        if (bc) bioToks.push(bc);
-        const bioOut = bioToks.map((t) => {
-          let tc = t.replace(/;+$/, "");
-          let op = 0;
-          for (let k = 0; k < tc.length; k++) { if (tc[k] === "(") op++; else if (tc[k] === ")" && op > 0) op--; }
-          while (op > 0) { tc += ")"; op--; }
-          const tl = tc.toLowerCase();
-          if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(tl)) return tl;
-          if (/^(?:calc|min|max|clamp)\(/i.test(tl)) {
-            const stripped = tl.replace(/\bsign\([^()]+\)/gi, "1");
-            if (!/(?:\d|\.)(?:px|em|rem|pt|pc|in|cm|mm|q|vw|vh|ch|lh|%)\b/i.test(stripped)) {
-              const v = evalCssLengthExpr(tc, 0, fontSize);
-              if (v !== null && isFinite(v)) return String(Number(Math.max(0, v).toFixed(6)));
-            }
+      for (const bisKey of ["border-image-source", "mask-border-source"]) {
+        const bisRaw = (computedMap.get(bisKey) || "").trim();
+        if (bisRaw && /^(?:repeating-)?(?:linear|radial|conic)-gradient\(/i.test(bisRaw)) {
+          computedMap.set(bisKey, evalGradientComputed(bisRaw).replace(/\bcurrentcolor\b/gi, elColor));
+        } else if (/^url\(\s*(['"]?)(.*?)\1\s*\)$/i.test(bisRaw)) {
+          const um = /^url\(\s*(['"]?)(.*?)\1\s*\)$/i.exec(bisRaw);
+          if (um && um[2]) {
+            try {
+              const base = (element && element.ownerDocument && element.ownerDocument.baseURI) || (typeof location !== "undefined" && location.href) || "";
+              if (base) computedMap.set(bisKey, 'url("' + new URL(um[2], base).href + '")');
+            } catch (_) {}
           }
-          const ev = evalLinLenPctTok(tc.replace(/\bsign\(([^()]+)\)/gi, (m, inn) => {
-            const sv = evalCssLengthExpr(inn, 0, fontSize);
-            return sv !== null ? String(Math.sign(sv)) : m;
-          }));
-          if (/^-[\d.]+px$/.test(ev)) return "0px";
-          return ev;
-        });
-        if (bioOut.length === 4 && bioOut[1] === bioOut[3]) bioOut.pop();
-        if (bioOut.length === 3 && bioOut[0] === bioOut[2]) bioOut.pop();
-        if (bioOut.length === 2 && bioOut[0] === bioOut[1]) bioOut.pop();
-        computedMap.set("border-image-outset", bioOut.join(" "));
-      }
-      const bisSliceRaw = (computedMap.get("border-image-slice") || "").trim();
-      if (bisSliceRaw && bisSliceRaw !== "100%") {
-        const slToks = [];
-        let sc = "", sd = 0;
-        for (let i = 0; i < bisSliceRaw.length; i++) {
-          const ch = bisSliceRaw[i];
-          if (ch === "(") sd++; else if (ch === ")" && sd > 0) sd--;
-          if (sd === 0 && /\s/.test(ch)) { if (sc) { slToks.push(sc); sc = ""; } }
-          else sc += ch;
         }
-        if (sc) slToks.push(sc);
-        const slOut = slToks.map((t) => {
-          const tl = t.toLowerCase();
-          if (tl === "fill" || /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)%?$/.test(tl)) return tl;
-          if (/^(?:calc|min|max|clamp)\(/i.test(tl)) {
-            const pre = tl.replace(/\bsign\(([^()]+)\)/gi, (m, inn) => {
+      }
+      for (const biwKey of ["border-image-width", "mask-border-width"]) {
+        const biwRaw = (computedMap.get(biwKey) || "").trim();
+        if (biwRaw && biwRaw !== "1" && biwRaw !== "0") {
+          const biwToks = [];
+          let bc = "", bd = 0;
+          for (let i = 0; i < biwRaw.length; i++) {
+            const ch = biwRaw[i];
+            if (ch === "(") bd++; else if (ch === ")" && bd > 0) bd--;
+            if (bd === 0 && /\s/.test(ch)) { if (bc) { biwToks.push(bc); bc = ""; } }
+            else bc += ch;
+          }
+          if (bc) biwToks.push(bc);
+          const biwOut = biwToks.map((t) => {
+            const tl = t.toLowerCase();
+            if (tl === "auto" || /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(tl)) return tl;
+            const ev = evalLinLenPctTok(t);
+            if (/^-[\d.]+px$/.test(ev)) return "0px";
+            return ev;
+          });
+          if (biwOut.length === 4 && biwOut[1] === biwOut[3]) biwOut.pop();
+          if (biwOut.length === 3 && biwOut[0] === biwOut[2]) biwOut.pop();
+          if (biwOut.length === 2 && biwOut[0] === biwOut[1]) biwOut.pop();
+          computedMap.set(biwKey, biwOut.join(" "));
+        }
+      }
+      for (const bioKey of ["border-image-outset", "mask-border-outset"]) {
+        const bioRaw = (computedMap.get(bioKey) || "").trim();
+        if (bioRaw && bioRaw !== "0") {
+          const bioToks = [];
+          let bc = "", bd = 0;
+          for (let i = 0; i < bioRaw.length; i++) {
+            const ch = bioRaw[i];
+            if (ch === "(") bd++; else if (ch === ")" && bd > 0) bd--;
+            if (bd === 0 && /\s/.test(ch)) { if (bc) { bioToks.push(bc); bc = ""; } }
+            else bc += ch;
+          }
+          if (bc) bioToks.push(bc);
+          const bioOut = bioToks.map((t) => {
+            let tc = t.replace(/;+$/, "");
+            let op = 0;
+            for (let k = 0; k < tc.length; k++) { if (tc[k] === "(") op++; else if (tc[k] === ")" && op > 0) op--; }
+            while (op > 0) { tc += ")"; op--; }
+            const tl = tc.toLowerCase();
+            if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(tl)) return tl;
+            if (/^(?:calc|min|max|clamp)\(/i.test(tl)) {
+              const stripped = tl.replace(/\bsign\([^()]+\)/gi, "1");
+              if (!/(?:\d|\.)(?:px|em|rem|pt|pc|in|cm|mm|q|vw|vh|ch|lh|%)\b/i.test(stripped)) {
+                const v = evalCssLengthExpr(tc, 0, fontSize);
+                if (v !== null && isFinite(v)) return String(Number(Math.max(0, v).toFixed(6)));
+              }
+            }
+            const ev = evalLinLenPctTok(tc.replace(/\bsign\(([^()]+)\)/gi, (m, inn) => {
               const sv = evalCssLengthExpr(inn, 0, fontSize);
               return sv !== null ? String(Math.sign(sv)) : m;
-            });
-            if (pre.indexOf("%") !== -1) return evalLinLenPctTok(pre);
-            const v = evalCssLengthExpr(pre, 0, fontSize);
-            if (v !== null && isFinite(v)) return String(Number(Math.max(0, v).toFixed(6)));
+            }));
+            if (/^-[\d.]+px$/.test(ev)) return "0px";
+            return ev;
+          });
+          if (bioOut.length === 4 && bioOut[1] === bioOut[3]) bioOut.pop();
+          if (bioOut.length === 3 && bioOut[0] === bioOut[2]) bioOut.pop();
+          if (bioOut.length === 2 && bioOut[0] === bioOut[1]) bioOut.pop();
+          computedMap.set(bioKey, bioOut.join(" "));
+        }
+      }
+      for (const bisSliceKey of ["border-image-slice", "mask-border-slice"]) {
+        const bisSliceRaw = (computedMap.get(bisSliceKey) || "").trim();
+        if (bisSliceRaw && bisSliceRaw !== "100%" && bisSliceRaw !== "0") {
+          const slToks = [];
+          let sc = "", sd = 0;
+          for (let i = 0; i < bisSliceRaw.length; i++) {
+            const ch = bisSliceRaw[i];
+            if (ch === "(") sd++; else if (ch === ")" && sd > 0) sd--;
+            if (sd === 0 && /\s/.test(ch)) { if (sc) { slToks.push(sc); sc = ""; } }
+            else sc += ch;
           }
-          return tl;
-        });
-        computedMap.set("border-image-slice", slOut.join(" "));
+          if (sc) slToks.push(sc);
+          const slOut = slToks.map((t) => {
+            const tl = t.toLowerCase();
+            if (tl === "fill" || /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)%?$/.test(tl)) return tl;
+            if (/^(?:calc|min|max|clamp)\(/i.test(tl)) {
+              const pre = tl.replace(/\bsign\(([^()]+)\)/gi, (m, inn) => {
+                const sv = evalCssLengthExpr(inn, 0, fontSize);
+                return sv !== null ? String(Math.sign(sv)) : m;
+              });
+              if (pre.indexOf("%") !== -1) return evalLinLenPctTok(pre);
+              const v = evalCssLengthExpr(pre, 0, fontSize);
+              if (v !== null && isFinite(v)) return String(Number(Math.max(0, v).toFixed(6)));
+            }
+            return tl;
+          });
+          computedMap.set(bisSliceKey, slOut.join(" "));
+        }
       }
       const textDecorDefs = [
         ["text-decoration-line", "none"],
@@ -53816,7 +55558,7 @@
             if (tl === "center") return "50%";
             if (tl === "right" || tl === "bottom") return "100%";
             if (tl === "x-start" || tl === "x-end" || tl === "y-start" || tl === "y-end") {
-              return (bpKey === "background-position" || bpLayers.length > 1) ? ((tl === "x-start" || tl === "y-start") ? "0%" : "100%") : tl;
+              return (bpKey === "background-position" || bpKey === "mask-position" || bpLayers.length > 1) ? ((tl === "x-start" || tl === "y-start") ? "0%" : "100%") : tl;
             }
             return evalLinLenPctTok(t);
           };
@@ -53829,7 +55571,7 @@
             }
             return off;
           };
-          if (bpKey === "background-position") {
+          if (bpKey === "background-position" || bpKey === "mask-position") {
             if (toks.length === 1) {
               const tl = toks[0].toLowerCase();
               if (tl === "left") return "0% 50%";
@@ -53945,7 +55687,7 @@
       resolveContentGradients();
       for (const sk of ["shape-outside", "clip-path"]) {
         const sv = (computedMap.get(sk) || "").trim();
-        if (!sv || sv === "initial" || sv === "revert" || sv === "revert-layer") {
+        if (!sv || sv === "initial" || sv === "unset" || sv === "revert" || sv === "revert-layer") {
           computedMap.set(sk, "none");
           continue;
         }
@@ -54462,7 +56204,7 @@
       "column-rule-color", "column-rule-style", "column-rule-width", "column-span", "column-width", "column-height", "column-wrap", "contain",
       "contain-intrinsic-block-size", "contain-intrinsic-height", "contain-intrinsic-inline-size", "contain-intrinsic-width",
       "content", "content-visibility", "continue", "container-name", "container-type", "counter-increment", "counter-reset", "counter-set", "cursor", "direction", "display", "initial-letter", "margin-trim",
-      "clip-rule", "mask-border-outset", "mask-border-repeat", "mask-border-slice", "mask-border-source", "mask-border-width",
+      "clip-rule", "mask-border-mode", "mask-border-outset", "mask-border-repeat", "mask-border-slice", "mask-border-source", "mask-border-width",
       "mask-clip", "mask-composite", "mask-image", "mask-mode", "mask-origin", "mask-position", "mask-repeat", "mask-size", "mask-type",
       "empty-cells", "field-sizing", "filter", "flex-basis", "flex-direction", "flex-grow", "flex-shrink",
       "flex-wrap", "float", "font-family", "font-feature-settings", "font-kerning", "font-language-override", "font-optical-sizing", "font-palette", "font-size", "font-size-adjust", "font-synthesis", "font-synthesis-position", "font-synthesis-small-caps", "font-synthesis-style", "font-synthesis-weight",
@@ -54523,6 +56265,7 @@
       let lastStyleAttr = (element && typeof element.getAttribute === "function") ? (element.getAttribute("style") || "") : "";
       let lastActiveEl = liveDoc ? liveDoc.activeElement : null;
       let lastDomEpoch = (typeof globalThis !== "undefined" && globalThis.__capsurf_domMutationEpoch) || 0;
+      let lastHoveredNid = (typeof globalThis !== "undefined" ? Number(globalThis.__capsurf_hovered_nid) : 0) | 0;
       let computedMap = collectRawComputedMap(element, normalizedPseudo);
       applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo);
       let _cachedPropList = null;
@@ -54530,10 +56273,12 @@
         const curStyleAttr = (element && typeof element.getAttribute === "function") ? (element.getAttribute("style") || "") : "";
         const curActiveEl = liveDoc ? liveDoc.activeElement : null;
         const curDomEpoch = (typeof globalThis !== "undefined" && globalThis.__capsurf_domMutationEpoch) || 0;
-        if (curStyleAttr !== lastStyleAttr || curActiveEl !== lastActiveEl || curDomEpoch !== lastDomEpoch) {
+        const curHoveredNid = (typeof globalThis !== "undefined" ? Number(globalThis.__capsurf_hovered_nid) : 0) | 0;
+        if (curStyleAttr !== lastStyleAttr || curActiveEl !== lastActiveEl || curDomEpoch !== lastDomEpoch || curHoveredNid !== lastHoveredNid) {
           lastStyleAttr = curStyleAttr;
           lastActiveEl = curActiveEl;
           lastDomEpoch = curDomEpoch;
+          lastHoveredNid = curHoveredNid;
           _cachedPropList = null;
           computedMap = collectRawComputedMap(element, normalizedPseudo);
           applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo);
@@ -54709,7 +56454,9 @@
           const e = computedMap.get(base + "-end-" + kind) || def;
           return s === e ? s : (s + " " + e);
         }
-        if (name === "border-block-start" || name === "border-block-end" ||
+        if (name === "border-top" || name === "border-right" ||
+            name === "border-bottom" || name === "border-left" ||
+            name === "border-block-start" || name === "border-block-end" ||
             name === "border-inline-start" || name === "border-inline-end") {
           const w = computedMap.get(name + "-width") || "0px";
           const st = computedMap.get(name + "-style") || "none";
@@ -54937,6 +56684,7 @@
         }
         if (lower === "contain") return "none";
         if (lower === "content-visibility") return "visible";
+        if (lower === "visibility") return "visible";
         if (lower.startsWith("contain-intrinsic-")) {
           if (lower === "contain-intrinsic-size") return getShorthandComputed("contain-intrinsic-size") || "none";
           return "none";
@@ -55055,6 +56803,7 @@
             }
             const lower = prop.toLowerCase();
             if (computedMap.has(lower)) return computedMap.get(lower);
+            if (kebab === "visibility") return "visible";
             if (kebab === "text-combine-upright") return "none";
             if (kebab === "text-orientation") return "mixed";
             if (kebab === "perspective-origin" || kebab === "transform-origin") return getDefaultOriginComputed();
@@ -58343,7 +60092,13 @@
     global.__capsurf_drain_bindings = function () {
       const q = global.__capsurf_binding_queue || [];
       global.__capsurf_binding_queue = [];
-      return JSON.stringify(q);
+      if (!q.length) return "[]";
+      const parts = [];
+      for (let i = 0; i < q.length; i++) {
+        const item = q[i];
+        parts.push(JSON.stringify({ name: item.name, payload: item.payload }));
+      }
+      return "[" + parts.join(",") + "]";
     };
     if (typeof globalThis !== "undefined") {
       globalThis.__capsurf_binding_queue = global.__capsurf_binding_queue;
@@ -58354,6 +60109,11 @@
     // 13. HTML5 Lifecycle Events Dispatcher (DOMContentLoaded on document, load on window)
     let deferredLifecyclePending = false;
     function dispatchLifecycleNow() {
+      try {
+        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_initCssTransitionSnapshots === "function") {
+          globalThis.__capsurf_initCssTransitionSnapshots();
+        }
+      } catch (e) {}
       try {
         if (global.document && global.document.querySelectorAll) {
           const scripts = global.document.querySelectorAll("script");
@@ -58420,7 +60180,7 @@
       } catch (e) {}
       try {
         if (global.document && global.document.querySelectorAll && typeof global.__capsurf_on_iframe_connected === "function") {
-          const iframes = global.document.querySelectorAll("iframe");
+          const iframes = global.document.querySelectorAll("iframe, frame");
           for (let i = 0; i < iframes.length; i++) {
             const f = iframes[i];
             const loadingAttr = f.getAttribute ? String(f.getAttribute("loading") || "").toLowerCase() : "";
@@ -58432,20 +60192,6 @@
             } else if (!f._contentWindow && !f._navSeq) {
               global.__capsurf_on_iframe_connected(f);
             }
-          }
-        }
-      } catch (e) {}
-      try {
-        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_initCssTransitionSnapshots === "function") {
-          const nativeST = (typeof global.__capsurf_native_setTimeout === "function")
-            ? global.__capsurf_native_setTimeout
-            : (typeof setTimeout === "function" ? setTimeout : null);
-          if (nativeST) {
-            nativeST(function () {
-              try { globalThis.__capsurf_initCssTransitionSnapshots(); } catch (e) {}
-            }, 0);
-          } else {
-            globalThis.__capsurf_initCssTransitionSnapshots();
           }
         }
       } catch (e) {}
@@ -58535,8 +60281,8 @@
       const de = (typeof document !== "undefined" && document.documentElement) ? document.documentElement : null;
       const vw = Number(global.innerWidth || (typeof window !== "undefined" ? window.innerWidth : 0) || 1280);
       const vh = Number(global.innerHeight || (typeof window !== "undefined" ? window.innerHeight : 0) || 720);
-      const maxScrollX = de ? Math.max(0, (de.scrollWidth || vw) - vw) : Math.max(0, targetX);
-      const maxScrollY = de ? Math.max(0, (de.scrollHeight || vh) - vh) : Math.max(0, targetY);
+      const maxScrollX = (targetX > 0 && de) ? Math.max(0, (de.scrollWidth || vw) - vw) : Math.max(0, targetX);
+      const maxScrollY = (targetY > 0 && de) ? Math.max(0, (de.scrollHeight || vh) - vh) : Math.max(0, targetY);
       targetX = Math.max(0, Math.min(targetX, maxScrollX));
       targetY = Math.max(0, Math.min(targetY, maxScrollY));
       const prevX = (typeof global.scrollX !== "undefined") ? global.scrollX : 0;
@@ -59180,10 +60926,105 @@
       XMLHttpRequest.prototype.send = function (body) {
         const self = this;
         this._emit("loadstart");
+        if (this._aborted) return;
+        if (this._async === false) {
+          const syncXhrFn =
+            (typeof global.__capsurf_sync_xhr === "function" ? global.__capsurf_sync_xhr : null) ||
+            (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_sync_xhr === "function" ? globalThis.__capsurf_sync_xhr : null);
+          if (syncXhrFn) {
+            let serializedBody = "";
+            if (body !== undefined && body !== null && this._method !== "GET" && this._method !== "HEAD") {
+              if (typeof ArrayBuffer !== "undefined" && ArrayBuffer.isView(body)) {
+                serializedBody = new Uint8Array(body.buffer, body.byteOffset, body.byteLength);
+              } else if (typeof ArrayBuffer !== "undefined" && body instanceof ArrayBuffer) {
+                serializedBody = new Uint8Array(body);
+              } else {
+                serializedBody = String(body);
+              }
+            }
+            const reqContentType = this._reqHeaders && this._reqHeaders["content-type"] ? String(this._reqHeaders["content-type"]) : "";
+            let reqHeadersJson = "{}";
+            try { reqHeadersJson = JSON.stringify(this._reqHeaders || {}); } catch (e) {}
+            const rawRes = syncXhrFn(this._url, this._method, serializedBody, reqContentType, reqHeadersJson);
+            if (this._aborted) return;
+            let parsed = null;
+            if (rawRes !== null && rawRes !== undefined) {
+              try { parsed = JSON.parse(String(rawRes)); } catch (e) {}
+            }
+            if (!parsed || typeof parsed !== "object") {
+              this.status = 0;
+              this.statusText = "";
+              this.readyState = 4;
+              this._emit("readystatechange");
+              this._emit("error");
+              this._emit("loadend");
+              return;
+            }
+            this.status = Number(parsed.status || 0);
+            this.statusText = String(parsed.statusText || "");
+            this.responseURL = String(parsed.url || this._url);
+            this._respHeaders = {};
+            try {
+              const hdrObj = typeof parsed.headersJson === "string"
+                ? JSON.parse(parsed.headersJson || "{}")
+                : (parsed.headersJson || {});
+              if (hdrObj && typeof hdrObj === "object") {
+                const hkeys = Object.keys(hdrObj);
+                for (let hi = 0; hi < hkeys.length; hi++) {
+                  this._respHeaders[String(hkeys[hi]).toLowerCase()] = String(hdrObj[hkeys[hi]]);
+                }
+              }
+            } catch (e) {}
+            this.readyState = 2;
+            this._emit("readystatechange");
+            if (this._aborted) return;
+            let bodyBytes = new Uint8Array(0);
+            if (parsed.bodyBase64) {
+              try {
+                const bin = atob(String(parsed.bodyBase64));
+                bodyBytes = new Uint8Array(bin.length);
+                for (let bi = 0; bi < bin.length; bi++) {
+                  bodyBytes[bi] = bin.charCodeAt(bi) & 0xff;
+                }
+              } catch (e) {}
+            }
+            let bodyText = "";
+            if (bodyBytes.length > 0) {
+              try {
+                bodyText = typeof TextDecoder === "function"
+                  ? new TextDecoder().decode(bodyBytes)
+                  : String.fromCharCode.apply(null, bodyBytes);
+              } catch (e) {
+                let s = "";
+                for (let si = 0; si < bodyBytes.length; si++) s += String.fromCharCode(bodyBytes[si]);
+                bodyText = s;
+              }
+            }
+            this.readyState = 3;
+            this._emit("readystatechange");
+            if (this._aborted) return;
+            if (this.responseType === "arraybuffer") {
+              this._responseText = "";
+              this.response = bodyBytes.buffer;
+            } else if (this.responseType === "json") {
+              this._responseText = bodyText;
+              try { this.response = JSON.parse(bodyText); } catch (e) { this.response = null; }
+            } else {
+              this._responseText = bodyText;
+              this.response = bodyText;
+            }
+            this.readyState = 4;
+            this._emit("readystatechange");
+            this._emit("load");
+            this._emit("loadend");
+            return;
+          }
+        }
         const init = {
           method: this._method,
           headers: this._reqHeaders,
           credentials: this.withCredentials ? "include" : "same-origin",
+          _resourceType: "xhr",
         };
         if (body !== undefined && body !== null && this._method !== "GET" && this._method !== "HEAD") {
           init.body = body;
@@ -59597,7 +61438,7 @@
         if (child && this && (this === global.document || this === global.document?.body || this.isConnected)) {
           stampNamedGlobals(child);
           const tag = String(child.localName || child.tagName || "").toLowerCase();
-          if (tag === "iframe") {
+          if (tag === "iframe" || tag === "frame") {
             try {
               if (typeof child.contentWindow !== "undefined") {
                 const _ = child.contentWindow;
@@ -60152,8 +61993,25 @@
 
     function applyContentEditableInsertText(doc, host, sel, range, text) {
       if (!range) {
+        let firstText = null;
+        (function findText(n) {
+          if (!n || firstText) return;
+          if (n.nodeType === 3) { firstText = n; return; }
+          const cs = n.childNodes || [];
+          for (let i = 0; i < cs.length; i++) findText(cs[i]);
+        })(host);
+        if (firstText) {
+          const curText = String(firstText.data !== undefined ? firstText.data : (firstText.textContent || ""));
+          const nextText = text + curText;
+          if (typeof firstText.data === "string") firstText.data = nextText;
+          else firstText.textContent = nextText;
+          if (sel && typeof sel.collapse === "function") {
+            try { sel.collapse(firstText, text.length); } catch (e) {}
+          }
+          return;
+        }
         const tn = doc.createTextNode(text);
-        host.insertBefore(tn, host.firstChild || null);
+        host.appendChild(tn);
         if (sel && typeof sel.collapse === "function") {
           try { sel.collapse(tn, text.length); } catch (e) {}
         }
@@ -60381,6 +62239,17 @@
         }
 
         if (!defaultPrevented) {
+          if (keyStr === "Escape" && doc && typeof doc.querySelectorAll === "function") {
+            const dialogs = doc.querySelectorAll("dialog[open]");
+            for (let di = dialogs.length - 1; di >= 0; di--) {
+              const dlg = dialogs[di];
+              if (dlg && dlg._isModalDialog) {
+                if (typeof dlg.requestClose === "function") dlg.requestClose();
+                else if (typeof dlg.close === "function") dlg.close();
+                break;
+              }
+            }
+          }
           if (!isTargetContentEditable(target) && (keyStr === "Backspace" || keyStr === "Delete")) {
             const tTag = String(target.tagName || target.localName || "").toLowerCase();
             if (tTag === "textarea" || tTag === "input") {
@@ -60677,8 +62546,24 @@
     if (typeof window !== "undefined") window.postMessage = windowPostMessage;
     if (typeof globalThis !== "undefined") globalThis.postMessage = windowPostMessage;
 
-    function evalInIframe(expr) {
-      const iframeEl = document.querySelector("iframe");
+    function evalInIframe(expr, iframeIdx) {
+      function collectEvalFrames(doc, out) {
+        if (!doc || typeof doc.querySelectorAll !== "function") return;
+        const list = doc.querySelectorAll("iframe, frame");
+        for (let i = 0; i < list.length; i++) {
+          const f = list[i];
+          out.push(f);
+          try {
+            const cd = f.contentDocument;
+            if (cd) collectEvalFrames(cd, out);
+          } catch (e) {}
+        }
+      }
+      const evalFrames = [];
+      collectEvalFrames(document, evalFrames);
+      const iframeEl = (typeof iframeIdx === "number" && iframeIdx >= 0)
+        ? (evalFrames[iframeIdx] || evalFrames[0] || document.querySelector("iframe, frame"))
+        : (evalFrames[0] || document.querySelector("iframe, frame"));
       const win = (iframeEl && iframeEl.contentWindow) || (typeof window !== "undefined" ? window : global);
       const args = [
         win,
@@ -60713,14 +62598,21 @@
         fn = compileIframeFn("return (" + expr + ");");
       } catch (e) {
         const trimmed = String(expr || "").replace(/[\s;]+$/, "");
-        const semi = trimmed.lastIndexOf(";");
-        if (semi !== -1) {
-          const prefix = trimmed.slice(0, semi + 1);
-          const last = trimmed.slice(semi + 1).trim();
-          if (last) {
-            try {
-              fn = compileIframeFn(prefix + "\nreturn (" + last + ");");
-            } catch (e2) {}
+        if (trimmed) {
+          try {
+            fn = compileIframeFn("return (" + trimmed + ");");
+          } catch (e1) {}
+        }
+        if (!fn) {
+          const semi = trimmed.lastIndexOf(";");
+          if (semi !== -1) {
+            const prefix = trimmed.slice(0, semi + 1);
+            const last = trimmed.slice(semi + 1).trim();
+            if (last) {
+              try {
+                fn = compileIframeFn(prefix + "\nreturn (" + last + ");");
+              } catch (e2) {}
+            }
           }
         }
         if (!fn) {
@@ -60771,7 +62663,38 @@
       }
       return null;
     }
+    let _pseudoEpoch = -1;
+    let _pseudoHasRules = false;
+    function _hasPseudoElementRules() {
+      const ep = (typeof globalThis !== "undefined" ? globalThis.__capsurf_domMutationEpoch : 0) || 0;
+      if (_pseudoEpoch === ep) return _pseudoHasRules;
+      _pseudoEpoch = ep;
+      _pseudoHasRules = false;
+      try {
+        const d = typeof document !== "undefined" ? document : null;
+        if (d && typeof d.querySelectorAll === "function") {
+          const stEls = d.querySelectorAll("style");
+          for (let i = 0; i < stEls.length; i++) {
+            const txt = String(stEls[i].textContent || "");
+            if (txt.indexOf(":before") !== -1 || txt.indexOf(":after") !== -1) { _pseudoHasRules = true; return true; }
+          }
+        }
+        const sheets = (d && d.styleSheets) || [];
+        for (let si = 0; si < sheets.length; si++) {
+          const sh = sheets[si];
+          if (!sh) continue;
+          if (typeof sh._cssText === "string" && (sh._cssText.indexOf(":before") !== -1 || sh._cssText.indexOf(":after") !== -1)) { _pseudoHasRules = true; return true; }
+          const rules = sh.cssRules || [];
+          for (let ri = 0; ri < rules.length; ri++) {
+            const sel = String((rules[ri] && rules[ri].selectorText) || "");
+            if (sel.indexOf(":before") !== -1 || sel.indexOf(":after") !== -1) { _pseudoHasRules = true; return true; }
+          }
+        }
+      } catch (_) { _pseudoHasRules = true; }
+      return _pseudoHasRules;
+    }
     function _resolvePseudoHit(hit, x, y) {
+      if (!_hasPseudoElementRules()) return hit;
       if (hit && hit.querySelectorAll && typeof window !== "undefined" && typeof window.getComputedStyle === "function") {
         try {
           const desc = hit.querySelectorAll("*");
@@ -60809,31 +62732,85 @@
       const _origEfp = Document.prototype.elementFromPoint;
       Document.prototype._capsurfPseudoWrapped = true;
       Document.prototype.elementFromPoint = markNative(function (x, y) {
-        return _resolvePseudoHit(_origEfp.call(this, x, y), x, y);
+        let hit = _origEfp.call(this, x, y);
+        if (!hit || hit === this.documentElement || hit === this.body) {
+          if (this.body && this.body._shadowRoot && typeof this.body.getBoundingClientRect === "function") {
+            const br = this.body.getBoundingClientRect();
+            if (br && x >= br.left && x <= br.right && y >= br.top && y <= br.bottom) hit = this.body;
+          }
+          const scope = hit || this.body || this.documentElement;
+          if (scope && typeof scope.querySelectorAll === "function") {
+            const hosts = scope.querySelectorAll("*");
+            for (let hi = hosts.length - 1; hi >= 0; hi--) {
+              const h = hosts[hi];
+              if (h && h._shadowRoot && typeof h.getBoundingClientRect === "function") {
+                const hr = h.getBoundingClientRect();
+                if (hr && hr.width > 0 && hr.height > 0 && x >= hr.left && x <= hr.right && y >= hr.top && y <= hr.bottom) {
+                  hit = h;
+                  break;
+                }
+              }
+            }
+          }
+        }
+        return _resolvePseudoHit(hit, x, y);
       }, "elementFromPoint");
       if (global.document && typeof global.document.elementFromPoint === "function") {
         global.document.elementFromPoint = Document.prototype.elementFromPoint.bind(global.document);
       }
     }
-    function _hitTestElement(x, y) {
-      const doc = (typeof document !== "undefined" ? document : null) || global.document;
+    function _hitTestElement(x, y, targetDoc, depth) {
+      if ((depth || 0) > 16) return null;
+      const doc = targetDoc || (typeof document !== "undefined" ? document : null) || global.document;
       if (!doc) return null;
+      let hit = null;
       if (typeof doc.elementFromPoint === "function") {
         try {
-          const hit = doc.elementFromPoint(x, y);
-          if (hit) return _resolvePseudoHit(hit, x, y);
+          const efpHit = doc.elementFromPoint(x, y);
+          if (efpHit) hit = _resolvePseudoHit(efpHit, x, y);
         } catch (e) {}
       }
-      const all = doc.querySelectorAll ? doc.querySelectorAll("*") : [];
-      for (let i = all.length - 1; i >= 0; i--) {
-        const item = all[i];
-        if (!item || typeof item.getBoundingClientRect !== "function") continue;
-        const r = item.getBoundingClientRect();
-        if (r && r.width > 0 && r.height > 0 && x >= r.left && x <= r.left + r.width && y >= r.top && y <= r.top + r.height) {
-          return item;
+      if (!hit) {
+        const all = doc.querySelectorAll ? doc.querySelectorAll("*") : [];
+        for (let i = all.length - 1; i >= 0; i--) {
+          const item = all[i];
+          if (!item || typeof item.getBoundingClientRect !== "function") continue;
+          const r = item.getBoundingClientRect();
+          if (r && r.width > 0 && r.height > 0 && x >= r.left && x <= r.left + r.width && y >= r.top && y <= r.top + r.height) {
+            hit = item;
+            break;
+          }
         }
       }
-      return doc.body || doc.documentElement || null;
+      if (!hit) hit = doc.body || doc.documentElement || null;
+      if (hit && hit.nodeType === 1) {
+        const tag = String(hit.localName || hit.tagName || "").toLowerCase();
+        if (tag === "iframe" || tag === "frame") {
+          let contentDoc = null;
+          try {
+            contentDoc = hit.contentDocument || (hit.contentWindow && hit.contentWindow.document) || null;
+          } catch (e) {}
+          if (contentDoc && typeof hit.getBoundingClientRect === "function") {
+            const rect = hit.getBoundingClientRect();
+            if (rect) {
+              let offsetX = rect.left || 0;
+              let offsetY = rect.top || 0;
+              if (typeof window !== "undefined" && typeof window.getComputedStyle === "function") {
+                try {
+                  const cs = window.getComputedStyle(hit);
+                  if (cs) {
+                    offsetX += (parseFloat(cs.borderLeftWidth) || 0) + (parseFloat(cs.paddingLeft) || 0);
+                    offsetY += (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.paddingTop) || 0);
+                  }
+                } catch (e) {}
+              }
+              const innerHit = _hitTestElement(x - offsetX, y - offsetY, contentDoc, (depth || 0) + 1);
+              if (innerHit) return innerHit;
+            }
+          }
+        }
+      }
+      return hit;
     }
     function _dispatchTrusted(target, ev) {
       if (typeof global.__capsurf_dispatchTrustedEvent === "function") {
@@ -60855,6 +62832,7 @@
       return list;
     }
     function _dispatchPointerAndMouseBoundary(target, x, y, dx, dy, btnNum, effectiveButtons) {
+      if (typeof globalThis !== "undefined") globalThis.__capsurf_hovered_nid = (target && target._nid) ? target._nid : 0;
       const prev = _lastHoveredElement;
       if (prev === target) return;
       _lastHoveredElement = target;
@@ -61000,6 +62978,8 @@
             if (form && typeof submitForm === "function") {
               submitForm(form, ctrl);
             }
+          } else if (iType === "file") {
+            if (typeof globalThis.__capsurf_notifyFileChooser === "function") globalThis.__capsurf_notifyFileChooser(ctrl);
           }
         } else if (ctrlTag === "button") {
           const bType = String(ctrl.getAttribute ? (ctrl.getAttribute("type") || "submit") : "submit").toLowerCase();
@@ -61037,7 +63017,16 @@
               const loc = (typeof location !== "undefined") ? location : global.location;
               if (loc && href) {
                 if (href.startsWith("#")) loc.hash = href;
-                else loc.href = cur.href || href;
+                else {
+                  if (cur.hasAttribute && cur.hasAttribute("download")) {
+                    const dlVal = cur.getAttribute("download") || "__1__";
+                    global.__capsurf_pending_download = dlVal;
+                    if (typeof globalThis !== "undefined") {
+                      globalThis.__capsurf_pending_download = dlVal;
+                    }
+                  }
+                  loc.href = cur.href || href;
+                }
               }
             }
             break;
@@ -61364,6 +63353,163 @@
     if (typeof window !== "undefined") window.__capsurf_dispatch_wheel_event = dispatchWheelEvent;
     if (typeof globalThis !== "undefined") globalThis.__capsurf_dispatch_wheel_event = dispatchWheelEvent;
 
+    const _activeTouches = new Map();
+    function dispatchTouchEvent(cdpType, touchPoints, modifiers) {
+      let domType = "";
+      if (cdpType === "touchStart") domType = "touchstart";
+      else if (cdpType === "touchMove") domType = "touchmove";
+      else if (cdpType === "touchEnd") domType = "touchend";
+      else if (cdpType === "touchCancel") domType = "touchcancel";
+      else return { handled: false };
+
+      const doc = (typeof document !== "undefined" ? document : null) || global.document;
+      const fallbackTarget = (doc && (doc.body || doc.documentElement)) || global;
+      const pts = Array.isArray(touchPoints) ? touchPoints : [];
+      const mods = Number(modifiers) || 0;
+      const sx = global.scrollX || 0;
+      const sy = global.scrollY || 0;
+      const TouchCtor = _ne.Touch || (typeof Touch !== "undefined" ? Touch : null) || global.Touch || (typeof globalThis !== "undefined" ? globalThis.Touch : null);
+      const TouchEvCtor = _ne.TouchEvent || (typeof TouchEvent !== "undefined" ? TouchEvent : null) || global.TouchEvent || (typeof globalThis !== "undefined" ? globalThis.TouchEvent : null) || _NativeEventCtor;
+
+      const makeTouch = function (pt, id, target, isLift) {
+        const x = Number(pt.x) || 0;
+        const y = Number(pt.y) || 0;
+        const init = {
+          identifier: id,
+          target: target,
+          clientX: x,
+          clientY: y,
+          screenX: x,
+          screenY: y,
+          pageX: x + sx,
+          pageY: y + sy,
+          radiusX: pt.radiusX !== undefined ? Number(pt.radiusX) : 1,
+          radiusY: pt.radiusY !== undefined ? Number(pt.radiusY) : 1,
+          rotationAngle: pt.rotationAngle !== undefined ? Number(pt.rotationAngle) : 0,
+          force: pt.force !== undefined ? Number(pt.force) : (isLift ? 0 : 1),
+        };
+        return typeof TouchCtor === "function" ? new TouchCtor(init) : init;
+      };
+
+      const changed = [];
+      if (cdpType === "touchStart") {
+        for (let i = 0; i < pts.length; i++) {
+          const pt = pts[i] || {};
+          const id = pt.id !== undefined ? Number(pt.id) : i;
+          const x = Number(pt.x) || 0;
+          const y = Number(pt.y) || 0;
+          const target = _hitTestElement(x, y) || fallbackTarget;
+          const t = makeTouch(pt, id, target, false);
+          _activeTouches.set(id, t);
+          changed.push(t);
+        }
+      } else if (cdpType === "touchMove") {
+        for (let i = 0; i < pts.length; i++) {
+          const pt = pts[i] || {};
+          const id = pt.id !== undefined ? Number(pt.id) : i;
+          const prev = _activeTouches.get(id);
+          const x = Number(pt.x) || 0;
+          const y = Number(pt.y) || 0;
+          const target = (prev && prev.target) || _hitTestElement(x, y) || fallbackTarget;
+          const t = makeTouch(pt, id, target, false);
+          _activeTouches.set(id, t);
+          changed.push(t);
+        }
+      } else {
+        if (pts.length === 0) {
+          if (_activeTouches.size > 0) {
+            for (const prev of _activeTouches.values()) {
+              const t = makeTouch({
+                x: prev.clientX,
+                y: prev.clientY,
+                radiusX: prev.radiusX,
+                radiusY: prev.radiusY,
+                rotationAngle: prev.rotationAngle,
+                force: 0,
+              }, prev.identifier, prev.target || fallbackTarget, true);
+              changed.push(t);
+            }
+            _activeTouches.clear();
+          }
+        } else {
+          for (let i = 0; i < pts.length; i++) {
+            const pt = pts[i] || {};
+            const id = pt.id !== undefined ? Number(pt.id) : i;
+            const prev = _activeTouches.get(id);
+            const x = pt.x !== undefined ? Number(pt.x) : (prev ? prev.clientX : 0);
+            const y = pt.y !== undefined ? Number(pt.y) : (prev ? prev.clientY : 0);
+            const target = (prev && prev.target) || _hitTestElement(x, y) || fallbackTarget;
+            const t = makeTouch({
+              x: x,
+              y: y,
+              radiusX: pt.radiusX !== undefined ? pt.radiusX : (prev ? prev.radiusX : 1),
+              radiusY: pt.radiusY !== undefined ? pt.radiusY : (prev ? prev.radiusY : 1),
+              rotationAngle: pt.rotationAngle !== undefined ? pt.rotationAngle : (prev ? prev.rotationAngle : 0),
+              force: pt.force !== undefined ? pt.force : 0,
+            }, id, target, true);
+            _activeTouches.delete(id);
+            changed.push(t);
+          }
+        }
+      }
+
+      const allActive = Array.from(_activeTouches.values());
+      const altKey = (mods & 1) !== 0;
+      const ctrlKey = (mods & 2) !== 0;
+      const metaKey = (mods & 4) !== 0;
+      const shiftKey = (mods & 8) !== 0;
+      const cancelable = domType !== "touchcancel";
+
+      if (changed.length === 0) {
+        if (fallbackTarget && typeof fallbackTarget.dispatchEvent === "function") {
+          const ev = new TouchEvCtor(domType, {
+            bubbles: true,
+            cancelable: cancelable,
+            composed: true,
+            view: global,
+            touches: allActive,
+            targetTouches: allActive.filter(function (t) { return t.target === fallbackTarget; }),
+            changedTouches: [],
+            altKey: altKey,
+            ctrlKey: ctrlKey,
+            metaKey: metaKey,
+            shiftKey: shiftKey,
+          });
+          _dispatchTrusted(fallbackTarget, ev);
+        }
+      } else {
+        const targets = [];
+        for (let i = 0; i < changed.length; i++) {
+          const tgt = changed[i].target || fallbackTarget;
+          if (targets.indexOf(tgt) === -1) targets.push(tgt);
+        }
+        for (let i = 0; i < targets.length; i++) {
+          const tgt = targets[i];
+          if (!tgt || typeof tgt.dispatchEvent !== "function") continue;
+          const changedForTgt = changed.filter(function (t) { return (t.target || fallbackTarget) === tgt; });
+          const targetTouches = allActive.filter(function (t) { return (t.target || fallbackTarget) === tgt; });
+          const ev = new TouchEvCtor(domType, {
+            bubbles: true,
+            cancelable: cancelable,
+            composed: true,
+            view: global,
+            touches: allActive,
+            targetTouches: targetTouches,
+            changedTouches: changedForTgt,
+            altKey: altKey,
+            ctrlKey: ctrlKey,
+            metaKey: metaKey,
+            shiftKey: shiftKey,
+          });
+          _dispatchTrusted(tgt, ev);
+        }
+      }
+      return { handled: true };
+    }
+    global.__capsurf_dispatch_touch_event = dispatchTouchEvent;
+    if (typeof window !== "undefined") window.__capsurf_dispatch_touch_event = dispatchTouchEvent;
+    if (typeof globalThis !== "undefined") globalThis.__capsurf_dispatch_touch_event = dispatchTouchEvent;
+
     // HTML Named Access on Window (live, connected-only, no Proxy prototype so QuickJS throws ReferenceError for absent bare globals)
     try {
       const winTarget = (typeof globalThis !== "undefined") ? globalThis : global;
@@ -61414,7 +63560,7 @@
 
           walkConnectedTree(doc.documentElement, function (el) {
             const tag = String(el.localName || el.tagName || "").toLowerCase();
-            if (tag === "iframe") {
+            if (tag === "iframe" || tag === "frame") {
               iframes.push(el);
             }
             const idAttr = typeof el.getAttribute === "function" ? el.getAttribute("id") : (el.id || "");
@@ -62380,7 +64526,8 @@
           const start = timers.get(k);
           if (start === undefined) { c.warn("Timer '" + k + "' does not exist"); return; }
           timers.delete(k);
-          c.log(k + ": " + (Date.now() - start) + " ms");
+          if (typeof c.__capsurf_timeEnd === "function") c.__capsurf_timeEnd(k + ": " + (Date.now() - start) + " ms");
+          else c.log(k + ": " + (Date.now() - start) + " ms");
         };
       }
       if (typeof c.count !== "function") {
@@ -62575,12 +64722,28 @@
         globalThis.__capsurf_open_popup(fullUrl, isNoopener ? 1 : 0);
       }
       if (isNoopener) return null;
+      let popupDoc = null;
+      try {
+        const DP = global.DOMParser || (typeof DOMParser === "function" ? DOMParser : null);
+        if (DP) {
+          popupDoc = new DP().parseFromString("<html><head></head><body></body></html>", "text/html");
+          popupDoc._mutable = true;
+          popupDoc.URL = fullUrl;
+          popupDoc.documentURI = fullUrl;
+          popupDoc.baseURI = fullUrl;
+          popupDoc.title = "";
+        }
+      } catch (e) {}
+      if (!popupDoc) {
+        popupDoc = { title: "", URL: fullUrl };
+      }
       const popupWin = {
         closed: false,
         opener: global,
+        console: global.console,
         Promise: global.Promise,
         location: { href: fullUrl },
-        document: { title: "", URL: fullUrl },
+        document: popupDoc,
         close: function () { this.closed = true; },
         focus: function () {},
         blur: function () {},
@@ -62589,6 +64752,11 @@
         confirm: function (msg) { return typeof global.confirm === "function" ? global.confirm(msg) : false; },
         prompt: function (msg, def) { return typeof global.prompt === "function" ? global.prompt(msg, def) : null; },
       };
+      popupWin.window = popupWin;
+      popupWin.self = popupWin;
+      if (popupDoc && typeof popupDoc === "object") {
+        try { popupDoc.defaultView = popupWin; } catch (e) {}
+      }
       return popupWin;
     }, "open");
     global.open = openFn;
@@ -63256,6 +65424,9 @@
           MessageEvent: MessageEvent,
           HashChangeEvent: HashChangeEvent,
           PopStateEvent: PopStateEvent,
+          Touch: Touch,
+          TouchList: TouchList,
+          TouchEvent: TouchEvent,
         },
         configurable: true,
         writable: true,
@@ -63291,6 +65462,9 @@
     Object.defineProperty(global, "TransitionEvent", { value: TransitionEvent, writable: true, enumerable: false, configurable: true });
     Object.defineProperty(global, "AnimationEvent", { value: AnimationEvent, writable: true, enumerable: false, configurable: true });
     global.BeforeUnloadEvent = BeforeUnloadEvent;
+    global.Touch = Touch;
+    global.TouchList = TouchList;
+    global.TouchEvent = TouchEvent;
 
     if (typeof globalThis !== "undefined") {
       globalThis.Event = Event;
@@ -63322,6 +65496,9 @@
       Object.defineProperty(globalThis, "TransitionEvent", { value: TransitionEvent, writable: true, enumerable: false, configurable: true });
       Object.defineProperty(globalThis, "AnimationEvent", { value: AnimationEvent, writable: true, enumerable: false, configurable: true });
       globalThis.BeforeUnloadEvent = BeforeUnloadEvent;
+      globalThis.Touch = Touch;
+      globalThis.TouchList = TouchList;
+      globalThis.TouchEvent = TouchEvent;
     }
 
     // 2. Expose DOM Collections and Nodes
@@ -63850,7 +66027,7 @@
         case "source": Object.setPrototypeOf(el, (global.HTMLSourceElement || global.HTMLElement).prototype); break;
         case "canvas": Object.setPrototypeOf(el, global.HTMLCanvasElement.prototype); break;
         case "script": Object.setPrototypeOf(el, global.HTMLScriptElement.prototype); break;
-        case "frame":
+        case "frame": Object.setPrototypeOf(el, (global.HTMLFrameElement || global.HTMLIFrameElement).prototype); break;
         case "iframe": Object.setPrototypeOf(el, global.HTMLIFrameElement.prototype); break;
         case "template": Object.setPrototypeOf(el, global.HTMLTemplateElement.prototype); break;
         case "slot": Object.setPrototypeOf(el, (global.HTMLSlotElement || global.HTMLElement).prototype); break;
@@ -63908,6 +66085,12 @@
     if (docProto) {
       // Inherit from Node
       Object.setPrototypeOf(docProto, Node.prototype);
+      if (!("parentNode" in docProto)) {
+        Object.defineProperty(docProto, "parentNode", {
+          get: function () { return null; },
+          configurable: true,
+        });
+      }
 
       const origQS = docProto.querySelector;
       docProto.querySelector = wrapQuerySelector(origQS);
@@ -64401,6 +66584,14 @@
           const hadScripts = enqueueWrittenScripts(markup, this);
           const nonScriptMarkup = hadScripts ? markup.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "") : markup;
           if (nonScriptMarkup) {
+            const bodyOpenMatch = /<body\b([^>]*)>/i.exec(nonScriptMarkup);
+            if (bodyOpenMatch && bodyOpenMatch[1] && this.body && typeof this.body.setAttribute === "function") {
+              const attrRe = /([a-zA-Z_:][\w:.-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g;
+              let am;
+              while ((am = attrRe.exec(bodyOpenMatch[1])) !== null) {
+                this.body.setAttribute(am[1], am[2] !== undefined ? am[2] : (am[3] !== undefined ? am[3] : (am[4] || "")));
+              }
+            }
             const target = this.body || this.documentElement;
             if (target && typeof this.createElement === "function") {
               const temp = this.createElement("div");
@@ -64427,6 +66618,24 @@
         }, "writeln");
         if (global.document) {
           global.document.writeln = docProto.writeln;
+        }
+      }
+      if (typeof ParsedDocument !== "undefined" && ParsedDocument.prototype) {
+        if (!ParsedDocument.prototype.open) {
+          ParsedDocument.prototype.open = markNative(function () {
+            if (this.head && this.head._children) this.head._children.length = 0;
+            if (this.body && this.body._children) this.body._children.length = 0;
+            return docProto.open.apply(this, arguments);
+          }, "open");
+        }
+        if (!ParsedDocument.prototype.close) {
+          ParsedDocument.prototype.close = docProto.close;
+        }
+        if (!ParsedDocument.prototype.write) {
+          ParsedDocument.prototype.write = docProto.write;
+        }
+        if (!ParsedDocument.prototype.writeln) {
+          ParsedDocument.prototype.writeln = docProto.writeln;
         }
       }
 
@@ -65472,20 +67681,20 @@
                   if (cachedBody) {
                     setDocOwner(cachedBody);
                     setParent(cachedBody, cachedDocEl || doc);
-                    Object.defineProperty(doc, "body", {
-                      get: function () {
-                        const de = this.documentElement;
-                        if (de && de.children) {
-                          for (let i = 0; i < de.children.length; i++) {
-                            const t = (de.children[i].tagName || "").toUpperCase();
-                            if (t === "BODY" || t === "FRAMESET") return upgradeElement(de.children[i]);
-                          }
-                        }
-                        return cachedBody;
-                      },
-                      configurable: true
-                    });
                   }
+                  Object.defineProperty(doc, "body", {
+                    get: function () {
+                      const de = this.documentElement;
+                      if (de && de.children) {
+                        for (let i = 0; i < de.children.length; i++) {
+                          const t = (de.children[i].tagName || "").toUpperCase();
+                          if (t === "BODY" || t === "FRAMESET") return upgradeElement(de.children[i]);
+                        }
+                      }
+                      return cachedBody;
+                    },
+                    configurable: true
+                  });
                   const origDocCreateElement = doc.createElement;
                   if (typeof origDocCreateElement === "function") {
                     doc.createElement = function (tagName) {

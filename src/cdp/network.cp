@@ -5,7 +5,7 @@
 import { CdpRequest, CdpResponse, extractJsonString, extractJsonInt, extractJsonBool } from "./types.cp";
 import { CdpPageSession, escapeJsonString } from "./session.cp";
 import { CookieEntry, entryToCdp, parseUrlParts } from "../net/cookies.cp";
-import { markFreshExtraHeaders } from "../net/http_loader.cp";
+import { markFreshExtraHeaders, RedirectHop } from "../net/http_loader.cp";
 
 pub struct StoredResponseBody {
     request_id_buf: [64]u8 = [0; 64],
@@ -15,7 +15,7 @@ pub struct StoredResponseBody {
     used: bool = false,
 }
 
-const MAX_STORED_BODIES: usize = 64;
+const MAX_STORED_BODIES: usize = 256;
 let g_stored_bodies: [MAX_STORED_BODIES]StoredResponseBody = [StoredResponseBody{}; MAX_STORED_BODIES];
 let g_stored_body_cursor: usize = 0;
 let g_doc_req_seq: u64 = 0;
@@ -152,9 +152,21 @@ pub fn formatHttpHeadersExtraInfoJson(raw_headers: []const u8, allocator: std.me
     return formatHttpHeadersJsonWithSep(raw_headers, allocator, "\n");
 }
 
+pub struct PendingRedirectHop {
+    url: []u8 = [],
+    method: []u8 = [],
+    status_code: u32 = 0,
+    status_text: []u8 = [],
+    raw_headers: []u8 = [],
+    req_headers_text: []u8 = [],
+    resp_headers_text: []u8 = [],
+    wire_body_len: usize = 0,
+}
+
 pub struct PendingFetchBody {
     url_buf: [1024]u8 = [0; 1024],
     url_len: usize = 0,
+    final_url: []u8 = [],
     body: []u8 = [],
     status_code: u32 = 200,
     status_text_buf: [64]u8 = [0; 64],
@@ -162,7 +174,13 @@ pub struct PendingFetchBody {
     mime_buf: [128]u8 = [0; 128],
     mime_len: usize = 0,
     raw_headers: []u8 = [],
+    req_headers_text: []u8 = [],
+    resp_headers_text: []u8 = [],
+    wire_body_len: usize = 0,
+    redirect_count: usize = 0,
+    redirect_hops: [6]PendingRedirectHop = [PendingRedirectHop{}; 6],
     has_meta: bool = false,
+    failed: bool = false,
     active: bool = false,
 }
 
@@ -170,21 +188,95 @@ const MAX_PENDING_FETCH_BODIES: usize = 32;
 let g_pending_fetch_bodies: [MAX_PENDING_FETCH_BODIES]PendingFetchBody = [PendingFetchBody{}; MAX_PENDING_FETCH_BODIES];
 let g_pending_fetch_cursor: usize = 0;
 
-fn writePendingFetchSlot(url: []const u8, body: []const u8, status_code: u32, status_text: []const u8, raw_headers: []const u8, mime_type: []const u8, has_meta: bool) {
+fn dupePendingSlice(src: []const u8): []u8 {
+    if (src.len == 0) return [];
+    const dup = std.heap.c_allocator.alloc(u8, src.len) catch return [];
+    @memcpy(dup, src);
+    return dup;
+}
+
+fn freePendingRedirectHop(hop: *PendingRedirectHop) {
+    if (hop.url.len > 0) {
+        std.heap.c_allocator.free(hop.url);
+        hop.url = [];
+    }
+    if (hop.method.len > 0) {
+        std.heap.c_allocator.free(hop.method);
+        hop.method = [];
+    }
+    if (hop.status_text.len > 0) {
+        std.heap.c_allocator.free(hop.status_text);
+        hop.status_text = [];
+    }
+    if (hop.raw_headers.len > 0) {
+        std.heap.c_allocator.free(hop.raw_headers);
+        hop.raw_headers = [];
+    }
+    if (hop.req_headers_text.len > 0) {
+        std.heap.c_allocator.free(hop.req_headers_text);
+        hop.req_headers_text = [];
+    }
+    if (hop.resp_headers_text.len > 0) {
+        std.heap.c_allocator.free(hop.resp_headers_text);
+        hop.resp_headers_text = [];
+    }
+    hop.status_code = 0;
+    hop.wire_body_len = 0;
+}
+
+fn writePendingFetchSlot(
+    url: []const u8,
+    final_url: []const u8,
+    body: []const u8,
+    status_code: u32,
+    status_text: []const u8,
+    raw_headers: []const u8,
+    mime_type: []const u8,
+    req_headers_text: []const u8,
+    resp_headers_text: []const u8,
+    wire_body_len: usize,
+    redirect_count: usize,
+    redirect_hops: []const RedirectHop,
+    has_meta: bool,
+    failed: bool,
+) {
     if (url.len == 0) return;
     let slot = &g_pending_fetch_bodies[g_pending_fetch_cursor % MAX_PENDING_FETCH_BODIES];
     g_pending_fetch_cursor += 1;
     if (slot.active && slot.body.len > 0) {
         std.heap.c_allocator.free(slot.body);
-        slot.body = [];
     }
+    slot.body = [];
+    if (slot.active && slot.final_url.len > 0) {
+        std.heap.c_allocator.free(slot.final_url);
+    }
+    slot.final_url = [];
     if (slot.active && slot.raw_headers.len > 0) {
         std.heap.c_allocator.free(slot.raw_headers);
-        slot.raw_headers = [];
     }
+    slot.raw_headers = [];
+    if (slot.active && slot.req_headers_text.len > 0) {
+        std.heap.c_allocator.free(slot.req_headers_text);
+    }
+    slot.req_headers_text = [];
+    if (slot.active && slot.resp_headers_text.len > 0) {
+        std.heap.c_allocator.free(slot.resp_headers_text);
+    }
+    slot.resp_headers_text = [];
+    let hi: usize = 0;
+    while (hi < 6) : (hi += 1) {
+        if (slot.active) {
+            freePendingRedirectHop(&slot.redirect_hops[hi]);
+        } else {
+            slot.redirect_hops[hi] = PendingRedirectHop{};
+        }
+    }
+    slot.redirect_count = 0;
+
     const u_len = @min(url.len, slot.url_buf.len);
     @memcpy(slot.url_buf[0..u_len], url[0..u_len]);
     slot.url_len = u_len;
+    slot.final_url = dupePendingSlice(final_url);
     slot.status_code = status_code;
     const st_len = @min(status_text.len, slot.status_text_buf.len);
     if (st_len > 0) @memcpy(slot.status_text_buf[0..st_len], status_text[0..st_len]);
@@ -192,42 +284,78 @@ fn writePendingFetchSlot(url: []const u8, body: []const u8, status_code: u32, st
     const m_len = @min(mime_type.len, slot.mime_buf.len);
     if (m_len > 0) @memcpy(slot.mime_buf[0..m_len], mime_type[0..m_len]);
     slot.mime_len = m_len;
+    slot.wire_body_len = wire_body_len;
     slot.has_meta = has_meta;
-    if (body.len > 0) {
-        const dup = std.heap.c_allocator.alloc(u8, body.len) catch {
-            slot.body = [];
-            slot.active = true;
-            return;
+    slot.failed = failed;
+    slot.body = dupePendingSlice(body);
+    slot.raw_headers = dupePendingSlice(raw_headers);
+    slot.req_headers_text = dupePendingSlice(req_headers_text);
+    slot.resp_headers_text = dupePendingSlice(resp_headers_text);
+    const hop_cap = @min(redirect_count, @min(redirect_hops.len, 6));
+    slot.redirect_count = hop_cap;
+    let hj: usize = 0;
+    while (hj < hop_cap) : (hj += 1) {
+        const src_hop = redirect_hops[hj];
+        slot.redirect_hops[hj] = PendingRedirectHop{
+            url: dupePendingSlice(src_hop.url),
+            method: dupePendingSlice(src_hop.method),
+            status_code: src_hop.status_code,
+            status_text: dupePendingSlice(src_hop.status_text),
+            raw_headers: dupePendingSlice(src_hop.raw_headers),
+            req_headers_text: dupePendingSlice(src_hop.req_headers_text),
+            resp_headers_text: dupePendingSlice(src_hop.resp_headers_text),
+            wire_body_len: src_hop.wire_body_len,
         };
-        @memcpy(dup, body);
-        slot.body = dup;
-    } else {
-        slot.body = [];
-    }
-    if (raw_headers.len > 0) {
-        const hdup = std.heap.c_allocator.alloc(u8, raw_headers.len) catch {
-            slot.raw_headers = [];
-            slot.active = true;
-            return;
-        };
-        @memcpy(hdup, raw_headers);
-        slot.raw_headers = hdup;
-    } else {
-        slot.raw_headers = [];
     }
     slot.active = true;
 }
 
 pub fn recordPendingFetchBody(url: []const u8, body: []const u8) {
-    writePendingFetchSlot(url, body, 200, "OK", "", "", false);
+    writePendingFetchSlot(url, "", body, 200, "OK", "", "", "", "", 0, 0, [], false, false);
 }
 
-pub fn recordPendingFetchMeta(url: []const u8, body: []const u8, status_code: u32, status_text: []const u8, raw_headers: []const u8, mime_type: []const u8) {
-    writePendingFetchSlot(url, body, status_code, status_text, raw_headers, mime_type, true);
+pub fn recordPendingFetchFailed(url: []const u8) {
+    writePendingFetchSlot(url, "", "", 0, "", "", "", "", "", 0, 0, [], false, true);
+}
+
+pub fn recordPendingFetchFailedWithError(url: []const u8, err_text: []const u8) {
+    writePendingFetchSlot(url, "", "", 0, err_text, "", "", "", "", 0, 0, [], false, true);
+}
+
+pub fn recordPendingFetchMeta(
+    url: []const u8,
+    body: []const u8,
+    status_code: u32,
+    status_text: []const u8,
+    raw_headers: []const u8,
+    mime_type: []const u8,
+    req_headers_text: []const u8,
+    resp_headers_text: []const u8,
+    wire_body_len: usize,
+) {
+    writePendingFetchSlot(url, "", body, status_code, status_text, raw_headers, mime_type, req_headers_text, resp_headers_text, wire_body_len, 0, [], true, false);
+}
+
+pub fn recordPendingFetchMetaWithRedirects(
+    url: []const u8,
+    final_url: []const u8,
+    body: []const u8,
+    status_code: u32,
+    status_text: []const u8,
+    raw_headers: []const u8,
+    mime_type: []const u8,
+    req_headers_text: []const u8,
+    resp_headers_text: []const u8,
+    wire_body_len: usize,
+    redirect_count: usize,
+    redirect_hops: [6]RedirectHop,
+) {
+    writePendingFetchSlot(url, final_url, body, status_code, status_text, raw_headers, mime_type, req_headers_text, resp_headers_text, wire_body_len, redirect_count, redirect_hops[0..], true, false);
 }
 
 pub struct PendingFetchResult {
     found: bool = false,
+    final_url: []const u8 = "",
     body: []const u8 = "",
     status_code: u32 = 200,
     status_text_buf: [64]u8 = [0; 64],
@@ -235,7 +363,13 @@ pub struct PendingFetchResult {
     mime_buf: [128]u8 = [0; 128],
     mime_len: usize = 0,
     raw_headers: []const u8 = "",
+    req_headers_text: []const u8 = "",
+    resp_headers_text: []const u8 = "",
+    wire_body_len: usize = 0,
+    redirect_count: usize = 0,
+    redirect_hops: [6]PendingRedirectHop = [PendingRedirectHop{}; 6],
     has_meta: bool = false,
+    failed: bool = false,
 }
 
 pub fn consumePendingFetchBody(url: []const u8): PendingFetchResult {
@@ -245,19 +379,40 @@ pub fn consumePendingFetchBody(url: []const u8): PendingFetchResult {
         let slot = &g_pending_fetch_bodies[i];
         if (slot.active && std.mem.eql(u8, slot.url_buf[0..slot.url_len], url)) {
             const b = slot.body;
+            const fu = slot.final_url;
             const h = slot.raw_headers;
+            const req_ht = slot.req_headers_text;
+            const resp_ht = slot.resp_headers_text;
+            const rc = slot.redirect_count;
+            const is_failed = slot.failed;
             slot.body = [];
+            slot.final_url = [];
             slot.raw_headers = [];
+            slot.req_headers_text = [];
+            slot.resp_headers_text = [];
+            slot.redirect_count = 0;
+            slot.failed = false;
             slot.active = false;
             let res = PendingFetchResult{
                 found: true,
+                final_url: fu,
                 body: b,
                 status_code: slot.status_code,
                 status_text_len: slot.status_text_len,
                 mime_len: slot.mime_len,
                 raw_headers: h,
+                req_headers_text: req_ht,
+                resp_headers_text: resp_ht,
+                wire_body_len: slot.wire_body_len,
+                redirect_count: rc,
                 has_meta: slot.has_meta,
+                failed: is_failed,
             };
+            let hi: usize = 0;
+            while (hi < 6) : (hi += 1) {
+                res.redirect_hops[hi] = slot.redirect_hops[hi];
+                slot.redirect_hops[hi] = PendingRedirectHop{};
+            }
             if (slot.status_text_len > 0) @memcpy(res.status_text_buf[0..slot.status_text_len], slot.status_text_buf[0..slot.status_text_len]);
             if (slot.mime_len > 0) @memcpy(res.mime_buf[0..slot.mime_len], slot.mime_buf[0..slot.mime_len]);
             return res;
@@ -374,6 +529,9 @@ pub struct NetworkHandler {
     static fn handle(session: *CdpPageSession, req: CdpRequest, out_buf: []u8): CdpResponse {
         // 1. Network lifecycle & buffering
         if (std.mem.eql(u8, req.method, "Network.enable")) {
+            if (req.session_id.len > 0 && session.dedicated_workers.findWorkerBySessionId(req.session_id) != null) {
+                return CdpResponse.ok(req.id, "{}");
+            }
             const max_buf = extractJsonInt(req.params_raw, "maxTotalBufferSize");
             * = max_buf;
             session.network_enabled = true;

@@ -2,6 +2,10 @@
 // Aligned with vendor/kitesurf/packages/dom-shim/src/window.ts
 
 function installWindow(global) {
+  const _Array = Array;
+  const _isArray = Array.isArray;
+  const _arrayFrom = Array.from;
+  const _arraySlice = Array.prototype.slice;
   const _ne = global.__capsurf_nativeEvents || {};
   const _NativeEventCtor = _ne.Event || (typeof Event !== "undefined" ? Event : global.Event);
   const _NativeMouseEvent = _ne.MouseEvent || (typeof MouseEvent !== "undefined" ? MouseEvent : global.MouseEvent);
@@ -1387,8 +1391,8 @@ function installWindow(global) {
 
   // 2. Navigator: modern lightweight shield & Client Hints
   const navigatorObj = {
-    userAgent: "Kitesurf/0.0.1",
-    appVersion: "Kitesurf/0.0.1",
+    userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 CapSurf/1.0.0",
+    appVersion: "5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 CapSurf/1.0.0",
     platform: "Linux x86_64",
     appName: "Netscape",
     appCodeName: "Mozilla",
@@ -1403,23 +1407,112 @@ function installWindow(global) {
     hardwareConcurrency: 8,
     deviceMemory: 8,
     maxTouchPoints: 0,
-    webdriver: false, // Critical: anti-bot bot-detection override
+    webdriver: true,
     pdfViewerEnabled: true,
+    geolocation: {
+      getCurrentPosition: function (success, error) {
+        setTimeout(function () {
+          if (typeof error === "function") error({ code: 1, message: "User denied Geolocation", PERMISSION_DENIED: 1, POSITION_UNAVAILABLE: 2, TIMEOUT: 3 });
+          else if (typeof success === "function") success({ coords: { latitude: 0, longitude: 0, accuracy: 1 }, timestamp: Date.now() });
+        }, 0);
+      },
+      watchPosition: function (success, error) {
+        setTimeout(function () {
+          if (typeof error === "function") error({ code: 1, message: "User denied Geolocation", PERMISSION_DENIED: 1, POSITION_UNAVAILABLE: 2, TIMEOUT: 3 });
+        }, 0);
+        return 1;
+      },
+      clearWatch: function () {},
+    },
     sendBeacon: markNative(function (url, data) {
       if (arguments.length === 0) {
         throw new TypeError("Failed to execute 'sendBeacon' on 'Navigator': 1 argument required, but only 0 present.");
       }
       const base = (global.document && global.document.URL) || (global.location && global.location.href) || currentHref || "about:blank";
       const fullUrl = new URL(String(url), base).href;
-      const bodyStr = bodyToPostString(data);
+      const bodyBytes = bodyToPostBytes(data);
       if (typeof __capsurf_native_record_fetch === "function") {
-        __capsurf_native_record_fetch(fullUrl, "text/plain", "POST", bodyStr);
+        __capsurf_native_record_fetch(fullUrl, "text/plain", "POST", bodyBytes);
       } else if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_native_record_fetch === "function") {
-        globalThis.__capsurf_native_record_fetch(fullUrl, "text/plain", "POST", bodyStr);
+        globalThis.__capsurf_native_record_fetch(fullUrl, "text/plain", "POST", bodyBytes);
       }
       return true;
     }, "sendBeacon"),
   };
+
+  function encodePostUtf8(str) {
+    if (typeof TextEncoder === "function") {
+      return new TextEncoder().encode(str);
+    }
+    if (typeof stringToUtf8 === "function") {
+      return stringToUtf8(str);
+    }
+    const len = str.length;
+    const out = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      out[i] = str.charCodeAt(i) & 0xff;
+    }
+    return out;
+  }
+
+  function bodyToPostBytes(data) {
+    if (data === undefined || data === null) return null;
+    if (typeof data === "string") return data;
+    if (typeof FormData === "function" && data instanceof FormData) {
+      const bnd = (data._boundary && String(data._boundary)) || "----CapSurfFormBoundary7d9f";
+      const chunks = [];
+      let totalLength = 0;
+      const pushChunk = function (u8) {
+        if (u8 && u8.byteLength > 0) {
+          chunks.push(u8);
+          totalLength += u8.byteLength;
+        }
+      };
+      data.forEach(function (val, key) {
+        if ((typeof File === "function" && val instanceof File) || (typeof Blob === "function" && val instanceof Blob)) {
+          const fname = val.name || "blob";
+          const ctype = val.type || "application/octet-stream";
+          pushChunk(encodePostUtf8("--" + bnd + "\r\nContent-Disposition: form-data; name=\"" + key + "\"; filename=\"" + fname + "\"\r\nContent-Type: " + ctype + "\r\n\r\n"));
+          const inner = bodyToPostBytes(val);
+          if (inner instanceof Uint8Array) {
+            pushChunk(inner);
+          } else if (typeof inner === "string" && inner.length > 0) {
+            pushChunk(encodePostUtf8(inner));
+          }
+          pushChunk(encodePostUtf8("\r\n"));
+        } else {
+          pushChunk(encodePostUtf8("--" + bnd + "\r\nContent-Disposition: form-data; name=\"" + key + "\"\r\n\r\n" + String(val) + "\r\n"));
+        }
+      });
+      pushChunk(encodePostUtf8("--" + bnd + "--\r\n"));
+      const out = new Uint8Array(totalLength);
+      let offset = 0;
+      for (let i = 0; i < chunks.length; i++) {
+        out.set(chunks[i], offset);
+        offset += chunks[i].byteLength;
+      }
+      return out;
+    }
+    if (data instanceof Uint8Array) return data;
+    if (data._bytes && data._bytes.BYTES_PER_ELEMENT) {
+      return data._bytes instanceof Uint8Array
+        ? data._bytes
+        : new Uint8Array(data._bytes.buffer, data._bytes.byteOffset, data._bytes.byteLength);
+    }
+    if (ArrayBuffer.isView(data)) {
+      return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+    }
+    if (data instanceof ArrayBuffer) {
+      return new Uint8Array(data);
+    }
+    if (typeof Blob === "function" && data instanceof Blob) {
+      if (data._text !== undefined) {
+        return encodePostUtf8(String(data._text));
+      }
+      return new Uint8Array(0);
+    }
+    return String(data);
+  }
 
   function bodyToPostString(data) {
     if (data === undefined || data === null) return null;
@@ -1451,22 +1544,24 @@ function installWindow(global) {
   function setUserAgent(ua) {
     const rawUa = ua ? String(ua) : "";
     if (!rawUa) {
-      navigatorObj.userAgent = "Kitesurf/0.0.1";
-      navigatorObj.appVersion = "Kitesurf/0.0.1";
+      const defUa = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 CapSurf/1.0.0";
+      const defVer = "5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 CapSurf/1.0.0";
+      navigatorObj.userAgent = defUa;
+      navigatorObj.appVersion = defVer;
       delete navigatorObj.userAgentData;
       if (global.navigator) {
-        global.navigator.userAgent = "Kitesurf/0.0.1";
-        global.navigator.appVersion = "Kitesurf/0.0.1";
+        global.navigator.userAgent = defUa;
+        global.navigator.appVersion = defVer;
         delete global.navigator.userAgentData;
       }
       if (typeof window !== "undefined" && window.navigator) {
-        window.navigator.userAgent = "Kitesurf/0.0.1";
-        window.navigator.appVersion = "Kitesurf/0.0.1";
+        window.navigator.userAgent = defUa;
+        window.navigator.appVersion = defVer;
         delete window.navigator.userAgentData;
       }
       if (typeof globalThis !== "undefined" && globalThis.navigator) {
-        globalThis.navigator.userAgent = "Kitesurf/0.0.1";
-        globalThis.navigator.appVersion = "Kitesurf/0.0.1";
+        globalThis.navigator.userAgent = defUa;
+        globalThis.navigator.appVersion = defVer;
         delete globalThis.navigator.userAgentData;
       }
       return;
@@ -1630,6 +1725,18 @@ function installWindow(global) {
 
   function handleLocationNavigate(targetInput, isReplace) {
     const targetStr = String(targetInput);
+    const trimmedTarget = targetStr.trim();
+    if (/^javascript:/i.test(trimmedTarget)) {
+      const code = trimmedTarget.slice(11);
+      try {
+        (0, eval)(code);
+      } catch (e) {
+        try {
+          (0, eval)(decodeURIComponent(code));
+        } catch (e2) {}
+      }
+      return;
+    }
     let targetUrl;
     try {
       targetUrl = new HistoryURL(targetStr, currentHref).href;
@@ -2203,6 +2310,15 @@ function installWindow(global) {
 
       const prevNesting = global.__capsurf_timer_nesting || 0;
       global.__capsurf_timer_nesting = (item.nestingLevel || 0) + 1;
+      const prevIso = !!(typeof globalThis !== "undefined" && globalThis.__capsurf_in_isolated);
+      let restoredNode = false;
+      if (item.isIso && typeof globalThis !== "undefined") {
+        globalThis.__capsurf_in_isolated = true;
+        if (globalThis.Node === undefined && globalThis.__capsurf_orig_Node !== undefined) {
+          globalThis.Node = globalThis.__capsurf_orig_Node;
+          restoredNode = true;
+        }
+      }
       try {
         if (typeof item.cb === "function") {
           item.cb.apply(global, item.args);
@@ -2216,6 +2332,13 @@ function installWindow(global) {
           console.error(e);
         }
       } finally {
+        if (restoredNode && typeof globalThis !== "undefined") {
+          delete globalThis.Node;
+        }
+        if (item.isIso && typeof globalThis !== "undefined") {
+          globalThis.__capsurf_in_isolated = prevIso;
+          globalThis.__capsurf_iso_jobs_pending = true;
+        }
         global.__capsurf_timer_nesting = prevNesting;
       }
 
@@ -2244,7 +2367,7 @@ function installWindow(global) {
     const rawDelay = Math.max(0, Number(ms) || 0);
     const delay = (curNesting > 5 && rawDelay < 4) ? 4 : rawDelay;
     const due = nativeDateNow() + delay;
-    const args = Array.prototype.slice.call(arguments, 2);
+    const args = _arraySlice.call(arguments, 2);
     const item = {
       id: id,
       order: timerOrderCounter++,
@@ -2254,6 +2377,7 @@ function installWindow(global) {
       due: due,
       isInterval: false,
       nestingLevel: curNesting,
+      isIso: !!(typeof globalThis !== "undefined" && globalThis.__capsurf_in_isolated),
     };
     activeTimers.set(id, true);
     insertTimerTask(item);
@@ -2284,7 +2408,7 @@ function installWindow(global) {
     const rawDelay = Math.max(0, Number(ms) || 0);
     const delay = (curNesting > 5 && rawDelay < 4) ? 4 : rawDelay;
     const due = nativeDateNow() + delay;
-    const args = Array.prototype.slice.call(arguments, 2);
+    const args = _arraySlice.call(arguments, 2);
     const item = {
       id: id,
       order: timerOrderCounter++,
@@ -2332,6 +2456,41 @@ function installWindow(global) {
   }
   if (typeof globalThis !== "undefined") {
     globalThis.queueMicrotask = queueMicrotaskFn;
+  }
+
+  if (typeof Promise === "function" && Promise.prototype && typeof Promise.prototype.then === "function") {
+    const origPromiseThen = Promise.prototype.then;
+    const wrapIsoMicroCb = function (cb) {
+      if (typeof cb !== "function") return cb;
+      return function (v) {
+        const prevIso = !!(typeof globalThis !== "undefined" && globalThis.__capsurf_in_isolated);
+        let restoredNode = false;
+        if (typeof globalThis !== "undefined") {
+          globalThis.__capsurf_in_isolated = true;
+          if (globalThis.Node === undefined && globalThis.__capsurf_orig_Node !== undefined) {
+            globalThis.Node = globalThis.__capsurf_orig_Node;
+            restoredNode = true;
+          }
+        }
+        try {
+          return cb.call(this, v);
+        } finally {
+          if (restoredNode && typeof globalThis !== "undefined") {
+            delete globalThis.Node;
+          }
+          if (typeof globalThis !== "undefined") {
+            globalThis.__capsurf_in_isolated = prevIso;
+          }
+        }
+      };
+    };
+    Promise.prototype.then = markNative(function (onFulfilled, onRejected) {
+      const isIso = !!(typeof globalThis !== "undefined" && globalThis.__capsurf_in_isolated);
+      if (!isIso) {
+        return origPromiseThen.call(this, onFulfilled, onRejected);
+      }
+      return origPromiseThen.call(this, wrapIsoMicroCb(onFulfilled), wrapIsoMicroCb(onRejected));
+    }, "then");
   }
 
   // 5.1b AbortSignal & AbortController (WHATWG DOM)
@@ -3208,6 +3367,10 @@ function installWindow(global) {
     if (body instanceof ArrayBuffer) return body.byteLength;
     if (ArrayBuffer.isView(body)) return body.byteLength;
     if (typeof Blob !== "undefined" && body instanceof Blob) return body.size;
+    if (typeof FormData === "function" && body instanceof FormData) {
+      const fdBytes = bodyToPostBytes(body);
+      return fdBytes ? fdBytes.byteLength : 0;
+    }
     const s = String(body);
     if (typeof stringToUtf8 === "function") return stringToUtf8(s).byteLength;
     return s.length;
@@ -3255,6 +3418,89 @@ function installWindow(global) {
         return Promise.resolve(new Uint8Array(0).buffer);
       },
     };
+  }
+
+  const corsPreflightCache = new Map();
+
+  function verifyCorsPreflightResponse(preflightRes, expectedOrigin, reqMethodNorm, isSimpleMethod, acrhList, reqCredentials) {
+    if (preflightRes === null || preflightRes === undefined) {
+      return { ok: false, ttlMs: 0 };
+    }
+    let meta = null;
+    if (typeof preflightRes === "object") {
+      meta = preflightRes;
+    } else if (typeof preflightRes === "string") {
+      const trimmed = preflightRes.trim();
+      if (trimmed.length > 0 && trimmed[0] === "{") {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (parsed && typeof parsed === "object" && (parsed.status !== undefined || parsed.headers !== undefined || parsed.headersJson !== undefined)) {
+            meta = parsed;
+          }
+        } catch (e) {}
+      }
+    }
+    if (!meta) {
+      return { ok: true, ttlMs: 5000 };
+    }
+    if (meta.status !== undefined) {
+      const st = Number(meta.status);
+      if (!(st >= 200 && st < 300)) {
+        return { ok: false, ttlMs: 0 };
+      }
+    }
+    let rawHdrs = meta.headers || null;
+    if (!rawHdrs && meta.headersJson) {
+      try {
+        rawHdrs = typeof meta.headersJson === "string" ? JSON.parse(meta.headersJson) : meta.headersJson;
+      } catch (e) {}
+    }
+    if (!rawHdrs || typeof rawHdrs !== "object") {
+      return { ok: true, ttlMs: 5000 };
+    }
+    const hdrMap = {};
+    const hKeys = Object.keys(rawHdrs);
+    for (let i = 0; i < hKeys.length; i++) {
+      hdrMap[String(hKeys[i]).toLowerCase()] = String(rawHdrs[hKeys[i]]);
+    }
+    const acao = hdrMap["access-control-allow-origin"] !== undefined ? hdrMap["access-control-allow-origin"].trim() : null;
+    const acac = hdrMap["access-control-allow-credentials"] !== undefined ? hdrMap["access-control-allow-credentials"].trim() : null;
+    const acaoOk = (reqCredentials === "include")
+      ? (acao !== null && acao !== "*" && acao === expectedOrigin && acac === "true")
+      : (acao !== null && (acao === "*" || acao === expectedOrigin));
+    if (!acaoOk) {
+      return { ok: false, ttlMs: 0 };
+    }
+    if (!isSimpleMethod) {
+      const acamRaw = hdrMap["access-control-allow-methods"] || "";
+      const acamSet = new Set(acamRaw.split(",").map(function (s) { return s.trim().toUpperCase(); }).filter(Boolean));
+      const allowAnyMethod = acamSet.has("*") && reqCredentials !== "include";
+      if (!allowAnyMethod && !acamSet.has(reqMethodNorm)) {
+        return { ok: false, ttlMs: 0 };
+      }
+    }
+    if (acrhList.length > 0) {
+      const acahRaw = hdrMap["access-control-allow-headers"] || "";
+      const acahSet = new Set(acahRaw.split(",").map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean));
+      const allowAnyHeader = acahSet.has("*") && reqCredentials !== "include";
+      if (!allowAnyHeader) {
+        for (let hi = 0; hi < acrhList.length; hi++) {
+          if (!acahSet.has(acrhList[hi])) {
+            return { ok: false, ttlMs: 0 };
+          }
+        }
+      }
+    }
+    let ttlMs = 5000;
+    if (hdrMap["access-control-max-age"] !== undefined) {
+      const maxAgeSec = Number(hdrMap["access-control-max-age"]);
+      if (Number.isFinite(maxAgeSec) && maxAgeSec >= 0) {
+        ttlMs = Math.min(maxAgeSec * 1000, 7200000);
+      } else if (Number.isFinite(maxAgeSec) && maxAgeSec < 0) {
+        ttlMs = 0;
+      }
+    }
+    return { ok: true, ttlMs: ttlMs };
   }
 
   const fetchFn = markNative(function (resource, init) {
@@ -3426,7 +3672,12 @@ function installWindow(global) {
     const reqBody = (init && init.body !== undefined)
       ? init.body
       : (typeof Request !== "undefined" && resource instanceof Request && resource._body ? resource._body : undefined);
-    const bodyLen = computeBodyByteLength(reqBody);
+    if (typeof FormData === "function" && reqBody instanceof FormData && !reqHeaders["content-type"]) {
+      const fdBnd = (reqBody._boundary && String(reqBody._boundary)) || "----CapSurfFormBoundary7d9f";
+      reqHeaders["content-type"] = "multipart/form-data; boundary=" + fdBnd;
+    }
+    const serializedBody = bodyToPostBytes(reqBody);
+    const bodyLen = computeBodyByteLength(serializedBody);
     if (bodyLen !== null) {
       reqHeaders["content-length"] = String(bodyLen);
     }
@@ -3496,56 +3747,6 @@ function installWindow(global) {
     const cleanFullUrl = fullUrl.split("#")[0];
     const isRedirected = Boolean(init._redirected);
 
-    // Fetch interception hook (CDP Fetch.enable / page.setRequestInterception)
-    const fetchInterceptor = (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_fetch_interceptor === "function")
-      ? globalThis.__capsurf_fetch_interceptor
-      : null;
-    if (fetchInterceptor && !init._intercepted) {
-      const selfCtx = this;
-      const reqMethod = String((init && init.method) || (typeof Request !== "undefined" && resource instanceof Request ? resource.method : "GET") || "GET").toUpperCase();
-      return fetchInterceptor({
-        url: cleanFullUrl,
-        method: reqMethod,
-        headers: reqHeaders,
-        resourceType: "fetch",
-      }).then(function (verdict) {
-        if (!verdict || verdict.action === "continue") {
-          const nextUrl = (verdict && verdict.url) ? String(verdict.url) : cleanFullUrl;
-          const nextInit = Object.assign({}, init, { _intercepted: true });
-          if (verdict && verdict.method) nextInit.method = verdict.method;
-          if (verdict && verdict.headers) nextInit.headers = verdict.headers;
-          return fetchFn.call(selfCtx, nextUrl, nextInit);
-        }
-        if (verdict.action === "abort") {
-          return Promise.reject(new TypeError("Failed to fetch"));
-        }
-        if (verdict.action === "respond") {
-          const rHeaders = Object.assign({}, verdict.headers || {});
-          if (verdict.contentType && !rHeaders["content-type"]) {
-            rHeaders["content-type"] = verdict.contentType;
-          }
-          return makeFetchedResponse(verdict.body != null ? String(verdict.body) : "", {
-            status: verdict.status || 200,
-            statusText: verdict.statusText || "OK",
-            url: cleanFullUrl,
-            redirected: isRedirected,
-            headers: rHeaders,
-          });
-        }
-        return fetchFn.call(selfCtx, cleanFullUrl, Object.assign({}, init, { _intercepted: true }));
-      });
-    }
-
-    // Private Network Access: block public pages from reaching loopback addresses
-    if (isPublicPageLocation(loc)) {
-      try {
-        const targetParsed = new URL(cleanFullUrl);
-        if (isLoopbackHostname(targetParsed.hostname)) {
-          return Promise.reject(new TypeError("Failed to fetch: blocked private network access to loopback"));
-        }
-      } catch (e) {}
-    }
-
     let isSameOrigin = false;
     if (urlStr.startsWith("/")) {
       isSameOrigin = true;
@@ -3554,6 +3755,172 @@ function installWindow(global) {
         const u = new URL(cleanFullUrl);
         if (docOrigin && u.origin === docOrigin) {
           isSameOrigin = true;
+        }
+      } catch (e) {}
+    }
+
+    const reqCredentials = (init && init.credentials) || (typeof Request !== "undefined" && resource instanceof Request ? resource.credentials : null) || "same-origin";
+    const reqRedirect = (init && init.redirect) || (typeof Request !== "undefined" && resource instanceof Request ? resource.redirect : null) || "follow";
+
+    // Inject Origin header for cross-origin requests if not explicitly set
+    if (!isSameOrigin) {
+      let hasOriginHdr = false;
+      const rHdrNames = Object.keys(reqHeaders);
+      for (let oi = 0; oi < rHdrNames.length; oi++) {
+        if (rHdrNames[oi].toLowerCase() === "origin") {
+          hasOriginHdr = true;
+          break;
+        }
+      }
+      if (!hasOriginHdr) {
+        reqHeaders["origin"] = docOrigin || "null";
+      }
+    }
+
+    // Fetch interception hook (CDP Fetch.enable / page.setRequestInterception)
+    const fetchInterceptor = (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_fetch_interceptor === "function")
+      ? globalThis.__capsurf_fetch_interceptor
+      : null;
+    if (!init._intercepted) {
+      const selfCtx = this;
+      const reqMethod = String((init && init.method) || (typeof Request !== "undefined" && resource instanceof Request ? resource.method : "GET") || "GET").toUpperCase();
+      const rType = (init && init._resourceType) ? String(init._resourceType) : "fetch";
+      const rTypeLow = rType.toLowerCase();
+      const cdpRtype = rTypeLow === "xhr" ? "XHR"
+        : rTypeLow === "script" ? "Script"
+        : rTypeLow === "stylesheet" ? "Stylesheet"
+        : rTypeLow === "image" ? "Image"
+        : rTypeLow === "font" ? "Font"
+        : rTypeLow === "document" ? "Document"
+        : "Fetch";
+      let pausePromise = null;
+      if (fetchInterceptor) {
+        pausePromise = fetchInterceptor({
+          url: cleanFullUrl,
+          method: reqMethod,
+          headers: reqHeaders,
+          resourceType: rType,
+        });
+      } else if (
+        typeof globalThis !== "undefined" &&
+        typeof globalThis.__capsurf_should_intercept_fetch === "function" &&
+        globalThis.__capsurf_should_intercept_fetch(cleanFullUrl, cdpRtype) &&
+        typeof globalThis.__capsurf_fetch_pause === "function"
+      ) {
+        let hdrJson = "{}";
+        try { hdrJson = JSON.stringify(reqHeaders || {}); } catch (e) {}
+        pausePromise = globalThis.__capsurf_fetch_pause(cleanFullUrl, reqMethod, hdrJson, serializedBody, cdpRtype);
+      }
+      if (pausePromise && typeof pausePromise.then === "function") {
+        return pausePromise.then(function (verdict) {
+          if (!verdict || verdict.action === "continue") {
+            const nextUrl = (verdict && verdict.url) ? String(verdict.url) : cleanFullUrl;
+            const nextInit = Object.assign({}, init, { _intercepted: true });
+            if (verdict && verdict.method) nextInit.method = verdict.method;
+            if (verdict && verdict.headers) nextInit.headers = verdict.headers;
+            if (verdict && verdict.body !== undefined) nextInit.body = verdict.body;
+            return fetchFn.call(selfCtx, nextUrl, nextInit);
+          }
+          if (verdict.action === "abort") {
+            return Promise.reject(new TypeError("Failed to fetch"));
+          }
+          if (verdict.action === "respond") {
+            const rStatus = Number(verdict.status) || 200;
+            const rHeaders = Object.assign({}, verdict.headers || {});
+            if (verdict.contentType && !rHeaders["content-type"]) {
+              rHeaders["content-type"] = verdict.contentType;
+            }
+            const rHdrKeys = Object.keys(rHeaders);
+            let locationVal = null;
+            for (let hi = 0; hi < rHdrKeys.length; hi++) {
+              if (rHdrKeys[hi].toLowerCase() === "location") {
+                locationVal = rHeaders[rHdrKeys[hi]];
+                break;
+              }
+            }
+            const isRedirectStatus = rStatus === 301 || rStatus === 302 || rStatus === 303 || rStatus === 307 || rStatus === 308;
+            if (isRedirectStatus && locationVal !== null && locationVal !== undefined && String(locationVal) !== "") {
+              if (reqRedirect === "error") {
+                return Promise.reject(new TypeError("Failed to fetch"));
+              }
+              if (reqRedirect === "manual") {
+                return makeFetchedResponse("", {
+                  status: 0,
+                  statusText: "",
+                  type: "opaqueredirect",
+                  url: cleanFullUrl,
+                  redirected: false,
+                  headers: {},
+                });
+              }
+              const redirectCount = Number(init._redirectCount || 0);
+              if (redirectCount >= 20) {
+                return Promise.reject(new TypeError("Failed to fetch: too many redirects"));
+              }
+              let targetUrl = String(locationVal);
+              try {
+                targetUrl = new URL(targetUrl, cleanFullUrl).href;
+              } catch (e) {}
+              const nextInit = Object.assign({}, init, {
+                _redirected: true,
+                _redirectCount: redirectCount + 1,
+              });
+              delete nextInit._intercepted;
+              if (((rStatus === 301 || rStatus === 302) && reqMethod === "POST") || (rStatus === 303 && reqMethod !== "GET" && reqMethod !== "HEAD")) {
+                nextInit.method = "GET";
+                delete nextInit.body;
+                if (nextInit.headers) {
+                  const nextHdrs = Object.assign({}, nextInit.headers);
+                  const nhKeys = Object.keys(nextHdrs);
+                  for (let nhi = 0; nhi < nhKeys.length; nhi++) {
+                    const lk = nhKeys[nhi].toLowerCase();
+                    if (lk === "content-length" || lk === "content-type") {
+                      delete nextHdrs[nhKeys[nhi]];
+                    }
+                  }
+                  nextInit.headers = nextHdrs;
+                }
+              } else {
+                if (nextInit.method === undefined) nextInit.method = reqMethod;
+                if (nextInit.body === undefined && reqBody !== undefined) nextInit.body = reqBody;
+              }
+              return fetchFn.call(selfCtx, targetUrl, nextInit);
+            }
+            if (reqMode === "cors" && !isSameOrigin) {
+              let acao = null;
+              let acac = null;
+              for (let hi = 0; hi < rHdrKeys.length; hi++) {
+                const lk = rHdrKeys[hi].toLowerCase();
+                if (lk === "access-control-allow-origin") acao = String(rHeaders[rHdrKeys[hi]]).trim();
+                else if (lk === "access-control-allow-credentials") acac = String(rHeaders[rHdrKeys[hi]]).trim();
+              }
+              const expectedOrigin = docOrigin || "null";
+              const acaoOk = (reqCredentials === "include")
+                ? (acao !== null && acao !== "*" && acao === expectedOrigin && acac === "true")
+                : (acao !== null && (acao === "*" || acao === expectedOrigin));
+              if (!acaoOk) {
+                return Promise.reject(new TypeError("Failed to fetch"));
+              }
+            }
+            return makeFetchedResponse(verdict.body != null ? String(verdict.body) : "", {
+              status: rStatus,
+              statusText: verdict.statusText || "OK",
+              url: cleanFullUrl,
+              redirected: isRedirected,
+              headers: rHeaders,
+            });
+          }
+          return fetchFn.call(selfCtx, cleanFullUrl, Object.assign({}, init, { _intercepted: true }));
+        });
+      }
+    }
+
+    // Private Network Access: block public pages from reaching loopback addresses
+    if (isPublicPageLocation(loc)) {
+      try {
+        const targetParsed = new URL(cleanFullUrl);
+        if (isLoopbackHostname(targetParsed.hostname)) {
+          return Promise.reject(new TypeError("Failed to fetch: blocked private network access to loopback"));
         }
       } catch (e) {}
     }
@@ -3567,11 +3934,10 @@ function installWindow(global) {
     else if (cleanFullUrl.indexOf(".html") !== -1 || cleanFullUrl.indexOf(".htm") !== -1) reqMime = "text/html; charset=utf-8";
     else if (cleanFullUrl.indexOf(".css") !== -1) reqMime = "text/css";
 
-    const postStr = bodyToPostString(reqBody);
     if (typeof __capsurf_native_record_fetch === "function") {
-      __capsurf_native_record_fetch(cleanFullUrl, reqMime, reqMethodNorm, postStr);
+      __capsurf_native_record_fetch(cleanFullUrl, reqMime, reqMethodNorm, serializedBody);
     } else if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_native_record_fetch === "function") {
-      globalThis.__capsurf_native_record_fetch(cleanFullUrl, reqMime, reqMethodNorm, postStr);
+      globalThis.__capsurf_native_record_fetch(cleanFullUrl, reqMime, reqMethodNorm, serializedBody);
     }
 
     const cred = init.credentials || (typeof Request !== "undefined" && resource instanceof Request ? resource.credentials : null) || "same-origin";
@@ -3631,6 +3997,7 @@ function installWindow(global) {
             redirected: false,
           }));
         }
+        if (typeof console !== "undefined" && typeof console.error === "function") console.error("Access to fetch at '" + cleanFullUrl + "' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.");
         return Promise.reject(new TypeError("Failed to fetch: CORS header 'Access-Control-Allow-Origin' missing"));
       }
       return Promise.resolve(makeFetchedResponse("", {
@@ -3896,7 +4263,8 @@ function installWindow(global) {
               redirected: false,
             }));
           }
-          return Promise.reject(new TypeError("Failed to fetch: CORS header 'Access-Control-Allow-Origin' missing"));
+          if (typeof console !== "undefined" && typeof console.error === "function") console.error("Access to fetch at '" + cleanFullUrl + "' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.");
+        return Promise.reject(new TypeError("Failed to fetch: CORS header 'Access-Control-Allow-Origin' missing"));
         }
         const isHtml = urlStr.indexOf(".htm") !== -1 || urlStr.indexOf("html") !== -1;
         const isJson = urlStr.indexOf(".json") !== -1;
@@ -3913,19 +4281,6 @@ function installWindow(global) {
       }
     }
 
-    if (!isSameOrigin) {
-      if (init && init.mode === "no-cors") {
-        return Promise.resolve(makeFetchedResponse("", {
-          status: 0,
-          statusText: "",
-          type: "opaque",
-          url: "",
-          redirected: false,
-        }));
-      }
-      return Promise.reject(new TypeError("Failed to fetch: CORS header 'Access-Control-Allow-Origin' missing"));
-    }
-
     if (pathOnly.indexOf("/__fixtures/") !== -1) {
       return Promise.resolve(makeFetchedResponse("", {
         status: 404,
@@ -3935,9 +4290,84 @@ function installWindow(global) {
       }));
     }
 
-    if ((cleanFullUrl.startsWith("http://") || cleanFullUrl.startsWith("https://")) && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_http_get === "function") {
-      const realBody = globalThis.__capsurf_http_get(cleanFullUrl);
+    if ((cleanFullUrl.startsWith("http://") || cleanFullUrl.startsWith("https://")) && typeof globalThis !== "undefined" && (typeof globalThis.__capsurf_http_request === "function" || typeof globalThis.__capsurf_http_get === "function")) {
+      if (!isSameOrigin && reqMode !== "no-cors" && typeof globalThis.__capsurf_http_request === "function") {
+        const isSimpleMethod = reqMethodNorm === "GET" || reqMethodNorm === "HEAD" || reqMethodNorm === "POST";
+        const nonSafelist = getCorsNonSafelistHeaders();
+        if (!isSimpleMethod || nonSafelist.length > 0) {
+          const acrhSet = new Set();
+          for (let ai = 0; ai < nonSafelist.length; ai++) {
+            acrhSet.add(String(nonSafelist[ai]).toLowerCase());
+          }
+          const acrhList = Array.from(acrhSet).sort();
+          const acrhHeaderVal = acrhList.join(", ");
+          const preflightOrigin = (reqHeaders["origin"] !== undefined && reqHeaders["origin"] !== null)
+            ? String(reqHeaders["origin"])
+            : (docOrigin || "null");
+          const preflightCacheKey = preflightOrigin + "\0" + cleanFullUrl + "\0" + reqMethodNorm + "\0" + acrhList.join(",") + "\0" + reqCredentials;
+          const nowMs = Date.now();
+          const cachedPreflight = corsPreflightCache.get(preflightCacheKey);
+          let preflightHit = false;
+          if (cachedPreflight && nowMs < cachedPreflight.expiresAt) {
+            preflightHit = true;
+          } else if (cachedPreflight) {
+            corsPreflightCache.delete(preflightCacheKey);
+          }
+          if (!preflightHit) {
+            const preflightHeaders = {
+              "origin": preflightOrigin,
+              "access-control-request-method": reqMethodNorm,
+            };
+            if (reqHeaders["user-agent"]) preflightHeaders["user-agent"] = String(reqHeaders["user-agent"]);
+            if (reqHeaders["referer"]) preflightHeaders["referer"] = String(reqHeaders["referer"]);
+            if (acrhHeaderVal) {
+              preflightHeaders["access-control-request-headers"] = acrhHeaderVal;
+            }
+            const preflightRes = globalThis.__capsurf_http_request(
+              cleanFullUrl,
+              "OPTIONS",
+              "",
+              "",
+              JSON.stringify(preflightHeaders)
+            );
+            const pfVerdict = verifyCorsPreflightResponse(preflightRes, preflightOrigin, reqMethodNorm, isSimpleMethod, acrhList, reqCredentials);
+            if (!pfVerdict.ok) {
+              return Promise.reject(new TypeError("Failed to fetch: CORS preflight failed"));
+            }
+            if (pfVerdict.ttlMs > 0) {
+              corsPreflightCache.set(preflightCacheKey, { expiresAt: nowMs + pfVerdict.ttlMs });
+            }
+          }
+        }
+      }
+      const reqContentType = reqHeaders["content-type"] ? String(reqHeaders["content-type"]) : "";
+      let reqHeadersJson = "{}";
+      try {
+        const cleanReqHeaders = {};
+        const rhKeys = Object.keys(reqHeaders || {});
+        for (let hi = 0; hi < rhKeys.length; hi++) {
+          const hk = rhKeys[hi];
+          if (!hk || hk.charCodeAt(0) === 95) continue;
+          const hv = reqHeaders[hk];
+          if (hv !== undefined && hv !== null) {
+            cleanReqHeaders[hk] = String(hv);
+          }
+        }
+        reqHeadersJson = JSON.stringify(cleanReqHeaders);
+      } catch (e) {}
+      const realBody = typeof globalThis.__capsurf_http_request === "function"
+        ? globalThis.__capsurf_http_request(cleanFullUrl, reqMethodNorm, serializedBody, reqContentType, reqHeadersJson)
+        : globalThis.__capsurf_http_get(cleanFullUrl);
       if (realBody !== null && realBody !== undefined) {
+        if (!isSameOrigin && reqMode === "no-cors") {
+          return Promise.resolve(makeFetchedResponse("", {
+            status: 0,
+            statusText: "",
+            type: "opaque",
+            url: "",
+            redirected: false,
+          }));
+        }
         return Promise.resolve(makeFetchedResponse(String(realBody), {
           status: 200,
           statusText: "OK",
@@ -3952,6 +4382,20 @@ function installWindow(global) {
         url: cleanFullUrl,
         redirected: isRedirected,
       }));
+    }
+
+    if (!isSameOrigin) {
+      if (reqMode === "no-cors") {
+        return Promise.resolve(makeFetchedResponse("", {
+          status: 0,
+          statusText: "",
+          type: "opaque",
+          url: "",
+          redirected: false,
+        }));
+      }
+      if (typeof console !== "undefined" && typeof console.error === "function") console.error("Access to fetch at '" + cleanFullUrl + "' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.");
+      return Promise.reject(new TypeError("Failed to fetch: CORS header 'Access-Control-Allow-Origin' missing"));
     }
 
     return Promise.resolve(makeFetchedResponse("", {
@@ -4910,6 +5354,15 @@ function installWindow(global) {
       _rafEntries.delete(entry.id);
       if (entry.cancelled) continue;
       ran++;
+      const prevIso = !!(typeof globalThis !== "undefined" && globalThis.__capsurf_in_isolated);
+      let restoredNode = false;
+      if (entry.isIso && typeof globalThis !== "undefined") {
+        globalThis.__capsurf_in_isolated = true;
+        if (globalThis.Node === undefined && globalThis.__capsurf_orig_Node !== undefined) {
+          globalThis.Node = globalThis.__capsurf_orig_Node;
+          restoredNode = true;
+        }
+      }
       try {
         if (typeof entry.cb === "function") {
           entry.cb(ts);
@@ -4919,6 +5372,14 @@ function installWindow(global) {
           globalThis.__capsurf_report_exception(e);
         } else if (typeof console !== "undefined" && console.error) {
           console.error(e);
+        }
+      } finally {
+        if (restoredNode && typeof globalThis !== "undefined") {
+          delete globalThis.Node;
+        }
+        if (entry.isIso && typeof globalThis !== "undefined") {
+          globalThis.__capsurf_in_isolated = prevIso;
+          globalThis.__capsurf_iso_jobs_pending = true;
         }
       }
     }
@@ -4945,7 +5406,12 @@ function installWindow(global) {
   if (!global.requestAnimationFrame) {
     global.requestAnimationFrame = markNative(function (cb) {
       const id = _rafNextId++;
-      const entry = { id: id, cb: cb, cancelled: false };
+      const entry = {
+        id: id,
+        cb: cb,
+        cancelled: false,
+        isIso: !!(typeof globalThis !== "undefined" && globalThis.__capsurf_in_isolated),
+      };
       _rafEntries.set(id, entry);
       _rafQueue.push(entry);
       _scheduleRafFallbackTimer();
@@ -5127,7 +5593,11 @@ function installWindow(global) {
 
     const newEntries = [];
     for (const [target, tInfo] of st.targets.entries()) {
-      if (!target || !target.isConnected || (doc && target.ownerDocument && target.ownerDocument !== doc)) {
+      if (!target || !target.isConnected) {
+        continue;
+      }
+      const targetDoc = target.ownerDocument || doc;
+      if (st.root && st.root !== targetDoc && targetDoc && st.root.ownerDocument && st.root.ownerDocument !== targetDoc) {
         continue;
       }
       if (isIoNodeBoxless(target)) {
@@ -5340,10 +5810,10 @@ function installWindow(global) {
     const obs = this;
     if (!st.pendingMicrotask) {
       st.pendingMicrotask = true;
-      setTimeout(function () {
+      Promise.resolve().then(function () {
         st.pendingMicrotask = false;
         evaluateIntersectionObserver(obs);
-      }, 0);
+      });
     }
     scheduleIoTick();
   }, "observe");
@@ -5587,7 +6057,7 @@ function installWindow(global) {
     const dpr = (global.devicePixelRatio || (typeof window !== "undefined" ? window.devicePixelRatio : 1)) || 1;
     const curMedia = ((typeof globalThis !== "undefined" && globalThis.__capsurf_emulated_media) || "screen").toLowerCase();
     if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_eval_media_query === "function" &&
-        raw.indexOf("device-pixel-ratio") === -1 && raw.indexOf("resolution") === -1 && raw.indexOf("aspect-ratio") === -1) {
+        raw.indexOf("device-pixel-ratio") === -1 && raw.indexOf("resolution") === -1 && raw.indexOf("aspect-ratio") === -1 && raw.indexOf("prefers-") === -1) {
       const nativeRes = globalThis.__capsurf_eval_media_query(raw, w, h, curMedia);
       if (typeof nativeRes === "boolean") return nativeRes;
     }
@@ -5687,11 +6157,37 @@ function installWindow(global) {
   global.AudioContext = AudioContext;
   global.webkitAudioContext = AudioContext;
 
-  // 9. User Interaction Prompts (silent, non-throwing headless stubs)
-  const alertFn = markNative(function (msg) { return undefined; }, "alert");
-  const confirmFn = markNative(function (msg) { return false; }, "confirm");
-  const promptFn = markNative(function (msg, defaultText) { return null; }, "prompt");
-  const stopFn = markNative(function () {}, "stop");
+  // 9. User Interaction Prompts (delegates to native CDP dialog hook when present)
+  const alertFn = markNative(function (msg) {
+    if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_dialog_open === "function") {
+      globalThis.__capsurf_dialog_open("alert", msg === undefined ? "" : String(msg), "");
+    }
+    return undefined;
+  }, "alert");
+  const confirmFn = markNative(function (msg) {
+    if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_dialog_open === "function") {
+      return Boolean(globalThis.__capsurf_dialog_open("confirm", msg === undefined ? "" : String(msg), ""));
+    }
+    return false;
+  }, "confirm");
+  const promptFn = markNative(function (msg, defaultText) {
+    if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_dialog_open === "function") {
+      return globalThis.__capsurf_dialog_open(
+        "prompt",
+        msg === undefined ? "" : String(msg),
+        defaultText === undefined ? "" : String(defaultText)
+      );
+    }
+    return null;
+  }, "prompt");
+  const stopFn = markNative(function () {
+    global.__capsurf_pending_navigation = "";
+    global.__capsurf_window_stopped = true;
+    if (typeof globalThis !== "undefined") {
+      globalThis.__capsurf_pending_navigation = "";
+      globalThis.__capsurf_window_stopped = true;
+    }
+  }, "stop");
 
   global.alert = alertFn;
   global.confirm = confirmFn;
@@ -6274,6 +6770,29 @@ function installWindow(global) {
       return matchesSingleSelector(el, base);
     }
 
+    // :hover support
+    const isElementHovered = function (node) {
+      const hn = (typeof globalThis !== "undefined" ? Number(globalThis.__capsurf_hovered_nid) : 0) | 0;
+      if (!node || hn <= 0) return false;
+      if (node._nid === hn) return true;
+      let cur = (typeof globalThis.__capsurf_find_node_by_id === "function") ? globalThis.__capsurf_find_node_by_id(hn) : null;
+      let guard = 0;
+      while (cur && guard++ < 128) {
+        if (cur === node || (typeof cur._nid === "number" && typeof node._nid === "number" && cur._nid > 0 && cur._nid === node._nid)) return true;
+        cur = cur.parentElement || (cur.parentNode && cur.parentNode.nodeType === 1 ? cur.parentNode : (cur.parentNode && cur.parentNode.host ? cur.parentNode.host : null));
+      }
+      return false;
+    };
+    if (s === ":hover") {
+      return isElementHovered(el);
+    }
+    if (s.endsWith(":hover")) {
+      if (!isElementHovered(el)) return false;
+      const base = s.slice(0, -6).trim();
+      if (!base || base === "*") return true;
+      return matchesSingleSelector(el, base);
+    }
+
     // Simple ID selector #id
     if (s.startsWith("#") && !s.includes(" ") && !s.includes(".") && !s.includes(">") && !s.includes(":") && !s.includes("[")) {
       const id = s.slice(1);
@@ -6777,7 +7296,7 @@ function installWindow(global) {
     "font-language-override", "font-optical-sizing", "font-palette", "font-variant-emoji", "font-variant-position", "font-variation-settings",
     "hanging-punctuation", "hyphens", "line-break", "overflow-wrap", "tab-size",
     "text-align-all", "text-align-last", "text-fit", "text-indent", "text-justify",
-    "text-transform", "word-break", "word-wrap", "clip-rule", "orphans", "widows", "quotes", "block-ellipsis",
+    "text-transform", "word-break", "word-wrap", "clip-rule", "orphans", "widows", "quotes", "block-ellipsis", "pointer-events",
   ]);
 
   function getDefaultDisplayForElement(element) {
@@ -6829,10 +7348,10 @@ function installWindow(global) {
           const rel = String(node.getAttribute ? (node.getAttribute("rel") || "") : "").trim().toLowerCase().split(/\s+/);
           if (rel.includes("stylesheet")) styleNodes.push(node);
         }
-        if (node.childNodes && node.childNodes.length) {
-          for (let i = 0; i < node.childNodes.length; i++) {
-            scanStyles(node.childNodes[i]);
-          }
+        if (node._children && node._children.length) {
+          for (let i = 0; i < node._children.length; i++) scanStyles(node._children[i]);
+        } else if (!node._children) {
+          for (let c = node.firstChild; c; c = c.nextSibling) scanStyles(c);
         }
       }
       if (styleScope.nodeType === 11) {
@@ -7429,12 +7948,17 @@ function installWindow(global) {
     const styleNodes = getStyleNodesForElement(element);
     const curDomEpoch = (typeof globalThis !== "undefined" && globalThis.__capsurf_domMutationEpoch) || 0;
     const curActiveEl = (element && element.ownerDocument ? element.ownerDocument.activeElement : (typeof document !== "undefined" ? document.activeElement : null)) || null;
-    const rawInlineSelf = (!normalizedPseudo && element && element.getAttribute) ? (element.getAttribute("style") || "") : "";
+    const curHoveredNid = (typeof globalThis !== "undefined" ? Number(globalThis.__capsurf_hovered_nid) : 0) | 0;
+    const isBeforeOrAfter = normalizedPseudo === "::before" || normalizedPseudo === "::after";
+    const cacheProp = !normalizedPseudo ? "_rawBaseCache" : (normalizedPseudo === "::before" ? "_rawBeforeCache" : (normalizedPseudo === "::after" ? "_rawAfterCache" : ""));
+    const elInlineSelf = (element && element.getAttribute) ? (element.getAttribute("style") || "") : "";
+    const rawInlineSelf = !normalizedPseudo ? elInlineSelf : "";
     const hasInlineImp = rawInlineSelf.toLowerCase().indexOf("!important") !== -1;
+    const canUseRawCache = !!cacheProp && (!hasInlineImp || isBeforeOrAfter) && styleNodes.length <= 16;
     let sheetKey = "";
     let computedMap = null;
     let hitBaseCache = false;
-    if (!normalizedPseudo && !hasInlineImp && styleNodes.length <= 16) {
+    if (canUseRawCache) {
       for (let si = 0; si < styleNodes.length; si++) {
         const sn = styleNodes[si];
         if (!sn) continue;
@@ -7445,8 +7969,8 @@ function installWindow(global) {
         }
         sheetKey += t.length + ":" + h.toString(36) + "|";
       }
-      const bCache = element._rawBaseCache;
-      if (bCache && bCache.domEpoch === curDomEpoch && bCache.sheetKey === sheetKey && bCache.activeEl === curActiveEl) {
+      const bCache = element[cacheProp];
+      if (bCache && bCache.domEpoch === curDomEpoch && bCache.sheetKey === sheetKey && bCache.activeEl === curActiveEl && bCache.hoveredNid === curHoveredNid && bCache.styleCount === styleNodes.length && (!isBeforeOrAfter || bCache.elInline === elInlineSelf)) {
         computedMap = new Map(bCache.baseMap);
         if (bCache.impKeys && bCache.impKeys.size > 0) computedMap._importantKeys = new Set(bCache.impKeys);
         if (rawInlineSelf) parseDeclarationsBlockInto(element, rawInlineSelf, computedMap);
@@ -7455,7 +7979,7 @@ function installWindow(global) {
     }
     if (!computedMap) {
       computedMap = new Map();
-      if (!normalizedPseudo && !hasInlineImp && styleNodes.length <= 16) {
+      if (canUseRawCache) {
         computedMap._skipInline = true;
       }
     }
@@ -7521,7 +8045,7 @@ function installWindow(global) {
     }
 
     // Own declarations (or pseudo-element declarations)
-    if (normalizedPseudo) {
+    if (!hitBaseCache && normalizedPseudo) {
       const elMap = new Map();
       collectElementOwnDeclarations(element, styleNodes, "", elMap);
       for (const [k, v] of elMap.entries()) {
@@ -7537,7 +8061,7 @@ function installWindow(global) {
       if (computedMap.has(vp)) preOwn.set(vp, computedMap.get(vp));
     }
     if (hitBaseCache) {
-      const bCache = element._rawBaseCache;
+      const bCache = element[cacheProp];
       if (bCache && bCache.ancestors) {
         for (let ai = 0; ai < bCache.ancestors.length; ai++) ancestors.push(bCache.ancestors[ai]);
       }
@@ -7609,11 +8133,11 @@ function installWindow(global) {
       }
     }
 
-    if (computedMap._skipInline) {
+    if (computedMap._skipInline && cacheProp) {
       delete computedMap._skipInline;
       const baseSnap = new Map(computedMap);
       const impSnap = computedMap._importantKeys ? new Set(computedMap._importantKeys) : null;
-      element._rawBaseCache = { domEpoch: curDomEpoch, sheetKey: sheetKey, activeEl: curActiveEl, baseMap: baseSnap, impKeys: impSnap, ancestors: ancestors };
+      element[cacheProp] = { domEpoch: curDomEpoch, sheetKey: sheetKey, activeEl: curActiveEl, hoveredNid: curHoveredNid, styleCount: styleNodes.length, elInline: elInlineSelf, baseMap: baseSnap, impKeys: impSnap, ancestors: ancestors };
       if (rawInlineSelf) {
         parseDeclarationsBlockInto(element, rawInlineSelf, computedMap);
         for (let vi = 0; vi < valCheckProps.length; vi++) {
@@ -8347,6 +8871,12 @@ function installWindow(global) {
     if (!computedMap.has("content-visibility")) {
       computedMap.set("content-visibility", "visible");
     }
+    if (!computedMap.has("visibility")) {
+      computedMap.set("visibility", "visible");
+    }
+    if (!computedMap.has("pointer-events")) {
+      computedMap.set("pointer-events", "auto");
+    }
     if (!computedMap.has("contain")) {
       computedMap.set("contain", "none");
     } else {
@@ -8915,7 +9445,7 @@ function installWindow(global) {
     // Check if an ancestor is replaced via CSS `content: url(...)` / gradient / image-set (CSS Content 3)
     let isInsideReplacedContent = false;
     {
-      const sheetHasContent = Array.isArray(collectRawComputedMap._sheetTexts) &&
+      const sheetHasContent = _isArray(collectRawComputedMap._sheetTexts) &&
         collectRawComputedMap._sheetTexts.some((t) => t.indexOf("content") !== -1);
       let anc = element.parentElement || element.parentNode;
       while (anc && anc.nodeType === 1) {
@@ -10443,6 +10973,8 @@ function installWindow(global) {
       } else if (ck === "outline-color" && (!cv || cvLow === "auto")) {
         const os = (computedMap.get("outline-style") || "none").trim().toLowerCase();
         computedMap.set(ck, os === "auto" ? "auto" : elColor);
+      } else if (ck === "outline-color" && cvLow === "invert") {
+        computedMap.set(ck, "invert");
       } else if (!cv || cvLow === "currentcolor") {
         computedMap.set(ck, elColor);
       } else {
@@ -10581,104 +11113,112 @@ function installWindow(global) {
     if (tuoRaw && tuoRaw.toLowerCase() !== "auto") {
       computedMap.set("text-underline-offset", evalLinLenPctTok(tuoRaw));
     }
-    const bisRaw = (computedMap.get("border-image-source") || "").trim();
-    if (bisRaw && /^(?:repeating-)?(?:linear|radial|conic)-gradient\(/i.test(bisRaw)) {
-      computedMap.set("border-image-source", evalGradientComputed(bisRaw).replace(/\bcurrentcolor\b/gi, elColor));
-    } else if (/^url\(\s*(['"]?)(.*?)\1\s*\)$/i.test(bisRaw)) {
-      const um = /^url\(\s*(['"]?)(.*?)\1\s*\)$/i.exec(bisRaw);
-      if (um && um[2]) {
-        try {
-          const base = (element && element.ownerDocument && element.ownerDocument.baseURI) || (typeof location !== "undefined" && location.href) || "";
-          if (base) computedMap.set("border-image-source", 'url("' + new URL(um[2], base).href + '")');
-        } catch (_) {}
-      }
-    }
-    const biwRaw = (computedMap.get("border-image-width") || "").trim();
-    if (biwRaw && biwRaw !== "1") {
-      const biwToks = [];
-      let bc = "", bd = 0;
-      for (let i = 0; i < biwRaw.length; i++) {
-        const ch = biwRaw[i];
-        if (ch === "(") bd++; else if (ch === ")" && bd > 0) bd--;
-        if (bd === 0 && /\s/.test(ch)) { if (bc) { biwToks.push(bc); bc = ""; } }
-        else bc += ch;
-      }
-      if (bc) biwToks.push(bc);
-      const biwOut = biwToks.map((t) => {
-        const tl = t.toLowerCase();
-        if (tl === "auto" || /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(tl)) return tl;
-        const ev = evalLinLenPctTok(t);
-        if (/^-[\d.]+px$/.test(ev)) return "0px";
-        return ev;
-      });
-      if (biwOut.length === 4 && biwOut[1] === biwOut[3]) biwOut.pop();
-      if (biwOut.length === 3 && biwOut[0] === biwOut[2]) biwOut.pop();
-      if (biwOut.length === 2 && biwOut[0] === biwOut[1]) biwOut.pop();
-      computedMap.set("border-image-width", biwOut.join(" "));
-    }
-    const bioRaw = (computedMap.get("border-image-outset") || "").trim();
-    if (bioRaw && bioRaw !== "0") {
-      const bioToks = [];
-      let bc = "", bd = 0;
-      for (let i = 0; i < bioRaw.length; i++) {
-        const ch = bioRaw[i];
-        if (ch === "(") bd++; else if (ch === ")" && bd > 0) bd--;
-        if (bd === 0 && /\s/.test(ch)) { if (bc) { bioToks.push(bc); bc = ""; } }
-        else bc += ch;
-      }
-      if (bc) bioToks.push(bc);
-      const bioOut = bioToks.map((t) => {
-        let tc = t.replace(/;+$/, "");
-        let op = 0;
-        for (let k = 0; k < tc.length; k++) { if (tc[k] === "(") op++; else if (tc[k] === ")" && op > 0) op--; }
-        while (op > 0) { tc += ")"; op--; }
-        const tl = tc.toLowerCase();
-        if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(tl)) return tl;
-        if (/^(?:calc|min|max|clamp)\(/i.test(tl)) {
-          const stripped = tl.replace(/\bsign\([^()]+\)/gi, "1");
-          if (!/(?:\d|\.)(?:px|em|rem|pt|pc|in|cm|mm|q|vw|vh|ch|lh|%)\b/i.test(stripped)) {
-            const v = evalCssLengthExpr(tc, 0, fontSize);
-            if (v !== null && isFinite(v)) return String(Number(Math.max(0, v).toFixed(6)));
-          }
+    for (const bisKey of ["border-image-source", "mask-border-source"]) {
+      const bisRaw = (computedMap.get(bisKey) || "").trim();
+      if (bisRaw && /^(?:repeating-)?(?:linear|radial|conic)-gradient\(/i.test(bisRaw)) {
+        computedMap.set(bisKey, evalGradientComputed(bisRaw).replace(/\bcurrentcolor\b/gi, elColor));
+      } else if (/^url\(\s*(['"]?)(.*?)\1\s*\)$/i.test(bisRaw)) {
+        const um = /^url\(\s*(['"]?)(.*?)\1\s*\)$/i.exec(bisRaw);
+        if (um && um[2]) {
+          try {
+            const base = (element && element.ownerDocument && element.ownerDocument.baseURI) || (typeof location !== "undefined" && location.href) || "";
+            if (base) computedMap.set(bisKey, 'url("' + new URL(um[2], base).href + '")');
+          } catch (_) {}
         }
-        const ev = evalLinLenPctTok(tc.replace(/\bsign\(([^()]+)\)/gi, (m, inn) => {
-          const sv = evalCssLengthExpr(inn, 0, fontSize);
-          return sv !== null ? String(Math.sign(sv)) : m;
-        }));
-        if (/^-[\d.]+px$/.test(ev)) return "0px";
-        return ev;
-      });
-      if (bioOut.length === 4 && bioOut[1] === bioOut[3]) bioOut.pop();
-      if (bioOut.length === 3 && bioOut[0] === bioOut[2]) bioOut.pop();
-      if (bioOut.length === 2 && bioOut[0] === bioOut[1]) bioOut.pop();
-      computedMap.set("border-image-outset", bioOut.join(" "));
-    }
-    const bisSliceRaw = (computedMap.get("border-image-slice") || "").trim();
-    if (bisSliceRaw && bisSliceRaw !== "100%") {
-      const slToks = [];
-      let sc = "", sd = 0;
-      for (let i = 0; i < bisSliceRaw.length; i++) {
-        const ch = bisSliceRaw[i];
-        if (ch === "(") sd++; else if (ch === ")" && sd > 0) sd--;
-        if (sd === 0 && /\s/.test(ch)) { if (sc) { slToks.push(sc); sc = ""; } }
-        else sc += ch;
       }
-      if (sc) slToks.push(sc);
-      const slOut = slToks.map((t) => {
-        const tl = t.toLowerCase();
-        if (tl === "fill" || /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)%?$/.test(tl)) return tl;
-        if (/^(?:calc|min|max|clamp)\(/i.test(tl)) {
-          const pre = tl.replace(/\bsign\(([^()]+)\)/gi, (m, inn) => {
+    }
+    for (const biwKey of ["border-image-width", "mask-border-width"]) {
+      const biwRaw = (computedMap.get(biwKey) || "").trim();
+      if (biwRaw && biwRaw !== "1" && biwRaw !== "0") {
+        const biwToks = [];
+        let bc = "", bd = 0;
+        for (let i = 0; i < biwRaw.length; i++) {
+          const ch = biwRaw[i];
+          if (ch === "(") bd++; else if (ch === ")" && bd > 0) bd--;
+          if (bd === 0 && /\s/.test(ch)) { if (bc) { biwToks.push(bc); bc = ""; } }
+          else bc += ch;
+        }
+        if (bc) biwToks.push(bc);
+        const biwOut = biwToks.map((t) => {
+          const tl = t.toLowerCase();
+          if (tl === "auto" || /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(tl)) return tl;
+          const ev = evalLinLenPctTok(t);
+          if (/^-[\d.]+px$/.test(ev)) return "0px";
+          return ev;
+        });
+        if (biwOut.length === 4 && biwOut[1] === biwOut[3]) biwOut.pop();
+        if (biwOut.length === 3 && biwOut[0] === biwOut[2]) biwOut.pop();
+        if (biwOut.length === 2 && biwOut[0] === biwOut[1]) biwOut.pop();
+        computedMap.set(biwKey, biwOut.join(" "));
+      }
+    }
+    for (const bioKey of ["border-image-outset", "mask-border-outset"]) {
+      const bioRaw = (computedMap.get(bioKey) || "").trim();
+      if (bioRaw && bioRaw !== "0") {
+        const bioToks = [];
+        let bc = "", bd = 0;
+        for (let i = 0; i < bioRaw.length; i++) {
+          const ch = bioRaw[i];
+          if (ch === "(") bd++; else if (ch === ")" && bd > 0) bd--;
+          if (bd === 0 && /\s/.test(ch)) { if (bc) { bioToks.push(bc); bc = ""; } }
+          else bc += ch;
+        }
+        if (bc) bioToks.push(bc);
+        const bioOut = bioToks.map((t) => {
+          let tc = t.replace(/;+$/, "");
+          let op = 0;
+          for (let k = 0; k < tc.length; k++) { if (tc[k] === "(") op++; else if (tc[k] === ")" && op > 0) op--; }
+          while (op > 0) { tc += ")"; op--; }
+          const tl = tc.toLowerCase();
+          if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(tl)) return tl;
+          if (/^(?:calc|min|max|clamp)\(/i.test(tl)) {
+            const stripped = tl.replace(/\bsign\([^()]+\)/gi, "1");
+            if (!/(?:\d|\.)(?:px|em|rem|pt|pc|in|cm|mm|q|vw|vh|ch|lh|%)\b/i.test(stripped)) {
+              const v = evalCssLengthExpr(tc, 0, fontSize);
+              if (v !== null && isFinite(v)) return String(Number(Math.max(0, v).toFixed(6)));
+            }
+          }
+          const ev = evalLinLenPctTok(tc.replace(/\bsign\(([^()]+)\)/gi, (m, inn) => {
             const sv = evalCssLengthExpr(inn, 0, fontSize);
             return sv !== null ? String(Math.sign(sv)) : m;
-          });
-          if (pre.indexOf("%") !== -1) return evalLinLenPctTok(pre);
-          const v = evalCssLengthExpr(pre, 0, fontSize);
-          if (v !== null && isFinite(v)) return String(Number(Math.max(0, v).toFixed(6)));
+          }));
+          if (/^-[\d.]+px$/.test(ev)) return "0px";
+          return ev;
+        });
+        if (bioOut.length === 4 && bioOut[1] === bioOut[3]) bioOut.pop();
+        if (bioOut.length === 3 && bioOut[0] === bioOut[2]) bioOut.pop();
+        if (bioOut.length === 2 && bioOut[0] === bioOut[1]) bioOut.pop();
+        computedMap.set(bioKey, bioOut.join(" "));
+      }
+    }
+    for (const bisSliceKey of ["border-image-slice", "mask-border-slice"]) {
+      const bisSliceRaw = (computedMap.get(bisSliceKey) || "").trim();
+      if (bisSliceRaw && bisSliceRaw !== "100%" && bisSliceRaw !== "0") {
+        const slToks = [];
+        let sc = "", sd = 0;
+        for (let i = 0; i < bisSliceRaw.length; i++) {
+          const ch = bisSliceRaw[i];
+          if (ch === "(") sd++; else if (ch === ")" && sd > 0) sd--;
+          if (sd === 0 && /\s/.test(ch)) { if (sc) { slToks.push(sc); sc = ""; } }
+          else sc += ch;
         }
-        return tl;
-      });
-      computedMap.set("border-image-slice", slOut.join(" "));
+        if (sc) slToks.push(sc);
+        const slOut = slToks.map((t) => {
+          const tl = t.toLowerCase();
+          if (tl === "fill" || /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)%?$/.test(tl)) return tl;
+          if (/^(?:calc|min|max|clamp)\(/i.test(tl)) {
+            const pre = tl.replace(/\bsign\(([^()]+)\)/gi, (m, inn) => {
+              const sv = evalCssLengthExpr(inn, 0, fontSize);
+              return sv !== null ? String(Math.sign(sv)) : m;
+            });
+            if (pre.indexOf("%") !== -1) return evalLinLenPctTok(pre);
+            const v = evalCssLengthExpr(pre, 0, fontSize);
+            if (v !== null && isFinite(v)) return String(Number(Math.max(0, v).toFixed(6)));
+          }
+          return tl;
+        });
+        computedMap.set(bisSliceKey, slOut.join(" "));
+      }
     }
     const textDecorDefs = [
       ["text-decoration-line", "none"],
@@ -11535,7 +12075,7 @@ function installWindow(global) {
           if (tl === "center") return "50%";
           if (tl === "right" || tl === "bottom") return "100%";
           if (tl === "x-start" || tl === "x-end" || tl === "y-start" || tl === "y-end") {
-            return (bpKey === "background-position" || bpLayers.length > 1) ? ((tl === "x-start" || tl === "y-start") ? "0%" : "100%") : tl;
+            return (bpKey === "background-position" || bpKey === "mask-position" || bpLayers.length > 1) ? ((tl === "x-start" || tl === "y-start") ? "0%" : "100%") : tl;
           }
           return evalLinLenPctTok(t);
         };
@@ -11548,7 +12088,7 @@ function installWindow(global) {
           }
           return off;
         };
-        if (bpKey === "background-position") {
+        if (bpKey === "background-position" || bpKey === "mask-position") {
           if (toks.length === 1) {
             const tl = toks[0].toLowerCase();
             if (tl === "left") return "0% 50%";
@@ -11664,7 +12204,7 @@ function installWindow(global) {
     resolveContentGradients();
     for (const sk of ["shape-outside", "clip-path"]) {
       const sv = (computedMap.get(sk) || "").trim();
-      if (!sv || sv === "initial" || sv === "revert" || sv === "revert-layer") {
+      if (!sv || sv === "initial" || sv === "unset" || sv === "revert" || sv === "revert-layer") {
         computedMap.set(sk, "none");
         continue;
       }
@@ -12181,7 +12721,7 @@ function installWindow(global) {
     "column-rule-color", "column-rule-style", "column-rule-width", "column-span", "column-width", "column-height", "column-wrap", "contain",
     "contain-intrinsic-block-size", "contain-intrinsic-height", "contain-intrinsic-inline-size", "contain-intrinsic-width",
     "content", "content-visibility", "continue", "container-name", "container-type", "counter-increment", "counter-reset", "counter-set", "cursor", "direction", "display", "initial-letter", "margin-trim",
-    "clip-rule", "mask-border-outset", "mask-border-repeat", "mask-border-slice", "mask-border-source", "mask-border-width",
+    "clip-rule", "mask-border-mode", "mask-border-outset", "mask-border-repeat", "mask-border-slice", "mask-border-source", "mask-border-width",
     "mask-clip", "mask-composite", "mask-image", "mask-mode", "mask-origin", "mask-position", "mask-repeat", "mask-size", "mask-type",
     "empty-cells", "field-sizing", "filter", "flex-basis", "flex-direction", "flex-grow", "flex-shrink",
     "flex-wrap", "float", "font-family", "font-feature-settings", "font-kerning", "font-language-override", "font-optical-sizing", "font-palette", "font-size", "font-size-adjust", "font-synthesis", "font-synthesis-position", "font-synthesis-small-caps", "font-synthesis-style", "font-synthesis-weight",
@@ -12242,6 +12782,7 @@ function installWindow(global) {
     let lastStyleAttr = (element && typeof element.getAttribute === "function") ? (element.getAttribute("style") || "") : "";
     let lastActiveEl = liveDoc ? liveDoc.activeElement : null;
     let lastDomEpoch = (typeof globalThis !== "undefined" && globalThis.__capsurf_domMutationEpoch) || 0;
+    let lastHoveredNid = (typeof globalThis !== "undefined" ? Number(globalThis.__capsurf_hovered_nid) : 0) | 0;
     let computedMap = collectRawComputedMap(element, normalizedPseudo);
     applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo);
     let _cachedPropList = null;
@@ -12249,10 +12790,12 @@ function installWindow(global) {
       const curStyleAttr = (element && typeof element.getAttribute === "function") ? (element.getAttribute("style") || "") : "";
       const curActiveEl = liveDoc ? liveDoc.activeElement : null;
       const curDomEpoch = (typeof globalThis !== "undefined" && globalThis.__capsurf_domMutationEpoch) || 0;
-      if (curStyleAttr !== lastStyleAttr || curActiveEl !== lastActiveEl || curDomEpoch !== lastDomEpoch) {
+      const curHoveredNid = (typeof globalThis !== "undefined" ? Number(globalThis.__capsurf_hovered_nid) : 0) | 0;
+      if (curStyleAttr !== lastStyleAttr || curActiveEl !== lastActiveEl || curDomEpoch !== lastDomEpoch || curHoveredNid !== lastHoveredNid) {
         lastStyleAttr = curStyleAttr;
         lastActiveEl = curActiveEl;
         lastDomEpoch = curDomEpoch;
+        lastHoveredNid = curHoveredNid;
         _cachedPropList = null;
         computedMap = collectRawComputedMap(element, normalizedPseudo);
         applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo);
@@ -12428,7 +12971,9 @@ function installWindow(global) {
         const e = computedMap.get(base + "-end-" + kind) || def;
         return s === e ? s : (s + " " + e);
       }
-      if (name === "border-block-start" || name === "border-block-end" ||
+      if (name === "border-top" || name === "border-right" ||
+          name === "border-bottom" || name === "border-left" ||
+          name === "border-block-start" || name === "border-block-end" ||
           name === "border-inline-start" || name === "border-inline-end") {
         const w = computedMap.get(name + "-width") || "0px";
         const st = computedMap.get(name + "-style") || "none";
@@ -12656,6 +13201,7 @@ function installWindow(global) {
       }
       if (lower === "contain") return "none";
       if (lower === "content-visibility") return "visible";
+      if (lower === "visibility") return "visible";
       if (lower.startsWith("contain-intrinsic-")) {
         if (lower === "contain-intrinsic-size") return getShorthandComputed("contain-intrinsic-size") || "none";
         return "none";
@@ -12774,6 +13320,7 @@ function installWindow(global) {
           }
           const lower = prop.toLowerCase();
           if (computedMap.has(lower)) return computedMap.get(lower);
+          if (kebab === "visibility") return "visible";
           if (kebab === "text-combine-upright") return "none";
           if (kebab === "text-orientation") return "mixed";
           if (kebab === "perspective-origin" || kebab === "transform-origin") return getDefaultOriginComputed();
@@ -16062,7 +16609,13 @@ const CSS_TYPED_OM_GLOBALS = {
   global.__capsurf_drain_bindings = function () {
     const q = global.__capsurf_binding_queue || [];
     global.__capsurf_binding_queue = [];
-    return JSON.stringify(q);
+    if (!q.length) return "[]";
+    const parts = [];
+    for (let i = 0; i < q.length; i++) {
+      const item = q[i];
+      parts.push(JSON.stringify({ name: item.name, payload: item.payload }));
+    }
+    return "[" + parts.join(",") + "]";
   };
   if (typeof globalThis !== "undefined") {
     globalThis.__capsurf_binding_queue = global.__capsurf_binding_queue;
@@ -16073,6 +16626,11 @@ const CSS_TYPED_OM_GLOBALS = {
   // 13. HTML5 Lifecycle Events Dispatcher (DOMContentLoaded on document, load on window)
   let deferredLifecyclePending = false;
   function dispatchLifecycleNow() {
+    try {
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_initCssTransitionSnapshots === "function") {
+        globalThis.__capsurf_initCssTransitionSnapshots();
+      }
+    } catch (e) {}
     try {
       if (global.document && global.document.querySelectorAll) {
         const scripts = global.document.querySelectorAll("script");
@@ -16139,7 +16697,7 @@ const CSS_TYPED_OM_GLOBALS = {
     } catch (e) {}
     try {
       if (global.document && global.document.querySelectorAll && typeof global.__capsurf_on_iframe_connected === "function") {
-        const iframes = global.document.querySelectorAll("iframe");
+        const iframes = global.document.querySelectorAll("iframe, frame");
         for (let i = 0; i < iframes.length; i++) {
           const f = iframes[i];
           const loadingAttr = f.getAttribute ? String(f.getAttribute("loading") || "").toLowerCase() : "";
@@ -16151,20 +16709,6 @@ const CSS_TYPED_OM_GLOBALS = {
           } else if (!f._contentWindow && !f._navSeq) {
             global.__capsurf_on_iframe_connected(f);
           }
-        }
-      }
-    } catch (e) {}
-    try {
-      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_initCssTransitionSnapshots === "function") {
-        const nativeST = (typeof global.__capsurf_native_setTimeout === "function")
-          ? global.__capsurf_native_setTimeout
-          : (typeof setTimeout === "function" ? setTimeout : null);
-        if (nativeST) {
-          nativeST(function () {
-            try { globalThis.__capsurf_initCssTransitionSnapshots(); } catch (e) {}
-          }, 0);
-        } else {
-          globalThis.__capsurf_initCssTransitionSnapshots();
         }
       }
     } catch (e) {}
@@ -16254,8 +16798,8 @@ const CSS_TYPED_OM_GLOBALS = {
     const de = (typeof document !== "undefined" && document.documentElement) ? document.documentElement : null;
     const vw = Number(global.innerWidth || (typeof window !== "undefined" ? window.innerWidth : 0) || 1280);
     const vh = Number(global.innerHeight || (typeof window !== "undefined" ? window.innerHeight : 0) || 720);
-    const maxScrollX = de ? Math.max(0, (de.scrollWidth || vw) - vw) : Math.max(0, targetX);
-    const maxScrollY = de ? Math.max(0, (de.scrollHeight || vh) - vh) : Math.max(0, targetY);
+    const maxScrollX = (targetX > 0 && de) ? Math.max(0, (de.scrollWidth || vw) - vw) : Math.max(0, targetX);
+    const maxScrollY = (targetY > 0 && de) ? Math.max(0, (de.scrollHeight || vh) - vh) : Math.max(0, targetY);
     targetX = Math.max(0, Math.min(targetX, maxScrollX));
     targetY = Math.max(0, Math.min(targetY, maxScrollY));
     const prevX = (typeof global.scrollX !== "undefined") ? global.scrollX : 0;
@@ -16899,10 +17443,105 @@ const CSS_TYPED_OM_GLOBALS = {
     XMLHttpRequest.prototype.send = function (body) {
       const self = this;
       this._emit("loadstart");
+      if (this._aborted) return;
+      if (this._async === false) {
+        const syncXhrFn =
+          (typeof global.__capsurf_sync_xhr === "function" ? global.__capsurf_sync_xhr : null) ||
+          (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_sync_xhr === "function" ? globalThis.__capsurf_sync_xhr : null);
+        if (syncXhrFn) {
+          let serializedBody = "";
+          if (body !== undefined && body !== null && this._method !== "GET" && this._method !== "HEAD") {
+            if (typeof ArrayBuffer !== "undefined" && ArrayBuffer.isView(body)) {
+              serializedBody = new Uint8Array(body.buffer, body.byteOffset, body.byteLength);
+            } else if (typeof ArrayBuffer !== "undefined" && body instanceof ArrayBuffer) {
+              serializedBody = new Uint8Array(body);
+            } else {
+              serializedBody = String(body);
+            }
+          }
+          const reqContentType = this._reqHeaders && this._reqHeaders["content-type"] ? String(this._reqHeaders["content-type"]) : "";
+          let reqHeadersJson = "{}";
+          try { reqHeadersJson = JSON.stringify(this._reqHeaders || {}); } catch (e) {}
+          const rawRes = syncXhrFn(this._url, this._method, serializedBody, reqContentType, reqHeadersJson);
+          if (this._aborted) return;
+          let parsed = null;
+          if (rawRes !== null && rawRes !== undefined) {
+            try { parsed = JSON.parse(String(rawRes)); } catch (e) {}
+          }
+          if (!parsed || typeof parsed !== "object") {
+            this.status = 0;
+            this.statusText = "";
+            this.readyState = 4;
+            this._emit("readystatechange");
+            this._emit("error");
+            this._emit("loadend");
+            return;
+          }
+          this.status = Number(parsed.status || 0);
+          this.statusText = String(parsed.statusText || "");
+          this.responseURL = String(parsed.url || this._url);
+          this._respHeaders = {};
+          try {
+            const hdrObj = typeof parsed.headersJson === "string"
+              ? JSON.parse(parsed.headersJson || "{}")
+              : (parsed.headersJson || {});
+            if (hdrObj && typeof hdrObj === "object") {
+              const hkeys = Object.keys(hdrObj);
+              for (let hi = 0; hi < hkeys.length; hi++) {
+                this._respHeaders[String(hkeys[hi]).toLowerCase()] = String(hdrObj[hkeys[hi]]);
+              }
+            }
+          } catch (e) {}
+          this.readyState = 2;
+          this._emit("readystatechange");
+          if (this._aborted) return;
+          let bodyBytes = new Uint8Array(0);
+          if (parsed.bodyBase64) {
+            try {
+              const bin = atob(String(parsed.bodyBase64));
+              bodyBytes = new Uint8Array(bin.length);
+              for (let bi = 0; bi < bin.length; bi++) {
+                bodyBytes[bi] = bin.charCodeAt(bi) & 0xff;
+              }
+            } catch (e) {}
+          }
+          let bodyText = "";
+          if (bodyBytes.length > 0) {
+            try {
+              bodyText = typeof TextDecoder === "function"
+                ? new TextDecoder().decode(bodyBytes)
+                : String.fromCharCode.apply(null, bodyBytes);
+            } catch (e) {
+              let s = "";
+              for (let si = 0; si < bodyBytes.length; si++) s += String.fromCharCode(bodyBytes[si]);
+              bodyText = s;
+            }
+          }
+          this.readyState = 3;
+          this._emit("readystatechange");
+          if (this._aborted) return;
+          if (this.responseType === "arraybuffer") {
+            this._responseText = "";
+            this.response = bodyBytes.buffer;
+          } else if (this.responseType === "json") {
+            this._responseText = bodyText;
+            try { this.response = JSON.parse(bodyText); } catch (e) { this.response = null; }
+          } else {
+            this._responseText = bodyText;
+            this.response = bodyText;
+          }
+          this.readyState = 4;
+          this._emit("readystatechange");
+          this._emit("load");
+          this._emit("loadend");
+          return;
+        }
+      }
       const init = {
         method: this._method,
         headers: this._reqHeaders,
         credentials: this.withCredentials ? "include" : "same-origin",
+        _resourceType: "xhr",
       };
       if (body !== undefined && body !== null && this._method !== "GET" && this._method !== "HEAD") {
         init.body = body;
@@ -17316,7 +17955,7 @@ const CSS_TYPED_OM_GLOBALS = {
       if (child && this && (this === global.document || this === global.document?.body || this.isConnected)) {
         stampNamedGlobals(child);
         const tag = String(child.localName || child.tagName || "").toLowerCase();
-        if (tag === "iframe") {
+        if (tag === "iframe" || tag === "frame") {
           try {
             if (typeof child.contentWindow !== "undefined") {
               const _ = child.contentWindow;
@@ -17871,8 +18510,25 @@ const CSS_TYPED_OM_GLOBALS = {
 
   function applyContentEditableInsertText(doc, host, sel, range, text) {
     if (!range) {
+      let firstText = null;
+      (function findText(n) {
+        if (!n || firstText) return;
+        if (n.nodeType === 3) { firstText = n; return; }
+        const cs = n.childNodes || [];
+        for (let i = 0; i < cs.length; i++) findText(cs[i]);
+      })(host);
+      if (firstText) {
+        const curText = String(firstText.data !== undefined ? firstText.data : (firstText.textContent || ""));
+        const nextText = text + curText;
+        if (typeof firstText.data === "string") firstText.data = nextText;
+        else firstText.textContent = nextText;
+        if (sel && typeof sel.collapse === "function") {
+          try { sel.collapse(firstText, text.length); } catch (e) {}
+        }
+        return;
+      }
       const tn = doc.createTextNode(text);
-      host.insertBefore(tn, host.firstChild || null);
+      host.appendChild(tn);
       if (sel && typeof sel.collapse === "function") {
         try { sel.collapse(tn, text.length); } catch (e) {}
       }
@@ -18100,6 +18756,17 @@ const CSS_TYPED_OM_GLOBALS = {
       }
 
       if (!defaultPrevented) {
+        if (keyStr === "Escape" && doc && typeof doc.querySelectorAll === "function") {
+          const dialogs = doc.querySelectorAll("dialog[open]");
+          for (let di = dialogs.length - 1; di >= 0; di--) {
+            const dlg = dialogs[di];
+            if (dlg && dlg._isModalDialog) {
+              if (typeof dlg.requestClose === "function") dlg.requestClose();
+              else if (typeof dlg.close === "function") dlg.close();
+              break;
+            }
+          }
+        }
         if (!isTargetContentEditable(target) && (keyStr === "Backspace" || keyStr === "Delete")) {
           const tTag = String(target.tagName || target.localName || "").toLowerCase();
           if (tTag === "textarea" || tTag === "input") {
@@ -18396,8 +19063,24 @@ const CSS_TYPED_OM_GLOBALS = {
   if (typeof window !== "undefined") window.postMessage = windowPostMessage;
   if (typeof globalThis !== "undefined") globalThis.postMessage = windowPostMessage;
 
-  function evalInIframe(expr) {
-    const iframeEl = document.querySelector("iframe");
+  function evalInIframe(expr, iframeIdx) {
+    function collectEvalFrames(doc, out) {
+      if (!doc || typeof doc.querySelectorAll !== "function") return;
+      const list = doc.querySelectorAll("iframe, frame");
+      for (let i = 0; i < list.length; i++) {
+        const f = list[i];
+        out.push(f);
+        try {
+          const cd = f.contentDocument;
+          if (cd) collectEvalFrames(cd, out);
+        } catch (e) {}
+      }
+    }
+    const evalFrames = [];
+    collectEvalFrames(document, evalFrames);
+    const iframeEl = (typeof iframeIdx === "number" && iframeIdx >= 0)
+      ? (evalFrames[iframeIdx] || evalFrames[0] || document.querySelector("iframe, frame"))
+      : (evalFrames[0] || document.querySelector("iframe, frame"));
     const win = (iframeEl && iframeEl.contentWindow) || (typeof window !== "undefined" ? window : global);
     const args = [
       win,
@@ -18432,14 +19115,21 @@ const CSS_TYPED_OM_GLOBALS = {
       fn = compileIframeFn("return (" + expr + ");");
     } catch (e) {
       const trimmed = String(expr || "").replace(/[\s;]+$/, "");
-      const semi = trimmed.lastIndexOf(";");
-      if (semi !== -1) {
-        const prefix = trimmed.slice(0, semi + 1);
-        const last = trimmed.slice(semi + 1).trim();
-        if (last) {
-          try {
-            fn = compileIframeFn(prefix + "\nreturn (" + last + ");");
-          } catch (e2) {}
+      if (trimmed) {
+        try {
+          fn = compileIframeFn("return (" + trimmed + ");");
+        } catch (e1) {}
+      }
+      if (!fn) {
+        const semi = trimmed.lastIndexOf(";");
+        if (semi !== -1) {
+          const prefix = trimmed.slice(0, semi + 1);
+          const last = trimmed.slice(semi + 1).trim();
+          if (last) {
+            try {
+              fn = compileIframeFn(prefix + "\nreturn (" + last + ");");
+            } catch (e2) {}
+          }
         }
       }
       if (!fn) {
@@ -18490,7 +19180,38 @@ const CSS_TYPED_OM_GLOBALS = {
     }
     return null;
   }
+  let _pseudoEpoch = -1;
+  let _pseudoHasRules = false;
+  function _hasPseudoElementRules() {
+    const ep = (typeof globalThis !== "undefined" ? globalThis.__capsurf_domMutationEpoch : 0) || 0;
+    if (_pseudoEpoch === ep) return _pseudoHasRules;
+    _pseudoEpoch = ep;
+    _pseudoHasRules = false;
+    try {
+      const d = typeof document !== "undefined" ? document : null;
+      if (d && typeof d.querySelectorAll === "function") {
+        const stEls = d.querySelectorAll("style");
+        for (let i = 0; i < stEls.length; i++) {
+          const txt = String(stEls[i].textContent || "");
+          if (txt.indexOf(":before") !== -1 || txt.indexOf(":after") !== -1) { _pseudoHasRules = true; return true; }
+        }
+      }
+      const sheets = (d && d.styleSheets) || [];
+      for (let si = 0; si < sheets.length; si++) {
+        const sh = sheets[si];
+        if (!sh) continue;
+        if (typeof sh._cssText === "string" && (sh._cssText.indexOf(":before") !== -1 || sh._cssText.indexOf(":after") !== -1)) { _pseudoHasRules = true; return true; }
+        const rules = sh.cssRules || [];
+        for (let ri = 0; ri < rules.length; ri++) {
+          const sel = String((rules[ri] && rules[ri].selectorText) || "");
+          if (sel.indexOf(":before") !== -1 || sel.indexOf(":after") !== -1) { _pseudoHasRules = true; return true; }
+        }
+      }
+    } catch (_) { _pseudoHasRules = true; }
+    return _pseudoHasRules;
+  }
   function _resolvePseudoHit(hit, x, y) {
+    if (!_hasPseudoElementRules()) return hit;
     if (hit && hit.querySelectorAll && typeof window !== "undefined" && typeof window.getComputedStyle === "function") {
       try {
         const desc = hit.querySelectorAll("*");
@@ -18528,31 +19249,85 @@ const CSS_TYPED_OM_GLOBALS = {
     const _origEfp = Document.prototype.elementFromPoint;
     Document.prototype._capsurfPseudoWrapped = true;
     Document.prototype.elementFromPoint = markNative(function (x, y) {
-      return _resolvePseudoHit(_origEfp.call(this, x, y), x, y);
+      let hit = _origEfp.call(this, x, y);
+      if (!hit || hit === this.documentElement || hit === this.body) {
+        if (this.body && this.body._shadowRoot && typeof this.body.getBoundingClientRect === "function") {
+          const br = this.body.getBoundingClientRect();
+          if (br && x >= br.left && x <= br.right && y >= br.top && y <= br.bottom) hit = this.body;
+        }
+        const scope = hit || this.body || this.documentElement;
+        if (scope && typeof scope.querySelectorAll === "function") {
+          const hosts = scope.querySelectorAll("*");
+          for (let hi = hosts.length - 1; hi >= 0; hi--) {
+            const h = hosts[hi];
+            if (h && h._shadowRoot && typeof h.getBoundingClientRect === "function") {
+              const hr = h.getBoundingClientRect();
+              if (hr && hr.width > 0 && hr.height > 0 && x >= hr.left && x <= hr.right && y >= hr.top && y <= hr.bottom) {
+                hit = h;
+                break;
+              }
+            }
+          }
+        }
+      }
+      return _resolvePseudoHit(hit, x, y);
     }, "elementFromPoint");
     if (global.document && typeof global.document.elementFromPoint === "function") {
       global.document.elementFromPoint = Document.prototype.elementFromPoint.bind(global.document);
     }
   }
-  function _hitTestElement(x, y) {
-    const doc = (typeof document !== "undefined" ? document : null) || global.document;
+  function _hitTestElement(x, y, targetDoc, depth) {
+    if ((depth || 0) > 16) return null;
+    const doc = targetDoc || (typeof document !== "undefined" ? document : null) || global.document;
     if (!doc) return null;
+    let hit = null;
     if (typeof doc.elementFromPoint === "function") {
       try {
-        const hit = doc.elementFromPoint(x, y);
-        if (hit) return _resolvePseudoHit(hit, x, y);
+        const efpHit = doc.elementFromPoint(x, y);
+        if (efpHit) hit = _resolvePseudoHit(efpHit, x, y);
       } catch (e) {}
     }
-    const all = doc.querySelectorAll ? doc.querySelectorAll("*") : [];
-    for (let i = all.length - 1; i >= 0; i--) {
-      const item = all[i];
-      if (!item || typeof item.getBoundingClientRect !== "function") continue;
-      const r = item.getBoundingClientRect();
-      if (r && r.width > 0 && r.height > 0 && x >= r.left && x <= r.left + r.width && y >= r.top && y <= r.top + r.height) {
-        return item;
+    if (!hit) {
+      const all = doc.querySelectorAll ? doc.querySelectorAll("*") : [];
+      for (let i = all.length - 1; i >= 0; i--) {
+        const item = all[i];
+        if (!item || typeof item.getBoundingClientRect !== "function") continue;
+        const r = item.getBoundingClientRect();
+        if (r && r.width > 0 && r.height > 0 && x >= r.left && x <= r.left + r.width && y >= r.top && y <= r.top + r.height) {
+          hit = item;
+          break;
+        }
       }
     }
-    return doc.body || doc.documentElement || null;
+    if (!hit) hit = doc.body || doc.documentElement || null;
+    if (hit && hit.nodeType === 1) {
+      const tag = String(hit.localName || hit.tagName || "").toLowerCase();
+      if (tag === "iframe" || tag === "frame") {
+        let contentDoc = null;
+        try {
+          contentDoc = hit.contentDocument || (hit.contentWindow && hit.contentWindow.document) || null;
+        } catch (e) {}
+        if (contentDoc && typeof hit.getBoundingClientRect === "function") {
+          const rect = hit.getBoundingClientRect();
+          if (rect) {
+            let offsetX = rect.left || 0;
+            let offsetY = rect.top || 0;
+            if (typeof window !== "undefined" && typeof window.getComputedStyle === "function") {
+              try {
+                const cs = window.getComputedStyle(hit);
+                if (cs) {
+                  offsetX += (parseFloat(cs.borderLeftWidth) || 0) + (parseFloat(cs.paddingLeft) || 0);
+                  offsetY += (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.paddingTop) || 0);
+                }
+              } catch (e) {}
+            }
+            const innerHit = _hitTestElement(x - offsetX, y - offsetY, contentDoc, (depth || 0) + 1);
+            if (innerHit) return innerHit;
+          }
+        }
+      }
+    }
+    return hit;
   }
   function _dispatchTrusted(target, ev) {
     if (typeof global.__capsurf_dispatchTrustedEvent === "function") {
@@ -18574,6 +19349,7 @@ const CSS_TYPED_OM_GLOBALS = {
     return list;
   }
   function _dispatchPointerAndMouseBoundary(target, x, y, dx, dy, btnNum, effectiveButtons) {
+    if (typeof globalThis !== "undefined") globalThis.__capsurf_hovered_nid = (target && target._nid) ? target._nid : 0;
     const prev = _lastHoveredElement;
     if (prev === target) return;
     _lastHoveredElement = target;
@@ -18719,6 +19495,8 @@ const CSS_TYPED_OM_GLOBALS = {
           if (form && typeof submitForm === "function") {
             submitForm(form, ctrl);
           }
+        } else if (iType === "file") {
+          if (typeof globalThis.__capsurf_notifyFileChooser === "function") globalThis.__capsurf_notifyFileChooser(ctrl);
         }
       } else if (ctrlTag === "button") {
         const bType = String(ctrl.getAttribute ? (ctrl.getAttribute("type") || "submit") : "submit").toLowerCase();
@@ -18756,7 +19534,16 @@ const CSS_TYPED_OM_GLOBALS = {
             const loc = (typeof location !== "undefined") ? location : global.location;
             if (loc && href) {
               if (href.startsWith("#")) loc.hash = href;
-              else loc.href = cur.href || href;
+              else {
+                if (cur.hasAttribute && cur.hasAttribute("download")) {
+                  const dlVal = cur.getAttribute("download") || "__1__";
+                  global.__capsurf_pending_download = dlVal;
+                  if (typeof globalThis !== "undefined") {
+                    globalThis.__capsurf_pending_download = dlVal;
+                  }
+                }
+                loc.href = cur.href || href;
+              }
             }
           }
           break;
@@ -19083,6 +19870,163 @@ const CSS_TYPED_OM_GLOBALS = {
   if (typeof window !== "undefined") window.__capsurf_dispatch_wheel_event = dispatchWheelEvent;
   if (typeof globalThis !== "undefined") globalThis.__capsurf_dispatch_wheel_event = dispatchWheelEvent;
 
+  const _activeTouches = new Map();
+  function dispatchTouchEvent(cdpType, touchPoints, modifiers) {
+    let domType = "";
+    if (cdpType === "touchStart") domType = "touchstart";
+    else if (cdpType === "touchMove") domType = "touchmove";
+    else if (cdpType === "touchEnd") domType = "touchend";
+    else if (cdpType === "touchCancel") domType = "touchcancel";
+    else return { handled: false };
+
+    const doc = (typeof document !== "undefined" ? document : null) || global.document;
+    const fallbackTarget = (doc && (doc.body || doc.documentElement)) || global;
+    const pts = Array.isArray(touchPoints) ? touchPoints : [];
+    const mods = Number(modifiers) || 0;
+    const sx = global.scrollX || 0;
+    const sy = global.scrollY || 0;
+    const TouchCtor = _ne.Touch || (typeof Touch !== "undefined" ? Touch : null) || global.Touch || (typeof globalThis !== "undefined" ? globalThis.Touch : null);
+    const TouchEvCtor = _ne.TouchEvent || (typeof TouchEvent !== "undefined" ? TouchEvent : null) || global.TouchEvent || (typeof globalThis !== "undefined" ? globalThis.TouchEvent : null) || _NativeEventCtor;
+
+    const makeTouch = function (pt, id, target, isLift) {
+      const x = Number(pt.x) || 0;
+      const y = Number(pt.y) || 0;
+      const init = {
+        identifier: id,
+        target: target,
+        clientX: x,
+        clientY: y,
+        screenX: x,
+        screenY: y,
+        pageX: x + sx,
+        pageY: y + sy,
+        radiusX: pt.radiusX !== undefined ? Number(pt.radiusX) : 1,
+        radiusY: pt.radiusY !== undefined ? Number(pt.radiusY) : 1,
+        rotationAngle: pt.rotationAngle !== undefined ? Number(pt.rotationAngle) : 0,
+        force: pt.force !== undefined ? Number(pt.force) : (isLift ? 0 : 1),
+      };
+      return typeof TouchCtor === "function" ? new TouchCtor(init) : init;
+    };
+
+    const changed = [];
+    if (cdpType === "touchStart") {
+      for (let i = 0; i < pts.length; i++) {
+        const pt = pts[i] || {};
+        const id = pt.id !== undefined ? Number(pt.id) : i;
+        const x = Number(pt.x) || 0;
+        const y = Number(pt.y) || 0;
+        const target = _hitTestElement(x, y) || fallbackTarget;
+        const t = makeTouch(pt, id, target, false);
+        _activeTouches.set(id, t);
+        changed.push(t);
+      }
+    } else if (cdpType === "touchMove") {
+      for (let i = 0; i < pts.length; i++) {
+        const pt = pts[i] || {};
+        const id = pt.id !== undefined ? Number(pt.id) : i;
+        const prev = _activeTouches.get(id);
+        const x = Number(pt.x) || 0;
+        const y = Number(pt.y) || 0;
+        const target = (prev && prev.target) || _hitTestElement(x, y) || fallbackTarget;
+        const t = makeTouch(pt, id, target, false);
+        _activeTouches.set(id, t);
+        changed.push(t);
+      }
+    } else {
+      if (pts.length === 0) {
+        if (_activeTouches.size > 0) {
+          for (const prev of _activeTouches.values()) {
+            const t = makeTouch({
+              x: prev.clientX,
+              y: prev.clientY,
+              radiusX: prev.radiusX,
+              radiusY: prev.radiusY,
+              rotationAngle: prev.rotationAngle,
+              force: 0,
+            }, prev.identifier, prev.target || fallbackTarget, true);
+            changed.push(t);
+          }
+          _activeTouches.clear();
+        }
+      } else {
+        for (let i = 0; i < pts.length; i++) {
+          const pt = pts[i] || {};
+          const id = pt.id !== undefined ? Number(pt.id) : i;
+          const prev = _activeTouches.get(id);
+          const x = pt.x !== undefined ? Number(pt.x) : (prev ? prev.clientX : 0);
+          const y = pt.y !== undefined ? Number(pt.y) : (prev ? prev.clientY : 0);
+          const target = (prev && prev.target) || _hitTestElement(x, y) || fallbackTarget;
+          const t = makeTouch({
+            x: x,
+            y: y,
+            radiusX: pt.radiusX !== undefined ? pt.radiusX : (prev ? prev.radiusX : 1),
+            radiusY: pt.radiusY !== undefined ? pt.radiusY : (prev ? prev.radiusY : 1),
+            rotationAngle: pt.rotationAngle !== undefined ? pt.rotationAngle : (prev ? prev.rotationAngle : 0),
+            force: pt.force !== undefined ? pt.force : 0,
+          }, id, target, true);
+          _activeTouches.delete(id);
+          changed.push(t);
+        }
+      }
+    }
+
+    const allActive = Array.from(_activeTouches.values());
+    const altKey = (mods & 1) !== 0;
+    const ctrlKey = (mods & 2) !== 0;
+    const metaKey = (mods & 4) !== 0;
+    const shiftKey = (mods & 8) !== 0;
+    const cancelable = domType !== "touchcancel";
+
+    if (changed.length === 0) {
+      if (fallbackTarget && typeof fallbackTarget.dispatchEvent === "function") {
+        const ev = new TouchEvCtor(domType, {
+          bubbles: true,
+          cancelable: cancelable,
+          composed: true,
+          view: global,
+          touches: allActive,
+          targetTouches: allActive.filter(function (t) { return t.target === fallbackTarget; }),
+          changedTouches: [],
+          altKey: altKey,
+          ctrlKey: ctrlKey,
+          metaKey: metaKey,
+          shiftKey: shiftKey,
+        });
+        _dispatchTrusted(fallbackTarget, ev);
+      }
+    } else {
+      const targets = [];
+      for (let i = 0; i < changed.length; i++) {
+        const tgt = changed[i].target || fallbackTarget;
+        if (targets.indexOf(tgt) === -1) targets.push(tgt);
+      }
+      for (let i = 0; i < targets.length; i++) {
+        const tgt = targets[i];
+        if (!tgt || typeof tgt.dispatchEvent !== "function") continue;
+        const changedForTgt = changed.filter(function (t) { return (t.target || fallbackTarget) === tgt; });
+        const targetTouches = allActive.filter(function (t) { return (t.target || fallbackTarget) === tgt; });
+        const ev = new TouchEvCtor(domType, {
+          bubbles: true,
+          cancelable: cancelable,
+          composed: true,
+          view: global,
+          touches: allActive,
+          targetTouches: targetTouches,
+          changedTouches: changedForTgt,
+          altKey: altKey,
+          ctrlKey: ctrlKey,
+          metaKey: metaKey,
+          shiftKey: shiftKey,
+        });
+        _dispatchTrusted(tgt, ev);
+      }
+    }
+    return { handled: true };
+  }
+  global.__capsurf_dispatch_touch_event = dispatchTouchEvent;
+  if (typeof window !== "undefined") window.__capsurf_dispatch_touch_event = dispatchTouchEvent;
+  if (typeof globalThis !== "undefined") globalThis.__capsurf_dispatch_touch_event = dispatchTouchEvent;
+
   // HTML Named Access on Window (live, connected-only, no Proxy prototype so QuickJS throws ReferenceError for absent bare globals)
   try {
     const winTarget = (typeof globalThis !== "undefined") ? globalThis : global;
@@ -19133,7 +20077,7 @@ const CSS_TYPED_OM_GLOBALS = {
 
         walkConnectedTree(doc.documentElement, function (el) {
           const tag = String(el.localName || el.tagName || "").toLowerCase();
-          if (tag === "iframe") {
+          if (tag === "iframe" || tag === "frame") {
             iframes.push(el);
           }
           const idAttr = typeof el.getAttribute === "function" ? el.getAttribute("id") : (el.id || "");
@@ -20099,7 +21043,8 @@ const CSS_TYPED_OM_GLOBALS = {
         const start = timers.get(k);
         if (start === undefined) { c.warn("Timer '" + k + "' does not exist"); return; }
         timers.delete(k);
-        c.log(k + ": " + (Date.now() - start) + " ms");
+        if (typeof c.__capsurf_timeEnd === "function") c.__capsurf_timeEnd(k + ": " + (Date.now() - start) + " ms");
+        else c.log(k + ": " + (Date.now() - start) + " ms");
       };
     }
     if (typeof c.count !== "function") {
@@ -20294,12 +21239,28 @@ const CSS_TYPED_OM_GLOBALS = {
       globalThis.__capsurf_open_popup(fullUrl, isNoopener ? 1 : 0);
     }
     if (isNoopener) return null;
+    let popupDoc = null;
+    try {
+      const DP = global.DOMParser || (typeof DOMParser === "function" ? DOMParser : null);
+      if (DP) {
+        popupDoc = new DP().parseFromString("<html><head></head><body></body></html>", "text/html");
+        popupDoc._mutable = true;
+        popupDoc.URL = fullUrl;
+        popupDoc.documentURI = fullUrl;
+        popupDoc.baseURI = fullUrl;
+        popupDoc.title = "";
+      }
+    } catch (e) {}
+    if (!popupDoc) {
+      popupDoc = { title: "", URL: fullUrl };
+    }
     const popupWin = {
       closed: false,
       opener: global,
+      console: global.console,
       Promise: global.Promise,
       location: { href: fullUrl },
-      document: { title: "", URL: fullUrl },
+      document: popupDoc,
       close: function () { this.closed = true; },
       focus: function () {},
       blur: function () {},
@@ -20308,6 +21269,11 @@ const CSS_TYPED_OM_GLOBALS = {
       confirm: function (msg) { return typeof global.confirm === "function" ? global.confirm(msg) : false; },
       prompt: function (msg, def) { return typeof global.prompt === "function" ? global.prompt(msg, def) : null; },
     };
+    popupWin.window = popupWin;
+    popupWin.self = popupWin;
+    if (popupDoc && typeof popupDoc === "object") {
+      try { popupDoc.defaultView = popupWin; } catch (e) {}
+    }
     return popupWin;
   }, "open");
   global.open = openFn;

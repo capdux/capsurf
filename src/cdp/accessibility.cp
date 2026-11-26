@@ -1323,7 +1323,7 @@ pub struct AXTree {
                 self_aria_hidden = std.ascii.eqlIgnoreCase(ah, "true");
             }
             const aria_hidden = inherited_aria_hidden || self_aria_hidden;
-            const self_no_box = isNoBox(node);
+            const self_no_box = isNoBox(&node);
             let self_vis_hidden = false;
             let self_vis_visible = false;
             if (node.inline_style.len > 0) {
@@ -1340,8 +1340,8 @@ pub struct AXTree {
 
             const node_hidden = self_no_box || aria_hidden || vis_hidden;
 
-            const explicit_role = getExplicitRole(node);
-            const role_str = if (explicit_role != null) explicit_role.? else computeImplicitRole(node.tag_name, node);
+            const explicit_role = getExplicitRole(&node);
+            const role_str = if (explicit_role != null) explicit_role.? else computeImplicitRole(node.tag_name, &node);
 
             const is_table = std.ascii.eqlIgnoreCase(node.tag_name, "table") && explicit_role == null;
             const starts_layout_table = is_table && isLayoutTable(doc, dom_id);
@@ -1376,21 +1376,21 @@ pub struct AXTree {
             } else {
                 _.nodes[ax_idx].role = AxValue.fromRole(role_str, explicit_role == null);
 
-                const name_str = _.computeName(doc, node, role_str);
+                const name_str = _.computeName(doc, &node, role_str);
                 if (name_str.len > 0) {
                     _.nodes[ax_idx].name = AxValue.fromComputedString(name_str);
                 }
 
-                const desc_str = _.computeDescription(doc, node);
+                const desc_str = _.computeDescription(doc, &node);
                 if (desc_str.len > 0) {
                     _.nodes[ax_idx].description = AxValue.fromComputedString(desc_str);
                 }
 
-                if (val_str := _.computeValue(doc, node)) {
+                if (val_str := _.computeValue(doc, &node)) {
                     _.nodes[ax_idx].value = AxValue.fromString("string", val_str);
                 }
 
-                _.populateProperties(doc, ax_idx, node, role_str);
+                _.populateProperties(doc, ax_idx, &node, role_str);
             }
 
             // If boxless (display:none or hidden attr), children are not rendered and have no boxes

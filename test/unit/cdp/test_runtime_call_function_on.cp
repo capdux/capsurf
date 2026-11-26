@@ -24,7 +24,7 @@ pub fn main()! {
 
     // 2. callFunctionOn globalThis returning an Object
     let buf2: [4096]u8 = [0; 4096];
-    const len2 = session.callFunctionOn("globalThis", "function() { return { answer: 42 }; }", false, true, &buf2);
+    const len2 = session.callFunctionOn("globalThis", "function() { return { answer: 42 }; }", "", false, true, &buf2);
     assertCheck(len2 > 0, "callFunctionOn returns output");
     assertCheck(std.mem.indexOf(u8, buf2[0..len2], "\"className\":\"Object\"") != null, "returns className Object");
     assertCheck(std.mem.indexOf(u8, buf2[0..len2], "\"objectId\"") != null, "returns objectId for object");
@@ -32,7 +32,7 @@ pub fn main()! {
 
     // 3. callFunctionOn globalThis returning an Array
     let buf3: [4096]u8 = [0; 4096];
-    const len3 = session.callFunctionOn("globalThis", "function() { return [1, 2, 3]; }", false, true, &buf3);
+    const len3 = session.callFunctionOn("globalThis", "function() { return [1, 2, 3]; }", "", false, true, &buf3);
     assertCheck(len3 > 0, "callFunctionOn array returns output");
     assertCheck(std.mem.indexOf(u8, buf3[0..len3], "\"className\":\"Array\"") != null, "returns className Array");
     assertCheck(std.mem.indexOf(u8, buf3[0..len3], "\"subtype\":\"array\"") != null, "returns subtype array");
@@ -40,7 +40,7 @@ pub fn main()! {
 
     // 4. callFunctionOn globalThis returning a Function
     let buf4: [4096]u8 = [0; 4096];
-    const len4 = session.callFunctionOn("globalThis", "function() { return function named() {}; }", false, true, &buf4);
+    const len4 = session.callFunctionOn("globalThis", "function() { return function named() {}; }", "", false, true, &buf4);
     assertCheck(len4 > 0, "callFunctionOn function returns output");
     assertCheck(std.mem.indexOf(u8, buf4[0..len4], "\"className\":\"Function\"") != null, "returns className Function");
     assertCheck(std.mem.indexOf(u8, buf4[0..len4], "\"type\":\"function\"") != null, "returns type function");

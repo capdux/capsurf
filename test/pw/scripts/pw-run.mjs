@@ -130,6 +130,8 @@ function runPlaywright(wsEndpoint, specFiles, grep, tag) {
   if (invert) cliArgs.push("--grep-invert", invert);
   if (grep) cliArgs.push("--grep", grep);
   const runtime = process.versions.bun ? "node" : process.execPath;
+  const rawPortBase = 18900 + (firstPort - 9700) * 16;
+  const defaultPortBase = 10000 + (((rawPortBase - 10000) % 50000 + 50000) % 50000);
   const r = spawnSync(runtime, cliArgs, {
     cwd: PW_DIR,
     stdio: "inherit",
@@ -140,6 +142,7 @@ function runPlaywright(wsEndpoint, specFiles, grep, tag) {
       KITESURF_WS: wsEndpoint,
       PWTEST_JSON_OUTPUT: jsonOut,
       PLAYWRIGHT_BLOB_OUTPUT_FILE: blobOut,
+      PW_TEST_PORT_BASE: process.env.PW_TEST_PORT_BASE || String(defaultPortBase),
     },
   });
   if (!existsSync(jsonOut)) {

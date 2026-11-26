@@ -143,6 +143,7 @@ pub enum PseudoKind {
     Lang,
     Link,
     Visited,
+    PopoverOpen,
 }
 
 pub enum ComponentKind {
@@ -691,6 +692,9 @@ pub struct SelectorParser {
                 } else if (std.ascii.eqlIgnoreCase(p_name, "visited")) {
                     p_comp.pseudo_kind = PseudoKind.Visited;
                     spec.class_like_selectors += 1;
+                } else if (std.ascii.eqlIgnoreCase(p_name, "popover-open")) {
+                    p_comp.pseudo_kind = PseudoKind.PopoverOpen;
+                    spec.class_like_selectors += 1;
                 } else {
                     spec.class_like_selectors += 1;
                 }
@@ -756,6 +760,99 @@ pub struct SelectorParser {
         return result;
     }
 }
+
+pub const SELECTOR_CACHE_CAP: usize = 64;
+pub const SELECTOR_CACHE_MAX_KEY: usize = 256;
+
+pub struct SelectorCacheSlot {
+    occupied: bool = false;
+    ref_bit: bool = false;
+    pin_count: u32 = 0;
+    key_hash: u64 = 0;
+    key_len: usize = 0;
+    key_buf: [256]u8 = [0; 256];
+    list: SelectorList = SelectorList{};
+}
+
+pub struct SelectorClockCache {
+    slots: [64]SelectorCacheSlot = [SelectorCacheSlot{}; 64];
+    hand: usize = 0;
+
+    static fn hashKey(key: []const u8): u64 {
+        let h: u64 = (@as(u64, 0xcbf29ce4) << 32) | @as(u64, 0x84222325);
+        for (b of key) {
+            h ^= @as(u64, b);
+            h *%= 1099511628211;
+        }
+        return h;
+    }
+
+    fn acquire(*_, key: []const u8): (usize)? {
+        if (key.len > SELECTOR_CACHE_MAX_KEY) {
+            return null;
+        }
+        const h = SelectorClockCache.hashKey(key);
+
+        let i: usize = 0;
+        while (i < SELECTOR_CACHE_CAP) : (i += 1) {
+            let slot = &_.slots[i];
+            if (slot.occupied && slot.key_hash == h && slot.key_len == key.len) {
+                if (std.mem.eql(u8, slot.key_buf[0..slot.key_len], key)) {
+                    slot.ref_bit = true;
+                    slot.pin_count += 1;
+                    return i;
+                }
+            }
+        }
+
+        let steps: usize = 0;
+        while (steps < SELECTOR_CACHE_CAP * 2) : (steps += 1) {
+            const idx = _.hand;
+            _.hand = (_.hand + 1) % SELECTOR_CACHE_CAP;
+            let slot = &_.slots[idx];
+            if (!slot.occupied) {
+                slot.occupied = true;
+                slot.ref_bit = true;
+                slot.pin_count = 1;
+                slot.key_hash = h;
+                slot.key_len = key.len;
+                if (key.len > 0) {
+                    @memcpy(slot.key_buf[0..key.len], key);
+                }
+                slot.list = SelectorList.parse(slot.key_buf[0..slot.key_len]);
+                return idx;
+            }
+            if (slot.pin_count > 0) {
+                continue;
+            }
+            if (slot.ref_bit) {
+                slot.ref_bit = false;
+                continue;
+            }
+            slot.ref_bit = true;
+            slot.pin_count = 1;
+            slot.key_hash = h;
+            slot.key_len = key.len;
+            if (key.len > 0) {
+                @memcpy(slot.key_buf[0..key.len], key);
+            }
+            slot.list = SelectorList.parse(slot.key_buf[0..slot.key_len]);
+            return idx;
+        }
+
+        return null;
+    }
+
+    fn releasePin(*_, idx: usize) {
+        if (idx < SELECTOR_CACHE_CAP) {
+            if (_.slots[idx].pin_count > 0) {
+                _.slots[idx].pin_count -= 1;
+            }
+        }
+    }
+}
+
+@tls let g_selector_cache: SelectorClockCache = SelectorClockCache{};
 
 pub struct Matcher {
     static fn strEql(a: []const u8, b: []const u8, case_insensitive: bool): bool {
@@ -933,24 +1030,63 @@ pub struct Matcher {
                 return Matcher.matchesNthEquation(comp.nth_a, comp.nth_b, from_end);
             },
             .Is, .Where => {
-                const sub_list = SelectorList.parse(comp.sub_selector_raw);
-                return Matcher.matchesSelectorList(doc, node_id, sub_list);
+                let fallback_list = SelectorList{};
+                const cached_idx = g_selector_cache.acquire(comp.sub_selector_raw);
+                defer {
+                    if (idx := cached_idx) {
+                        g_selector_cache.releasePin(idx);
+                    }
+                }
+                let list_ptr: *const SelectorList = undefined;
+                if (idx := cached_idx) {
+                    list_ptr = &g_selector_cache.slots[idx].list;
+                } else {
+                    fallback_list = SelectorList.parse(comp.sub_selector_raw);
+                    list_ptr = &fallback_list;
+                }
+                return Matcher.matchesSelectorListPtr(doc, node_id, list_ptr);
             },
             .Not => {
-                const sub_list = SelectorList.parse(comp.sub_selector_raw);
-                if (Matcher.matchesSelectorList(doc, node_id, sub_list)) {
+                let fallback_list = SelectorList{};
+                const cached_idx = g_selector_cache.acquire(comp.sub_selector_raw);
+                defer {
+                    if (idx := cached_idx) {
+                        g_selector_cache.releasePin(idx);
+                    }
+                }
+                let list_ptr: *const SelectorList = undefined;
+                if (idx := cached_idx) {
+                    list_ptr = &g_selector_cache.slots[idx].list;
+                } else {
+                    fallback_list = SelectorList.parse(comp.sub_selector_raw);
+                    list_ptr = &fallback_list;
+                }
+                if (Matcher.matchesSelectorListPtr(doc, node_id, list_ptr)) {
                     return false;
                 }
                 return true;
             },
             .Has => {
-                const sub_list = SelectorList.parse(comp.sub_selector_raw);
+                let fallback_list = SelectorList{};
+                const cached_idx = g_selector_cache.acquire(comp.sub_selector_raw);
+                defer {
+                    if (idx := cached_idx) {
+                        g_selector_cache.releasePin(idx);
+                    }
+                }
+                let list_ptr: *const SelectorList = undefined;
+                if (idx := cached_idx) {
+                    list_ptr = &g_selector_cache.slots[idx].list;
+                } else {
+                    fallback_list = SelectorList.parse(comp.sub_selector_raw);
+                    list_ptr = &fallback_list;
+                }
                 return switch (comp.has_combinator) {
                     .Child => {
                         let ch = node.first_child;
                         while (ch != NULL_NODE) {
                             if (doc.nodes.items[@as(usize, ch)].node_type == NodeType.Element) {
-                                if (Matcher.matchesSelectorList(doc, ch, sub_list)) return true;
+                                if (Matcher.matchesSelectorListPtr(doc, ch, list_ptr)) return true;
                             }
                             ch = doc.nodes.items[@as(usize, ch)].next_sibling;
                         }
@@ -959,18 +1095,18 @@ pub struct Matcher {
                     .NextSibling => {
                         const nxt = doc.nextElementSibling(node_id);
                         if (nxt == NULL_NODE) return false;
-                        return Matcher.matchesSelectorList(doc, nxt, sub_list);
+                        return Matcher.matchesSelectorListPtr(doc, nxt, list_ptr);
                     },
                     .LaterSibling => {
                         let nxt = doc.nextElementSibling(node_id);
                         while (nxt != NULL_NODE) {
-                            if (Matcher.matchesSelectorList(doc, nxt, sub_list)) return true;
+                            if (Matcher.matchesSelectorListPtr(doc, nxt, list_ptr)) return true;
                             nxt = doc.nextElementSibling(nxt);
                         }
                         return false;
                     },
                     .Descendant => {
-                        return Matcher.subtreeMatches(doc, node_id, sub_list);
+                        return Matcher.subtreeMatchesPtr(doc, node_id, list_ptr);
                     },
                 };
             },
@@ -980,6 +1116,7 @@ pub struct Matcher {
             .Lang => doc.matchesLang(node_id, comp.sub_selector_raw),
             .Link => (std.ascii.eqlIgnoreCase(node.tag_name, "a") || std.ascii.eqlIgnoreCase(node.tag_name, "area") || std.ascii.eqlIgnoreCase(node.tag_name, "link")) && node.getAttribute("href") != null,
             .Visited => false,
+            .PopoverOpen => node_id != NULL_NODE && node.popover_open,
         };
     }
 
@@ -994,20 +1131,24 @@ pub struct Matcher {
         return false;
     }
 
-    static fn subtreeMatches(doc: *const Document, root_id: NodeId, sub_list: SelectorList): bool {
+    static fn subtreeMatchesPtr(doc: *const Document, root_id: NodeId, sub_list: *const SelectorList): bool {
         let ch = doc.nodes.items[@as(usize, root_id)].first_child;
         while (ch != NULL_NODE) {
             if (doc.nodes.items[@as(usize, ch)].node_type == NodeType.Element) {
-                if (Matcher.matchesSelectorList(doc, ch, sub_list)) {
+                if (Matcher.matchesSelectorListPtr(doc, ch, sub_list)) {
                     return true;
                 }
-                if (Matcher.subtreeMatches(doc, ch, sub_list)) {
+                if (Matcher.subtreeMatchesPtr(doc, ch, sub_list)) {
                     return true;
                 }
             }
             ch = doc.nodes.items[@as(usize, ch)].next_sibling;
         }
         return false;
+    }
+
+    static fn subtreeMatches(doc: *const Document, root_id: NodeId, sub_list: SelectorList): bool {
+        return Matcher.subtreeMatchesPtr(doc, root_id, &sub_list);
     }
 
     static fn matchesSimpleComponent(doc: *const Document, node_id: NodeId, comp: *const Component): bool {
@@ -1119,7 +1260,7 @@ pub struct Matcher {
         return Matcher.matchFromIndex(doc, node_id, sel, 0);
     }
 
-    static fn matchesSelectorList(doc: *const Document, node_id: NodeId, list: SelectorList): bool {
+    static fn matchesSelectorListPtr(doc: *const Document, node_id: NodeId, list: *const SelectorList): bool {
         let i: usize = 0;
         while (i < list.count) : (i += 1) {
             if (Matcher.matchesSelector(doc, node_id, &list.selectors[i])) {
@@ -1127,6 +1268,10 @@ pub struct Matcher {
             }
         }
         return false;
+    }
+
+    static fn matchesSelectorList(doc: *const Document, node_id: NodeId, list: SelectorList): bool {
+        return Matcher.matchesSelectorListPtr(doc, node_id, &list);
     }
 
     /// Evaluates a `SelectorList` against `node_id` and returns `(matched, max_specificity_u32)`.
@@ -1154,15 +1299,36 @@ pub struct Matcher {
 
     /// Cache-friendly O(N) linear scan over `doc.nodes.items[1..]` returning the first matching `NodeId`.
     static fn querySelector(doc: *const Document, selector_str: []const u8): NodeId {
-        const list = SelectorList.parse(selector_str);
-        if (list.count == 0) {
+        let fallback_list = SelectorList{};
+        const cached_idx = g_selector_cache.acquire(selector_str);
+        defer {
+            if (idx := cached_idx) {
+                g_selector_cache.releasePin(idx);
+            }
+        }
+        let list_ptr: *const SelectorList = undefined;
+        if (idx := cached_idx) {
+            list_ptr = &g_selector_cache.slots[idx].list;
+        } else {
+            fallback_list = SelectorList.parse(selector_str);
+            list_ptr = &fallback_list;
+        }
+        if (list_ptr.count == 0) {
             return NULL_NODE;
+        }
+        if (!doc.in_quirks_mode && list_ptr.count == 1) {
+            const sel = &list_ptr.selectors[0];
+            if (sel.comp_count == 1 && sel.components[0].kind == ComponentKind.Id) {
+                let u_buf: [128]u8 = [0; 128];
+                const target_id = unescapeCssIdent(sel.components[0].ident, &u_buf);
+                return doc.getElementById(target_id);
+            }
         }
         let i: usize = 1;
         while (i < doc.nodes.items.len) : (i += 1) {
             if (doc.nodes.items[i].node_type == NodeType.Element) {
                 const nid: NodeId = @intCast(i);
-                if (doc.isConnectedNode(nid) && Matcher.matchesSelectorList(doc, nid, list)) {
+                if (doc.isConnectedNode(nid) && Matcher.matchesSelectorListPtr(doc, nid, list_ptr)) {
                     return nid;
                 }
             }
@@ -1172,8 +1338,21 @@ pub struct Matcher {
 
     /// Cache-friendly O(N) linear scan over `doc.nodes.items[1..]` writing all matching `NodeId`s into `out_ids`.
     static fn querySelectorAll(doc: *const Document, selector_str: []const u8, out_ids: []NodeId): usize {
-        const list = SelectorList.parse(selector_str);
-        if (list.count == 0) {
+        let fallback_list = SelectorList{};
+        const cached_idx = g_selector_cache.acquire(selector_str);
+        defer {
+            if (idx := cached_idx) {
+                g_selector_cache.releasePin(idx);
+            }
+        }
+        let list_ptr: *const SelectorList = undefined;
+        if (idx := cached_idx) {
+            list_ptr = &g_selector_cache.slots[idx].list;
+        } else {
+            fallback_list = SelectorList.parse(selector_str);
+            list_ptr = &fallback_list;
+        }
+        if (list_ptr.count == 0) {
             return 0;
         }
         let count: usize = 0;
@@ -1181,7 +1360,7 @@ pub struct Matcher {
         while (i < doc.nodes.items.len && count < out_ids.len) : (i += 1) {
             if (doc.nodes.items[i].node_type == NodeType.Element) {
                 const nid: NodeId = @intCast(i);
-                if (doc.isConnectedNode(nid) && Matcher.matchesSelectorList(doc, nid, list)) {
+                if (doc.isConnectedNode(nid) && Matcher.matchesSelectorListPtr(doc, nid, list_ptr)) {
                     out_ids[count] = nid;
                     count += 1;
                 }

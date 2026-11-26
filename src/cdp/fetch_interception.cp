@@ -204,7 +204,7 @@ pub struct FetchInterceptionState {
         return null;
     }
 
-    fn getParked(request_id: []const u8): (*const ParkedRequest)? {
+    fn getParked(*_, request_id: []const u8): (*const ParkedRequest)? {
         let i: usize = 0;
         while (i < _.parked_count) : (i += 1) {
             const p_id = if (_.parked[i].requestId.len > 0) _.parked[i].requestId else _.parked[i].request_id;

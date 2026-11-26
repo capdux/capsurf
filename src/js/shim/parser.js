@@ -329,6 +329,56 @@ ParsedElement.prototype.getAttributeNames = function () {
   return Array.from(this._attrCases.values());
 };
 
+Object.defineProperty(ParsedElement.prototype, "attributes", {
+  get: function () {
+    const items = [];
+    const byName = new Map();
+    const map = {};
+    if (this._attrs instanceof Map) {
+      this._attrs.forEach((val, key) => {
+        const name = (this._attrCases && this._attrCases.get(key)) || key;
+        const attr = {
+          name: name,
+          value: val,
+          nodeName: name,
+          nodeValue: val,
+          specified: true,
+        };
+        map[items.length] = attr;
+        items.push(attr);
+        byName.set(String(key).toLowerCase(), attr);
+      });
+    }
+    Object.defineProperties(map, {
+      length: { value: items.length, enumerable: false, configurable: true },
+      item: {
+        value: function (i) {
+          const idx = Number(i);
+          return Number.isInteger(idx) && idx >= 0 && idx < items.length ? items[idx] : null;
+        },
+        enumerable: false,
+        configurable: true,
+      },
+      getNamedItem: {
+        value: function (name) {
+          return byName.get(String(name).toLowerCase()) || null;
+        },
+        enumerable: false,
+        configurable: true,
+      },
+      [Symbol.iterator]: {
+        value: function () {
+          return items[Symbol.iterator]();
+        },
+        enumerable: false,
+        configurable: true,
+      },
+    });
+    return map;
+  },
+  configurable: true,
+});
+
 Object.defineProperty(ParsedElement.prototype, "nodeValue", {
   get: function () { return null; },
   set: function () {},
@@ -543,6 +593,11 @@ ParsedElement.prototype.removeChild = function (child) {
   child.parentNode = null;
   return child;
 };
+ParsedElement.prototype.remove = function () {
+  if (this.parentNode && typeof this.parentNode.removeChild === "function") {
+    this.parentNode.removeChild(this);
+  }
+};
 ParsedElement.prototype.replaceChild = function (newChild, oldChild) {
   this.insertBefore(newChild, oldChild);
   return this.removeChild(oldChild);
@@ -631,6 +686,44 @@ ParsedElement.prototype.getElementsByClassName = function (cls) {
 Object.defineProperty(ParsedElement.prototype, "outerHTML", {
   get: function () {
     return serializeXmlNode(this, true);
+  },
+  configurable: true,
+});
+
+Object.defineProperty(ParsedElement.prototype, "innerHTML", {
+  get: function () {
+    const kids = this._children || [];
+    let out = "";
+    for (let i = 0; i < kids.length; i++) {
+      out += serializeXmlNode(kids[i]);
+    }
+    return out;
+  },
+  set: function (val) {
+    this._children = [];
+    const str = String(val);
+    if (!str) return;
+    const parsed = parseDocument(str, "text/html");
+    const rawNodes = (parsed.body && parsed.body._children && parsed.body._children.length > 0)
+      ? parsed.body._children
+      : ((parsed.head && parsed.head._children && parsed.head._children.length > 0)
+          ? parsed.head._children
+          : (parsed._children || []));
+    const nodes = rawNodes.slice();
+    const targetDoc = this.ownerDocument || null;
+    function setOwnerDoc(node, doc) {
+      if (!node || typeof node !== "object") return;
+      node.ownerDocument = doc;
+      const cs = node._children;
+      if (cs && cs.length) {
+        for (let i = 0; i < cs.length; i++) setOwnerDoc(cs[i], doc);
+      }
+    }
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      this.appendChild(n);
+      if (targetDoc) setOwnerDoc(n, targetDoc);
+    }
   },
   configurable: true,
 });

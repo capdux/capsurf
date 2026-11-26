@@ -252,6 +252,7 @@ function File(fileBits, fileName, options) {
 
   this._name = String(fileName);
   this._lastModified = options.lastModified != null ? Number(options.lastModified) : Date.now();
+  this._webkitRelativePath = (options && options.webkitRelativePath) ? String(options.webkitRelativePath) : "";
 }
 
 File.prototype = Object.create(Blob.prototype);
@@ -270,7 +271,7 @@ Object.defineProperty(File.prototype, "lastModified", {
 });
 
 Object.defineProperty(File.prototype, "webkitRelativePath", {
-  get: function () { return ""; },
+  get: function () { return this._webkitRelativePath || ""; },
   configurable: true,
   enumerable: true,
 });
@@ -1279,16 +1280,19 @@ function DataTransfer() {
   });
 }
 
+const _validDropEffects = new Set(["none", "copy", "link", "move"]);
+const _validEffectAllowed = new Set(["none", "copy", "copyLink", "copyMove", "link", "linkMove", "move", "all", "uninitialized"]);
+
 Object.defineProperty(DataTransfer.prototype, "dropEffect", {
   get: function () { const st = _dtState.get(this); if (!st) throw new TypeError("Illegal invocation"); return st.dropEffect; },
-  set: function (v) { const st = _dtState.get(this); if (!st) throw new TypeError("Illegal invocation"); st.dropEffect = String(v); },
+  set: function (v) { const st = _dtState.get(this); if (!st) throw new TypeError("Illegal invocation"); const s = String(v); if (_validDropEffects.has(s)) st.dropEffect = s; },
   configurable: true,
   enumerable: true,
 });
 
 Object.defineProperty(DataTransfer.prototype, "effectAllowed", {
   get: function () { const st = _dtState.get(this); if (!st) throw new TypeError("Illegal invocation"); return st.effectAllowed; },
-  set: function (v) { const st = _dtState.get(this); if (!st) throw new TypeError("Illegal invocation"); st.effectAllowed = String(v); },
+  set: function (v) { const st = _dtState.get(this); if (!st) throw new TypeError("Illegal invocation"); const s = String(v); if (_validEffectAllowed.has(s)) st.effectAllowed = s; },
   configurable: true,
   enumerable: true,
 });

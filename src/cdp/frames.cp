@@ -642,7 +642,7 @@ pub fn writeFrameJson(writer: *FrameJsonWriter, frame: *const FrameState, all_fr
         writer.writeRaw(",\"parentId\":");
         writer.writeEscapedString(pid);
         let name_str = frame.name;
-        if (name_str.len == 0 && context.same_site_as_parent) {
+        if (name_str.len == 0) {
             name_str = frame.owner_element_id;
         }
         writer.writeRaw(",\"name\":");

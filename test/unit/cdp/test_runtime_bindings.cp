@@ -19,7 +19,7 @@ pub fn main() {
         session.runtime_enabled = true;
 
         let out_buf: [4096]u8 = [0; 4096];
-        let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
+        let out_evts: [128]CdpEvent = [CdpEvent{}; 128];
         let evt_cnt: usize = 0;
 
         const req_binding = CdpRequest{
@@ -38,7 +38,7 @@ pub fn main() {
         // 2. Test binding call and event emission
         const call_expr = "window.ksTestBinding('payload-xyz'); null";
         let call_res_buf: [4096]u8 = [0; 4096];
-        let call_evts: [64]CdpEvent = [CdpEvent{}; 64];
+        let call_evts: [128]CdpEvent = [CdpEvent{}; 128];
         let call_evt_cnt: usize = 0;
 
         const req_eval = CdpRequest{
@@ -65,7 +65,7 @@ pub fn main() {
         const exc_json = exc_buf[0..exc_len];
 
         assertCheck(std.mem.indexOf(u8, exc_json, "\"className\":\"TypeError\"") != null, "has className TypeError");
-        assertCheck(std.mem.indexOf(u8, exc_json, "\"description\":\"TypeError: bad arguments\\n\"") != null, "has description with newline");
+        assertCheck(std.mem.indexOf(u8, exc_json, "\"description\":\"TypeError: bad arguments\"") != null, "has description");
         assertCheck(std.mem.indexOf(u8, exc_json, "\"subtype\":\"error\"") != null, "has subtype error");
 
         std.debug.print("PASS: 2. Exception className & description formatting\n", .{});

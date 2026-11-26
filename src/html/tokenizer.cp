@@ -35,6 +35,8 @@ pub enum State: u8 {
 pub struct Tokenizer {
     input: []const u8 = "";
     pos: usize = 0;
+    line_pos: usize = 0;
+    line_count: u32 = 0;
     state: State = State.Data;
     eof_emitted: bool = false;
     is_xhtml: bool = false;
@@ -203,6 +205,8 @@ pub struct Tokenizer {
         return Tokenizer {
             input: input,
             pos: 0,
+            line_pos: 0,
+            line_count: 0,
             state: State.Data,
             eof_emitted: false,
             is_xhtml: Tokenizer.sniffXhtml(input),
@@ -211,6 +215,23 @@ pub struct Tokenizer {
             current_tag: TagToken{},
             entity_buf: [0; 8],
         };
+    }
+
+    fn countLinesUpTo(*_, end_pos: usize): u32 {
+        const limit = if (end_pos < _.input.len) end_pos else _.input.len;
+        while (_.line_pos < limit) : (_.line_pos += 1) {
+            if (_.input[_.line_pos] == '\n') {
+                _.line_count += 1;
+            }
+        }
+        return _.line_count;
+    }
+
+    fn emitCurrentTag(*_): Token {
+        if (_.current_tag.kind == TagKind.Start && _.current_tag.tag == HtmlTag.Script) {
+            _.current_tag.start_line = _.countLinesUpTo(_.pos);
+        }
+        return Token { .Tag = _.current_tag };
     }
 
     /// Receives feedback from TreeBuilder to switch tokenizer mode.
@@ -388,14 +409,14 @@ pub struct Tokenizer {
                     _.skipWhitespace();
                     if (_.pos >= _.input.len) {
                         _.state = State.Data;
-                        return Token { .Tag = _.current_tag };
+                        return _.emitCurrentTag();
                     }
 
                     const next_ch = _.input[_.pos];
                     if (next_ch == '>') {
                         _.pos += 1;
                         _.state = State.Data;
-                        return Token { .Tag = _.current_tag };
+                        return _.emitCurrentTag();
                     }
                     if (next_ch == '/') {
                         _.pos += 1;
@@ -411,14 +432,14 @@ pub struct Tokenizer {
                     _.skipWhitespace();
                     if (_.pos >= _.input.len) {
                         _.state = State.Data;
-                        return Token { .Tag = _.current_tag };
+                        return _.emitCurrentTag();
                     }
 
                     const ch = _.input[_.pos];
                     if (ch == '>') {
                         _.pos += 1;
                         _.state = State.Data;
-                        return Token { .Tag = _.current_tag };
+                        return _.emitCurrentTag();
                     }
                     if (ch == '/') {
                         _.pos += 1;
@@ -490,7 +511,7 @@ pub struct Tokenizer {
                         _.current_tag.self_closing = true;
                     }
                     _.state = State.Data;
-                    return Token { .Tag = _.current_tag };
+                    return _.emitCurrentTag();
                 },
 
                 .RawText, .ScriptData => {

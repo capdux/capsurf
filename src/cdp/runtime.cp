@@ -2,19 +2,70 @@
 // CDP Runtime Domain Handler for CapSurf
 // Migrated from vendor/kitesurf/packages/engine/src/cdp/runtime.ts
 
-import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt, extractJsonBool, extractJsonArray, unescapeJsonString, normalizeExceptionMessage, MAX_CDP_EVENTS } from "./types.cp";
+import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt, extractJsonBool, extractJsonArray, extractJsonObject, unescapeJsonString, normalizeExceptionMessage, MAX_CDP_EVENTS } from "./types.cp";
 import { CdpPageSession, escapeJsonString } from "./session.cp";
 import { emitPendingNavigationEvents } from "./input.cp";
 import { emitNewChildFrameEvents } from "./page.cp";
 import { originOf } from "./frames.cp";
 import { JS_Eval, jsIsException } from "../js/qjs_engine.cp";
 import { makeCompiledScriptMeta, emitScriptParsedEvent } from "./debugger.cp";
+import { getWorkerJsContext, evalInWorkerContextWithSerialization, callFunctionOnWorkerContextWithSerialization } from "./session_hooks.cp";
+
+struct SerializationOpts {
+    mode: u8 = 0,
+    max_depth: i32 = 99,
+}
+
+fn parseSerializationOptions(params_raw: []const u8): SerializationOpts {
+    let opts = SerializationOpts{};
+    if (ser_obj := extractJsonObject(params_raw, "serializationOptions")) {
+        const ser_str = extractJsonString(ser_obj, "serialization") ?? "";
+        if (std.mem.eql(u8, ser_str, "deep")) {
+            opts.mode = 1;
+        } else if (std.mem.eql(u8, ser_str, "json")) {
+            opts.mode = 2;
+        } else if (std.mem.eql(u8, ser_str, "idOnly")) {
+            opts.mode = 3;
+        }
+        if (md := extractJsonInt(ser_obj, "maxDepth")) {
+            opts.max_depth = if (md < 0) 0 else if (md > 1000000) 1000000 else @as(i32, @intCast(md));
+        }
+    }
+    return opts;
+}
+
+fn pollWorkerCdpEvents(session: *CdpPageSession, out_events: *[MAX_CDP_EVENTS]CdpEvent, event_count: *usize) {
+    if (event_count.* < out_events.len) {
+        const w_cnt = session.dedicated_workers.pollCdpEvents(out_events[event_count.*..out_events.len]);
+        event_count.* += w_cnt;
+    }
+}
 
 pub struct RuntimeHandler {
     pub static fn handle(session: *CdpPageSession, req: CdpRequest, out_buf: []u8, out_events: *[MAX_CDP_EVENTS]CdpEvent, event_count: *usize): CdpResponse {
         event_count.* = 0;
 
         if (std.mem.eql(u8, req.method, "Runtime.enable")) {
+            if (w_entry := session.dedicated_workers.findWorkerBySessionId(req.session_id)) {
+                w_entry.runtime_enabled = true;
+                let esc_orig_buf: [256]u8 = [0; 256];
+                const w_url = w_entry.getUrl();
+                const w_orig = if (w_url.len > 0) originOf(w_url) else "about:blank";
+                const esc_orig = escapeJsonString(w_orig, &esc_orig_buf);
+                const w_ctx_json = std.fmt.allocPrint(
+                    session.allocator,
+                    "{{\"context\":{{\"id\":1,\"origin\":\"{s}\",\"name\":\"\",\"uniqueId\":\"worker-ctx-{d}\",\"auxData\":{{\"isDefault\":true,\"type\":\"default\"}}}}}}",
+                    .{ esc_orig, w_entry.id },
+                ) catch "{}";
+                out_events[0] = CdpEvent{
+                    method: "Runtime.executionContextCreated",
+                    params_json: w_ctx_json,
+                    session_id: w_entry.getSessionId(),
+                };
+                event_count.* = 1;
+                pollWorkerCdpEvents(session, out_events, event_count);
+                return CdpResponse.ok(req.id, "{}");
+            }
             session.runtime_enabled = true;
             if (req.session_id.len > 0 && !std.mem.eql(u8, req.session_id, "capsurf-session-001")) {
                 if (iframe_fid := session.target_registry.findFrameIdBySessionId(req.session_id)) {
@@ -113,6 +164,11 @@ pub struct RuntimeHandler {
         }
 
         if (std.mem.eql(u8, req.method, "Runtime.disable")) {
+            if (w_entry := session.dedicated_workers.findWorkerBySessionId(req.session_id)) {
+                w_entry.runtime_enabled = false;
+                pollWorkerCdpEvents(session, out_events, event_count);
+                return CdpResponse.ok(req.id, "{}");
+            }
             session.runtime_enabled = false;
             return CdpResponse.ok(req.id, "{}");
         }
@@ -224,6 +280,9 @@ pub struct RuntimeHandler {
             if (eval_len == 0) {
                 return CdpResponse.ok(req.id, "{\"result\":{\"type\":\"undefined\"}}");
             }
+            if (std.mem.startsWith(u8, out_buf[0..eval_len], "__CAPSURF_CDP_ERROR__:")) {
+                return CdpResponse.err(req.id, -32000, out_buf["__CAPSURF_CDP_ERROR__:".len..eval_len]);
+            }
             return CdpResponse.ok(req.id, out_buf[0..eval_len]);
         }
 
@@ -265,6 +324,32 @@ pub struct RuntimeHandler {
         }
 
         if (std.mem.eql(u8, req.method, "Runtime.callFunctionOn")) {
+            if (w_entry := session.dedicated_workers.findWorkerBySessionId(req.session_id)) {
+                const w_ctx = getWorkerJsContext(w_entry.native_wid) orelse {
+                    return CdpResponse.err(req.id, -32000, "Worker context not available");
+                };
+                const raw_object_id = extractJsonString(req.params_raw, "objectId");
+                const object_id = raw_object_id ?? "globalThis";
+                const raw_decl = extractJsonString(req.params_raw, "functionDeclaration") ?? "";
+                let decl_buf = session.allocator.alloc(u8, @max(raw_decl.len + 1, @as(usize, 65536))) catch return CdpResponse.err(req.id, -32000, "Out of memory");
+                defer session.allocator.free(decl_buf);
+                const func_decl_len = unescapeJsonString(raw_decl, decl_buf).len;
+                decl_buf[func_decl_len] = 0;
+                const func_decl = decl_buf[0..func_decl_len];
+                const return_by_value = extractJsonBool(req.params_raw, "returnByValue") ?? false;
+                const await_promise = extractJsonBool(req.params_raw, "awaitPromise") ?? false;
+                const ser_opts = parseSerializationOptions(req.params_raw);
+                const args_json = extractJsonArray(req.params_raw, "arguments") ?? "[]";
+                const res_len = callFunctionOnWorkerContextWithSerialization(w_ctx, object_id, func_decl, args_json, return_by_value, await_promise, ser_opts.mode, ser_opts.max_depth, out_buf);
+                pollWorkerCdpEvents(session, out_events, event_count);
+                if (res_len == 0) {
+                    return CdpResponse.ok(req.id, "{\"result\":{\"type\":\"undefined\"}}");
+                }
+                if (std.mem.startsWith(u8, out_buf[0..res_len], "__CAPSURF_CDP_ERROR__:")) {
+                    return CdpResponse.err(req.id, -32000, out_buf["__CAPSURF_CDP_ERROR__:".len..res_len]);
+                }
+                return CdpResponse.ok(req.id, out_buf[0..res_len]);
+            }
             const exec_ctx_id = extractJsonInt(req.params_raw, "executionContextId");
             if (exec_ctx_id != null && !session.isValidContextId(exec_ctx_id.?)) {
                 return CdpResponse.err(req.id, -32000, "Cannot find context with specified id");
@@ -279,12 +364,15 @@ pub struct RuntimeHandler {
             const func_decl = decl_buf[0..func_decl_len];
             const return_by_value = extractJsonBool(req.params_raw, "returnByValue") ?? false;
             const await_promise = extractJsonBool(req.params_raw, "awaitPromise") ?? false;
+            const ser_opts = parseSerializationOptions(req.params_raw);
             const args_json = extractJsonArray(req.params_raw, "arguments") ?? "[]";
             
             const in_iso = (exec_ctx_id != null && exec_ctx_id.? > 1) || session.isIsolatedObjectId(object_id);
             const restored_node: i32 = if (in_iso) session.restoreIsolatedNodeIfNeeded() else 0;
             defer if (in_iso) session.clearIsolatedNode(restored_node);
-            let res_len = session.callFunctionOn(object_id, func_decl, args_json, return_by_value, await_promise, out_buf);
+            session.park_pending_promise = await_promise;
+            defer session.park_pending_promise = false;
+            let res_len = session.callFunctionOnWithSerialization(object_id, func_decl, args_json, return_by_value, await_promise, exec_ctx_id, ser_opts.mode, ser_opts.max_depth, out_buf);
 
             if (std.mem.eql(u8, out_buf[0..res_len], "{\"__capsurf_ctx_destroyed\":true}")) {
                 return CdpResponse.err(req.id, -32000, "Cannot find context with specified id");
@@ -349,6 +437,15 @@ pub struct RuntimeHandler {
                 event_count.* += 1;
             }
 
+            // Poll any file chooser events produced during callFunctionOn
+            let polled_fc_evts: [4]CdpEvent = [CdpEvent{}; 4];
+            const polled_fc_count = session.pollFileChooserEvents(&polled_fc_evts);
+            let fc_i: usize = 0;
+            while (fc_i < polled_fc_count && event_count.* < out_events.len) : (fc_i += 1) {
+                out_events[event_count.*] = polled_fc_evts[fc_i];
+                event_count.* += 1;
+            }
+
             // Poll any network events produced during callFunctionOn (e.g. fetch() / XHR)
             let polled_net_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
             const polled_net_count = session.pollNetworkEvents(&polled_net_evts);
@@ -366,6 +463,14 @@ pub struct RuntimeHandler {
                 out_events[event_count.*] = polled_ctx_evts[c_i];
                 event_count.* += 1;
             }
+            // Poll any document.open/write/close reopened load events before emitting new child frame events
+            let polled_reopen_evts: [16]CdpEvent = [CdpEvent{}; 16];
+            const polled_reopen_count = session.pollReopenLoadEvents(&polled_reopen_evts);
+            let r_i: usize = 0;
+            while (r_i < polled_reopen_count && event_count.* < out_events.len) : (r_i += 1) {
+                out_events[event_count.*] = polled_reopen_evts[r_i];
+                event_count.* += 1;
+            }
             emitNewChildFrameEvents(session, out_events, event_count);
 
             let polled_pop_evts: [8]CdpEvent = [CdpEvent{}; 8];
@@ -379,6 +484,9 @@ pub struct RuntimeHandler {
             if (res_len == 0) {
                 return CdpResponse.ok(req.id, "{\"result\":{\"type\":\"undefined\"}}");
             }
+            if (std.mem.startsWith(u8, out_buf[0..res_len], "__CAPSURF_CDP_ERROR__:")) {
+                return CdpResponse.err(req.id, -32000, out_buf["__CAPSURF_CDP_ERROR__:".len..res_len]);
+            }
             return CdpResponse.ok(req.id, out_buf[0..res_len]);
         }
 
@@ -386,13 +494,47 @@ pub struct RuntimeHandler {
             const raw_name = extractJsonString(req.params_raw, "name") ?? "";
             let name_buf: [128]u8 = [0; 128];
             const name = unescapeJsonString(raw_name, &name_buf);
+            let ctx_id: i64 = extractJsonInt(req.params_raw, "executionContextId") ?? 0;
+            if (ctx_id <= 0) {
+                if (raw_ctx_name := extractJsonString(req.params_raw, "executionContextName")) {
+                    let cname_buf: [128]u8 = [0; 128];
+                    const cname = unescapeJsonString(raw_ctx_name, &cname_buf);
+                    if (found_cid := session.findIsolatedWorldContextId(cname)) {
+                        ctx_id = found_cid;
+                    }
+                }
+            }
+            if (ctx_id <= 0) ctx_id = 1;
             if (name.len > 0) {
-                session.addBinding(name);
+                session.addBindingWithContext(name, ctx_id);
             }
             return CdpResponse.ok(req.id, "{}");
         }
 
         if (std.mem.eql(u8, req.method, "Runtime.evaluate")) {
+            if (w_entry := session.dedicated_workers.findWorkerBySessionId(req.session_id)) {
+                const w_ctx = getWorkerJsContext(w_entry.native_wid) orelse {
+                    return CdpResponse.err(req.id, -32000, "Worker context not available");
+                };
+                const raw_expr = extractJsonString(req.params_raw, "expression") ?? "undefined";
+                let unesc_buf = session.allocator.alloc(u8, @max(raw_expr.len + 1, @as(usize, 65536))) catch return CdpResponse.err(req.id, -32000, "Out of memory");
+                defer session.allocator.free(unesc_buf);
+                const expr_len = unescapeJsonString(raw_expr, unesc_buf).len;
+                unesc_buf[expr_len] = 0;
+                const expr = unesc_buf[0..expr_len];
+                const return_by_value = extractJsonBool(req.params_raw, "returnByValue") ?? false;
+                const await_promise = extractJsonBool(req.params_raw, "awaitPromise") ?? true;
+                const ser_opts = parseSerializationOptions(req.params_raw);
+                const eval_len = evalInWorkerContextWithSerialization(w_ctx, expr, return_by_value, await_promise, ser_opts.mode, ser_opts.max_depth, out_buf);
+                pollWorkerCdpEvents(session, out_events, event_count);
+                if (eval_len == 0) {
+                    return CdpResponse.ok(req.id, "{\"result\":{\"type\":\"undefined\"}}");
+                }
+                if (std.mem.startsWith(u8, out_buf[0..eval_len], "__CAPSURF_CDP_ERROR__:")) {
+                    return CdpResponse.err(req.id, -32000, out_buf["__CAPSURF_CDP_ERROR__:".len..eval_len]);
+                }
+                return CdpResponse.ok(req.id, out_buf[0..eval_len]);
+            }
             const bctx = extractJsonString(req.params_raw, "browserContextId") ?? "";
             if (bctx.len > 0) {
                 session.setContextId(bctx);
@@ -407,6 +549,7 @@ pub struct RuntimeHandler {
             
             const return_by_value = extractJsonBool(req.params_raw, "returnByValue") ?? false;
             const await_promise = extractJsonBool(req.params_raw, "awaitPromise") ?? true;
+            const ser_opts = parseSerializationOptions(req.params_raw);
             const context_id = extractJsonInt(req.params_raw, "contextId");
             if (context_id != null && !session.isValidContextId(context_id.?)) {
                 if (session.isRetiredIsolatedWorldId(context_id.?)) {
@@ -423,7 +566,9 @@ pub struct RuntimeHandler {
             const in_iso = context_id != null && context_id.? > 1;
             const restored_node: i32 = if (in_iso) session.restoreIsolatedNodeIfNeeded() else 0;
             defer if (in_iso) session.clearIsolatedNode(restored_node);
-            let eval_len = session.evaluateInContext(context_id, expr, return_by_value, await_promise, out_buf);
+            session.park_pending_promise = await_promise;
+            defer session.park_pending_promise = false;
+            let eval_len = session.evaluateInContextWithSerialization(context_id, expr, return_by_value, await_promise, ser_opts.mode, ser_opts.max_depth, out_buf);
 
             if (std.mem.eql(u8, out_buf[0..eval_len], "{\"__capsurf_ctx_destroyed\":true}")) {
                 return CdpResponse.err(req.id, -32000, "Cannot find context with specified id");
@@ -489,6 +634,15 @@ pub struct RuntimeHandler {
                 event_count.* += 1;
             }
 
+            // Poll any file chooser events produced during evaluation
+            let polled_fc_evts: [4]CdpEvent = [CdpEvent{}; 4];
+            const polled_fc_count = session.pollFileChooserEvents(&polled_fc_evts);
+            let fc_i: usize = 0;
+            while (fc_i < polled_fc_count && event_count.* < out_events.len) : (fc_i += 1) {
+                out_events[event_count.*] = polled_fc_evts[fc_i];
+                event_count.* += 1;
+            }
+
             // Poll any execution context created events (e.g. out-of-process iframe added)
             let polled_ctx_evts: [2]CdpEvent = [CdpEvent{}; 2];
             const polled_c_count = session.pollExecutionContextEvents(&polled_ctx_evts);
@@ -526,6 +680,9 @@ pub struct RuntimeHandler {
 
             if (eval_len == 0) {
                 return CdpResponse.ok(req.id, "{\"result\":{\"type\":\"undefined\"}}");
+            }
+            if (std.mem.startsWith(u8, out_buf[0..eval_len], "__CAPSURF_CDP_ERROR__:")) {
+                return CdpResponse.err(req.id, -32000, out_buf["__CAPSURF_CDP_ERROR__:".len..eval_len]);
             }
             return CdpResponse.ok(req.id, out_buf[0..eval_len]);
         }

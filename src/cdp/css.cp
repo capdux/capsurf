@@ -751,7 +751,7 @@ pub struct CssHandler {
                 }
             }
             const full_css = if (css_buf != null) css_buf.?[0..css_len] else "";
-            const sheet = StyleSheet.parse(full_css, session.viewport_width, session.emulated_media_print);
+            const sheet = StyleSheet.parse(full_css, session.viewport_width, session.dark_color_scheme);
             const count = @max(@as(usize, 1), session.doc.nodeCount());
             let styles = session.allocator.alloc(ComputedStyle, count) catch null;
             defer if (styles != null) session.allocator.free(styles.?);

@@ -187,9 +187,53 @@ fn main() {
         expect_eq(jar.setFromHeader(HTTPS, "__Host-t=1; Secure; Domain=example.com", null) == null, true);
         expect_eq(jar.setFromHeader(HTTPS, "__Host-t=1; Secure; Path=/sub", null) == null, true);
         expect_eq(jar.setFromHeader(HTTPS, "__Host-t=1; Secure; Path=/", null) != null, true);
+
+        // Case-insensitive __Secure- and __Host-
+        expect_eq(jar.setFromHeader(HTTPS, "__secure-ci=1", null) == null, true);
+        expect_eq(jar.setFromHeader(HTTPS, "__SECURE-ci=1; Secure", null) != null, true);
+        expect_eq(jar.setFromHeader(HTTPS, "__host-ci=1; Secure; Domain=example.com; Path=/", null) == null, true);
+        expect_eq(jar.setFromHeader(HTTPS, "__HOST-ci=1; Secure; Path=/sub", null) == null, true);
+        expect_eq(jar.setFromHeader(HTTPS, "__hOsT-ci=1; Secure; Path=/", null) != null, true);
+
+        // __Http- (case-insensitive) requires Secure + HttpOnly
+        expect_eq(jar.setFromHeader(HTTPS, "__Http-t=1; Secure", null) == null, true);
+        expect_eq(jar.setFromHeader(HTTPS, "__http-t=1; HttpOnly", null) == null, true);
+        expect_eq(jar.setFromHeader(HTTPS, "__HTTP-t=1; Secure; HttpOnly", null) != null, true);
+        expect_eq(jar.setFromDocumentCookie(HTTPS, "__Http-js=1; Secure; HttpOnly") == null, true);
+
+        // __Host-Http- (case-insensitive) requires Secure + HttpOnly + no Domain + Path=/
+        expect_eq(jar.setFromHeader(HTTPS, "__Host-Http-t=1; Secure; Path=/", null) == null, true);
+        expect_eq(jar.setFromHeader(HTTPS, "__host-http-t=1; HttpOnly; Path=/", null) == null, true);
+        expect_eq(jar.setFromHeader(HTTPS, "__Host-Http-t=1; Secure; HttpOnly; Domain=example.com; Path=/", null) == null, true);
+        expect_eq(jar.setFromHeader(HTTPS, "__Host-Http-t=1; Secure; HttpOnly; Path=/sub", null) == null, true);
+        expect_eq(jar.setFromHeader(HTTPS, "__hOsT-hTtP-t=1; Secure; HttpOnly; Path=/", null) != null, true);
+        expect_eq(jar.setFromDocumentCookie(HTTPS, "__Host-Http-js=1; Secure; HttpOnly; Path=/") == null, true);
     });
 
-    test("7. CDP Cookie Format Conversion (entryToCdp)", () => {
+    test("7. Case-insensitive Domain matching & lowercase normalization", () => {
+        let jar = CookieJar.init(std.heap.page_allocator);
+        defer jar.deinit();
+
+        const e1 = jar.setFromHeader("https://APP.EXAMPLE.COM/x", "sid=1; Domain=.Example.COM", null);
+        expect_eq(e1 != null, true);
+        expect_eq(std.mem.eql(u8, e1.?.host, "example.com"), true);
+        expect_eq(e1.?.host_only, false);
+
+        const h1 = jar.cookieHeaderForUrl("https://Sub.EXAMPLE.Com/path", null, std.heap.page_allocator);
+        defer if (h1 != null) std.heap.page_allocator.free(h1.?);
+        expect_eq(h1 != null, true);
+        expect_eq(std.mem.eql(u8, h1.?, "sid=1"), true);
+
+        // Overwrite with different case Domain updates in place
+        const e2 = jar.setFromHeader("https://app.example.com/x", "sid=2; Domain=EXAMPLE.COM", null);
+        expect_eq(e2 != null, true);
+        expect_eq(jar.getAll().len == 1, true);
+        const h2 = jar.cookieHeaderForUrl("https://app.example.com/", null, std.heap.page_allocator);
+        defer if (h2 != null) std.heap.page_allocator.free(h2.?);
+        expect_eq(std.mem.eql(u8, h2.?, "sid=2"), true);
+    });
+
+    test("8. CDP Cookie Format Conversion (entryToCdp)", () => {
         let jar = CookieJar.init(std.heap.page_allocator);
         defer jar.deinit();
 

@@ -583,13 +583,14 @@ markNative(KeyframeEffect.prototype.getComputedTiming, "getComputedTiming");
 markNative(KeyframeEffect.prototype.getKeyframes, "getKeyframes");
 
 const registeredAnimations = new Set();
+let _flushCssAnimHook = null;
 
 function Animation(effect, timeline) {
   EventTarget.call(this);
   this.id = "";
   this._effect = null;
   this.timeline = timeline || globalDocTimeline;
-  this.playbackRate = 1.0;
+  this._playbackRate = 1.0;
   this.startTime = null;
   this._holdTime = null;
   this._finishTimer = null;
@@ -612,6 +613,17 @@ function Animation(effect, timeline) {
 }
 Animation.prototype = Object.create(EventTarget.prototype);
 Animation.prototype.constructor = Animation;
+
+Object.defineProperty(Animation.prototype, "playbackRate", {
+  get: function () {
+    return this._playbackRate;
+  },
+  set: function (val) {
+    if (this._playbackRate === val) return;
+    this.updatePlaybackRate(val);
+  },
+  configurable: true,
+});
 
 Object.defineProperty(Animation.prototype, "effect", {
   get: function () {
@@ -723,12 +735,71 @@ Animation.prototype.pause = function () {
   }
 };
 
+function _dispatchCssLifecycleEvent(anim, transitionType, animationType, elapsedMs) {
+  const target = anim.effect && anim.effect.target;
+  if (!target) return;
+  const elapsedSec = (Number(elapsedMs) || 0) / 1000;
+  const pseudo = (anim.effect && anim.effect.pseudoElement) || "";
+  const dispatch = function (ev) {
+    try {
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_dispatchTrustedEvent === "function") {
+        globalThis.__capsurf_dispatchTrustedEvent(target, ev);
+      } else if (typeof target.dispatchEvent === "function") {
+        target.dispatchEvent(ev);
+      }
+    } catch (e) {}
+  };
+  if (anim._transitionProperty) {
+    let ev;
+    if (typeof TransitionEvent === "function") {
+      ev = new TransitionEvent(transitionType, {
+        bubbles: true,
+        cancelable: false,
+        propertyName: String(anim._transitionProperty),
+        elapsedTime: elapsedSec,
+        pseudoElement: pseudo,
+      });
+    } else {
+      ev = new Event(transitionType, { bubbles: true, cancelable: false });
+      try {
+        ev.propertyName = String(anim._transitionProperty);
+        ev.elapsedTime = elapsedSec;
+        ev.pseudoElement = pseudo;
+      } catch (e) {}
+    }
+    dispatch(ev);
+  }
+  if (anim._animationName) {
+    let ev;
+    if (typeof AnimationEvent === "function") {
+      ev = new AnimationEvent(animationType, {
+        bubbles: true,
+        cancelable: false,
+        animationName: String(anim._animationName),
+        elapsedTime: elapsedSec,
+        pseudoElement: pseudo,
+      });
+    } else {
+      ev = new Event(animationType, { bubbles: true, cancelable: false });
+      try {
+        ev.animationName = String(anim._animationName);
+        ev.elapsedTime = elapsedSec;
+        ev.pseudoElement = pseudo;
+      } catch (e) {}
+    }
+    dispatch(ev);
+  }
+}
+
 Animation.prototype.finish = function () {
   this._clearFinishTimer();
   const endTime = this._getEndTime();
   this.playState = "finished";
   this._holdTime = isFinite(endTime) ? endTime : 0;
   this.startTime = null;
+  if (typeof this._onCssFinish === "function") {
+    try { this._onCssFinish(); } catch (e) {}
+  }
 
   if (this._finishedResolve) {
     const res = this._finishedResolve;
@@ -742,32 +813,100 @@ Animation.prototype.finish = function () {
     evt.timelineTime = this.timeline ? this.timeline.currentTime : 0;
   } catch (e) {}
   this.dispatchEvent(evt);
+  let cssElapsedMs = this._holdTime;
+  if (this._effect && (this._transitionProperty || this._animationName)) {
+    const dur = typeof this._effect.duration === "number" ? this._effect.duration : 0;
+    const iters = this._effect.iterations;
+    cssElapsedMs = (iters === 0 || !isFinite(iters)) ? 0 : dur * iters;
+  }
+  _dispatchCssLifecycleEvent(this, "transitionend", "animationend", cssElapsedMs);
 };
 
 Animation.prototype.cancel = function () {
+  let cancelElapsedMs = 0;
+  if (this._holdTime !== null) {
+    cancelElapsedMs = this._holdTime;
+  } else if (this.startTime !== null && this.timeline) {
+    cancelElapsedMs = (this.timeline.currentTime - this.startTime) * this.playbackRate;
+  }
+  if (cancelElapsedMs < 0 || !isFinite(cancelElapsedMs)) cancelElapsedMs = 0;
+
   this._clearFinishTimer();
   this.playState = "idle";
   this._holdTime = null;
   this.startTime = null;
   registeredAnimations.delete(this);
+  if (typeof this._onCssCancel === "function") {
+    try { this._onCssCancel(); } catch (e) {}
+  }
   const evt = new Event("cancel");
   try {
     evt.currentTime = null;
     evt.timelineTime = this.timeline ? this.timeline.currentTime : 0;
   } catch (e) {}
   this.dispatchEvent(evt);
+  const delayMs = (this._effect && this._effect.delay) ? this._effect.delay : 0;
+  const cssCancelElapsedMs = Math.max(0, cancelElapsedMs - delayMs);
+  _dispatchCssLifecycleEvent(this, "transitioncancel", "animationcancel", cssCancelElapsedMs);
+};
+
+Animation.prototype.updatePlaybackRate = function (rate) {
+  const r = Number(rate);
+  if (!isFinite(r)) {
+    throw new TypeError("playbackRate must be a finite number.");
+  }
+  if (this.playState === "running" && this.timeline && this.startTime !== null) {
+    const prevTime = (this.timeline.currentTime - this.startTime) * this._playbackRate;
+    this._playbackRate = r;
+    if (r === 0) {
+      this._holdTime = prevTime;
+      this.startTime = null;
+      this._clearFinishTimer();
+    } else {
+      this._holdTime = null;
+      this.startTime = this.timeline.currentTime - prevTime / r;
+      this._scheduleFinish();
+    }
+  } else {
+    this._playbackRate = r;
+  }
 };
 
 Animation.prototype.reverse = function () {
-  this.playbackRate = -this.playbackRate;
+  this.updatePlaybackRate(-this._playbackRate);
   this.play();
 };
+
+function CSSTransition(effect, timeline, transitionProperty) {
+  Animation.call(this, effect, timeline);
+  this.transitionProperty = String(transitionProperty || "");
+  this._transitionProperty = this.transitionProperty;
+}
+CSSTransition.prototype = Object.create(Animation.prototype);
+CSSTransition.prototype.constructor = CSSTransition;
+markNative(CSSTransition, "CSSTransition");
+
+function CSSAnimation(effect, timeline, animationName) {
+  Animation.call(this, effect, timeline);
+  this.animationName = String(animationName || "");
+  this._animationName = this.animationName;
+  this.id = this.animationName;
+}
+CSSAnimation.prototype = Object.create(Animation.prototype);
+CSSAnimation.prototype.constructor = CSSAnimation;
+markNative(CSSAnimation, "CSSAnimation");
+
+if (typeof globalThis !== "undefined") {
+  globalThis.CSSTransition = CSSTransition;
+  globalThis.CSSAnimation = CSSAnimation;
+}
 
 markNative(Animation, "Animation");
 markNative(Animation.prototype.play, "play");
 markNative(Animation.prototype.pause, "pause");
 markNative(Animation.prototype.finish, "finish");
 markNative(Animation.prototype.cancel, "cancel");
+markNative(Animation.prototype.updatePlaybackRate, "updatePlaybackRate");
 
 function animateElement(element, keyframes, options) {
   const effect = new KeyframeEffect(element, keyframes, options);
@@ -794,6 +933,9 @@ function isAnimationRelevant(anim) {
 }
 
 function animationsFor(root) {
+  if (typeof _flushCssAnimHook === "function") {
+    _flushCssAnimHook();
+  }
   const res = [];
   for (const anim of registeredAnimations) {
     if (!isAnimationRelevant(anim)) continue;
@@ -810,6 +952,7 @@ function computeAnimatedStylesForElement(element, pseudoElt) {
   const wantPseudo = String(pseudoElt || "").toLowerCase();
   for (const anim of registeredAnimations) {
     if (!anim || !anim.effect || anim.effect.target !== element) continue;
+    if (anim._transitionProperty || anim._animationName) continue;
     const animPseudo = String(anim.effect.pseudoElement || "").toLowerCase();
     if (animPseudo !== wantPseudo) continue;
     if (anim.playState === "idle") continue;
@@ -1016,6 +1159,33 @@ if (typeof globalThis !== "undefined") {
     return TIMING_KEYWORDS.has(l) || l.startsWith("cubic-bezier(") || l.startsWith("steps(");
   }
 
+  const FALLBACK_TRANSITION_SHORTHANDS = {
+    margin: ["margin-top", "margin-right", "margin-bottom", "margin-left"],
+    padding: ["padding-top", "padding-right", "padding-bottom", "padding-left"],
+    "border-width": ["border-top-width", "border-right-width", "border-bottom-width", "border-left-width"],
+    "border-color": ["border-top-color", "border-right-color", "border-bottom-color", "border-left-color"],
+    "border-style": ["border-top-style", "border-right-style", "border-bottom-style", "border-left-style"],
+    "border-radius": ["border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius", "border-bottom-left-radius"],
+    inset: ["top", "right", "bottom", "left"],
+    gap: ["row-gap", "column-gap"],
+    "grid-gap": ["row-gap", "column-gap"],
+    overflow: ["overflow-x", "overflow-y"],
+    outline: ["outline-color", "outline-style", "outline-width"],
+    flex: ["flex-grow", "flex-shrink", "flex-basis"],
+  };
+
+  function expandTransitionProp(prop) {
+    const shMap = (typeof globalThis !== "undefined" && globalThis.__capsurf_shorthandLonghands) || null;
+    if (shMap && Object.prototype.hasOwnProperty.call(shMap, prop)) {
+      const lhs = shMap[prop];
+      if (Array.isArray(lhs) && lhs.length > 0) return lhs;
+    }
+    if (Object.prototype.hasOwnProperty.call(FALLBACK_TRANSITION_SHORTHANDS, prop)) {
+      return FALLBACK_TRANSITION_SHORTHANDS[prop];
+    }
+    return [prop];
+  }
+
   function parseTransitionSpecs(computedMap) {
     const specs = [];
     const shorthand = computedMap.get("transition");
@@ -1203,7 +1373,17 @@ if (typeof globalThis !== "undefined") {
             if (col === -1) continue;
             const k = declParts[di].slice(0, col).trim().toLowerCase();
             const v = declParts[di].slice(col + 1).replace(/!important/i, "").trim();
-            if (k && v) props[k] = v;
+            if (k && v) {
+              const exp = (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_expandShorthand === "function") ? globalThis.__capsurf_expandShorthand(k, v) : null;
+              if (Array.isArray(exp) && exp.length > 0) {
+                for (let ei = 0; ei < exp.length; ei++) {
+                  const pair = exp[ei];
+                  if (pair && pair[0] && pair[1] !== undefined) props[pair[0]] = String(pair[1]);
+                }
+              } else {
+                props[k] = v;
+              }
+            }
           }
           for (let si = 0; si < sels.length; si++) {
             let offset = null;
@@ -1224,8 +1404,23 @@ if (typeof globalThis !== "undefined") {
     return map;
   }
 
+  function kebabToCamelCase(prop) {
+    return String(prop).replace(/-([a-z])/g, function (_, c) { return c.toUpperCase(); });
+  }
+
+  function safeEasingForEffect(easing) {
+    try { return validateEasingString(easing); } catch (e) { return "ease"; }
+  }
+
   function evalTransitionValue(tr, now) {
-    const activeMs = (now - tr.startTime) - tr.delayMs;
+    let activeMs;
+    if (tr.anim) {
+      const curTime = tr.anim.currentTime;
+      if (curTime === null) return tr.toVal;
+      activeMs = curTime - tr.delayMs;
+    } else {
+      activeMs = (now - tr.startTime) - tr.delayMs;
+    }
     if (activeMs <= 0) return tr.fromVal;
     if (activeMs >= tr.durationMs) return tr.toVal;
     const rawT = activeMs / tr.durationMs;
@@ -1236,7 +1431,16 @@ if (typeof globalThis !== "undefined") {
   function evalCssAnimationStyles(anim, frames, now, baseStyles) {
     const out = {};
     if (!frames || frames.length === 0) return out;
-    const activeMs = (anim.playState === "paused" ? 0 : (now - anim.startTime)) - anim.delayMs;
+    let localTime;
+    if (anim.anim) {
+      if (anim.anim.playState === "idle") return out;
+      const curTime = anim.anim.currentTime;
+      if (curTime === null) return out;
+      localTime = curTime;
+    } else {
+      localTime = anim.playState === "paused" ? 0 : (now - anim.startTime);
+    }
+    const activeMs = localTime - anim.delayMs;
     const totalMs = anim.iterations === Infinity ? Infinity : anim.durationMs * anim.iterations;
     if (activeMs < 0 && anim.fill !== "backwards" && anim.fill !== "both") return out;
     if (activeMs >= totalMs && anim.fill !== "forwards" && anim.fill !== "both") return out;
@@ -1351,7 +1555,12 @@ if (typeof globalThis !== "undefined") {
       const specByProp = new Map();
       for (let i = 0; i < trSpecs.length; i++) {
         if (trSpecs[i].prop === "all") allSpec = trSpecs[i];
-        else specByProp.set(trSpecs[i].prop, trSpecs[i]);
+        else {
+          const expanded = expandTransitionProp(trSpecs[i].prop);
+          for (let j = 0; j < expanded.length; j++) {
+            specByProp.set(expanded[j], trSpecs[i]);
+          }
+        }
       }
 
       const candidateProps = new Set();
@@ -1375,18 +1584,31 @@ if (typeof globalThis !== "undefined") {
           if (existing.toVal === nextVal) return;
           // Retarget: cancel existing transition and start from its current interpolated value
           startFromVal = evalTransitionValue(existing, now);
-          if (existing.endTimer !== null) {
-            try { clearTimeout(existing.endTimer); } catch (e) {}
-            existing.endTimer = null;
-          }
           if (existing.startTimer !== null) {
             try { clearTimeout(existing.startTimer); } catch (e) {}
             existing.startTimer = null;
           }
-          const cancelElapsed = Math.max(0, Math.min(existing.durationMs, (now - existing.startTime) - existing.delayMs)) / 1000;
           st.transitions.delete(prop);
-          fireTransitionEvent(element, "transitioncancel", prop, cancelElapsed);
+          if (existing.anim) {
+            existing.anim.cancel();
+          } else {
+            const cancelElapsed = Math.max(0, Math.min(existing.durationMs, (now - existing.startTime) - existing.delayMs)) / 1000;
+            fireTransitionEvent(element, "transitioncancel", prop, cancelElapsed);
+          }
         }
+
+        const kfProp = kebabToCamelCase(prop);
+        const f0 = {};
+        f0[kfProp] = startFromVal;
+        const f1 = {};
+        f1[kfProp] = nextVal;
+        const trEffect = new KeyframeEffect(element, [f0, f1], {
+          duration: spec.durationMs,
+          delay: spec.delayMs,
+          easing: safeEasingForEffect(spec.easing),
+          fill: "backwards",
+        });
+        const trAnim = new CSSTransition(trEffect, globalDocTimeline, prop);
 
         const tr = {
           prop: prop,
@@ -1397,37 +1619,52 @@ if (typeof globalThis !== "undefined") {
           delayMs: spec.delayMs,
           easing: spec.easing,
           startTimer: null,
-          endTimer: null,
+          anim: trAnim,
+        };
+        trAnim._onCssFinish = function () {
+          if (tr.startTimer !== null) {
+            try { clearTimeout(tr.startTimer); } catch (e) {}
+            tr.startTimer = null;
+          }
+          if (st.transitions.get(prop) === tr) {
+            st.transitions.delete(prop);
+            if (st.transitions.size === 0 && st.animations.size === 0) {
+              _activeCssAnimElements.delete(element);
+            }
+          }
+        };
+        trAnim._onCssCancel = function () {
+          if (tr.startTimer !== null) {
+            try { clearTimeout(tr.startTimer); } catch (e) {}
+            tr.startTimer = null;
+          }
+          if (st.transitions.get(prop) === tr) {
+            st.transitions.delete(prop);
+            if (st.transitions.size === 0 && st.animations.size === 0) {
+              _activeCssAnimElements.delete(element);
+            }
+          }
         };
         st.transitions.set(prop, tr);
+        trAnim.play();
 
         const initialElapsed = Math.max(0, -tr.delayMs) / 1000;
-        const remainingMs = Math.max(0, tr.durationMs + tr.delayMs);
 
         // Fire transitionrun and transitionstart asynchronously (or in microtask / timer)
         Promise.resolve().then(function () {
-          if (st.transitions.get(prop) !== tr) return;
+          if (st.transitions.get(prop) !== tr || trAnim.playState === "idle") return;
           fireTransitionEvent(element, "transitionrun", prop, initialElapsed);
           if (tr.delayMs <= 0) {
-            if (st.transitions.get(prop) !== tr) return;
+            if (st.transitions.get(prop) !== tr || trAnim.playState === "idle") return;
             fireTransitionEvent(element, "transitionstart", prop, initialElapsed);
           } else if (typeof setTimeout === "function") {
             tr.startTimer = setTimeout(function () {
               tr.startTimer = null;
-              if (st.transitions.get(prop) !== tr) return;
+              if (st.transitions.get(prop) !== tr || trAnim.playState === "idle") return;
               fireTransitionEvent(element, "transitionstart", prop, 0);
             }, tr.delayMs);
           }
         });
-
-        if (typeof setTimeout === "function") {
-          tr.endTimer = setTimeout(function () {
-            tr.endTimer = null;
-            if (st.transitions.get(prop) !== tr) return;
-            st.transitions.delete(prop);
-            fireTransitionEvent(element, "transitionend", prop, tr.durationMs / 1000);
-          }, remainingMs);
-        }
       });
     }
 
@@ -1442,7 +1679,27 @@ if (typeof globalThis !== "undefined") {
     for (let i = 0; i < animSpecs.length; i++) {
       const sp = animSpecs[i];
       activeNames.add(sp.name);
-      if (!st.animations.has(sp.name)) {
+      const existingRec = st.animations.get(sp.name);
+      if (!existingRec) {
+        const frames = keyframesMap ? keyframesMap.get(sp.name) : null;
+        const kfList = frames ? frames.map(function (fr) {
+          const o = { offset: fr.offset };
+          for (const k in fr.props) {
+            if (Object.prototype.hasOwnProperty.call(fr.props, k)) {
+              o[kebabToCamelCase(k)] = fr.props[k];
+            }
+          }
+          return o;
+        }) : [];
+        const cssAnimEffect = new KeyframeEffect(element, kfList, {
+          duration: sp.durationMs,
+          delay: sp.delayMs,
+          easing: safeEasingForEffect(sp.easing),
+          iterations: sp.iterations,
+          direction: sp.direction,
+          fill: sp.fill,
+        });
+        const cssAnim = new CSSAnimation(cssAnimEffect, globalDocTimeline, sp.name);
         const animRec = {
           name: sp.name,
           startTime: now,
@@ -1453,23 +1710,43 @@ if (typeof globalThis !== "undefined") {
           direction: sp.direction,
           fill: sp.fill,
           playState: sp.playState || "running",
+          cssPlayState: sp.playState || "running",
           finished: false,
-          endTimer: null,
+          anim: cssAnim,
+        };
+        cssAnim._onCssFinish = function () {
+          animRec.finished = true;
+        };
+        cssAnim._onCssCancel = function () {
+          if (st.animations.get(sp.name) === animRec) {
+            st.animations.delete(sp.name);
+            if (st.transitions.size === 0 && st.animations.size === 0) {
+              _activeCssAnimElements.delete(element);
+            }
+          }
         };
         st.animations.set(sp.name, animRec);
+        if (animRec.playState === "paused") {
+          cssAnim.playState = "paused";
+          cssAnim._holdTime = 0;
+          cssAnim.startTime = null;
+        } else {
+          cssAnim.play();
+        }
         const initialElapsed = Math.max(0, -sp.delayMs) / 1000;
         Promise.resolve().then(function () {
-          if (st.animations.get(sp.name) !== animRec) return;
+          if (st.animations.get(sp.name) !== animRec || cssAnim.playState === "idle") return;
           fireAnimationEvent(element, "animationstart", sp.name, initialElapsed);
         });
-        if (sp.iterations !== Infinity && typeof setTimeout === "function") {
-          const totalMs = Math.max(0, sp.durationMs * sp.iterations + sp.delayMs);
-          animRec.endTimer = setTimeout(function () {
-            animRec.endTimer = null;
-            if (st.animations.get(sp.name) !== animRec) return;
-            animRec.finished = true;
-            fireAnimationEvent(element, "animationend", sp.name, (sp.durationMs * sp.iterations) / 1000);
-          }, totalMs);
+      } else if (existingRec.anim) {
+        const nextCssPlayState = sp.playState || "running";
+        if (nextCssPlayState !== existingRec.cssPlayState) {
+          existingRec.cssPlayState = nextCssPlayState;
+          if (nextCssPlayState === "paused") {
+            existingRec.anim.pause();
+          } else {
+            existingRec.anim.play();
+          }
         }
       }
     }
@@ -1477,12 +1754,18 @@ if (typeof globalThis !== "undefined") {
     // Cancel removed CSS animations
     st.animations.forEach(function (animRec, animName) {
       if (!activeNames.has(animName)) {
-        if (animRec.endTimer !== null) {
-          try { clearTimeout(animRec.endTimer); } catch (e) {}
-          animRec.endTimer = null;
-        }
         st.animations.delete(animName);
-        if (!animRec.finished) {
+        if (animRec.anim) {
+          if (!animRec.finished && animRec.anim.playState !== "finished" && animRec.anim.playState !== "idle") {
+            animRec.anim.cancel();
+          } else {
+            animRec.anim._clearFinishTimer();
+            animRec.anim.playState = "idle";
+            animRec.anim._holdTime = null;
+            animRec.anim.startTime = null;
+            registeredAnimations.delete(animRec.anim);
+          }
+        } else if (!animRec.finished) {
           const cancelElapsed = Math.max(0, (now - animRec.startTime) - animRec.delayMs) / 1000;
           fireAnimationEvent(element, "animationcancel", animName, cancelElapsed);
         }
@@ -1491,7 +1774,8 @@ if (typeof globalThis !== "undefined") {
 
     // 3. Overlay active CSS transitions onto computedMap
     st.transitions.forEach(function (tr, prop) {
-      const activeMs = (now - tr.startTime) - tr.delayMs;
+      const curTime = tr.anim ? tr.anim.currentTime : (now - tr.startTime);
+      const activeMs = (curTime !== null ? curTime : tr.durationMs + tr.delayMs) - tr.delayMs;
       if (activeMs >= tr.durationMs) {
         computedMap.set(prop, tr.toVal);
       } else {
@@ -1566,6 +1850,17 @@ if (typeof globalThis !== "undefined") {
         }
       } catch (e) {}
     }
+  }
+
+  function ensureBeforeChangeSnapshot(el) {
+    if (!_snapshotsInitialized || !el || el.nodeType !== 1) return;
+    const st = _cssAnimStateMap.get(el);
+    if (st && st.lastStyle !== null) return;
+    try {
+      if (typeof getComputedStyle === "function") {
+        getComputedStyle(el);
+      }
+    } catch (e) {}
   }
 
   function notifyCssStyleChange(el) {
@@ -1652,7 +1947,8 @@ if (typeof globalThis !== "undefined") {
       }
       const decls = [];
       st.transitions.forEach(function (tr, prop) {
-        const activeMs = (now - tr.startTime) - tr.delayMs;
+        const curTime = tr.anim ? tr.anim.currentTime : (now - tr.startTime);
+        const activeMs = (curTime !== null ? curTime : tr.durationMs + tr.delayMs) - tr.delayMs;
         if (activeMs >= tr.durationMs) {
           decls.push(prop + ":" + tr.toVal);
         } else {
@@ -1684,9 +1980,19 @@ if (typeof globalThis !== "undefined") {
     return lines.join("\n");
   }
 
+  _flushCssAnimHook = function () {
+    if (!_snapshotsInitialized) {
+      initCssTransitionSnapshots();
+    }
+    if (_pendingStyleCheckElements.size > 0) {
+      flushPendingStyleChecks();
+    }
+  };
+
   if (typeof globalThis !== "undefined") {
     globalThis.__capsurf_syncCssTransitionsAndAnimations = syncCssTransitionsAndAnimations;
     globalThis.__capsurf_notifyCssStyleChange = notifyCssStyleChange;
+    globalThis.__capsurf_ensureBeforeChangeSnapshot = ensureBeforeChangeSnapshot;
     globalThis.__capsurf_initCssTransitionSnapshots = initCssTransitionSnapshots;
     globalThis.__capsurf_sample_active_animations = sampleActiveAnimations;
   }

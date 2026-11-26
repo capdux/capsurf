@@ -1,6 +1,25 @@
 // src/js/shim/element/html-element.js
 // Aligned with vendor/kitesurf/packages/dom-shim/src/element/html-element.ts
 
+if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_notifyFileChooser !== "function") {
+  globalThis.__capsurf_notifyFileChooser = function (ctrl) {
+    if (!ctrl || ctrl.nodeType !== 1) return;
+    const tag = String(ctrl.localName || ctrl.tagName || "").toLowerCase();
+    if (tag !== "input") return;
+    const iType = String(ctrl.getAttribute ? (ctrl.getAttribute("type") || "text") : (ctrl.type || "text")).toLowerCase();
+    if (iType !== "file") return;
+    if (ctrl.disabled || (ctrl.hasAttribute && ctrl.hasAttribute("disabled"))) return;
+    if (!Array.isArray(globalThis.__capsurf_pending_file_choosers)) {
+      globalThis.__capsurf_pending_file_choosers = [];
+    }
+    globalThis.__capsurf_pending_file_choosers.push({
+      backendNodeId: Number(ctrl._nid) || 0,
+      mode: (ctrl.hasAttribute && (ctrl.hasAttribute("multiple") || ctrl.hasAttribute("webkitdirectory"))) ? "selectMultiple" : "selectSingle",
+      frameId: (ctrl.ownerDocument && ctrl.ownerDocument.defaultView && ctrl.ownerDocument.defaultView.__capsurf_frame_id) || (typeof window !== "undefined" && window.__capsurf_frame_id) || undefined
+    });
+  };
+}
+
 function DOMStringMap() {}
 if (typeof global !== "undefined") global.DOMStringMap = DOMStringMap;
 if (typeof globalThis !== "undefined") globalThis.DOMStringMap = DOMStringMap;
@@ -279,6 +298,10 @@ function installHtmlElementExtensions(proto) {
                     dispatchTrusted(cur, new Event("input", { bubbles: true, cancelable: false, composed: true }));
                     dispatchTrusted(cur, new Event("change", { bubbles: true, cancelable: false }));
                   }
+                } else if (iType === "file") {
+                  if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_notifyFileChooser === "function") {
+                    globalThis.__capsurf_notifyFileChooser(cur);
+                  }
                 }
               }
               break;
@@ -329,6 +352,10 @@ function installHtmlElementExtensions(proto) {
                     if (!wasChecked) {
                       ctrl.dispatchEvent(new Event("input", { bubbles: true, cancelable: false, composed: true }));
                       ctrl.dispatchEvent(new Event("change", { bubbles: true, cancelable: false }));
+                    }
+                  } else if (iType === "file") {
+                    if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_notifyFileChooser === "function") {
+                      globalThis.__capsurf_notifyFileChooser(ctrl);
                     }
                   }
                 }
@@ -474,12 +501,18 @@ function installHtmlElementExtensions(proto) {
             const o = others[i];
             if (o && o !== this && o._popoverOpen && String(o.getAttribute("popover") || "").toLowerCase() !== "manual") {
               o._popoverOpen = false;
+              if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_set_popover_open === "function") {
+                globalThis.__capsurf_set_popover_open(o, false);
+              }
             }
           }
         }
       }
       this._popoverOpen = true;
       if (typeof globalThis !== "undefined") {
+        if (typeof globalThis.__capsurf_set_popover_open === "function") {
+          globalThis.__capsurf_set_popover_open(this, true);
+        }
         globalThis.__capsurf_domMutationEpoch = (globalThis.__capsurf_domMutationEpoch || 0) + 1;
       }
     };
@@ -489,6 +522,9 @@ function installHtmlElementExtensions(proto) {
     proto.hidePopover = function () {
       this._popoverOpen = false;
       if (typeof globalThis !== "undefined") {
+        if (typeof globalThis.__capsurf_set_popover_open === "function") {
+          globalThis.__capsurf_set_popover_open(this, false);
+        }
         globalThis.__capsurf_domMutationEpoch = (globalThis.__capsurf_domMutationEpoch || 0) + 1;
       }
     };

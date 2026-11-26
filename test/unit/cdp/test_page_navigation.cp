@@ -32,7 +32,7 @@ fn testDataUrlNavigation()! {
     defer session.deinit();
 
     let out_buf: [4096]u8 = undefined;
-    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
+    let out_evts: [128]CdpEvent = [CdpEvent{}; 128];
     let evt_cnt: usize = 0;
 
     // 1. Plaintext data: URL navigation
@@ -90,7 +90,7 @@ fn testLayoutMetricsIntegration()! {
     defer session.deinit();
 
     let out_buf: [4096]u8 = undefined;
-    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
+    let out_evts: [128]CdpEvent = [CdpEvent{}; 128];
     let evt_cnt: usize = 0;
 
     // Override viewport metrics via Emulation
@@ -141,7 +141,7 @@ fn testInterceptedNavigation()! {
     defer session.deinit();
 
     let out_buf: [4096]u8 = undefined;
-    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
+    let out_evts: [128]CdpEvent = [CdpEvent{}; 128];
     let evt_cnt: usize = 0;
 
     // 1. Enable Fetch interception for pattern *mocked*
@@ -158,7 +158,7 @@ fn testInterceptedNavigation()! {
     expect_eq(parked != null, true);
     parked.?.verdict = InterceptVerdict.Fulfill;
     parked.?.mock_status = 200;
-    parked.?.mock_body = "<html><body><h3 id='mock-target'>Mocked Response Success</h3></body></html>";
+    parked.?.setMockBody("<html><body><h3 id='mock-target'>Mocked Response Success</h3></body></html>");
 
     // 3. Navigate to intercepted URL
     const req_nav = CdpRequest{
@@ -235,7 +235,7 @@ fn testRealHttpLoadingWithServer()! {
 
     // 4. Navigate via CDP Page.navigate
     let out_buf: [4096]u8 = undefined;
-    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
+    let out_evts: [128]CdpEvent = [CdpEvent{}; 128];
     let evt_cnt: usize = 0;
 
     const req_nav = CdpRequest{

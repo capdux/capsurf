@@ -2668,7 +2668,19 @@ pub struct ComputedStyle {
             .Sub, .Sup, .Time, .U, .Var, .Wbr, .Label => {
                 _.display = Display.inlineFlow();
             },
-            .Button, .Input, .Select, .Textarea, .Img, .Video, .Audio,
+            .Input => {
+                if (t_attr := node.getAttribute("type")) {
+                    const t_trim = std.mem.trim(u8, t_attr, " \t\r\n");
+                    if (std.ascii.eqlIgnoreCase(t_trim, "hidden")) {
+                        _.display = Display.none();
+                    } else {
+                        _.display = Display.inlineBlock();
+                    }
+                } else {
+                    _.display = Display.inlineBlock();
+                }
+            },
+            .Button, .Select, .Textarea, .Img, .Video, .Audio,
             .Canvas, .Iframe, .Embed, .Object, .Progress, .Meter => {
                 _.display = Display.inlineBlock();
             },
@@ -2702,6 +2714,20 @@ pub struct ComputedStyle {
             * => {
                 _.display = Display.block();
             },
+        }
+
+        if (node.hasAttribute("popover")) {
+            if (!node.popover_open) {
+                _.display = Display.none();
+            } else {
+                _.position = CssPosition.Fixed;
+                _.top = LengthPercentageOrAuto.zeroPx();
+                _.right = LengthPercentageOrAuto.zeroPx();
+                _.bottom = LengthPercentageOrAuto.zeroPx();
+                _.left = LengthPercentageOrAuto.zeroPx();
+                _.z_index = 2147483647;
+                _.has_z_index = true;
+            }
         }
 
         switch (tag) {
@@ -2764,10 +2790,11 @@ pub struct ComputedStyle {
                 _.has_explicit_border_color = true;
             },
             .Button => {
-                _.padding_top = LengthPercentageOrAuto.px(4.0);
-                _.padding_right = LengthPercentageOrAuto.px(12.0);
-                _.padding_bottom = LengthPercentageOrAuto.px(4.0);
-                _.padding_left = LengthPercentageOrAuto.px(12.0);
+                _.box_sizing = BoxSizing.BorderBox;
+                _.padding_top = LengthPercentageOrAuto.px(1.0);
+                _.padding_right = LengthPercentageOrAuto.px(6.0);
+                _.padding_bottom = LengthPercentageOrAuto.px(1.0);
+                _.padding_left = LengthPercentageOrAuto.px(6.0);
                 _.background_color = CssColor.rgb(239, 239, 239);
                 _.border_top_width = 1.0;
                 _.border_right_width = 1.0;
@@ -2777,17 +2804,28 @@ pub struct ComputedStyle {
                 _.has_explicit_border_color = true;
             },
             .Input, .Textarea, .Select => {
-                _.padding_top = LengthPercentageOrAuto.px(2.0);
-                _.padding_right = LengthPercentageOrAuto.px(4.0);
-                _.padding_bottom = LengthPercentageOrAuto.px(2.0);
-                _.padding_left = LengthPercentageOrAuto.px(4.0);
-                _.background_color = CssColor.rgb(255, 255, 255);
-                _.border_top_width = 1.0;
-                _.border_right_width = 1.0;
-                _.border_bottom_width = 1.0;
-                _.border_left_width = 1.0;
-                _.border_color = CssColor.rgb(118, 118, 118);
-                _.has_explicit_border_color = true;
+                let is_radio_or_checkbox = false;
+                if (tag == .Input) {
+                    if (t_attr := node.getAttribute("type")) {
+                        const t_trim = std.mem.trim(u8, t_attr, " \t\r\n");
+                        if (std.ascii.eqlIgnoreCase(t_trim, "radio") || std.ascii.eqlIgnoreCase(t_trim, "checkbox")) {
+                            is_radio_or_checkbox = true;
+                        }
+                    }
+                }
+                if (!is_radio_or_checkbox) {
+                    _.padding_top = LengthPercentageOrAuto.px(2.0);
+                    _.padding_right = LengthPercentageOrAuto.px(4.0);
+                    _.padding_bottom = LengthPercentageOrAuto.px(2.0);
+                    _.padding_left = LengthPercentageOrAuto.px(4.0);
+                    _.background_color = CssColor.rgb(255, 255, 255);
+                    _.border_top_width = 1.0;
+                    _.border_right_width = 1.0;
+                    _.border_bottom_width = 1.0;
+                    _.border_left_width = 1.0;
+                    _.border_color = CssColor.rgb(118, 118, 118);
+                    _.has_explicit_border_color = true;
+                }
             },
             .Iframe => {
                 _.border_top_width = 2.0;
@@ -3510,16 +3548,7 @@ pub struct ComputedStyle {
         let var_syntax_invalid = false;
         let var_computed_invalid = false;
         const val = _.resolveVarExprBuf(prop.value, &var_buf, &var_syntax_invalid, &var_computed_invalid);
-        if (var_syntax_invalid) return;
-        if (var_computed_invalid) {
-            if (std.ascii.eqlIgnoreCase(name, "color")) {
-                if (_.tryClaimSlot(PROP_COLOR, weight)) {
-                    _.has_color_light_dark = false;
-                    _.color = _.inherited_color;
-                }
-            }
-            return;
-        }
+        if (var_syntax_invalid || var_computed_invalid) return;
 
         if (std.ascii.eqlIgnoreCase(name, "display")) {
             if (d := Display.parse(val)) {
@@ -6101,6 +6130,9 @@ pub struct Cascade {
             let style = ComputedStyle{};
 
             if (node.node_type != NodeType.Element) {
+                if (node.node_type == NodeType.Document && std.mem.eql(u8, node.tag_name, "#shadow-root") && node.parent != NULL_NODE && @as(usize, node.parent) < nid) {
+                    style.initForNode(node, &out_styles[@as(usize, node.parent)]);
+                }
                 out_styles[nid] = style;
                 continue;
             }
@@ -6528,10 +6560,16 @@ pub struct Cascade {
                 Cascade.resolveCountersRecursive(doc, styles, ch, &sub_stack);
                 ch = doc.nodes.items[@as(usize, ch)].next_sibling;
             }
+            if (node.shadow_root != NULL_NODE && @as(usize, node.shadow_root) < doc.nodes.items.len) {
+                Cascade.resolveCountersRecursive(doc, styles, node.shadow_root, &sub_stack);
+            }
         } else {
             while (ch != NULL_NODE && @as(usize, ch) < doc.nodes.items.len) {
                 Cascade.resolveCountersRecursive(doc, styles, ch, stack);
                 ch = doc.nodes.items[@as(usize, ch)].next_sibling;
+            }
+            if (node.shadow_root != NULL_NODE && @as(usize, node.shadow_root) < doc.nodes.items.len) {
+                Cascade.resolveCountersRecursive(doc, styles, node.shadow_root, stack);
             }
         }
         stack.count = saved_count;

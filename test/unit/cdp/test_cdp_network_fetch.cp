@@ -18,7 +18,7 @@ fn testEmulationMetrics()! {
     defer session.deinit();
 
     let out_buf: [4096]u8 = undefined;
-    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
+    let out_evts: [128]CdpEvent = [CdpEvent{}; 128];
     let evt_cnt: usize = 0;
 
     // 1. Mobile iPhone viewport override (375x667, dsf 2, mobile true)
@@ -60,7 +60,7 @@ fn testFetchInterception()! {
     defer session.deinit();
 
     let out_buf: [4096]u8 = undefined;
-    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
+    let out_evts: [128]CdpEvent = [CdpEvent{}; 128];
     let evt_cnt: usize = 0;
 
     // 1. Enable interception with wildcard pattern
@@ -85,7 +85,7 @@ fn testFetchInterception()! {
     expect_eq(req_ref != null, true);
 
     let event_buf: [512]u8 = undefined;
-    const paused_evt = FetchHandler.buildRequestPausedEvent("req-001", "https://example.com/api/data", "POST", "XHR", "frame-1", event_buf[0..]);
+    const paused_evt = FetchHandler.buildRequestPausedEvent("req-001", "https://example.com/api/data", "POST", "XHR", "frame-1", "net-001", event_buf[0..]);
     expect_eq(paused_evt != null, true);
     expect_eq(std.mem.indexOf(u8, paused_evt.?.params_json, "req-001") != null, true);
 
@@ -119,7 +119,7 @@ fn testNetworkCookiesAndHeaders()! {
     defer session.deinit();
 
     let out_buf: [4096]u8 = undefined;
-    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
+    let out_evts: [128]CdpEvent = [CdpEvent{}; 128];
     let evt_cnt: usize = 0;
 
     // 1. Initial cookie state must be empty

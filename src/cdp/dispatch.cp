@@ -27,6 +27,23 @@ pub struct CdpDispatcher {
         out_events: *[MAX_CDP_EVENTS]CdpEvent,
         event_count: *usize,
     ): CdpResponse {
+        const resp = CdpDispatcher.dispatchInner(session, req, out_buf, out_events, event_count);
+        const cur_cnt = event_count.*;
+        if (cur_cnt < out_events.len) {
+            const avail = out_events.len - cur_cnt;
+            const polled = session.dedicated_workers.pollCdpEvents(out_events[cur_cnt..out_events.len]);
+            event_count.* = cur_cnt + @min(polled, avail);
+        }
+        return resp;
+    }
+
+    static fn dispatchInner(
+        session: *CdpPageSession,
+        req: CdpRequest,
+        out_buf: []u8,
+        out_events: *[MAX_CDP_EVENTS]CdpEvent,
+        event_count: *usize,
+    ): CdpResponse {
         event_count.* = 0;
 
         // 0. Handle malformed envelope or parse errors

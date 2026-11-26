@@ -1,7 +1,7 @@
 // test/dom/test_storage.cp
 // Tests WHATWG Web Storage implementation in src/dom/storage.cp
 
-import { Storage, StorageEntry, StorageManager, MAX_STORAGE_ENTRIES } from "../../../src/dom/storage.cp";
+import { Storage, StorageEntry, StorageManager, MAX_STORAGE_ENTRIES, MAX_STORAGE_BYTES } from "../../../src/dom/storage.cp";
 
 fn assert(cond: bool, msg: []const u8) {
     if (!cond) {
@@ -81,6 +81,34 @@ pub fn main() {
         mgr.clearAll();
         assert(mgr.localStorage.length() == 0, "localStorage cleared");
         assert(mgr.sessionStorage.length() == 0, "sessionStorage cleared");
+    }
+
+    // 4. Quota limits (MAX_STORAGE_BYTES & MAX_STORAGE_ENTRIES) and boundary guards
+    {
+        let storage = Storage.init("https://example.com");
+        assert(storage.usedBytes() == 0, "initial usedBytes is 0");
+        assert(storage.remainingBytes() == MAX_STORAGE_BYTES, "initial remainingBytes is MAX_STORAGE_BYTES");
+
+        assert(storage.setItem("a", "12345"), "setItem a succeeded");
+        assert(storage.usedBytes() == 6, "usedBytes is 6");
+
+        // Update existing key adjusts usedBytes
+        assert(storage.setItem("a", "12"), "update a succeeded");
+        assert(storage.usedBytes() == 3, "usedBytes adjusted to 3");
+
+        // Reject oversized value without corrupting existing entry
+        let huge_buf: [MAX_STORAGE_BYTES + 1]u8 = [0; MAX_STORAGE_BYTES + 1];
+        assert(!storage.setItem("a", huge_buf[0..]), "oversized update rejected");
+        assert(std.mem.eql(u8, storage.getItem("a").?, "12"), "existing value preserved on quota failure");
+        assert(storage.usedBytes() == 3, "usedBytes unchanged on quota failure");
+        assert(!storage.setItem("b", huge_buf[0..]), "oversized insert rejected");
+
+        // Remove & clear reclaim quota
+        assert(storage.removeItem("a"), "removeItem a succeeded");
+        assert(storage.usedBytes() == 0, "usedBytes is 0 after removeItem");
+        assert(storage.setItem("x", "y"), "setItem x succeeded");
+        storage.clear();
+        assert(storage.usedBytes() == 0, "usedBytes is 0 after clear");
     }
 
     std.debug.print("test_storage passed all assertions!\n", .{});

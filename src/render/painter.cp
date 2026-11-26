@@ -25,6 +25,7 @@ import { Rect, LayoutTree } from "../layout/layout.cp";
 import { CssColor } from "cap:css";
 import { PngCodec } from "./png.cp";
 import { uncompress } from "cap:pack";
+import { getHostNowMs } from "../eval/host_clock.cp";
 
 @c {
     fn fopen(pathname: [*c]const u8, mode: [*c]const u8): (*void)?;
@@ -108,7 +109,14 @@ pub struct ScreenshotOptions {
     clip_h: u32 = 0;
     viewport_scroll_x: f32 = 0.0;
     viewport_scroll_y: f32 = 0.0;
+    capture_beyond_viewport: bool = false;
     doc_url: []const u8 = "";
+}
+
+@tls let g_capture_beyond_viewport: bool = false;
+
+pub fn setCaptureBeyondViewport(enabled: bool) {
+    g_capture_beyond_viewport = enabled;
 }
 
 fn hasEmojiVariationSelector(bytes: []const u8, next_idx: usize): bool {
@@ -350,10 +358,13 @@ pub struct Canvas {
         }
         const a = @as(u32, src.a);
         const inv_a = 255 - a;
-        _.pixels[idx] = @as(u8, @intCast((@as(u32, src.r) * a + @as(u32, _.pixels[idx]) * inv_a) / 255));
-        _.pixels[idx + 1] = @as(u8, @intCast((@as(u32, src.g) * a + @as(u32, _.pixels[idx + 1]) * inv_a) / 255));
-        _.pixels[idx + 2] = @as(u8, @intCast((@as(u32, src.b) * a + @as(u32, _.pixels[idx + 2]) * inv_a) / 255));
-        _.pixels[idx + 3] = 255;
+        const dst_a = @as(u32, _.pixels[idx + 3]);
+        const out_a = a + (dst_a * inv_a) / 255;
+        if (out_a == 0) return;
+        _.pixels[idx] = @as(u8, @intCast((@as(u32, src.r) * a + @as(u32, _.pixels[idx]) * dst_a * inv_a / 255) / out_a));
+        _.pixels[idx + 1] = @as(u8, @intCast((@as(u32, src.g) * a + @as(u32, _.pixels[idx + 1]) * dst_a * inv_a / 255) / out_a));
+        _.pixels[idx + 2] = @as(u8, @intCast((@as(u32, src.b) * a + @as(u32, _.pixels[idx + 2]) * dst_a * inv_a / 255) / out_a));
+        _.pixels[idx + 3] = @as(u8, @intCast(out_a));
     }
 
     /// SDF 圆角抗锯齿矩形填充 + 四周边框一体绘制
@@ -442,8 +453,8 @@ pub struct Canvas {
 
         let x0 = @max(0, @as(i32, @intFromFloat(@floor(rect.x))));
         let y0 = @max(0, @as(i32, @intFromFloat(@floor(rect.y))));
-        let x1 = @min(@as(i32, _.width), @as(i32, @intFromFloat(@ceil(rect.x + rect.width))));
-        let y1 = @min(@as(i32, _.height), @as(i32, @intFromFloat(@ceil(rect.y + rect.height))));
+        let x1 = @min(@as(i32, _.width), @as(i32, @intFromFloat(@ceil(rect.x + rect.width - 0.001))));
+        let y1 = @min(@as(i32, _.height), @as(i32, @intFromFloat(@ceil(rect.y + rect.height - 0.001))));
 
         if (c := clip) {
             x0 = @max(x0, c.x0);
@@ -3798,7 +3809,12 @@ fn paintNodeRecursive(
             }
         }
 
-        if (node_id == opts.focused_node && is_form_text) {
+        let is_contenteditable = false;
+        if (ce_val := node.getAttribute("contenteditable")) {
+            is_contenteditable = !std.ascii.eqlIgnoreCase(ce_val, "false");
+        }
+        const caret_blink_on = ((getHostNowMs() / 500) % 2) == 0;
+        if (node_id == opts.focused_node && (is_form_text || is_contenteditable) && caret_blink_on) {
             const pad_l = style.padding_left.resolvePx(r.width, style.font_size_px, 16.0, vw, vh);
             const pad_t = style.padding_top.resolvePx(r.height, style.font_size_px, 16.0, vw, vh);
             const bdr_l = paint_style.border_left_width;
@@ -3980,6 +3996,77 @@ fn paintNodeRecursive(
             }
         }
     }
+    if (node.shadow_root != NULL_NODE && @as(usize, node.shadow_root) < doc.nodes.items.len) {
+        paintNodeRecursive(canvas, doc, styles, rects, node.shadow_root, vw, vh, opts, child_clip, child_abs_clip, child_scroll_dx, child_scroll_dy, child_abs_scroll_dx, child_abs_scroll_dy, eff_op, child_skip_inline);
+    }
+}
+
+fn cropCanvas(allocator: std.mem.Allocator, canvas: *const Canvas, opts: ScreenshotOptions): Canvas! {
+    const cw = opts.clip_w;
+    const ch = opts.clip_h;
+    let cropped = Canvas.init(allocator, cw, ch, opts.clear_color)?;
+    let dy: u32 = 0;
+    while (dy < ch) : (dy += 1) {
+        const sy = opts.clip_y + @as(i32, @intCast(dy));
+        if (sy < 0 || sy >= @as(i32, @intCast(canvas.height))) continue;
+        let dx: u32 = 0;
+        while (dx < cw) : (dx += 1) {
+            const sx = opts.clip_x + @as(i32, @intCast(dx));
+            if (sx < 0 || sx >= @as(i32, @intCast(canvas.width))) continue;
+            const s_idx = (@as(usize, @intCast(sy)) * @as(usize, canvas.width) + @as(usize, @intCast(sx))) * 4;
+            const d_idx = (@as(usize, dy) * @as(usize, cw) + @as(usize, dx)) * 4;
+            cropped.pixels[d_idx] = canvas.pixels[s_idx];
+            cropped.pixels[d_idx + 1] = canvas.pixels[s_idx + 1];
+            cropped.pixels[d_idx + 2] = canvas.pixels[s_idx + 2];
+            cropped.pixels[d_idx + 3] = canvas.pixels[s_idx + 3];
+        }
+    }
+    return cropped;
+}
+
+fn renderDocumentToCanvas(
+    allocator: std.mem.Allocator,
+    doc: *const Document,
+    styles: []const ComputedStyle,
+    rects: []const Rect,
+    opts: ScreenshotOptions,
+): Canvas! {
+    const has_clip = (opts.clip_w > 0 && opts.clip_h > 0);
+    const beyond_viewport = opts.capture_beyond_viewport || g_capture_beyond_viewport;
+    const clip_out_of_vp = has_clip && (opts.clip_x < 0 || opts.clip_y < 0 ||
+        (@as(i64, opts.clip_x) + @as(i64, opts.clip_w)) > @as(i64, opts.viewport_w) ||
+        (@as(i64, opts.clip_y) + @as(i64, opts.clip_h)) > @as(i64, opts.viewport_h));
+    const direct_clip = has_clip && (beyond_viewport || clip_out_of_vp);
+
+    const canvas_w = if (direct_clip) opts.clip_w else opts.viewport_w;
+    const canvas_h = if (direct_clip) opts.clip_h else opts.viewport_h;
+    let canvas = Canvas.init(allocator, canvas_w, canvas_h, opts.clear_color)?;
+    errdefer canvas.deinit();
+
+    const vw: f32 = @floatFromInt(opts.viewport_w);
+    const vh: f32 = @floatFromInt(opts.viewport_h);
+
+    // 从文档根元素开始前序遍历绘制整棵 DOM 树
+    const root_id = if (doc.root_element != NULL_NODE) doc.root_element else 1;
+    if (root_id < doc.nodes.items.len) {
+        const vsx: f32 = if (direct_clip)
+            (if (beyond_viewport) @as(f32, @floatFromInt(opts.clip_x)) else opts.viewport_scroll_x + @as(f32, @floatFromInt(opts.clip_x)))
+        else
+            opts.viewport_scroll_x;
+        const vsy: f32 = if (direct_clip)
+            (if (beyond_viewport) @as(f32, @floatFromInt(opts.clip_y)) else opts.viewport_scroll_y + @as(f32, @floatFromInt(opts.clip_y)))
+        else
+            opts.viewport_scroll_y;
+        paintNodeRecursive(&canvas, doc, styles, rects, root_id, vw, vh, &opts, null, null, vsx, vsy, vsx, vsy, 1.0, false);
+    }
+
+    if (has_clip && !direct_clip) {
+        const cropped = cropCanvas(allocator, &canvas, opts)?;
+        canvas.deinit();
+        return cropped;
+    }
+
+    return canvas;
 }
 
 /// 顶层一键截图入口：将 DOM + ComputedStyle + Layout Rect 光栅化并按指定 `compress_level` 编码为 PNG
@@ -3990,44 +4077,8 @@ pub fn renderDocumentToPng(
     rects: []const Rect,
     opts: ScreenshotOptions,
 ): ([]u8)! {
-    let canvas = Canvas.init(allocator, opts.viewport_w, opts.viewport_h, opts.clear_color)?;
+    let canvas = renderDocumentToCanvas(allocator, doc, styles, rects, opts)?;
     defer canvas.deinit();
-
-    const vw: f32 = @floatFromInt(opts.viewport_w);
-    const vh: f32 = @floatFromInt(opts.viewport_h);
-
-    // 从文档根元素开始前序遍历绘制整棵 DOM 树
-    const root_id = if (doc.root_element != NULL_NODE) doc.root_element else 1;
-    if (root_id < doc.nodes.items.len) {
-        const vsx = opts.viewport_scroll_x;
-        const vsy = opts.viewport_scroll_y;
-        paintNodeRecursive(&canvas, doc, styles, rects, root_id, vw, vh, &opts, null, null, vsx, vsy, vsx, vsy, 1.0, false);
-    }
-
-    // 如果指定了 clip 裁剪区域，提取子区域编码
-    if (opts.clip_w > 0 && opts.clip_h > 0) {
-        const cw = opts.clip_w;
-        const ch = opts.clip_h;
-        let cropped = Canvas.init(allocator, cw, ch, opts.clear_color)?;
-        defer cropped.deinit();
-        let dy: u32 = 0;
-        while (dy < ch) : (dy += 1) {
-            const sy = opts.clip_y + @as(i32, @intCast(dy));
-            if (sy < 0 || sy >= @as(i32, @intCast(canvas.height))) continue;
-            let dx: u32 = 0;
-            while (dx < cw) : (dx += 1) {
-                const sx = opts.clip_x + @as(i32, @intCast(dx));
-                if (sx < 0 || sx >= @as(i32, @intCast(canvas.width))) continue;
-                const s_idx = (@as(usize, @intCast(sy)) * @as(usize, canvas.width) + @as(usize, @intCast(sx))) * 4;
-                const d_idx = (@as(usize, dy) * @as(usize, cw) + @as(usize, dx)) * 4;
-                cropped.pixels[d_idx] = canvas.pixels[s_idx];
-                cropped.pixels[d_idx + 1] = canvas.pixels[s_idx + 1];
-                cropped.pixels[d_idx + 2] = canvas.pixels[s_idx + 2];
-                cropped.pixels[d_idx + 3] = canvas.pixels[s_idx + 3];
-            }
-        }
-        return encodeCanvasToPngWithLevel(allocator, &cropped, opts.compress_level);
-    }
 
     // 直接桥接到 png.cp 的编码函数并透传指定的 compress_level
     return encodeCanvasToPngWithLevel(allocator, &canvas, opts.compress_level);
@@ -4041,17 +4092,7 @@ pub fn renderDocumentToRgba(
     rects: []const Rect,
     opts: ScreenshotOptions,
 ): ([]u8)! {
-    let canvas = Canvas.init(allocator, opts.viewport_w, opts.viewport_h, opts.clear_color)?;
-    const vw: f32 = @floatFromInt(opts.viewport_w);
-    const vh: f32 = @floatFromInt(opts.viewport_h);
-
-    const root_id = if (doc.root_element != NULL_NODE) doc.root_element else 1;
-    if (root_id < doc.nodes.items.len) {
-        const vsx = opts.viewport_scroll_x;
-        const vsy = opts.viewport_scroll_y;
-        paintNodeRecursive(&canvas, doc, styles, rects, root_id, vw, vh, &opts, null, null, vsx, vsy, vsx, vsy, 1.0, false);
-    }
-
+    const canvas = renderDocumentToCanvas(allocator, doc, styles, rects, opts)?;
     return canvas.pixels;
 }
 
@@ -4108,6 +4149,38 @@ pub fn encodeCanvasToPngWithLevel(
     let res = allocator.alloc(u8, raw.len)?;
     @memcpy(res, raw);
     return res;
+}
+
+/// 将 RGBA 像素缓冲按最近邻缩放到指定目标尺寸 (dst_w x dst_h)
+pub fn scaleRgbaBuffer(
+    allocator: std.mem.Allocator,
+    src: []const u8,
+    src_w: u32,
+    src_h: u32,
+    dst_w: u32,
+    dst_h: u32,
+): ([]u8)! {
+    if (src_w == 0 || src_h == 0 || dst_w == 0 || dst_h == 0) return error.InvalidSize;
+    const expected_len = @as(usize, src_w) * @as(usize, src_h) * 4;
+    if (src.len < expected_len) return error.InvalidSize;
+
+    const out_len = @as(usize, dst_w) * @as(usize, dst_h) * 4;
+    let dst = allocator.alloc(u8, out_len)?;
+    let dy: u32 = 0;
+    while (dy < dst_h) : (dy += 1) {
+        const sy = @min(src_h - 1, @as(u32, @intCast((@as(u64, dy) * @as(u64, src_h)) / @as(u64, dst_h))));
+        let dx: u32 = 0;
+        while (dx < dst_w) : (dx += 1) {
+            const sx = @min(src_w - 1, @as(u32, @intCast((@as(u64, dx) * @as(u64, src_w)) / @as(u64, dst_w))));
+            const s_idx = (@as(usize, sy) * @as(usize, src_w) + @as(usize, sx)) * 4;
+            const d_idx = (@as(usize, dy) * @as(usize, dst_w) + @as(usize, dx)) * 4;
+            dst[d_idx] = src[s_idx];
+            dst[d_idx + 1] = src[s_idx + 1];
+            dst[d_idx + 2] = src[s_idx + 2];
+            dst[d_idx + 3] = src[s_idx + 3];
+        }
+    }
+    return dst;
 }
 
 fn getAsciiGlyph8x8(ch: u8): []const u8 {

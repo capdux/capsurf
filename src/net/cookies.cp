@@ -59,9 +59,19 @@ pub struct UrlParts {
     trustworthy: bool = false,
 }
 
+fn startsWithIgnoreCase(s: []const u8, prefix: []const u8): bool {
+    if (s.len < prefix.len) return false;
+    return std.ascii.eqlIgnoreCase(s[0..prefix.len], prefix);
+}
+
+fn endsWithIgnoreCase(s: []const u8, suffix: []const u8): bool {
+    if (s.len < suffix.len) return false;
+    return std.ascii.eqlIgnoreCase(s[s.len - suffix.len..], suffix);
+}
+
 pub fn isTrustworthy(host: []const u8, secure: bool): bool {
     if (secure) return true;
-    if (std.mem.eql(u8, host, "localhost") || std.mem.endsWith(u8, host, ".localhost")) return true;
+    if (std.ascii.eqlIgnoreCase(host, "localhost") || endsWithIgnoreCase(host, ".localhost")) return true;
     if (std.mem.eql(u8, host, "[::1]") || std.mem.eql(u8, host, "::1")) return true;
     if (std.mem.startsWith(u8, host, "127.")) return true;
     return false;
@@ -122,11 +132,12 @@ pub fn pathMatches(cookie_path: []const u8, request_path: []const u8): bool {
 }
 
 pub fn domainMatches(cookie_host: []const u8, host: []const u8): bool {
-    if (std.mem.eql(u8, cookie_host, host)) return true;
+    if (cookie_host.len == 0 || host.len == 0) return false;
+    if (std.ascii.eqlIgnoreCase(cookie_host, host)) return true;
     if (host.len > cookie_host.len + 1) {
         const suffix = host[host.len - cookie_host.len..];
         const dot = host[host.len - cookie_host.len - 1];
-        if (dot == '.' && std.mem.eql(u8, suffix, cookie_host)) return true;
+        if (dot == '.' && std.ascii.eqlIgnoreCase(suffix, cookie_host)) return true;
     }
     return false;
 }
@@ -136,7 +147,7 @@ pub fn resolveDomain(claimed: []const u8, host: []const u8): ([]const u8)? {
     if (raw.len > 0 && raw[0] == '.') raw = raw[1..];
     if (raw.len > 0 && raw[raw.len - 1] == '.') raw = raw[0..raw.len - 1];
     if (raw.len == 0) return null;
-    if (std.mem.eql(u8, raw, host)) return raw;
+    if (std.ascii.eqlIgnoreCase(raw, host)) return raw;
     if (isIpHost(host)) return null;
 
     for (ch of raw) {
@@ -318,14 +329,22 @@ pub struct CookieJar {
             host_only = isPublicSuffix(resolved);
         }
 
-        // Prefix invariants
-        if (std.mem.startsWith(u8, parsed.name, "__Secure-")) {
+        // Prefix invariants (RFC 6265bis, case-insensitive)
+        if (startsWithIgnoreCase(parsed.name, "__Secure-")) {
             if (!parsed.secure || !parts.trustworthy) return null;
         }
-        if (std.mem.startsWith(u8, parsed.name, "__Host-")) {
+        if (startsWithIgnoreCase(parsed.name, "__Host-Http-")) {
+            if (!parsed.secure || !parts.trustworthy) return null;
+            if (!parsed.http_only || from_script) return null;
+            if (parsed.has_domain && parsed.domain.len > 0) return null;
+            if (!std.mem.eql(u8, parsed.path, "/")) return null;
+        } else if (startsWithIgnoreCase(parsed.name, "__Host-")) {
             if (!parsed.secure || !parts.trustworthy) return null;
             if (parsed.has_domain && parsed.domain.len > 0) return null;
             if (!std.mem.eql(u8, parsed.path, "/")) return null;
+        } else if (startsWithIgnoreCase(parsed.name, "__Http-")) {
+            if (!parsed.secure || !parts.trustworthy) return null;
+            if (!parsed.http_only || from_script) return null;
         }
 
         if (parsed.secure && !parts.trustworthy) return null;
@@ -354,7 +373,7 @@ pub struct CookieJar {
             for (ck of _.entries.items) {
                 if (std.mem.eql(u8, ck.name, parsed.name) && ck.http_only) {
                     if (host_only) {
-                        const reaches = if (ck.host_only) std.mem.eql(u8, ck.host, host) else domainMatches(ck.host, host);
+                        const reaches = if (ck.host_only) std.ascii.eqlIgnoreCase(ck.host, host) else domainMatches(ck.host, host);
                         if (reaches) return null;
                     } else {
                         const reaches = if (ck.host_only) domainMatches(host, ck.host) else (domainMatches(host, ck.host) || domainMatches(ck.host, host));
@@ -408,11 +427,15 @@ pub struct CookieJar {
             _.allocator.free(d_name);
             return null;
         };
-        const d_host = _.allocator.dupe(u8, host) catch {
+        let d_host = _.allocator.dupe(u8, host) catch {
             _.allocator.free(d_name);
             _.allocator.free(d_val);
             return null;
         };
+        let hi: usize = 0;
+        while (hi < d_host.len) : (hi += 1) {
+            d_host[hi] = std.ascii.toLower(d_host[hi]);
+        }
         const d_path = _.allocator.dupe(u8, parsed.path) catch {
             _.allocator.free(d_name);
             _.allocator.free(d_val);
@@ -441,7 +464,7 @@ pub struct CookieJar {
             const ex = &_.entries.items[i];
             if (std.mem.eql(u8, ex.name, entry.name) &&
                 std.mem.eql(u8, ex.path, entry.path) &&
-                std.mem.eql(u8, ex.host, entry.host) &&
+                std.ascii.eqlIgnoreCase(ex.host, entry.host) &&
                 ex.host_only == entry.host_only)
             {
                 if (from_script && ex.http_only) {
@@ -504,7 +527,7 @@ pub struct CookieJar {
 
         for (ck of _.entries.items) {
             if (ck.expires_at != null && ck.expires_at.? <= cur_now) continue;
-            const host_ok = if (ck.host_only) std.mem.eql(u8, ck.host, parts.host) else domainMatches(ck.host, parts.host);
+            const host_ok = if (ck.host_only) std.ascii.eqlIgnoreCase(ck.host, parts.host) else domainMatches(ck.host, parts.host);
             if (!host_ok) continue;
             if (ck.secure && !parts.trustworthy) continue;
             if (!pathMatches(ck.path, parts.path)) continue;
@@ -578,7 +601,7 @@ pub struct CookieJar {
         for (ck of _.entries.items) {
             if (ck.http_only) continue; // HttpOnly omitted from document.cookie
             if (ck.expires_at != null && ck.expires_at.? <= cur_now) continue;
-            const host_ok = if (ck.host_only) std.mem.eql(u8, ck.host, parts.host) else domainMatches(ck.host, parts.host);
+            const host_ok = if (ck.host_only) std.ascii.eqlIgnoreCase(ck.host, parts.host) else domainMatches(ck.host, parts.host);
             if (!host_ok) continue;
             if (ck.secure && !parts.trustworthy) continue;
             if (!pathMatches(ck.path, parts.path)) continue;
@@ -618,7 +641,7 @@ pub struct CookieJar {
             const ck = &_.entries.items[i];
             let is_match = std.mem.eql(u8, ck.name, name);
             if (is_match && filter_host.len > 0) {
-                is_match = std.mem.eql(u8, ck.host, filter_host);
+                is_match = std.ascii.eqlIgnoreCase(ck.host, filter_host);
             }
             if (is_match && path.len > 0) {
                 is_match = std.mem.eql(u8, ck.path, path);

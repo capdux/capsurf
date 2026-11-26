@@ -196,7 +196,7 @@ pub struct PrefetchScriptManager {
         return _.scripts[0.._.script_count];
     }
 
-    fn getScript(index: usize): (*const ScriptPrefetchEntry)? {
+    fn getScript(*_, index: usize): (*const ScriptPrefetchEntry)? {
         if (index >= _.script_count) return null;
         return &_.scripts[index];
     }

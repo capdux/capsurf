@@ -63,7 +63,7 @@ function computeSelectedIndex(selectEl) {
   if (selState.selectedIndex !== undefined) {
     return selState.selectedIndex;
   }
-  const opts = selectEl.options;
+  const opts = Array.prototype.slice.call(selectEl.options || []);
   if (opts.length === 0) return -1;
 
   if (selectEl.multiple) {
@@ -473,11 +473,14 @@ function installSelectElement(global) {
     this._customValidityMessage = String(msg || "");
   };
 
+  const _OrigSelectEvent = typeof Event === "function" ? Event : null;
+  const _OrigSelectInputEvent = typeof InputEvent === "function" ? InputEvent : null;
+
   HTMLSelectElement.prototype.checkValidity = function () {
     if (!this.willValidate) return true;
     if (!this.validity.valid) {
-      const evt = new Event("invalid", { bubbles: false, cancelable: true });
-      this.dispatchEvent(evt);
+      const Ev = typeof Event === "function" ? Event : _OrigSelectEvent;
+      if (Ev) this.dispatchEvent(new Ev("invalid", { bubbles: false, cancelable: true }));
       return false;
     }
     return true;
@@ -664,11 +667,12 @@ function installSelectElement(global) {
             if (changed) {
               selectEl.selectedIndex = index;
               try {
-                const InEv = typeof InputEvent === "function" ? InputEvent : Event;
-                selectEl.dispatchEvent(new InEv("input", { bubbles: true, cancelable: false }));
+                const InEv = typeof InputEvent === "function" ? InputEvent : (_OrigSelectInputEvent || (typeof Event === "function" ? Event : _OrigSelectEvent));
+                if (InEv) selectEl.dispatchEvent(new InEv("input", { bubbles: true, cancelable: false, composed: true }));
               } catch (e) {}
               try {
-                selectEl.dispatchEvent(new Event("change", { bubbles: true, cancelable: false }));
+                const ChEv = typeof Event === "function" ? Event : _OrigSelectEvent;
+                if (ChEv) selectEl.dispatchEvent(new ChEv("change", { bubbles: true, cancelable: false }));
               } catch (e) {}
             }
             closeSelectDropdown();

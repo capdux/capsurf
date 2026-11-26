@@ -1,13 +1,21 @@
 // src/cdp/session_hooks.cp
 // Page-level JS runtime hooks, native fixture/bake bridge, and inserted-script engine for CdpPageSession.
 
-import { JSRuntime, JSContext, JSModuleDef, JSValue, JS_Eval, JS_EvalFunction, JS_GetRuntime, JS_ExecutePendingJob, JS_GetException, JS_ToCStringLen2, JS_FreeCString, JS_NewStringLen, JS_GetGlobalObject, JS_FreeValue, JS_GetContextOpaque, JS_SetPropertyStr, JS_GetPropertyStr, JS_GetImportMeta, JS_IsPromise, JS_PromiseState, JS_NewContext, JS_FreeContext, JS_Call, JS_ToInt32, JS_ToFloat64, JS_IsFunction, jsNull, jsUndefined, jsInt, jsFloat, jsNewString, jsIsException, defineMethod } from "../js/qjs_engine.cp";
+import { JSRuntime, JSContext, JSModuleDef, JSValue, JS_Eval, JS_EvalFunction, JS_GetRuntime, JS_ExecutePendingJob, JS_GetException, JS_ToCStringLen2, JS_FreeCString, JS_GetUint8Array, JS_NewStringLen, JS_GetGlobalObject, JS_FreeValue, JS_DupValue, JS_GetContextOpaque, JS_SetPropertyStr, JS_GetPropertyStr, JS_GetImportMeta, JS_IsPromise, JS_PromiseState, JS_PromiseResult, JS_NewContext, JS_FreeContext, JS_Call, JS_ToInt32, JS_ToFloat64, JS_IsFunction, JS_TAG_OBJECT, jsNull, jsUndefined, jsTrue, jsFalse, jsInt, jsFloat, jsNewString, jsIsException, defineMethod } from "../js/qjs_engine.cp";
 import { JsDomContext } from "../js/dom_binding.cp";
 import { CookieJar, RequestContext } from "../net/cookies.cp";
 import { MockFixtures } from "../net/mock_fixtures.cp";
 import { CspPolicy, parseCsp, verifySriIntegrity, isScriptNosniffBlocked, isInlineScriptAllowed, isExternalScriptAllowed } from "../net/csp.cp";
 import { recordPendingFetchBody } from "./network.cp";
 import { getSystemMilliTimestamp } from "../eval/host_clock.cp";
+import { DedicatedWorkerPool, MAX_DEDICATED_WORKERS } from "./workers.cp";
+import { TargetRegistry } from "./target.cp";
+import { CdpEvent } from "./types.cp";
+import { CdpPageSession, escapeJsonString } from "./session.cp";
+
+@c {
+    fn usleep(usec: u32): i32;
+}
 
 struct LearnedScriptEntry {
     active: bool = false,
@@ -125,6 +133,65 @@ pub fn runSpeculativePrefetchForNav(bctx: []const u8, origin: []const u8, nav_se
     return jsNull();
 }
 
+struct CtxSessionEntry {
+    active: bool = false,
+    ctx: (*JSContext)? = null,
+    session_ptr: (*void)? = null,
+}
+
+let g_ctx_sessions: [32]CtxSessionEntry = [CtxSessionEntry{}; 32];
+
+pub fn registerCtxSession(ctx: *JSContext, session_ptr: *void) {
+    let i: usize = 0;
+    let free_idx: usize = g_ctx_sessions.len;
+    while (i < g_ctx_sessions.len) : (i += 1) {
+        if (g_ctx_sessions[i].active) {
+            if (c := g_ctx_sessions[i].ctx) {
+                if (unsafe { @intFromPtr(c) == @intFromPtr(ctx) }) {
+                    g_ctx_sessions[i].session_ptr = session_ptr;
+                    return;
+                }
+            }
+        } else if (free_idx == g_ctx_sessions.len) {
+            free_idx = i;
+        }
+    }
+    const target_idx = if (free_idx < g_ctx_sessions.len) free_idx else 0;
+    g_ctx_sessions[target_idx].active = true;
+    g_ctx_sessions[target_idx].ctx = ctx;
+    g_ctx_sessions[target_idx].session_ptr = session_ptr;
+}
+
+pub fn unregisterCtxSession(ctx: *JSContext) {
+    let i: usize = 0;
+    while (i < g_ctx_sessions.len) : (i += 1) {
+        if (g_ctx_sessions[i].active) {
+            if (c := g_ctx_sessions[i].ctx) {
+                if (unsafe { @intFromPtr(c) == @intFromPtr(ctx) }) {
+                    g_ctx_sessions[i].active = false;
+                    g_ctx_sessions[i].ctx = null;
+                    g_ctx_sessions[i].session_ptr = null;
+                    return;
+                }
+            }
+        }
+    }
+}
+
+fn lookupSessionByCtx(ctx: *JSContext): (*void)? {
+    let i: usize = 0;
+    while (i < g_ctx_sessions.len) : (i += 1) {
+        if (g_ctx_sessions[i].active) {
+            if (c := g_ctx_sessions[i].ctx) {
+                if (unsafe { @intFromPtr(c) == @intFromPtr(ctx) }) {
+                    return g_ctx_sessions[i].session_ptr;
+                }
+            }
+        }
+    }
+    return null;
+}
+
 pub type HttpGetHookFn = *const fn (session_ptr: *void, url: []const u8, out_buf: []u8): i64;
 let g_http_get_hook: (HttpGetHookFn)? = null;
 let g_http_session_ptr: (*void)? = null;
@@ -132,6 +199,175 @@ let g_http_session_ptr: (*void)? = null;
 pub fn registerHttpGetHook(session_ptr: *void, hook: HttpGetHookFn) {
     g_http_session_ptr = session_ptr;
     g_http_get_hook = hook;
+}
+
+pub type HttpRequestHookFn = *const fn (session_ptr: *void, url: []const u8, method: []const u8, post_data: []const u8, content_type: []const u8, headers_json: []const u8, out_buf: []u8): i64;
+let g_http_req_hook: (HttpRequestHookFn)? = null;
+
+pub fn registerHttpRequestHook(hook: HttpRequestHookFn) {
+    g_http_req_hook = hook;
+}
+
+pub type SyncXhrHookFn = *const fn (session_ptr: *void, url: []const u8, method: []const u8, post_data: []const u8, content_type: []const u8, headers_json: []const u8, out_buf: []u8): i64;
+let g_sync_xhr_hook: (SyncXhrHookFn)? = null;
+
+pub fn registerSyncXhrHook(hook: SyncXhrHookFn) {
+    g_sync_xhr_hook = hook;
+}
+
+@c {
+    fn JS_NewPromiseCapability(ctx: *JSContext, resolving_funcs: [*]JSValue!): JSValue;
+}
+
+pub type ShouldInterceptHookFn = *const fn (session_ptr: *void, url: []const u8, rtype: []const u8): bool;
+let g_should_intercept_hook: (ShouldInterceptHookFn)? = null;
+let g_should_intercept_session_ptr: (*void)? = null;
+
+pub fn registerShouldInterceptHook(session_ptr: *void, hook: ShouldInterceptHookFn) {
+    g_should_intercept_session_ptr = session_ptr;
+    g_should_intercept_hook = hook;
+}
+
+pub type FetchPauseHookFn = *const fn (
+    session_ptr: *void,
+    url: []const u8,
+    method: []const u8,
+    headers_json: []const u8,
+    post_data: []const u8,
+    rtype: []const u8,
+    resolve_fn: JSValue,
+    reject_fn: JSValue,
+): bool;
+let g_fetch_pause_hook: (FetchPauseHookFn)? = null;
+let g_fetch_pause_session_ptr: (*void)? = null;
+
+pub fn registerFetchPauseHook(session_ptr: *void, hook: FetchPauseHookFn) {
+    g_fetch_pause_session_ptr = session_ptr;
+    g_fetch_pause_hook = hook;
+}
+
+@c fn js_capsurf_fetch_pause(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 1) return jsNull();
+
+    let url_len: usize = 0;
+    const url_ptr = JS_ToCStringLen2(ctx, &url_len, unsafe { argv[0] }, 0);
+    if (url_ptr == null) return jsNull();
+    defer JS_FreeCString(ctx, url_ptr);
+    const url = unsafe { url_ptr.?[0..url_len] };
+
+    let method: []const u8 = "GET";
+    let method_ptr: ([*c]const u8)? = null;
+    if (argc >= 2) {
+        let method_len: usize = 0;
+        method_ptr = JS_ToCStringLen2(ctx, &method_len, unsafe { argv[1] }, 0);
+        if (method_ptr != null && method_len > 0) {
+            method = unsafe { method_ptr.?[0..method_len] };
+        }
+    }
+    defer if (method_ptr != null) JS_FreeCString(ctx, method_ptr);
+
+    let headers_json: []const u8 = "{}";
+    let headers_ptr: ([*c]const u8)? = null;
+    if (argc >= 3) {
+        let headers_len: usize = 0;
+        headers_ptr = JS_ToCStringLen2(ctx, &headers_len, unsafe { argv[2] }, 0);
+        if (headers_ptr != null && headers_len > 0) {
+            headers_json = unsafe { headers_ptr.?[0..headers_len] };
+        }
+    }
+    defer if (headers_ptr != null) JS_FreeCString(ctx, headers_ptr);
+
+    let post_data: []const u8 = "";
+    let post_ptr: ([*c]const u8)? = null;
+    if (argc >= 4) {
+        const arg3 = unsafe { argv[3] };
+        let got_u8 = false;
+        if (arg3.tag == JS_TAG_OBJECT) {
+            let u8_len: usize = 0;
+            const u8_ptr = JS_GetUint8Array(ctx, &u8_len, arg3);
+            if (u8_ptr != null) {
+                if (u8_len > 0) {
+                    post_data = unsafe { u8_ptr.?[0..u8_len] };
+                }
+                got_u8 = true;
+            } else {
+                const exc = JS_GetException(ctx);
+                JS_FreeValue(ctx, exc);
+            }
+        }
+        if (!got_u8) {
+            let post_len: usize = 0;
+            post_ptr = JS_ToCStringLen2(ctx, &post_len, arg3, 0);
+            if (post_ptr != null && post_len > 0) {
+                post_data = unsafe { post_ptr.?[0..post_len] };
+            }
+        }
+    }
+    defer if (post_ptr != null) JS_FreeCString(ctx, post_ptr);
+
+    let rtype: []const u8 = "Fetch";
+    let rt_ptr: ([*c]const u8)? = null;
+    if (argc >= 5) {
+        let rt_len: usize = 0;
+        rt_ptr = JS_ToCStringLen2(ctx, &rt_len, unsafe { argv[4] }, 0);
+        if (rt_ptr != null && rt_len > 0) {
+            rtype = unsafe { rt_ptr.?[0..rt_len] };
+        }
+    }
+    defer if (rt_ptr != null) JS_FreeCString(ctx, rt_ptr);
+
+    if (hook := g_fetch_pause_hook) {
+        const resolved_sess_ptr = lookupSessionByCtx(ctx) ?? g_fetch_pause_session_ptr;
+        if (sess_ptr := resolved_sess_ptr) {
+            let resolving_funcs: [2]JSValue = [jsUndefined(), jsUndefined()];
+            const promise = JS_NewPromiseCapability(ctx, unsafe { @ptrCast(&resolving_funcs) });
+            if (jsIsException(promise)) {
+                return promise;
+            }
+            const ok = hook(sess_ptr, url, method, headers_json, post_data, rtype, resolving_funcs[0], resolving_funcs[1]);
+            if (!ok) {
+                let call_args: [1]JSValue = [jsUndefined()];
+                const cres = JS_Call(ctx, resolving_funcs[0], jsUndefined(), 1, unsafe { @ptrCast(&call_args) });
+                JS_FreeValue(ctx, cres);
+                JS_FreeValue(ctx, resolving_funcs[0]);
+                JS_FreeValue(ctx, resolving_funcs[1]);
+            }
+            return promise;
+        }
+    }
+    return jsNull();
+}
+
+@c fn js_capsurf_should_intercept_fetch(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 1) return jsFalse();
+    let url_len: usize = 0;
+    const url_ptr = JS_ToCStringLen2(ctx, &url_len, unsafe { argv[0] }, 0);
+    if (url_ptr == null) return jsFalse();
+    defer JS_FreeCString(ctx, url_ptr);
+    const url = unsafe { url_ptr.?[0..url_len] };
+
+    let rtype: []const u8 = "fetch";
+    let rt_ptr: ([*c]const u8)? = null;
+    if (argc >= 2) {
+        let rt_len: usize = 0;
+        rt_ptr = JS_ToCStringLen2(ctx, &rt_len, unsafe { argv[1] }, 0);
+        if (rt_ptr != null && rt_len > 0) {
+            rtype = unsafe { rt_ptr.?[0..rt_len] };
+        }
+    }
+    defer if (rt_ptr != null) JS_FreeCString(ctx, rt_ptr);
+
+    if (hook := g_should_intercept_hook) {
+        const resolved_sess_ptr = lookupSessionByCtx(ctx) ?? g_should_intercept_session_ptr;
+        if (sess_ptr := resolved_sess_ptr) {
+            if (hook(sess_ptr, url, rtype)) {
+                return jsTrue();
+            }
+        }
+    }
+    return jsFalse();
 }
 
 @c fn js_capsurf_http_get(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
@@ -143,7 +379,8 @@ pub fn registerHttpGetHook(session_ptr: *void, hook: HttpGetHookFn) {
     defer JS_FreeCString(ctx, url_ptr);
     const url = unsafe { url_ptr.?[0..url_len] };
     if (hook := g_http_get_hook) {
-        if (sess_ptr := g_http_session_ptr) {
+        const resolved_sess_ptr = lookupSessionByCtx(ctx) ?? g_http_session_ptr;
+        if (sess_ptr := resolved_sess_ptr) {
             const buf = std.heap.c_allocator.alloc(u8, 524288) catch return jsNull();
             defer std.heap.c_allocator.free(buf);
             const n = hook(sess_ptr, url, buf);
@@ -152,6 +389,259 @@ pub fn registerHttpGetHook(session_ptr: *void, hook: HttpGetHookFn) {
         }
     }
     return jsNull();
+}
+
+@c fn js_capsurf_http_request(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 1) return jsNull();
+    let url_len: usize = 0;
+    const url_ptr = JS_ToCStringLen2(ctx, &url_len, unsafe { argv[0] }, 0);
+    if (url_ptr == null) return jsNull();
+    defer JS_FreeCString(ctx, url_ptr);
+    const url = unsafe { url_ptr.?[0..url_len] };
+
+    let method: []const u8 = "GET";
+    let method_ptr: ([*c]const u8)? = null;
+    if (argc >= 2) {
+        let method_len: usize = 0;
+        method_ptr = JS_ToCStringLen2(ctx, &method_len, unsafe { argv[1] }, 0);
+        if (method_ptr != null && method_len > 0) {
+            method = unsafe { method_ptr.?[0..method_len] };
+        }
+    }
+    defer if (method_ptr != null) JS_FreeCString(ctx, method_ptr);
+
+    let post_data: []const u8 = "";
+    let post_ptr: ([*c]const u8)? = null;
+    if (argc >= 3) {
+        const arg2 = unsafe { argv[2] };
+        let got_u8 = false;
+        if (arg2.tag == JS_TAG_OBJECT) {
+            let u8_len: usize = 0;
+            const u8_ptr = JS_GetUint8Array(ctx, &u8_len, arg2);
+            if (u8_ptr != null) {
+                if (u8_len > 0) {
+                    post_data = unsafe { u8_ptr.?[0..u8_len] };
+                }
+                got_u8 = true;
+            } else {
+                const exc = JS_GetException(ctx);
+                JS_FreeValue(ctx, exc);
+            }
+        }
+        if (!got_u8) {
+            let post_len: usize = 0;
+            post_ptr = JS_ToCStringLen2(ctx, &post_len, arg2, 0);
+            if (post_ptr != null && post_len > 0) {
+                post_data = unsafe { post_ptr.?[0..post_len] };
+            }
+        }
+    }
+    defer if (post_ptr != null) JS_FreeCString(ctx, post_ptr);
+
+    let content_type: []const u8 = "";
+    let ct_ptr: ([*c]const u8)? = null;
+    if (argc >= 4) {
+        let ct_len: usize = 0;
+        ct_ptr = JS_ToCStringLen2(ctx, &ct_len, unsafe { argv[3] }, 0);
+        if (ct_ptr != null && ct_len > 0) {
+            content_type = unsafe { ct_ptr.?[0..ct_len] };
+        }
+    }
+    defer if (ct_ptr != null) JS_FreeCString(ctx, ct_ptr);
+
+    let headers_json: []const u8 = "";
+    let hj_ptr: ([*c]const u8)? = null;
+    if (argc >= 5) {
+        let hj_len: usize = 0;
+        hj_ptr = JS_ToCStringLen2(ctx, &hj_len, unsafe { argv[4] }, 0);
+        if (hj_ptr != null && hj_len > 0) {
+            headers_json = unsafe { hj_ptr.?[0..hj_len] };
+        }
+    }
+    defer if (hj_ptr != null) JS_FreeCString(ctx, hj_ptr);
+
+    const resolved_sess_ptr = lookupSessionByCtx(ctx) ?? g_http_session_ptr;
+    if (sess_ptr := resolved_sess_ptr) {
+        const sess: *CdpPageSession = unsafe { @ptrCast(@alignCast(sess_ptr)) };
+        const is_worker_ctx = unsafe { @intFromPtr(sess.ctx.raw_ctx) != @intFromPtr(ctx) };
+        if (hook := g_http_req_hook) {
+            const buf = std.heap.c_allocator.alloc(u8, 524288) catch return jsNull();
+            defer std.heap.c_allocator.free(buf);
+            const n = hook(sess_ptr, url, method, post_data, content_type, headers_json, buf);
+            if (is_worker_ctx) {
+                if (dom_ctx := sess.dom_ctx) {
+                    const rec_mime = if (content_type.len > 0) content_type else "application/octet-stream";
+                    dom_ctx.addFetchRecordWithMethod(url, rec_mime, method, post_data, post_data.len > 0);
+                }
+            }
+            if (n < 0) return jsNull();
+            return JS_NewStringLen(ctx, buf.ptr, @as(usize, @intCast(n)));
+        }
+        if (get_hook := g_http_get_hook) {
+            const buf = std.heap.c_allocator.alloc(u8, 524288) catch return jsNull();
+            defer std.heap.c_allocator.free(buf);
+            const n = get_hook(sess_ptr, url, buf);
+            if (is_worker_ctx) {
+                if (dom_ctx := sess.dom_ctx) {
+                    const rec_mime = if (content_type.len > 0) content_type else "application/octet-stream";
+                    dom_ctx.addFetchRecordWithMethod(url, rec_mime, method, post_data, post_data.len > 0);
+                }
+            }
+            if (n < 0) return jsNull();
+            return JS_NewStringLen(ctx, buf.ptr, @as(usize, @intCast(n)));
+        }
+    }
+    return jsNull();
+}
+
+@c fn js_capsurf_sync_xhr(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 1) return jsNull();
+    let url_len: usize = 0;
+    const url_ptr = JS_ToCStringLen2(ctx, &url_len, unsafe { argv[0] }, 0);
+    if (url_ptr == null) return jsNull();
+    defer JS_FreeCString(ctx, url_ptr);
+    const url = unsafe { url_ptr.?[0..url_len] };
+
+    let method: []const u8 = "GET";
+    let method_ptr: ([*c]const u8)? = null;
+    if (argc >= 2) {
+        let method_len: usize = 0;
+        method_ptr = JS_ToCStringLen2(ctx, &method_len, unsafe { argv[1] }, 0);
+        if (method_ptr != null && method_len > 0) {
+            method = unsafe { method_ptr.?[0..method_len] };
+        }
+    }
+    defer if (method_ptr != null) JS_FreeCString(ctx, method_ptr);
+
+    let post_data: []const u8 = "";
+    let post_ptr: ([*c]const u8)? = null;
+    if (argc >= 3) {
+        const arg2 = unsafe { argv[2] };
+        let got_u8 = false;
+        if (arg2.tag == JS_TAG_OBJECT) {
+            let u8_len: usize = 0;
+            const u8_ptr = JS_GetUint8Array(ctx, &u8_len, arg2);
+            if (u8_ptr != null) {
+                if (u8_len > 0) {
+                    post_data = unsafe { u8_ptr.?[0..u8_len] };
+                }
+                got_u8 = true;
+            } else {
+                const exc = JS_GetException(ctx);
+                JS_FreeValue(ctx, exc);
+            }
+        }
+        if (!got_u8) {
+            let post_len: usize = 0;
+            post_ptr = JS_ToCStringLen2(ctx, &post_len, arg2, 0);
+            if (post_ptr != null && post_len > 0) {
+                post_data = unsafe { post_ptr.?[0..post_len] };
+            }
+        }
+    }
+    defer if (post_ptr != null) JS_FreeCString(ctx, post_ptr);
+
+    let content_type: []const u8 = "";
+    let ct_ptr: ([*c]const u8)? = null;
+    if (argc >= 4) {
+        let ct_len: usize = 0;
+        ct_ptr = JS_ToCStringLen2(ctx, &ct_len, unsafe { argv[3] }, 0);
+        if (ct_ptr != null && ct_len > 0) {
+            content_type = unsafe { ct_ptr.?[0..ct_len] };
+        }
+    }
+    defer if (ct_ptr != null) JS_FreeCString(ctx, ct_ptr);
+
+    let headers_json: []const u8 = "";
+    let hj_ptr: ([*c]const u8)? = null;
+    if (argc >= 5) {
+        let hj_len: usize = 0;
+        hj_ptr = JS_ToCStringLen2(ctx, &hj_len, unsafe { argv[4] }, 0);
+        if (hj_ptr != null && hj_len > 0) {
+            headers_json = unsafe { hj_ptr.?[0..hj_len] };
+        }
+    }
+    defer if (hj_ptr != null) JS_FreeCString(ctx, hj_ptr);
+
+    const resolved_sess_ptr = lookupSessionByCtx(ctx) ?? g_http_session_ptr;
+    if (sess_ptr := resolved_sess_ptr) {
+        if (hook := g_sync_xhr_hook) {
+            const buf = std.heap.c_allocator.alloc(u8, 2097152) catch return jsNull();
+            defer std.heap.c_allocator.free(buf);
+            const n = hook(sess_ptr, url, method, post_data, content_type, headers_json, buf);
+            if (n < 0) return jsNull();
+            return JS_NewStringLen(ctx, buf.ptr, @as(usize, @intCast(n)));
+        }
+    }
+    return jsNull();
+}
+
+pub type DialogHookFn = *const fn (session_ptr: *void, dlg_type: []const u8, message: []const u8, default_prompt: []const u8, accepted_out: *bool, prompt_buf: []u8, prompt_len_out: *usize): bool;
+let g_dialog_hook: (DialogHookFn)? = null;
+let g_dialog_session_ptr: (*void)? = null;
+
+pub fn registerDialogHook(session_ptr: *void, hook: DialogHookFn) {
+    g_dialog_session_ptr = session_ptr;
+    g_dialog_hook = hook;
+}
+
+@c fn js_capsurf_dialog_open(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 1) return jsUndefined();
+
+    let t_len: usize = 0;
+    const t_ptr = JS_ToCStringLen2(ctx, &t_len, unsafe { argv[0] }, 0);
+    if (t_ptr == null) return jsUndefined();
+    defer JS_FreeCString(ctx, t_ptr);
+    const dlg_type = unsafe { t_ptr.?[0..t_len] };
+
+    let message: []const u8 = "";
+    let m_ptr: ([*c]const u8)? = null;
+    if (argc >= 2) {
+        let m_len: usize = 0;
+        m_ptr = JS_ToCStringLen2(ctx, &m_len, unsafe { argv[1] }, 0);
+        if (m_ptr != null) {
+            message = unsafe { m_ptr.?[0..m_len] };
+        }
+    }
+    defer if (m_ptr != null) JS_FreeCString(ctx, m_ptr);
+
+    let default_prompt: []const u8 = "";
+    let d_ptr: ([*c]const u8)? = null;
+    if (argc >= 3) {
+        let d_len: usize = 0;
+        d_ptr = JS_ToCStringLen2(ctx, &d_len, unsafe { argv[2] }, 0);
+        if (d_ptr != null) {
+            default_prompt = unsafe { d_ptr.?[0..d_len] };
+        }
+    }
+    defer if (d_ptr != null) JS_FreeCString(ctx, d_ptr);
+
+    let accepted: bool = false;
+    let prompt_buf: [4096]u8 = [0; 4096];
+    let prompt_len: usize = 0;
+    if (hook := g_dialog_hook) {
+        if (sess_ptr := g_dialog_session_ptr) {
+            * = hook(sess_ptr, dlg_type, message, default_prompt, &accepted, prompt_buf[0..], &prompt_len);
+        }
+    }
+
+    if (std.mem.eql(u8, dlg_type, "alert")) {
+        return jsUndefined();
+    }
+    if (std.mem.eql(u8, dlg_type, "confirm")) {
+        return if (accepted) jsTrue() else jsFalse();
+    }
+    if (std.mem.eql(u8, dlg_type, "prompt")) {
+        if (accepted) {
+            const n = @min(prompt_len, prompt_buf.len);
+            return JS_NewStringLen(ctx, prompt_buf[0..n].ptr, n);
+        }
+        return jsNull();
+    }
+    return jsUndefined();
 }
 
 @c fn js_capsurf_iframe_load_fixture(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
@@ -610,6 +1100,27 @@ fn originSliceOf(url: []const u8): []const u8 {
         }
         return JS_NewStringLen(ctx, body.ptr, body.len);
     }
+    if (is_worker_mode) {
+        if (hook := g_http_get_hook) {
+            const resolved_sess_ptr = lookupSessionByCtx(ctx) ?? g_http_session_ptr;
+            if (sess_ptr := resolved_sess_ptr) {
+                const http_buf = std.heap.c_allocator.alloc(u8, 524288) catch return jsNull();
+                defer std.heap.c_allocator.free(http_buf);
+                const n = hook(sess_ptr, cur_url, http_buf);
+                if (opaq := JS_GetContextOpaque(ctx)) {
+                    const dom_ctx: *JsDomContext = unsafe { @ptrCast(@alignCast(opaq)) };
+                    dom_ctx.addFetchRecord(cur_url, "application/javascript");
+                }
+                if (n >= 0) {
+                    const body_slice = http_buf[0..@as(usize, @intCast(n))];
+                    if (integrity.len > 0 && !verifySriIntegrity(integrity, body_slice)) {
+                        return jsNull();
+                    }
+                    return JS_NewStringLen(ctx, body_slice.ptr, body_slice.len);
+                }
+            }
+        }
+    }
     return jsNull();
 }
 
@@ -832,11 +1343,15 @@ let g_cache_cursor: usize = 0;
 }
 
 pub fn registerSessionHooksNative(raw_ctx: *JSContext) {
-    terminateAllWorkers();
     const global_obj = JS_GetGlobalObject(raw_ctx);
     defer JS_FreeValue(raw_ctx, global_obj);
     defineMethod(raw_ctx, global_obj, "__capsurf_fixture_fetch", js_capsurf_fixture_fetch, 2);
     defineMethod(raw_ctx, global_obj, "__capsurf_http_get", js_capsurf_http_get, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_http_request", js_capsurf_http_request, 5);
+    defineMethod(raw_ctx, global_obj, "__capsurf_sync_xhr", js_capsurf_sync_xhr, 5);
+    defineMethod(raw_ctx, global_obj, "__capsurf_should_intercept_fetch", js_capsurf_should_intercept_fetch, 2);
+    defineMethod(raw_ctx, global_obj, "__capsurf_fetch_pause", js_capsurf_fetch_pause, 5);
+    defineMethod(raw_ctx, global_obj, "__capsurf_dialog_open", js_capsurf_dialog_open, 3);
     defineMethod(raw_ctx, global_obj, "__capsurf_record_fetch", js_capsurf_record_fetch, 3);
     defineMethod(raw_ctx, global_obj, "__capsurf_iframe_load_fixture", js_capsurf_iframe_load_fixture, 2);
     defineMethod(raw_ctx, global_obj, "__capsurf_learned_script", js_capsurf_learned_script, 5);
@@ -854,15 +1369,27 @@ pub fn registerSessionHooksNative(raw_ctx: *JSContext) {
     defineMethod(raw_ctx, global_obj, "__capsurf_cache_delete", js_capsurf_cache_delete, 3);
 }
 
-const MAX_WORKER_SLOTS: usize = 1;
+const MAX_WORKER_SLOTS: usize = MAX_DEDICATED_WORKERS;
 const MAX_WORKER_UPSTREAM: usize = 64;
+
+pub type WorkerContextHookFn = *const fn (server_ptr: *void, dom_ctx_ptr: (*void)?, out_pool: *(*DedicatedWorkerPool)?, out_registry: *(*TargetRegistry)?): bool;
+let g_worker_ctx_hook: (WorkerContextHookFn)? = null;
+let g_worker_server_ptr: (*void)? = null;
+
+pub fn registerWorkerContextHook(server_ptr: *void, hook: WorkerContextHookFn) {
+    g_worker_server_ptr = server_ptr;
+    g_worker_ctx_hook = hook;
+}
 
 struct NativeWorkerSlot {
     active: bool = false,
     closing: bool = false,
     slot_freed: bool = false,
     worker_id: i32 = 0,
+    rt: (*JSRuntime)? = null,
     ctx: (*JSContext)? = null,
+    pool_ptr: (*DedicatedWorkerPool)? = null,
+    registry_ptr: (*TargetRegistry)? = null,
 }
 
 struct WorkerUpstreamItem {
@@ -876,44 +1403,367 @@ struct WorkerUpstreamItem {
 let g_worker_slots: [MAX_WORKER_SLOTS]NativeWorkerSlot = [NativeWorkerSlot{}; MAX_WORKER_SLOTS];
 let g_worker_active_count: usize = 0;
 let g_worker_upstream: [MAX_WORKER_UPSTREAM]WorkerUpstreamItem = [WorkerUpstreamItem{}; MAX_WORKER_UPSTREAM];
+let g_worker_upstream_head: usize = 0;
+let g_worker_upstream_tail: usize = 0;
+let g_worker_upstream_count: usize = 0;
 
-pub fn terminateAllWorkers() {
-    let i: usize = 0;
-    while (i < MAX_WORKER_SLOTS) : (i += 1) {
-        if (w_ctx := g_worker_slots[i].ctx) {
-            JS_FreeContext(w_ctx);
-        }
-        g_worker_slots[i] = NativeWorkerSlot{};
+fn resolveWorkerPoolAndRegistry(
+    ctx: *JSContext,
+    out_pool: *(*DedicatedWorkerPool)?,
+    out_registry: *(*TargetRegistry)?,
+) {
+    out_pool.* = null;
+    out_registry.* = null;
+    let opaq: (*void)? = null;
+    if (o := JS_GetContextOpaque(ctx)) {
+        opaq = unsafe { @ptrCast(o) };
     }
-    g_worker_active_count = 0;
-    let j: usize = 0;
-    while (j < MAX_WORKER_UPSTREAM) : (j += 1) {
-        if (g_worker_upstream[j].used) {
-            if (g_worker_upstream[j].payload.len > 0) {
-                std.heap.page_allocator.free(g_worker_upstream[j].payload);
+    if (hook := g_worker_ctx_hook) {
+        if (srv_ptr := g_worker_server_ptr) {
+            if (hook(srv_ptr, opaq, out_pool, out_registry)) {
+                return;
             }
-            g_worker_upstream[j] = WorkerUpstreamItem{};
+        }
+    }
+    if (sess_ptr := g_http_session_ptr) {
+        const sess: *CdpPageSession = unsafe { @ptrCast(@alignCast(sess_ptr)) };
+        out_pool.* = &sess.dedicated_workers;
+        out_registry.* = sess.getBrowserTargetRegistry();
+    }
+}
+
+fn terminateInPoolByNativeWid(pool_opt: (*DedicatedWorkerPool)?, reg_opt: (*TargetRegistry)?, wid: i32) {
+    if (wid <= 0) return;
+    if (pool := pool_opt) {
+        if (reg := reg_opt) {
+            if (entry := pool.findWorkerByNativeWid(@as(u32, @intCast(wid)))) {
+                let evts: [4]CdpEvent = [CdpEvent{}; 4];
+                let cnt: usize = 0;
+                * = pool.terminateWorker(reg, entry.id, evts[0..], &cnt);
+            }
         }
     }
 }
 
-fn pushWorkerUpstream(worker_id: i32, ev_name: []const u8, payload: []const u8) {
-    let i: usize = 0;
-    while (i < MAX_WORKER_UPSTREAM) : (i += 1) {
-        if (!g_worker_upstream[i].used) {
-            g_worker_upstream[i].used = true;
-            g_worker_upstream[i].worker_id = worker_id;
-            const en = @min(ev_name.len, g_worker_upstream[i].ev_buf.len);
-            @memcpy(g_worker_upstream[i].ev_buf[0..en], ev_name[0..en]);
-            g_worker_upstream[i].ev_len = en;
-            if (payload.len > 0) {
-                g_worker_upstream[i].payload = std.heap.page_allocator.dupe(u8, payload) catch "";
-            } else {
-                g_worker_upstream[i].payload = "";
-            }
-            return;
+fn deliverDownQueueToWorker(w_ctx: *JSContext, pool: *DedicatedWorkerPool, native_wid: u32) {
+    if (native_wid == 0) return;
+    if (entry := pool.findWorkerByNativeWid(native_wid)) {
+        if (!entry.alive || entry.down_count == 0) return;
+        const deliv_fn = getGlobalProp(w_ctx, "__capsurf_worker_deliver");
+        defer JS_FreeValue(w_ctx, deliv_fn);
+        if (!JS_IsFunction(w_ctx, deliv_fn)) return;
+        const wg = JS_GetGlobalObject(w_ctx);
+        defer JS_FreeValue(w_ctx, wg);
+        let down_buf: [32768]u8 = undefined;
+        while (entry.down_count > 0) {
+            const n = entry.dequeueDownMessage(down_buf[0..]);
+            if (n == 0) break;
+            let dargs: [1]JSValue = [jsNewString(w_ctx, down_buf[0..n])];
+            const dr = JS_Call(w_ctx, deliv_fn, wg, 1, &dargs);
+            JS_FreeValue(w_ctx, dr);
+            JS_FreeValue(w_ctx, dargs[0]);
         }
     }
+}
+
+pub fn getWorkerJsContext(native_wid: u32): (*JSContext)? {
+    if (native_wid == 0) return null;
+    let i: usize = 0;
+    while (i < MAX_WORKER_SLOTS) : (i += 1) {
+        if (g_worker_slots[i].active && !g_worker_slots[i].closing && g_worker_slots[i].worker_id == @as(i32, @intCast(native_wid))) {
+            return g_worker_slots[i].ctx;
+        }
+    }
+    return null;
+}
+
+fn drainWorkerJobs(w_ctx: *JSContext) {
+    const rt = JS_GetRuntime(w_ctx);
+    let pctx: (*JSContext)? = null;
+    let limit: u32 = 10000;
+    while (limit > 0 && JS_ExecutePendingJob(rt, &pctx) > 0) : (limit -= 1) {}
+}
+
+fn freeWorkerSlot(slot_idx: usize) {
+    if (slot_idx >= MAX_WORKER_SLOTS) return;
+    const w_ctx_opt = g_worker_slots[slot_idx].ctx;
+    const pool_opt = g_worker_slots[slot_idx].pool_ptr;
+    const reg_opt = g_worker_slots[slot_idx].registry_ptr;
+    const wid = g_worker_slots[slot_idx].worker_id;
+    const was_active = g_worker_slots[slot_idx].active;
+    const was_freed = g_worker_slots[slot_idx].slot_freed;
+
+    g_worker_slots[slot_idx].closing = true;
+    g_worker_slots[slot_idx].active = false;
+    g_worker_slots[slot_idx].ctx = null;
+    g_worker_slots[slot_idx].pool_ptr = null;
+    g_worker_slots[slot_idx].registry_ptr = null;
+    if (was_active && !was_freed && g_worker_active_count > 0) {
+        g_worker_active_count -= 1;
+    }
+    g_worker_slots[slot_idx] = NativeWorkerSlot{};
+
+    terminateInPoolByNativeWid(pool_opt, reg_opt, wid);
+    if (w_ctx := w_ctx_opt) {
+        const shut_fn = getGlobalProp(w_ctx, "__capsurf_worker_shutdown");
+        if (JS_IsFunction(w_ctx, shut_fn)) {
+            const wg = JS_GetGlobalObject(w_ctx);
+            let dummy_args: [1]JSValue = [jsUndefined()];
+            const sr = JS_Call(w_ctx, shut_fn, wg, 0, &dummy_args);
+            JS_FreeValue(w_ctx, sr);
+            JS_FreeValue(w_ctx, wg);
+        }
+        JS_FreeValue(w_ctx, shut_fn);
+        drainWorkerJobs(w_ctx);
+        unregisterCtxSession(w_ctx);
+        JS_FreeContext(w_ctx);
+    }
+}
+
+fn formatWorkerRemoteObject(w_ctx: *JSContext, val: JSValue, return_by_value: bool, out_buf: []u8): usize {
+    return formatWorkerRemoteObjectWithOptions(w_ctx, val, return_by_value, 0, 99, out_buf);
+}
+
+fn formatWorkerRemoteObjectWithOptions(w_ctx: *JSContext, val: JSValue, return_by_value: bool, ser_mode: u8, max_depth: i32, out_buf: []u8): usize {
+    const wg = JS_GetGlobalObject(w_ctx);
+    defer JS_FreeValue(w_ctx, wg);
+    * = JS_SetPropertyStr(w_ctx, wg, "__capsurf_temp_val", JS_DupValue(w_ctx, val));
+    const effective_rbv = if (ser_mode == 2) true else if (ser_mode == 3) false else return_by_value;
+    const ser_mode_str: []const u8 = if (ser_mode == 1)
+        "'deep'"
+    else if (ser_mode == 2)
+        "'json'"
+    else if (ser_mode == 3)
+        "'idOnly'"
+    else
+        "''";
+    const rbv_str: []const u8 = if (effective_rbv) "true" else "false";
+    let script_buf: [256]u8 = [0; 256];
+    const script = std.fmt.bufPrint(
+        &script_buf,
+        "globalThis.__capsurf_safe_stringify(globalThis.__capsurf_format_remote_object(globalThis.__capsurf_temp_val, {s}, {s}, {d}))",
+        .{ rbv_str, ser_mode_str, max_depth },
+    ) catch "globalThis.__capsurf_safe_stringify(globalThis.__capsurf_format_remote_object(globalThis.__capsurf_temp_val, false))";
+    const s_val = JS_Eval(w_ctx, script.ptr, script.len, "<worker-fmt>", 0);
+    defer JS_FreeValue(w_ctx, s_val);
+    if (jsIsException(s_val)) {
+        const exc = JS_GetException(w_ctx);
+        defer JS_FreeValue(w_ctx, exc);
+        let elen: usize = 0;
+        const eptr = JS_ToCStringLen2(w_ctx, &elen, exc, 0);
+        if (eptr != null) {
+            defer JS_FreeCString(w_ctx, eptr);
+            if (std.mem.indexOf(u8, unsafe { eptr.?[0..elen] }, "Object reference chain is too long") != null) {
+                const deep_err = std.fmt.bufPrint(out_buf, "__CAPSURF_CDP_ERROR__:Object reference chain is too long", .{}) catch return 0;
+                return deep_err.len;
+            }
+        }
+        const fallback = std.fmt.bufPrint(out_buf, "{{\"result\":{{\"type\":\"undefined\"}}}}", .{}) catch return 0;
+        return fallback.len;
+    }
+    let slen: usize = 0;
+    const sptr = JS_ToCStringLen2(w_ctx, &slen, s_val, 0);
+    if (sptr != null) {
+        defer JS_FreeCString(w_ctx, sptr);
+        const s_slice = unsafe { sptr.?[0..slen] };
+        if (s_slice.len > 0 && !std.mem.eql(u8, s_slice, "undefined")) {
+            const formatted = std.fmt.bufPrint(out_buf, "{{\"result\":{s}}}", .{s_slice}) catch return 0;
+            return formatted.len;
+        }
+    }
+    const u_res = std.fmt.bufPrint(out_buf, "{{\"result\":{{\"type\":\"undefined\"}}}}", .{}) catch return 0;
+    return u_res.len;
+}
+
+fn formatWorkerCdpException(w_ctx: *JSContext, exc: JSValue, out_buf: []u8): usize {
+    if (exc.tag != JS_TAG_OBJECT) {
+        let prim_buf: [2048]u8 = [0; 2048];
+        const prim_len = formatWorkerRemoteObject(w_ctx, exc, true, &prim_buf);
+        const prefix = "{\"result\":";
+        if (prim_len > prefix.len + 1 && std.mem.startsWith(u8, prim_buf[0..prim_len], prefix) && prim_buf[prim_len - 1] == '}') {
+            const exc_obj = prim_buf[prefix.len .. prim_len - 1];
+            const err_json = std.fmt.bufPrint(
+                out_buf,
+                "{{\"result\":{{\"type\":\"undefined\"}},\"exceptionDetails\":{{\"text\":\"Uncaught\",\"exception\":{s}}}}}",
+                .{exc_obj},
+            ) catch return 0;
+            return err_json.len;
+        }
+    }
+    let elen: usize = 0;
+    const eptr = JS_ToCStringLen2(w_ctx, &elen, exc, 0);
+    const exc_str: []const u8 = if (eptr != null) unsafe { eptr.?[0..elen] } else "Error";
+    defer if (eptr != null) JS_FreeCString(w_ctx, eptr);
+
+    let class_name: []const u8 = "Error";
+    if (colon_idx := std.mem.indexOf(u8, exc_str, ":")) {
+        const prefix = exc_str[0..colon_idx];
+        if (prefix.len > 0 && std.mem.indexOf(u8, prefix, " ") == null) {
+            class_name = prefix;
+        }
+    }
+    let desc_slice: []const u8 = exc_str;
+    while (desc_slice.len > 0 && (desc_slice[desc_slice.len - 1] == '\n' || desc_slice[desc_slice.len - 1] == '\r')) {
+        desc_slice = desc_slice[0 .. desc_slice.len - 1];
+    }
+    let esc_exc_buf: [2048]u8 = [0; 2048];
+    const esc_exc = escapeJsonString(desc_slice, &esc_exc_buf);
+    const err_json = std.fmt.bufPrint(
+        out_buf,
+        "{{\"result\":{{\"type\":\"undefined\"}},\"exceptionDetails\":{{\"text\":\"Uncaught\",\"exception\":{{\"type\":\"object\",\"subtype\":\"error\",\"className\":\"{s}\",\"description\":\"{s}\"}}}}}}",
+        .{ class_name, esc_exc },
+    ) catch return 0;
+    return err_json.len;
+}
+
+fn finishWorkerEval(w_ctx: *JSContext, val: JSValue, return_by_value: bool, await_promise: bool, ser_mode: u8, max_depth: i32, out_buf: []u8): usize {
+    if (jsIsException(val)) {
+        const exc = JS_GetException(w_ctx);
+        defer JS_FreeValue(w_ctx, exc);
+        drainWorkerJobs(w_ctx);
+        return formatWorkerCdpException(w_ctx, exc, out_buf);
+    }
+    if (await_promise && JS_IsPromise(val)) {
+        drainWorkerJobs(w_ctx);
+        let limit: u32 = 1000;
+        while (JS_PromiseState(w_ctx, val) == 0 && limit > 0) : (limit -= 1) {
+            const p_fn = getGlobalProp(w_ctx, "__capsurf_worker_pump_timers");
+            let next_delay: i32 = -1;
+            if (JS_IsFunction(w_ctx, p_fn)) {
+                const wg = JS_GetGlobalObject(w_ctx);
+                let dummy_args: [1]JSValue = [jsUndefined()];
+                const pr = JS_Call(w_ctx, p_fn, wg, 0, &dummy_args);
+                * = JS_ToInt32(w_ctx, &next_delay, pr);
+                JS_FreeValue(w_ctx, pr);
+                JS_FreeValue(w_ctx, wg);
+            }
+            JS_FreeValue(w_ctx, p_fn);
+            drainWorkerJobs(w_ctx);
+            if (JS_PromiseState(w_ctx, val) != 0) break;
+            if (next_delay < 0) break;
+            if (next_delay > 0) {
+                const sleep_ms = if (next_delay > 10) @as(u64, 10) else @as(u64, @intCast(next_delay));
+                * = usleep(@as(u32, @intCast(sleep_ms)) * 1000);
+            }
+        }
+        const pstate = JS_PromiseState(w_ctx, val);
+        if (pstate == 1) {
+            const res_val = JS_PromiseResult(w_ctx, val);
+            defer JS_FreeValue(w_ctx, res_val);
+            return formatWorkerRemoteObjectWithOptions(w_ctx, res_val, return_by_value, ser_mode, max_depth, out_buf);
+        } else if (pstate == 2) {
+            const rej_val = JS_PromiseResult(w_ctx, val);
+            defer JS_FreeValue(w_ctx, rej_val);
+            return formatWorkerCdpException(w_ctx, rej_val, out_buf);
+        }
+    }
+    drainWorkerJobs(w_ctx);
+    return formatWorkerRemoteObjectWithOptions(w_ctx, val, return_by_value, ser_mode, max_depth, out_buf);
+}
+
+pub fn evalInWorkerContext(w_ctx: *JSContext, expr: []const u8, return_by_value: bool, await_promise: bool, out_buf: []u8): usize {
+    return evalInWorkerContextWithSerialization(w_ctx, expr, return_by_value, await_promise, 0, 99, out_buf);
+}
+
+pub fn evalInWorkerContextWithSerialization(w_ctx: *JSContext, expr: []const u8, return_by_value: bool, await_promise: bool, ser_mode: u8, max_depth: i32, out_buf: []u8): usize {
+    let expr_z = std.heap.page_allocator.alloc(u8, expr.len + 1) catch return 0;
+    defer std.heap.page_allocator.free(expr_z);
+    if (expr.len > 0) @memcpy(expr_z[0..expr.len], expr);
+    expr_z[expr.len] = 0;
+    const val = JS_Eval(w_ctx, expr_z.ptr, expr.len, "<worker-eval>", 0);
+    defer JS_FreeValue(w_ctx, val);
+    return finishWorkerEval(w_ctx, val, return_by_value, await_promise, ser_mode, max_depth, out_buf);
+}
+
+pub fn callFunctionOnWorkerContext(
+    w_ctx: *JSContext,
+    object_id: []const u8,
+    func_decl: []const u8,
+    args_json: []const u8,
+    return_by_value: bool,
+    await_promise: bool,
+    out_buf: []u8,
+): usize {
+    return callFunctionOnWorkerContextWithSerialization(w_ctx, object_id, func_decl, args_json, return_by_value, await_promise, 0, 99, out_buf);
+}
+
+pub fn callFunctionOnWorkerContextWithSerialization(
+    w_ctx: *JSContext,
+    object_id: []const u8,
+    func_decl: []const u8,
+    args_json: []const u8,
+    return_by_value: bool,
+    await_promise: bool,
+    ser_mode: u8,
+    max_depth: i32,
+    out_buf: []u8,
+): usize {
+    const wg = JS_GetGlobalObject(w_ctx);
+    defer JS_FreeValue(w_ctx, wg);
+    const id_s = if (object_id.len > 0) object_id else "globalThis";
+    * = JS_SetPropertyStr(w_ctx, wg, "__capsurf_call_id", jsNewString(w_ctx, id_s));
+    * = JS_SetPropertyStr(w_ctx, wg, "__capsurf_call_decl", jsNewString(w_ctx, func_decl));
+    * = JS_SetPropertyStr(w_ctx, wg, "__capsurf_call_args", jsNewString(w_ctx, if (args_json.len > 0) args_json else "[]"));
+    const call_script = "globalThis.__capsurf_call_fn(globalThis.__capsurf_call_id, globalThis.__capsurf_call_decl, globalThis.__capsurf_call_args)";
+    const val = JS_Eval(w_ctx, call_script.ptr, call_script.len, "<worker-call>", 0);
+    defer JS_FreeValue(w_ctx, val);
+    return finishWorkerEval(w_ctx, val, return_by_value, await_promise, ser_mode, max_depth, out_buf);
+}
+
+pub fn terminateWorkersForRuntime(rt: *JSRuntime) {
+    let i: usize = 0;
+    while (i < MAX_WORKER_SLOTS) : (i += 1) {
+        if (slot_rt := g_worker_slots[i].rt) {
+            if (slot_rt == rt && (g_worker_slots[i].active || g_worker_slots[i].ctx != null)) {
+                freeWorkerSlot(i);
+            }
+        }
+    }
+}
+
+pub fn terminateAllWorkers() {
+    let i: usize = 0;
+    while (i < MAX_WORKER_SLOTS) : (i += 1) {
+        if (g_worker_slots[i].active || g_worker_slots[i].ctx != null) {
+            freeWorkerSlot(i);
+        } else {
+            g_worker_slots[i] = NativeWorkerSlot{};
+        }
+    }
+    g_worker_active_count = 0;
+    while (g_worker_upstream_count > 0) {
+        const idx = g_worker_upstream_head;
+        if (g_worker_upstream[idx].used && g_worker_upstream[idx].payload.len > 0) {
+            std.heap.page_allocator.free(g_worker_upstream[idx].payload);
+        }
+        g_worker_upstream[idx] = WorkerUpstreamItem{};
+        g_worker_upstream_head = (g_worker_upstream_head + 1) % MAX_WORKER_UPSTREAM;
+        g_worker_upstream_count -= 1;
+    }
+    g_worker_upstream_head = 0;
+    g_worker_upstream_tail = 0;
+    g_worker_upstream_count = 0;
+}
+
+fn pushWorkerUpstream(worker_id: i32, ev_name: []const u8, payload: []const u8) {
+    if (g_worker_upstream_count >= MAX_WORKER_UPSTREAM) return;
+    let item = &g_worker_upstream[g_worker_upstream_tail];
+    if (item.used && item.payload.len > 0) {
+        std.heap.page_allocator.free(item.payload);
+    }
+    item.* = WorkerUpstreamItem{};
+    item.used = true;
+    item.worker_id = worker_id;
+    const en = @min(ev_name.len, item.ev_buf.len);
+    if (en > 0) @memcpy(item.ev_buf[0..en], ev_name[0..en]);
+    item.ev_len = en;
+    if (payload.len > 0) {
+        item.payload = std.heap.page_allocator.dupe(u8, payload) catch "";
+    } else {
+        item.payload = "";
+    }
+    g_worker_upstream_tail = (g_worker_upstream_tail + 1) % MAX_WORKER_UPSTREAM;
+    g_worker_upstream_count += 1;
 }
 
 @c fn js_capsurf_hr_now(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
@@ -922,6 +1772,17 @@ fn pushWorkerUpstream(worker_id: i32, ev_name: []const u8, payload: []const u8) 
     * = argc;
     * = argv;
     return jsFloat(getSystemMilliTimestamp());
+}
+
+fn findPoolForNativeWid(wid: i32): (*DedicatedWorkerPool)? {
+    if (wid <= 0) return null;
+    let si: usize = 0;
+    while (si < MAX_WORKER_SLOTS) : (si += 1) {
+        if (g_worker_slots[si].active && g_worker_slots[si].worker_id == wid) {
+            return g_worker_slots[si].pool_ptr;
+        }
+    }
+    return null;
 }
 
 @c fn js_capsurf_worker_emit(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
@@ -942,6 +1803,28 @@ fn pushWorkerUpstream(worker_id: i32, ev_name: []const u8, payload: []const u8) 
     const payload = unsafe { pay_ptr.?[0..pay_len] };
 
     pushWorkerUpstream(wid, ev_name, payload);
+    if (wid > 0) {
+        if (pool := findPoolForNativeWid(wid)) {
+            const uwid = @as(u32, @intCast(wid));
+            if (std.mem.eql(u8, ev_name, "worker.message")) {
+                * = pool.emitMessageFromWorker(uwid, payload);
+            } else if (std.mem.eql(u8, ev_name, "worker.console")) {
+                if (entry := pool.findWorkerByNativeWid(uwid)) {
+                    const sid = entry.getSessionId();
+                    if (entry.alive && entry.runtime_enabled && sid.len > 0) {
+                        * = pool.pushCdpEvent("Runtime.consoleAPICalled", payload, sid);
+                    }
+                }
+            } else if (std.mem.eql(u8, ev_name, "worker.exception")) {
+                if (entry := pool.findWorkerByNativeWid(uwid)) {
+                    const sid = entry.getSessionId();
+                    if (entry.alive && entry.runtime_enabled && sid.len > 0) {
+                        * = pool.pushCdpEvent("Runtime.exceptionThrown", payload, sid);
+                    }
+                }
+            }
+        }
+    }
     return jsUndefined();
 }
 
@@ -958,10 +1841,45 @@ fn pushWorkerUpstream(worker_id: i32, ev_name: []const u8, payload: []const u8) 
                 g_worker_slots[i].slot_freed = true;
                 if (g_worker_active_count > 0) g_worker_active_count -= 1;
             }
+            terminateInPoolByNativeWid(g_worker_slots[i].pool_ptr, g_worker_slots[i].registry_ptr, wid);
             break;
         }
     }
     return jsUndefined();
+}
+
+@c fn js_capsurf_worker_import_script(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 1) return jsNewString(ctx, "ERR_ARGS");
+    let url_len: usize = 0;
+    const url_ptr = JS_ToCStringLen2(ctx, &url_len, unsafe { argv[0] }, 0);
+    if (url_ptr == null) return jsNewString(ctx, "ERR_ARGS");
+    defer JS_FreeCString(ctx, url_ptr);
+    const url = unsafe { url_ptr.?[0..url_len] };
+
+    if (hook := g_http_get_hook) {
+        const resolved_sess_ptr = lookupSessionByCtx(ctx) ?? g_http_session_ptr;
+        if (sess_ptr := resolved_sess_ptr) {
+            let buf = std.heap.c_allocator.alloc(u8, 524288) catch return jsNewString(ctx, "ERR_OOM");
+            defer std.heap.c_allocator.free(buf);
+            const n = hook(sess_ptr, url, buf[0 .. buf.len - 1]);
+            if (n >= 0) {
+                const code_len = @as(usize, @intCast(n));
+                buf[code_len] = 0;
+                let fn_buf: [1024]u8 = undefined;
+                const fn_len = @min(url.len, fn_buf.len - 1);
+                if (fn_len > 0) @memcpy(fn_buf[0..fn_len], url[0..fn_len]);
+                fn_buf[fn_len] = 0;
+                const eval_res = JS_Eval(ctx, buf.ptr, code_len, unsafe { @ptrCast(&fn_buf) }, 0);
+                if (jsIsException(eval_res)) {
+                    return eval_res;
+                }
+                JS_FreeValue(ctx, eval_res);
+                return jsNull();
+            }
+        }
+    }
+    return jsNewString(ctx, "ERR_NETWORK");
 }
 
 const WORKER_BOOTSTRAP_JS: []const u8 =
@@ -1116,7 +2034,110 @@ const WORKER_BOOTSTRAP_JS: []const u8 =
     "    if (minDue === Infinity) return -1;\n" ++
     "    return Math.max(0, Math.ceil(minDue - g.__capsurf_hr_now()));\n" ++
     "  };\n" ++
-    "  g.console = { log: function(){}, warn: function(){}, error: function(){}, info: function(){}, debug: function(){} };\n" ++
+    "  var _objMap = new Map(), _nextObjId = 1;\n" ++
+    "  g.__capsurf_worker_shutdown = function() { _closing = true; _timers = []; _listeners.clear(); _handlers.clear(); _objMap.clear(); };\n" ++
+    "  g.__capsurf_store_object = function(v) { var id = 'worker-obj-' + (_nextObjId++); _objMap.set(id, v); return id; };\n" ++
+    "  g.__capsurf_get_object = function(id) { if (id === 'global' || id === 'globalThis') return g; return _objMap.get(id); };\n" ++
+    "  g.__capsurf_get_class_name = function(v) { try { if (v && v.constructor && v.constructor.name) return String(v.constructor.name); } catch (e) {} return Array.isArray(v) ? 'Array' : (typeof v === 'function' ? 'Function' : 'Object'); };\n" ++
+    "  g.__capsurf_format_remote_object = function(val, returnByValue) {\n" ++
+    "    if (val === undefined) return { type: 'undefined' };\n" ++
+    "    if (val === null) return { type: 'object', subtype: 'null', value: null };\n" ++
+    "    var t = typeof val;\n" ++
+    "    if (t === 'boolean' || t === 'string') return { type: t, value: val };\n" ++
+    "    if (t === 'number') {\n" ++
+    "      if (Number.isNaN(val)) return { type: 'number', unserializableValue: 'NaN' };\n" ++
+    "      if (Object.is(val, -0)) return { type: 'number', unserializableValue: '-0' };\n" ++
+    "      if (val === Infinity) return { type: 'number', unserializableValue: 'Infinity' };\n" ++
+    "      if (val === -Infinity) return { type: 'number', unserializableValue: '-Infinity' };\n" ++
+    "      return { type: 'number', value: val };\n" ++
+    "    }\n" ++
+    "    if (t === 'symbol') return returnByValue ? { type: 'undefined' } : { type: 'symbol', description: String(val), objectId: g.__capsurf_store_object(val) };\n" ++
+    "    if (t === 'bigint') return { type: 'bigint', unserializableValue: String(val) + 'n' };\n" ++
+    "    if (t === 'function') {\n" ++
+    "      var fobj = { type: 'function', className: 'Function', description: String(val) };\n" ++
+    "      if (!returnByValue) fobj.objectId = g.__capsurf_store_object(val);\n" ++
+    "      return fobj;\n" ++
+    "    }\n" ++
+    "    if (t === 'object') {\n" ++
+    "      var isArr = Array.isArray(val), isScope = (val === g);\n" ++
+    "      var className = isScope ? 'DedicatedWorkerGlobalScope' : g.__capsurf_get_class_name(val);\n" ++
+    "      var obj = { type: 'object', className: className };\n" ++
+    "      if (isArr) obj.subtype = 'array';\n" ++
+    "      else if (val instanceof Date) obj.subtype = 'date';\n" ++
+    "      else if (val instanceof RegExp) obj.subtype = 'regexp';\n" ++
+    "      else if (val instanceof Error) obj.subtype = 'error';\n" ++
+    "      else if (val instanceof Map) obj.subtype = 'map';\n" ++
+    "      else if (val instanceof Set) obj.subtype = 'set';\n" ++
+    "      else if (val instanceof Promise) obj.subtype = 'promise';\n" ++
+    "      else if (val instanceof ArrayBuffer) obj.subtype = 'arraybuffer';\n" ++
+    "      else if (ArrayBuffer.isView && ArrayBuffer.isView(val)) obj.subtype = 'typedarray';\n" ++
+    "      if (returnByValue) {\n" ++
+    "        var _seen = new WeakSet();\n" ++
+    "        var _chkDepth = function(x, d) {\n" ++
+    "          if (!x || typeof x !== 'object') return;\n" ++
+    "          if (_seen.has(x) || d > 100) throw new Error('Object reference chain is too long');\n" ++
+    "          _seen.add(x);\n" ++
+    "          if (Array.isArray(x)) { for (var i = 0; i < x.length; i++) _chkDepth(x[i], d + 1); }\n" ++
+    "          else { var ks = Object.keys(x); for (var i = 0; i < ks.length; i++) _chkDepth(x[ks[i]], d + 1); }\n" ++
+    "          _seen.delete(x);\n" ++
+    "        };\n" ++
+    "        _chkDepth(val, 0);\n" ++
+    "        if (obj.subtype === 'regexp' || obj.subtype === 'date') obj.description = String(val);\n" ++
+    "        if (obj.subtype !== 'regexp') obj.value = val;\n" ++
+    "      } else {\n" ++
+    "        obj.objectId = g.__capsurf_store_object(val);\n" ++
+    "        if (obj.subtype === 'regexp' || obj.subtype === 'date') obj.description = String(val);\n" ++
+    "        else if (obj.subtype === 'error') obj.description = String(val.stack || val);\n" ++
+    "        else obj.description = className;\n" ++
+    "      }\n" ++
+    "      return obj;\n" ++
+    "    }\n" ++
+    "    return { type: 'undefined' };\n" ++
+    "  };\n" ++
+    "  var _origJsonParse = JSON.parse, _origJsonStringify = JSON.stringify;\n" ++
+    "  g.__capsurf_safe_stringify = function(v) {\n" ++
+    "    var hasToJson = Object.prototype.hasOwnProperty.call(Array.prototype, 'toJSON');\n" ++
+    "    var desc = hasToJson ? Object.getOwnPropertyDescriptor(Array.prototype, 'toJSON') : null;\n" ++
+    "    if (hasToJson) delete Array.prototype.toJSON;\n" ++
+    "    try { return _origJsonStringify(v); }\n" ++
+    "    finally { if (hasToJson && desc) Object.defineProperty(Array.prototype, 'toJSON', desc); }\n" ++
+    "  };\n" ++
+    "  g.__capsurf_call_fn = function(id, fnDecl, argsJson) {\n" ++
+    "    var target = g.__capsurf_get_object(id);\n" ++
+    "    if (!target && id !== 'global' && id !== 'globalThis') throw new Error('Could not find object with id ' + id);\n" ++
+    "    var fn = (0, eval)('(' + fnDecl + ')');\n" ++
+    "    if (typeof fn !== 'function') throw new TypeError('functionDeclaration did not evaluate to a function');\n" ++
+    "    var rawArgs = argsJson ? _origJsonParse(argsJson) : [];\n" ++
+    "    var args = [];\n" ++
+    "    for (var i = 0; i < rawArgs.length; i++) {\n" ++
+    "      var arg = rawArgs[i] || {};\n" ++
+    "      if (arg.objectId) {\n" ++
+    "        var resv = g.__capsurf_get_object(arg.objectId);\n" ++
+    "        if (resv === undefined && arg.objectId !== 'global' && arg.objectId !== 'globalThis') throw new Error('Could not find object with id ' + arg.objectId);\n" ++
+    "        args.push(resv);\n" ++
+    "      } else if (arg.unserializableValue !== undefined) {\n" ++
+    "        var u = arg.unserializableValue;\n" ++
+    "        if (u === 'NaN') args.push(NaN); else if (u === '-0') args.push(-0);\n" ++
+    "        else if (u === 'Infinity') args.push(Infinity); else if (u === '-Infinity') args.push(-Infinity);\n" ++
+    "        else if (/^-?\\d+n$/.test(u)) args.push(BigInt(u.slice(0, -1))); else args.push(undefined);\n" ++
+    "      } else if ('value' in arg) { args.push(arg.value); }\n" ++
+    "      else { args.push(undefined); }\n" ++
+    "    }\n" ++
+    "    return fn.apply(target || g, args);\n" ++
+    "  };\n" ++
+    "  function _emitConsole(lvl, args) {\n" ++
+    "    var fmt = [];\n" ++
+    "    for (var i = 0; i < args.length; i++) fmt.push(g.__capsurf_format_remote_object(args[i], false));\n" ++
+    "    var pay = g.__capsurf_safe_stringify({ type: lvl, args: fmt, executionContextId: 1, timestamp: Date.now() });\n" ++
+    "    g.__capsurf_worker_emit(_workerId, 'worker.console', pay);\n" ++
+    "  }\n" ++
+    "  g.console = {\n" ++
+    "    log: function() { _emitConsole('log', arguments); },\n" ++
+    "    warn: function() { _emitConsole('warning', arguments); },\n" ++
+    "    error: function() { _emitConsole('error', arguments); },\n" ++
+    "    info: function() { _emitConsole('info', arguments); },\n" ++
+    "    debug: function() { _emitConsole('debug', arguments); }\n" ++
+    "  };\n" ++
     "  function _detachAb(ab) {\n" ++
     "    if (typeof ab.transfer === 'function') return ab.transfer();\n" ++
     "    var cp = new ArrayBuffer(ab.byteLength); new Uint8Array(cp).set(new Uint8Array(ab));\n" ++
@@ -1185,7 +2206,22 @@ const WORKER_BOOTSTRAP_JS: []const u8 =
     "  };\n" ++
     "  g.importScripts = function() {\n" ++
     "    if (arguments.length === 0) return;\n" ++
-    "    throw new DOMException(\"Failed to execute 'importScripts' on 'WorkerGlobalScope': CapSurf cannot load scripts synchronously (\" + String(arguments[0]) + \").\", 'NetworkError');\n" ++
+    "    var base = (g.location && g.location.href) ? g.location.href : (_scriptUrl || '');\n" ++
+    "    for (var i = 0; i < arguments.length; i++) {\n" ++
+    "      var rawUrl = String(arguments[i]);\n" ++
+    "      var absUrl = base ? (new URL(rawUrl, base)).href : (new URL(rawUrl)).href;\n" ++
+    "      var st = typeof g.__capsurf_worker_import_script === 'function' ? g.__capsurf_worker_import_script(absUrl) : 'ERR_NETWORK';\n" ++
+    "      if (st !== null && st !== undefined) {\n" ++
+    "        if (typeof g.__capsurf_http_get === 'function') {\n" ++
+    "          var code = g.__capsurf_http_get(absUrl);\n" ++
+    "          if (typeof code === 'string') {\n" ++
+    "            (0, eval)(code);\n" ++
+    "            continue;\n" ++
+    "          }\n" ++
+    "        }\n" ++
+    "        throw new DOMException(\"Failed to execute 'importScripts' on 'WorkerGlobalScope': The script at '\" + absUrl + \"' failed to load.\", 'NetworkError');\n" ++
+    "      }\n" ++
+    "    }\n" ++
     "  };\n" ++
     "  function addL(t, l, o) {\n" ++
     "    var fn = typeof l === 'function' ? l : (l && typeof l.handleEvent === 'function' ? function(e){ return l.handleEvent(e); } : null);\n" ++
@@ -1219,13 +2255,18 @@ const WORKER_BOOTSTRAP_JS: []const u8 =
     "  ['message', 'messageerror', 'error', 'rejectionhandled', 'unhandledrejection'].forEach(function(t) {\n" ++
     "    Object.defineProperty(g, 'on' + t, { configurable: true, enumerable: true, get: function(){ return _handlers.get(t) || null; }, set: function(fn){ _handlers.set(t, typeof fn === 'function' ? fn : null); } });\n" ++
     "  });\n" ++
-    "  function reportException(err) {\n" ++
+  "  function reportException(err) {\n" ++
     "    var msg = (err && typeof err === 'object' && 'message' in err) ? ('Uncaught ' + String(err.name || 'Error') + ': ' + String(err.message)) : ('Uncaught ' + String(err));\n" ++
     "    var lineno = 0, colno = 0;\n" ++
     "    var st = (err && typeof err === 'object' && typeof err.stack === 'string') ? err.stack : '';\n" ++
     "    var m = st.match(/:(\\d+)(?::(\\d+))?/);\n" ++
     "    if (m) { lineno = Number(m[1]) | 0; colno = m[2] ? (Number(m[2]) | 0) : 0; }\n" ++
     "    var info = { message: msg, filename: _scriptUrl, lineno: lineno, colno: colno };\n" ++
+    "    var cls = (err && typeof err === 'object' && err.name) ? String(err.name) : 'Error';\n" ++
+    "    var desc = st ? (msg.replace(/^Uncaught\\s+/, '') + '\\n' + st) : msg.replace(/^Uncaught\\s+/, '');\n" ++
+    "    var excObj = (err && typeof err === 'object') ? { type: 'object', subtype: 'error', className: cls, description: desc } : g.__capsurf_format_remote_object(err, true);\n" ++
+    "    var excParams = { timestamp: Date.now(), exceptionDetails: { exceptionId: 1, text: 'Uncaught', lineNumber: lineno > 0 ? lineno - 1 : 0, columnNumber: colno > 0 ? colno - 1 : 0, url: _scriptUrl, executionContextId: 1, exception: excObj } };\n" ++
+    "    g.__capsurf_worker_emit(_workerId, 'worker.exception', g.__capsurf_safe_stringify(excParams));\n" ++
     "    var ev = new ErrorEvent('error', Object.assign({ error: err }, info));\n" ++
     "    if (!dispatchOnScope('error', ev)) {\n" ++
     "      g.__capsurf_worker_emit(_workerId, 'worker.error', JSON.stringify(info));\n" ++
@@ -1243,12 +2284,33 @@ const WORKER_BOOTSTRAP_JS: []const u8 =
     "    if (g.location && (g.location.protocol === 'http:' || g.location.protocol === 'https:')) base = g.location.href;\n" ++
     "    var absUrl = uStr;\n" ++
     "    try { absUrl = new URL(uStr, base).href; } catch (e) {}\n" ++
-    "    var body = g.__capsurf_fixture_fetch(absUrl, '{}');\n" ++
-    "    var txt = (body !== null && body !== undefined) ? String(body) : '';\n" ++
+    "    var method = (init && init.method) ? String(init.method).toUpperCase() : ((resource && typeof resource === 'object' && resource.method) ? String(resource.method).toUpperCase() : 'GET');\n" ++
+    "    var reqBody = (init && init.body !== undefined && init.body !== null) ? String(init.body) : '';\n" ++
+    "    var contentType = '';\n" ++
+    "    if (init && init.headers) {\n" ++
+    "      if (typeof init.headers.get === 'function') {\n" ++
+    "        contentType = init.headers.get('content-type') || '';\n" ++
+    "      } else if (typeof init.headers === 'object') {\n" ++
+    "        var hk = Object.keys(init.headers);\n" ++
+    "        for (var hi = 0; hi < hk.length; hi++) {\n" ++
+    "          if (hk[hi].toLowerCase() === 'content-type') { contentType = String(init.headers[hk[hi]]); break; }\n" ++
+    "        }\n" ++
+    "      }\n" ++
+    "    }\n" ++
+    "    var isHttp = absUrl.indexOf('http://') === 0 || absUrl.indexOf('https://') === 0;\n" ++
+    "    var body = null;\n" ++
+    "    if (isHttp && typeof g.__capsurf_http_request === 'function') {\n" ++
+    "      body = g.__capsurf_http_request(absUrl, method, reqBody, contentType);\n" ++
+    "    }\n" ++
+    "    if (body === null || body === undefined) {\n" ++
+    "      body = g.__capsurf_fixture_fetch(absUrl, '{}');\n" ++
+    "    }\n" ++
+    "    var hasBody = (body !== null && body !== undefined);\n" ++
+    "    var txt = hasBody ? String(body) : '';\n" ++
     "    var sameOrig = true;\n" ++
     "    try { sameOrig = (_creatorOrigin !== 'null' && new URL(absUrl).origin === _creatorOrigin); } catch (e) {}\n" ++
     "    return Promise.resolve({\n" ++
-    "      ok: true, status: 200, statusText: 'OK', url: absUrl, type: sameOrig ? 'basic' : 'cors',\n" ++
+    "      ok: hasBody, status: hasBody ? 200 : 404, statusText: hasBody ? 'OK' : 'Not Found', url: absUrl, type: sameOrig ? 'basic' : 'cors',\n" ++
     "      text: function() { return Promise.resolve(txt); },\n" ++
     "      json: function() { return Promise.resolve(JSON.parse(txt)); },\n" ++
     "      arrayBuffer: function() { var b = new Uint8Array(txt.length); for (var i = 0; i < txt.length; i++) b[i] = txt.charCodeAt(i) & 255; return Promise.resolve(b.buffer); }\n" ++
@@ -1322,10 +2384,7 @@ fn getGlobalProp(ctx: *JSContext, name: [*c]const u8): JSValue {
     let i: usize = 0;
     while (i < MAX_WORKER_SLOTS) : (i += 1) {
         if (g_worker_slots[i].active && g_worker_slots[i].closing) {
-            if (old_ctx := g_worker_slots[i].ctx) {
-                JS_FreeContext(old_ctx);
-            }
-            g_worker_slots[i] = NativeWorkerSlot{};
+            freeWorkerSlot(i);
         }
         if (!g_worker_slots[i].active) {
             slot_idx = i;
@@ -1336,11 +2395,22 @@ fn getGlobalProp(ctx: *JSContext, name: [*c]const u8): JSValue {
         return jsNewString(ctx, "NO_SLOT");
     }
 
-    const w_ctx = JS_NewContext(JS_GetRuntime(ctx)) orelse return jsNewString(ctx, "NO_SLOT");
+    const resolved_sess_ptr = lookupSessionByCtx(ctx) ?? g_http_session_ptr;
+    const caller_rt = JS_GetRuntime(ctx);
+    const w_ctx_opt = JS_NewContext(caller_rt);
+    if (w_ctx_opt == null) return jsNewString(ctx, "NO_SLOT");
+    const w_ctx = w_ctx_opt.?;
+    if (sess_ptr := resolved_sess_ptr) {
+        registerCtxSession(w_ctx, sess_ptr);
+    }
     const wg = JS_GetGlobalObject(w_ctx);
     defineMethod(w_ctx, wg, "__capsurf_worker_emit", js_capsurf_worker_emit, 3);
     defineMethod(w_ctx, wg, "__capsurf_worker_close", js_capsurf_worker_close, 1);
+    defineMethod(w_ctx, wg, "__capsurf_worker_import_script", js_capsurf_worker_import_script, 1);
     defineMethod(w_ctx, wg, "__capsurf_fixture_fetch", js_capsurf_fixture_fetch, 2);
+    defineMethod(w_ctx, wg, "__capsurf_http_get", js_capsurf_http_get, 1);
+    defineMethod(w_ctx, wg, "__capsurf_http_request", js_capsurf_http_request, 5);
+    defineMethod(w_ctx, wg, "__capsurf_sync_xhr", js_capsurf_sync_xhr, 5);
     defineMethod(w_ctx, wg, "__capsurf_hr_now", js_capsurf_hr_now, 0);
     JS_FreeValue(w_ctx, wg);
 
@@ -1349,6 +2419,7 @@ fn getGlobalProp(ctx: *JSContext, name: [*c]const u8): JSValue {
         const be = JS_GetException(w_ctx);
         JS_FreeValue(w_ctx, be);
         JS_FreeValue(w_ctx, boot_res);
+        unregisterCtxSession(w_ctx);
         JS_FreeContext(w_ctx);
         return jsNewString(ctx, "ERR");
     }
@@ -1373,20 +2444,40 @@ fn getGlobalProp(ctx: *JSContext, name: [*c]const u8): JSValue {
     }
     JS_FreeValue(w_ctx, init_fn);
 
+    let pool_opt: (*DedicatedWorkerPool)? = null;
+    let reg_opt: (*TargetRegistry)? = null;
+    resolveWorkerPoolAndRegistry(ctx, &pool_opt, &reg_opt);
+
     g_worker_slots[slot_idx] = NativeWorkerSlot{
         active: true,
         closing: false,
         slot_freed: false,
         worker_id: wid,
+        rt: JS_GetRuntime(w_ctx),
         ctx: w_ctx,
+        pool_ptr: pool_opt,
+        registry_ptr: reg_opt,
     };
     g_worker_active_count += 1;
 
+    let bctx: []const u8 = "";
+    if (sess_ptr := resolved_sess_ptr) {
+        const sess: *CdpPageSession = unsafe { @ptrCast(@alignCast(sess_ptr)) };
+        bctx = sess.currentBrowserContextId();
+    }
+    if (wid > 0) {
+        if (pool := pool_opt) {
+            if (reg := reg_opt) {
+                let spawn_evts: [2]CdpEvent = [CdpEvent{}; 2];
+                let spawn_cnt: usize = 0;
+                * = pool.createWorkerWithWid(reg, url_s, name_s, @as(u32, @intCast(wid)), bctx, spawn_evts[0..], &spawn_cnt);
+            }
+        }
+    }
+
     // Null-terminate source and url for JS_Eval
     let src_z = std.heap.page_allocator.alloc(u8, src_s.len + 1) catch {
-        JS_FreeContext(w_ctx);
-        g_worker_slots[slot_idx] = NativeWorkerSlot{};
-        if (g_worker_active_count > 0) g_worker_active_count -= 1;
+        freeWorkerSlot(slot_idx);
         return jsNewString(ctx, "ERR");
     };
     defer std.heap.page_allocator.free(src_z);
@@ -1410,9 +2501,7 @@ fn getGlobalProp(ctx: *JSContext, name: [*c]const u8): JSValue {
         if (is_syntax) {
             JS_FreeValue(w_ctx, exc);
             JS_FreeValue(w_ctx, eval_res);
-            JS_FreeContext(w_ctx);
-            g_worker_slots[slot_idx] = NativeWorkerSlot{};
-            if (g_worker_active_count > 0) g_worker_active_count -= 1;
+            freeWorkerSlot(slot_idx);
             return jsNewString(ctx, "SYNTAX_ERROR");
         }
         const rep_fn = getGlobalProp(w_ctx, "__capsurf_worker_report_exception");
@@ -1427,6 +2516,11 @@ fn getGlobalProp(ctx: *JSContext, name: [*c]const u8): JSValue {
         JS_FreeValue(w_ctx, exc);
     }
     JS_FreeValue(w_ctx, eval_res);
+    if (wid > 0) {
+        if (pool := pool_opt) {
+            deliverDownQueueToWorker(w_ctx, pool, @as(u32, @intCast(wid)));
+        }
+    }
     return jsNewString(ctx, "OK");
 }
 
@@ -1470,13 +2564,7 @@ fn getGlobalProp(ctx: *JSContext, name: [*c]const u8): JSValue {
     let i: usize = 0;
     while (i < MAX_WORKER_SLOTS) : (i += 1) {
         if (g_worker_slots[i].active && g_worker_slots[i].worker_id == wid) {
-            if (w_ctx := g_worker_slots[i].ctx) {
-                JS_FreeContext(w_ctx);
-            }
-            if (!g_worker_slots[i].slot_freed && g_worker_active_count > 0) {
-                g_worker_active_count -= 1;
-            }
-            g_worker_slots[i] = NativeWorkerSlot{};
+            freeWorkerSlot(i);
             break;
         }
     }
@@ -1487,34 +2575,40 @@ fn getGlobalProp(ctx: *JSContext, name: [*c]const u8): JSValue {
     * = this_val;
     * = argc;
     * = argv;
+    const caller_rt = JS_GetRuntime(ctx);
     let min_delay: i32 = -1;
     let i: usize = 0;
     while (i < MAX_WORKER_SLOTS) : (i += 1) {
         if (g_worker_slots[i].active) {
-            if (!g_worker_slots[i].closing) {
-                if (w_ctx := g_worker_slots[i].ctx) {
-                    const p_fn = getGlobalProp(w_ctx, "__capsurf_worker_pump_timers");
-                    if (JS_IsFunction(w_ctx, p_fn)) {
-                        const wg = JS_GetGlobalObject(w_ctx);
-                        let dummy_args: [1]JSValue = [jsUndefined()];
-                        const pr = JS_Call(w_ctx, p_fn, wg, 0, &dummy_args);
-                        let d: i32 = -1;
-                        * = JS_ToInt32(w_ctx, &d, pr);
-                        JS_FreeValue(w_ctx, pr);
-                        JS_FreeValue(w_ctx, wg);
-                        if (d >= 0 && (min_delay < 0 || d < min_delay)) min_delay = d;
-                    }
-                    JS_FreeValue(w_ctx, p_fn);
-                }
+            let same_rt = false;
+            if (slot_rt := g_worker_slots[i].rt) {
+                same_rt = slot_rt == caller_rt;
             }
-            if (g_worker_slots[i].closing) {
-                if (w_ctx := g_worker_slots[i].ctx) {
-                    JS_FreeContext(w_ctx);
+            if (same_rt) {
+                if (!g_worker_slots[i].closing) {
+                    if (w_ctx := g_worker_slots[i].ctx) {
+                        if (g_worker_slots[i].worker_id > 0) {
+                            if (pool := g_worker_slots[i].pool_ptr) {
+                                deliverDownQueueToWorker(w_ctx, pool, @as(u32, @intCast(g_worker_slots[i].worker_id)));
+                            }
+                        }
+                        const p_fn = getGlobalProp(w_ctx, "__capsurf_worker_pump_timers");
+                        if (JS_IsFunction(w_ctx, p_fn)) {
+                            const wg = JS_GetGlobalObject(w_ctx);
+                            let dummy_args: [1]JSValue = [jsUndefined()];
+                            const pr = JS_Call(w_ctx, p_fn, wg, 0, &dummy_args);
+                            let d: i32 = -1;
+                            * = JS_ToInt32(w_ctx, &d, pr);
+                            JS_FreeValue(w_ctx, pr);
+                            JS_FreeValue(w_ctx, wg);
+                            if (d >= 0 && (min_delay < 0 || d < min_delay)) min_delay = d;
+                        }
+                        JS_FreeValue(w_ctx, p_fn);
+                    }
                 }
-                if (!g_worker_slots[i].slot_freed && g_worker_active_count > 0) {
-                    g_worker_active_count -= 1;
+                if (g_worker_slots[i].closing) {
+                    freeWorkerSlot(i);
                 }
-                g_worker_slots[i] = NativeWorkerSlot{};
             }
         }
     }
@@ -1522,25 +2616,27 @@ fn getGlobalProp(ctx: *JSContext, name: [*c]const u8): JSValue {
     const up_fn = getGlobalProp(ctx, "__capsurf_worker_on_upstream");
     const has_up = JS_IsFunction(ctx, up_fn);
     const pg = JS_GetGlobalObject(ctx);
-    let j: usize = 0;
-    while (j < MAX_WORKER_UPSTREAM) : (j += 1) {
-        if (g_worker_upstream[j].used) {
+    while (g_worker_upstream_count > 0) {
+        const idx = g_worker_upstream_head;
+        if (g_worker_upstream[idx].used) {
             if (has_up) {
                 let uargs: [3]JSValue = [
-                    jsInt(g_worker_upstream[j].worker_id),
-                    jsNewString(ctx, g_worker_upstream[j].ev_buf[0..g_worker_upstream[j].ev_len]),
-                    jsNewString(ctx, g_worker_upstream[j].payload),
+                    jsInt(g_worker_upstream[idx].worker_id),
+                    jsNewString(ctx, g_worker_upstream[idx].ev_buf[0..g_worker_upstream[idx].ev_len]),
+                    jsNewString(ctx, g_worker_upstream[idx].payload),
                 ];
                 const ur = JS_Call(ctx, up_fn, pg, 3, &uargs);
                 JS_FreeValue(ctx, ur);
                 JS_FreeValue(ctx, uargs[1]);
                 JS_FreeValue(ctx, uargs[2]);
             }
-            if (g_worker_upstream[j].payload.len > 0) {
-                std.heap.page_allocator.free(g_worker_upstream[j].payload);
+            if (g_worker_upstream[idx].payload.len > 0) {
+                std.heap.page_allocator.free(g_worker_upstream[idx].payload);
             }
-            g_worker_upstream[j] = WorkerUpstreamItem{};
+            g_worker_upstream[idx] = WorkerUpstreamItem{};
         }
+        g_worker_upstream_head = (g_worker_upstream_head + 1) % MAX_WORKER_UPSTREAM;
+        g_worker_upstream_count -= 1;
     }
     JS_FreeValue(ctx, pg);
     JS_FreeValue(ctx, up_fn);
@@ -1865,6 +2961,20 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "            for (var rii = 0; rii < reopenIframes.length; rii++) {\n" ++
     "              try {\n" ++
     "                if (typeof g.__capsurf_on_iframe_connected === 'function') g.__capsurf_on_iframe_connected(reopenIframes[rii]);\n" ++
+    "              } catch (e) {}\n" ++
+    "            }\n" ++
+    "            var reopenImgs = g.document.querySelectorAll('img[src]');\n" ++
+    "            for (var rmi = 0; rmi < reopenImgs.length; rmi++) {\n" ++
+    "              try {\n" ++
+    "                var rImg = reopenImgs[rmi];\n" ++
+    "                var rSrc = rImg.getAttribute ? rImg.getAttribute('src') : '';\n" ++
+    "                if (rSrc) { rImg.src = rSrc; }\n" ++
+    "              } catch (e) {}\n" ++
+    "            }\n" ++
+    "            var reopenLinks = g.document.querySelectorAll('link[href]');\n" ++
+    "            for (var rli = 0; rli < reopenLinks.length; rli++) {\n" ++
+    "              try {\n" ++
+    "                if (typeof g.__capsurf_handle_inserted_link === 'function') g.__capsurf_handle_inserted_link(reopenLinks[rli]);\n" ++
     "              } catch (e) {}\n" ++
     "            }\n" ++
     "          }\n" ++
@@ -2765,6 +3875,16 @@ pub const PAGE_INSERTED_SCRIPT_HOOKS_JS: []const u8 =
     "      });\n" ++
     "      return;\n" ++
     "    }\n" ++
+    "    if (typeof g.__capsurf_should_intercept_fetch === 'function' && g.__capsurf_should_intercept_fetch(absUrl, 'Script') && typeof g.fetch === 'function') {\n" ++
+    "      g.fetch(absUrl, { _resourceType: 'script' }).then(function(res) {\n" ++
+    "        if (!res || !res.ok) { fireScriptEvent(node, 'error'); return; }\n" ++
+    "        return res.text().then(function(code) {\n" ++
+    "          evalClassicCode(node, String(code), false);\n" ++
+    "          fireScriptEvent(node, 'load');\n" ++
+    "        });\n" ++
+    "      }).catch(function() { fireScriptEvent(node, 'error'); });\n" ++
+    "      return;\n" ++
+    "    }\n" ++
     "    if (typeof g.__capsurf_http_get === 'function') {\n" ++
     "      Promise.resolve().then(function() {\n" ++
     "        var code = g.__capsurf_http_get(absUrl);\n" ++
@@ -2776,6 +3896,7 @@ pub const PAGE_INSERTED_SCRIPT_HOOKS_JS: []const u8 =
     "    }\n" ++
     "    node._alreadyStarted = false;\n" ++
     "  }\n" ++
+    "  g.__capsurf_handle_inserted_link = handleInsertedLink;\n" ++
     "  function handleInsertedLink(node) {\n" ++
     "    if (!node || node.nodeType !== 1) return;\n" ++
     "    var tag = String(node.localName || node.tagName || '').toLowerCase();\n" ++
@@ -2793,6 +3914,22 @@ pub const PAGE_INSERTED_SCRIPT_HOOKS_JS: []const u8 =
     "    if (cspBlockedStyle) {\n" ++
     "      if (typeof console !== 'undefined' && console.error) console.error(\"Refused to load the stylesheet '\" + absUrl + \"' because it violates the following Content Security Policy directive: \" + docCsp);\n" ++
     "      Promise.resolve().then(function() { fireScriptEvent(node, 'error'); });\n" ++
+    "      return;\n" ++
+    "    }\n" ++
+    "    if (typeof g.__capsurf_should_intercept_fetch === 'function' && g.__capsurf_should_intercept_fetch(absUrl, 'Stylesheet') && typeof g.fetch === 'function') {\n" ++
+    "      g.fetch(absUrl, { _resourceType: 'stylesheet' }).then(function(res) {\n" ++
+    "        if (!res || !res.ok) { fireScriptEvent(node, 'error'); return; }\n" ++
+    "        return res.text().then(function(css) {\n" ++
+    "          var doc = node.ownerDocument || g.document;\n" ++
+    "          if (doc && doc.createElement && node.parentNode) {\n" ++
+    "            var st = doc.createElement('style');\n" ++
+    "            st.setAttribute('data-capsurf-link-mirror', '1');\n" ++
+    "            st.textContent = String(css);\n" ++
+    "            node.parentNode.insertBefore(st, node.nextSibling);\n" ++
+    "          }\n" ++
+    "          fireScriptEvent(node, 'load');\n" ++
+    "        });\n" ++
+    "      }).catch(function() { fireScriptEvent(node, 'error'); });\n" ++
     "      return;\n" ++
     "    }\n" ++
     "    if (typeof g.__capsurf_http_get === 'function') {\n" ++

@@ -123,7 +123,8 @@ function installLabelElement(global) {
       if (hasFor) {
         const forId = this.getAttribute("for");
         if (!forId) return null;
-        const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
+        const root = typeof this.getRootNode === "function" ? this.getRootNode() : null;
+        const doc = (root && typeof root.getElementById === "function") ? root : (this.ownerDocument || (typeof document !== "undefined" ? document : null));
         const el = doc && typeof doc.getElementById === "function" ? doc.getElementById(forId) : null;
         return (el && isLabelable(el)) ? el : null;
       }

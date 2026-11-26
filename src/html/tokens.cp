@@ -21,6 +21,7 @@ pub struct TagToken {
     attrs: [24]Attribute = [Attribute{}; 24];
     attr_count: usize = 0;
     self_closing: bool = false;
+    start_line: u32 = 0;
 
     fn getAttribute(attr_name: []const u8): ([]const u8)? {
         let i: usize = 0;

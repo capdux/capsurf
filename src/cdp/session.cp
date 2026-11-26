@@ -6,16 +6,16 @@ import { Doc, Document, NodeId, NULL_NODE, NodeType } from "../dom/dom.cp";
 import { Matcher } from "../css/matcher.cp";
 import { StyleSheet, Cascade, ComputedStyle } from "../css/cascade.cp";
 import { LayoutTree, Rect } from "../layout/layout.cp";
-import { JsRuntime, JsContext, JSRuntime, JSContext, JSModuleDef, JS_Eval, JS_EvalFunction, JS_FreeValue, JS_GetException, JS_ToCStringLen2, JS_FreeCString, JSValue, jsToSlice, jsIsException, jsUndefined, JS_TAG_INT, JS_TAG_FLOAT64, JS_TAG_BOOL, JS_TAG_NULL, JS_TAG_UNDEFINED, JS_TAG_OBJECT, JS_ToInt32, JS_SetPropertyStr, JS_GetPropertyStr, JS_GetImportMeta, JS_Call, JS_NewStringLen, JS_DupValue, JS_IsPromise, JS_PromiseState } from "../js/qjs_engine.cp";
+import { JsRuntime, JsContext, JSRuntime, JSContext, JSModuleDef, JS_Eval, JS_EvalFunction, JS_FreeValue, JS_GetException, JS_ToCStringLen2, JS_FreeCString, JSValue, jsToSlice, jsIsException, jsUndefined, jsInt, JS_TAG_INT, JS_TAG_FLOAT64, JS_TAG_BOOL, JS_TAG_NULL, JS_TAG_UNDEFINED, JS_TAG_OBJECT, JS_ToInt32, JS_NewObject, JS_SetPropertyStr, JS_GetPropertyStr, JS_GetImportMeta, JS_Call, JS_NewStringLen, JS_NewUint8ArrayCopy, JS_DupValue, JS_IsPromise, JS_PromiseState } from "../js/qjs_engine.cp";
 import { mountDom, JsDomContext, ConsoleRecord, getMilliTimestamp } from "../js/dom_binding.cp";
 import { CookieJar, CookieEntry } from "../net/cookies.cp";
 import { CdpBoxModel, CdpEvent, extractJsonInt, normalizeExceptionMessage, unescapeJsonString } from "./types.cp";
-import { FetchState } from "./fetch.cp";
+import { FetchState, FetchHandler, InterceptVerdict, httpStatusText } from "./fetch.cp";
 import { ScreenshotOptions, CanvasBitmap, SelectionSpan, FormControlValue, ScrollOffset, renderDocumentToPng, renderDocumentToRgba } from "../render/painter.cp";
 import { CssColor } from "cap:css";
 import { Base64 } from "cap:encoding";
 import { uncompress } from "cap:pack";
-import { recordResponseBody, recordPendingFetchBody, recordPendingFetchMeta, consumePendingFetchBody, formatHttpHeadersJson, formatHttpHeadersExtraInfoJson } from "./network.cp";
+import { recordResponseBody, recordPendingFetchBody, recordPendingFetchMeta, recordPendingFetchMetaWithRedirects, recordPendingFetchFailed, recordPendingFetchFailedWithError, consumePendingFetchBody, formatHttpHeadersJson, formatHttpHeadersExtraInfoJson } from "./network.cp";
 import { TargetRegistry } from "./target.cp";
 import { DedicatedWorkerPool } from "./workers.cp";
 import { DebuggerState } from "./debugger.cp";
@@ -26,20 +26,368 @@ import { MockFixtures } from "../net/mock_fixtures.cp";
 import { HttpLoader, HttpLoaderResult } from "../net/http_loader.cp";
 import { CspPolicy, parseCsp, verifySriIntegrity, isScriptNosniffBlocked, isInlineScriptAllowed, isInlineEventHandlerAllowed, isExternalScriptAllowed } from "../net/csp.cp";
 import { svgDocumentHtml, isSvgDocument } from "./svg_document.cp";
-import { PAGE_RUNTIME_HOOKS_JS, PAGE_INSERTED_SCRIPT_HOOKS_JS, PAGE_WEBMCP_HOOKS_JS, registerSessionHooksNative, registerHttpGetHook, runSpeculativePrefetchForNav, clearLearnedScripts } from "./session_hooks.cp";
+import { PAGE_RUNTIME_HOOKS_JS, PAGE_INSERTED_SCRIPT_HOOKS_JS, PAGE_WEBMCP_HOOKS_JS, registerSessionHooksNative, registerCtxSession, unregisterCtxSession, terminateWorkersForRuntime, registerHttpGetHook, registerHttpRequestHook, registerSyncXhrHook, registerShouldInterceptHook, registerFetchPauseHook, runSpeculativePrefetchForNav, clearLearnedScripts } from "./session_hooks.cp";
 import { MAX_CONCURRENT_OOPIF } from "./worker_budget.cp";
 import { ttyUaStylesheet, DEFAULT_TTY_CELL_WIDTH_PX, DEFAULT_TTY_CELL_HEIGHT_PX } from "../tty/nav_params.cp";
 
+fn tryAllocBytes(allocator: std.mem.Allocator, n: usize): ([]u8)? {
+    return allocator.alloc(u8, n) catch return null;
+}
+
+fn tryFetchCssWithReferrer(sess: *CdpPageSession, url: []const u8, out_buf: []u8, ref_url: []const u8): HttpLoaderResult? {
+    return HttpLoader.fetchDocumentWithReferrer(sess, url, out_buf, 0, ref_url) catch return null;
+}
+
 fn sessionHttpGetHook(session_ptr: *void, url: []const u8, out_buf: []u8): i64 {
-    const sess: *CdpPageSession = unsafe { @ptrCast(@alignCast(session_ptr)) };
-    const fetch_res = HttpLoader.fetchDocument(sess, url, out_buf, 0) catch return -1;
-    recordPendingFetchMeta(url, fetch_res.html, fetch_res.status_code, fetch_res.status_text, fetch_res.raw_headers, fetch_res.content_type);
+    let sess: *CdpPageSession = unsafe { @ptrCast(@alignCast(session_ptr)) };
+    let fetch_res: HttpLoaderResult = undefined;
+    if (sess.fetch_enabled || sess.fetch_state.enabled) {
+        fetch_res = sess.fetchSubresourceWithFetchHook(url, sess.url, "Other", "*/*", out_buf) catch {
+            recordPendingFetchFailed(url);
+            return -1;
+        };
+    } else {
+        fetch_res = HttpLoader.fetchDocumentWithReferrer(sess, url, out_buf, 0, sess.url) catch {
+            recordPendingFetchFailed(url);
+            return -1;
+        };
+    }
+    recordPendingFetchMetaWithRedirects(
+        url,
+        fetch_res.final_url,
+        fetch_res.html,
+        fetch_res.status_code,
+        fetch_res.status_text,
+        fetch_res.raw_headers,
+        fetch_res.content_type,
+        fetch_res.req_headers_text,
+        fetch_res.resp_headers_text,
+        fetch_res.wire_body_len,
+        fetch_res.redirect_count,
+        fetch_res.redirect_hops,
+    );
     if (fetch_res.status_code < 200 || fetch_res.status_code >= 300) return -1;
     const n = @min(fetch_res.html.len, out_buf.len);
     if (n > 0 && unsafe { @intFromPtr(fetch_res.html.ptr) != @intFromPtr(out_buf.ptr) }) {
         std.mem.copyForwards(u8, out_buf[0..n], fetch_res.html[0..n]);
     }
     return @as(i64, @intCast(n));
+}
+
+fn hasContentTypeKey(s: []const u8): bool {
+    const needle = "\"content-type\"";
+    if (s.len < needle.len) return false;
+    let i: usize = 0;
+    while (i + needle.len <= s.len) : (i += 1) {
+        if (std.ascii.eqlIgnoreCase(s[i .. i + needle.len], needle)) {
+            let j = i + needle.len;
+            while (j < s.len && (s[j] == ' ' || s[j] == '\t' || s[j] == '\r' || s[j] == '\n')) : (j += 1) {}
+            if (j < s.len && s[j] == ':') return true;
+        }
+    }
+    return false;
+}
+
+fn sessionHttpRequestHook(session_ptr: *void, url: []const u8, method: []const u8, post_data: []const u8, content_type: []const u8, headers_json: []const u8, out_buf: []u8): i64 {
+    let sess: *CdpPageSession = unsafe { @ptrCast(@alignCast(session_ptr)) };
+    const prev_extra_headers = sess.extra_headers;
+    const trimmed_hj = std.mem.trim(u8, headers_json, " \t\r\n");
+    const has_req_headers = trimmed_hj.len > 2 && trimmed_hj[0] == '{' && trimmed_hj[trimmed_hj.len - 1] == '}';
+    const base_headers = if (has_req_headers) trimmed_hj else prev_extra_headers;
+    if (has_req_headers) {
+        sess.extra_headers = trimmed_hj;
+    }
+    let temp_hdr_buf: [4096]u8 = undefined;
+    if (content_type.len > 0) {
+        const trimmed_eh = std.mem.trim(u8, base_headers, " \t\r\n");
+        if (trimmed_eh.len == 0 || std.mem.eql(u8, trimmed_eh, "{}")) {
+            const hdr = std.fmt.bufPrint(&temp_hdr_buf, "Content-Type: {s}\r\n", .{content_type}) catch "";
+            if (hdr.len > 0) sess.extra_headers = hdr;
+        } else if (trimmed_eh.len >= 2 && trimmed_eh[0] == '{' && trimmed_eh[trimmed_eh.len - 1] == '}') {
+            if (!hasContentTypeKey(trimmed_eh)) {
+                const prefix = trimmed_eh[0 .. trimmed_eh.len - 1];
+                const hdr = std.fmt.bufPrint(&temp_hdr_buf, "{s},\"Content-Type\":\"{s}\"}}", .{ prefix, content_type }) catch "";
+                if (hdr.len > 0) sess.extra_headers = hdr;
+            }
+        } else {
+            const hdr = std.fmt.bufPrint(&temp_hdr_buf, "{s}\r\nContent-Type: {s}\r\n", .{ trimmed_eh, content_type }) catch "";
+            if (hdr.len > 0) sess.extra_headers = hdr;
+        }
+    }
+    defer sess.extra_headers = prev_extra_headers;
+    const fetch_res = HttpLoader.fetchDocumentWithMethod(sess, url, method, post_data, out_buf, 0, "Fetch") catch { recordPendingFetchFailed(url); return -1; };
+    recordPendingFetchMetaWithRedirects(
+        url,
+        fetch_res.final_url,
+        fetch_res.html,
+        fetch_res.status_code,
+        fetch_res.status_text,
+        fetch_res.raw_headers,
+        fetch_res.content_type,
+        fetch_res.req_headers_text,
+        fetch_res.resp_headers_text,
+        fetch_res.wire_body_len,
+        fetch_res.redirect_count,
+        fetch_res.redirect_hops,
+    );
+    if (fetch_res.status_code < 200 || fetch_res.status_code >= 300) return -1;
+    const n = @min(fetch_res.html.len, out_buf.len);
+    if (n > 0 && unsafe { @intFromPtr(fetch_res.html.ptr) != @intFromPtr(out_buf.ptr) }) {
+        std.mem.copyForwards(u8, out_buf[0..n], fetch_res.html[0..n]);
+    }
+    return @as(i64, @intCast(n));
+}
+
+fn sessionSyncXhrHook(session_ptr: *void, url: []const u8, method: []const u8, post_data: []const u8, content_type: []const u8, headers_json: []const u8, out_buf: []u8): i64 {
+    let sess: *CdpPageSession = unsafe { @ptrCast(@alignCast(session_ptr)) };
+    const prev_extra_headers = sess.extra_headers;
+    const trimmed_hj = std.mem.trim(u8, headers_json, " \t\r\n");
+    const has_req_headers = trimmed_hj.len > 2 && trimmed_hj[0] == '{' && trimmed_hj[trimmed_hj.len - 1] == '}';
+    const base_headers = if (has_req_headers) trimmed_hj else prev_extra_headers;
+    if (has_req_headers) {
+        sess.extra_headers = trimmed_hj;
+    }
+    let temp_hdr_buf: [4096]u8 = undefined;
+    if (content_type.len > 0) {
+        const trimmed_eh = std.mem.trim(u8, base_headers, " \t\r\n");
+        if (trimmed_eh.len == 0 || std.mem.eql(u8, trimmed_eh, "{}")) {
+            const hdr = std.fmt.bufPrint(&temp_hdr_buf, "Content-Type: {s}\r\n", .{content_type}) catch "";
+            if (hdr.len > 0) sess.extra_headers = hdr;
+        } else if (trimmed_eh.len >= 2 && trimmed_eh[0] == '{' && trimmed_eh[trimmed_eh.len - 1] == '}') {
+            const prefix = trimmed_eh[0 .. trimmed_eh.len - 1];
+            const hdr = std.fmt.bufPrint(&temp_hdr_buf, "{s},\"Content-Type\":\"{s}\"}}", .{ prefix, content_type }) catch "";
+            if (hdr.len > 0) sess.extra_headers = hdr;
+        } else {
+            const hdr = std.fmt.bufPrint(&temp_hdr_buf, "{s}\r\nContent-Type: {s}\r\n", .{ trimmed_eh, content_type }) catch "";
+            if (hdr.len > 0) sess.extra_headers = hdr;
+        }
+    }
+    defer sess.extra_headers = prev_extra_headers;
+
+    let sync_hooked = false;
+    let net_id_buf: [64]u8 = [0; 64];
+    let net_id: []const u8 = "";
+    if ((sess.fetch_enabled || sess.fetch_state.enabled) &&
+        sess.fetch_state.shouldIntercept(url, "XHR") &&
+        sess.fetch_state.findParkedByUrl(url) == null)
+    {
+        if (hook := sess.sync_fetch_hook) {
+            if (srv_ptr := sess.sync_fetch_server_ptr) {
+                let ua_esc_buf: [1024]u8 = [0; 1024];
+                const ua_val = if (sess.user_agent.len > 0) sess.user_agent else DEFAULT_HTTP_USER_AGENT;
+                const esc_ua = escapeJsonString(ua_val, &ua_esc_buf);
+
+                let ref_kv_buf: [2048]u8 = [0; 2048];
+                let ref_kv: []const u8 = "";
+                if (sess.url.len > 0 && !std.mem.eql(u8, sess.url, "about:blank")) {
+                    let ref_esc_buf: [2048]u8 = [0; 2048];
+                    const esc_ref = escapeJsonString(sess.url, &ref_esc_buf);
+                    ref_kv = std.fmt.bufPrint(&ref_kv_buf, ",\"Referer\":\"{s}\"", .{esc_ref}) catch "";
+                }
+
+                let has_accept_hdr = false;
+                let has_cookie_hdr = false;
+                let extra_kv_buf: [2048]u8 = [0; 2048];
+                let extra_kv: []const u8 = "";
+                const trimmed_eh = std.mem.trim(u8, sess.extra_headers, " \t\r\n");
+                if (trimmed_eh.len > 2 && trimmed_eh[0] == '{' && trimmed_eh[trimmed_eh.len - 1] == '}') {
+                    const inner_eh = std.mem.trim(u8, trimmed_eh[1 .. trimmed_eh.len - 1], " \t\r\n");
+                    if (inner_eh.len > 0) {
+                        extra_kv = std.fmt.bufPrint(&extra_kv_buf, ",{s}", .{inner_eh}) catch "";
+                        let ai: usize = 0;
+                        while (ai + 8 <= inner_eh.len) : (ai += 1) {
+                            if (std.ascii.eqlIgnoreCase(inner_eh[ai .. ai + 8], "\"accept\"")) {
+                                has_accept_hdr = true;
+                            } else if (std.ascii.eqlIgnoreCase(inner_eh[ai .. ai + 8], "\"cookie\"")) {
+                                has_cookie_hdr = true;
+                            }
+                            if (has_accept_hdr && has_cookie_hdr) break;
+                        }
+                    }
+                }
+
+                const accept_kv: []const u8 = if (has_accept_hdr) "" else ",\"Accept\":\"*/*\"";
+
+                let cookie_kv_buf: [2048]u8 = [0; 2048];
+                let cookie_kv: []const u8 = "";
+                if (!has_cookie_hdr) {
+                    const cookie_hdr = sess.getActiveCookieJar().cookieHeaderForUrl(url, null, sess.allocator);
+                    if (cookie_hdr != null) {
+                        defer sess.allocator.free(cookie_hdr.?);
+                        if (cookie_hdr.?.len > 0) {
+                            let cookie_esc_buf: [2048]u8 = [0; 2048];
+                            const esc_cookie = escapeJsonString(cookie_hdr.?, &cookie_esc_buf);
+                            cookie_kv = std.fmt.bufPrint(&cookie_kv_buf, ",\"Cookie\":\"{s}\"", .{esc_cookie}) catch "";
+                        }
+                    }
+                }
+
+                let hdrs_buf: [4096]u8 = [0; 4096];
+                const hook_headers_json = std.fmt.bufPrint(
+                    &hdrs_buf,
+                    "{{\"User-Agent\":\"{s}\"{s}{s}{s}{s}}}",
+                    .{ esc_ua, accept_kv, ref_kv, cookie_kv, extra_kv },
+                ) catch "{}";
+
+                sess.net_req_seq += 1;
+                net_id = std.fmt.bufPrint(&net_id_buf, "req-{d}", .{sess.net_req_seq}) catch "req-1";
+                sync_hooked = hook(srv_ptr, unsafe { @ptrCast(sess) }, url, method, hook_headers_json, "XHR", net_id, "");
+            }
+        }
+    }
+    if (net_id.len == 0 && (sess.fetch_enabled || sess.fetch_state.enabled)) {
+        sess.net_req_seq += 1;
+        net_id = std.fmt.bufPrint(&net_id_buf, "req-{d}", .{sess.net_req_seq}) catch "req-1";
+    }
+    sess.setActiveNetReqId(net_id);
+    sess.redirect_live_emitted = false;
+    defer sess.active_net_req_id_len = 0;
+
+    const http_buf = std.heap.c_allocator.alloc(u8, 1048576) catch return -1;
+    defer std.heap.c_allocator.free(http_buf);
+
+    const fetch_res = HttpLoader.fetchDocumentWithMethod(sess, url, method, post_data, http_buf, 0, "XHR") catch e => {
+        if (sync_hooked && sess.network_enabled) {
+            let err_text: []const u8 = "net::ERR_FAILED";
+            if (e == error.EmptyResponse) {
+                err_text = "net::ERR_EMPTY_RESPONSE";
+            } else if (e == error.ConnectionFailed || e == error.ConnectFailed) {
+                err_text = "net::ERR_CONNECTION_REFUSED";
+            } else if (e == error.ReadFailed || e == error.SendFailed) {
+                err_text = "net::ERR_CONNECTION_RESET";
+            } else if (e == error.TlsFailed) {
+                err_text = "net::ERR_CERT_AUTHORITY_INVALID";
+            } else if (e == error.TooManyRedirects) {
+                err_text = "net::ERR_TOO_MANY_REDIRECTS";
+            } else if (e == error.NameNotResolved) {
+                err_text = "net::ERR_NAME_NOT_RESOLVED";
+            } else if (e == error.TimedOut) {
+                err_text = "net::ERR_TIMED_OUT";
+            } else if (e == error.FileTooBig) {
+                err_text = "net::ERR_FILE_TOO_BIG";
+            } else if (e == error.InternetDisconnected) {
+                err_text = "net::ERR_INTERNET_DISCONNECTED";
+            } else if (e == error.RequestAborted) {
+                err_text = "net::ERR_ABORTED";
+            } else if (e == error.BlockedByClient) {
+                err_text = "net::ERR_BLOCKED_BY_CLIENT";
+            }
+            let esc_err_buf: [128]u8 = [0; 128];
+            const esc_err = escapeJsonString(err_text, &esc_err_buf);
+            let fail_buf: [512]u8 = [0; 512];
+            const fail_json = std.fmt.bufPrint(
+                &fail_buf,
+                "{{\"requestId\":\"{s}\",\"timestamp\":1700000000.2,\"type\":\"XHR\",\"errorText\":\"{s}\",\"canceled\":false}}",
+                .{ net_id, esc_err },
+            ) catch "";
+            if (fail_json.len > 0) {
+                * = sess.addPendingFetchEvent("Network.loadingFailed", fail_json);
+            }
+        }
+        return -1;
+    };
+
+    const resp_url = if (fetch_res.final_url.len > 0) fetch_res.final_url else url;
+    const status_text = if (fetch_res.status_text.len > 0 && !(fetch_res.status_code != 200 && std.mem.eql(u8, fetch_res.status_text, "OK")))
+        fetch_res.status_text
+    else
+        httpStatusText(@as(u16, @intCast(@min(fetch_res.status_code, 65535))));
+    const hdrs_json = formatHttpHeadersJson(fetch_res.raw_headers, sess.allocator);
+    defer if (hdrs_json.len > 2) sess.allocator.free(hdrs_json);
+
+    let esc_url_buf: [2048]u8 = [0; 2048];
+    const esc_url = escapeJsonString(resp_url, &esc_url_buf);
+    let st_esc_buf: [128]u8 = [0; 128];
+    const st_esc = escapeJsonString(status_text, &st_esc_buf);
+
+    if (sync_hooked && sess.network_enabled) {
+        recordResponseBody(net_id, fetch_res.html, false);
+        let mime_esc_buf: [128]u8 = [0; 128];
+        const mime_esc = escapeJsonString(fetch_res.content_type, &mime_esc_buf);
+        let nev_buf: [4096]u8 = [0; 4096];
+        const resp_json = std.fmt.bufPrint(
+            &nev_buf,
+            "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"timestamp\":1700000000.1,\"type\":\"XHR\",\"response\":{{\"url\":\"{s}\",\"status\":{d},\"statusText\":\"{s}\",\"headers\":{s},\"mimeType\":\"{s}\"}},\"frameId\":\"{s}\"}}",
+            .{ net_id, sess.loader_id, esc_url, fetch_res.status_code, st_esc, hdrs_json, mime_esc, sess.frame_id },
+        ) catch "";
+        if (resp_json.len > 0) {
+            * = sess.addPendingFetchEvent("Network.responseReceived", resp_json);
+        }
+        let fin_buf: [512]u8 = [0; 512];
+        const fin_json = std.fmt.bufPrint(
+            &fin_buf,
+            "{{\"requestId\":\"{s}\",\"timestamp\":1700000000.2,\"encodedDataLength\":{d}}}",
+            .{ net_id, fetch_res.html.len },
+        ) catch "";
+        if (fin_json.len > 0) {
+            * = sess.addPendingFetchEvent("Network.loadingFinished", fin_json);
+        }
+    }
+
+    const enc_len = std.base64.standard.Encoder.calcSize(fetch_res.html.len);
+    const b64_buf = std.heap.c_allocator.alloc(u8, enc_len) catch return -1;
+    defer std.heap.c_allocator.free(b64_buf);
+    const b64_str = if (enc_len > 0) std.base64.standard.Encoder.encode(b64_buf, fetch_res.html) else "";
+
+    const hdrs_esc_buf = std.heap.c_allocator.alloc(u8, hdrs_json.len * 2 + 16) catch return -1;
+    defer std.heap.c_allocator.free(hdrs_esc_buf);
+    const hdrs_esc = escapeJsonString(hdrs_json, hdrs_esc_buf);
+
+    const ok_str: []const u8 = if (fetch_res.status_code >= 200 && fetch_res.status_code < 300) "true" else "false";
+    const out_json = std.fmt.bufPrint(
+        out_buf,
+        "{{\"ok\":{s},\"status\":{d},\"statusText\":\"{s}\",\"url\":\"{s}\",\"headersJson\":\"{s}\",\"bodyBase64\":\"{s}\"}}",
+        .{ ok_str, fetch_res.status_code, st_esc, esc_url, hdrs_esc, b64_str },
+    ) catch return -1;
+    return @as(i64, @intCast(out_json.len));
+}
+
+fn sessionShouldInterceptHook(session_ptr: *void, url: []const u8, rtype: []const u8): bool {
+    let sess: *CdpPageSession = unsafe { @ptrCast(@alignCast(session_ptr)) };
+    return (sess.fetch_enabled || sess.fetch_state.enabled) && sess.fetch_state.shouldIntercept(url, rtype);
+}
+
+fn sessionFetchPauseHook(
+    session_ptr: *void,
+    url: []const u8,
+    method: []const u8,
+    headers_json: []const u8,
+    post_data: []const u8,
+    rtype: []const u8,
+    resolve_fn: JSValue,
+    reject_fn: JSValue,
+): bool {
+    let sess: *CdpPageSession = unsafe { @ptrCast(@alignCast(session_ptr)) };
+    let free_idx: (usize)? = null;
+    let i: usize = 0;
+    while (i < sess.pending_fetch_js.len) : (i += 1) {
+        if (!sess.pending_fetch_js[i].active) {
+            free_idx = i;
+            break;
+        }
+    }
+    if (free_idx == null) return false;
+    const idx = free_idx.?;
+
+    let req_id_buf: [64]u8 = [0; 64];
+    const req_id_len = sess.enqueueSubresourceFetchPause(url, method, headers_json, post_data, rtype, &req_id_buf);
+    if (req_id_len == 0) return false;
+
+    const copy_len = @min(req_id_len, sess.pending_fetch_js[idx].req_id_buf.len);
+    @memcpy(sess.pending_fetch_js[idx].req_id_buf[0..copy_len], req_id_buf[0..copy_len]);
+    sess.pending_fetch_js[idx].req_id_len = copy_len;
+    if (parked := sess.fetch_state.findParked(req_id_buf[0..copy_len])) {
+        const nid = parked.networkId();
+        const nid_copy = @min(nid.len, sess.pending_fetch_js[idx].net_id_buf.len);
+        if (nid_copy > 0) @memcpy(sess.pending_fetch_js[idx].net_id_buf[0..nid_copy], nid[0..nid_copy]);
+        sess.pending_fetch_js[idx].net_id_len = nid_copy;
+    } else {
+        sess.pending_fetch_js[idx].net_id_len = 0;
+    }
+    sess.pending_fetch_js[idx].resolve_fn = resolve_fn;
+    sess.pending_fetch_js[idx].reject_fn = reject_fn;
+    sess.pending_fetch_js[idx].active = true;
+    return true;
 }
 
 @c {
@@ -91,20 +439,60 @@ fn sessionHttpGetHook(session_ptr: *void, url: []const u8, out_buf: []u8): i64 {
     fn JS_ComputeMemoryUsage(rt: *JSRuntime, s: *JSMemoryUsage);
 }
 
+pub struct PendingJsFetchSlot {
+    active: bool = false,
+    req_id_buf: [64]u8 = [0; 64],
+    req_id_len: usize = 0,
+    net_id_buf: [64]u8 = [0; 64],
+    net_id_len: usize = 0,
+    resolve_fn: JSValue = JSValue{ .u = .{ .uint64 = 0 }, .tag = 0 },
+    reject_fn: JSValue = JSValue{ .u = .{ .uint64 = 0 }, .tag = 0 },
+}
+
+pub struct PendingFetchEventSlot {
+    method: []const u8 = "",
+    params_buf: [4096]u8 = [0; 4096],
+    params_len: usize = 0,
+    params_dyn: ([]u8)? = null,
+    params_dyn_consumed: bool = false,
+
+    fn paramsSlice(): []const u8 {
+        if (dyn_buf := _.params_dyn) {
+            return dyn_buf[0.._.params_len];
+        }
+        return _.params_buf[0.._.params_len];
+    }
+
+    fn freeDyn(*_) {
+        if (dyn_buf := _.params_dyn) {
+            std.heap.c_allocator.free(dyn_buf);
+            _.params_dyn = null;
+        }
+        _.params_dyn_consumed = false;
+    }
+}
+
 pub struct NavigationEntry {
     id: i32 = 0,
     url: []const u8 = "",
     title: []const u8 = "",
+    doc_gen: u32 = 0,
 }
 
 pub struct IsolatedWorldEntry {
     name_buf: [128]u8 = [0; 128],
     name_len: usize = 0,
+    frame_id_buf: [32]u8 = [0; 32],
+    frame_id_len: usize = 0,
     context_id: i64 = 0,
     active: bool = false,
 
     fn name(*_): []const u8 {
         return _.name_buf[0.._.name_len];
+    }
+
+    fn frameId(*_): []const u8 {
+        return _.frame_id_buf[0.._.frame_id_len];
     }
 }
 
@@ -118,31 +506,78 @@ pub fn hashStyleBytes(bytes: []const u8): u64 {
     return h;
 }
 
+fn utf8ValidSeqLen(src: []const u8, i: usize): usize {
+    const b0 = src[i];
+    if (b0 >= 0xC2 && b0 <= 0xDF) {
+        if (i + 1 < src.len) {
+            const b1 = src[i + 1];
+            if ((b1 & 0xC0) == 0x80) return 2;
+        }
+        return 0;
+    }
+    if (b0 >= 0xE0 && b0 <= 0xEF) {
+        if (i + 2 < src.len) {
+            const b1 = src[i + 1];
+            const b2 = src[i + 2];
+            if ((b1 & 0xC0) == 0x80 && (b2 & 0xC0) == 0x80) {
+                if (b0 == 0xE0 && b1 < 0xA0) return 0;
+                if (b0 == 0xED && b1 > 0x9F) return 0;
+                return 3;
+            }
+        }
+        return 0;
+    }
+    if (b0 >= 0xF0 && b0 <= 0xF4) {
+        if (i + 3 < src.len) {
+            const b1 = src[i + 1];
+            const b2 = src[i + 2];
+            const b3 = src[i + 3];
+            if ((b1 & 0xC0) == 0x80 && (b2 & 0xC0) == 0x80 && (b3 & 0xC0) == 0x80) {
+                if (b0 == 0xF0 && b1 < 0x90) return 0;
+                if (b0 == 0xF4 && b1 > 0x8F) return 0;
+                return 4;
+            }
+        }
+        return 0;
+    }
+    return 0;
+}
+
 pub fn escapeJsonString(src: []const u8, dst: []u8): []const u8 {
     let out_idx: usize = 0;
     let i: usize = 0;
-    while (i < src.len && out_idx + 2 <= dst.len) : (i += 1) {
+    while (i < src.len) {
         const c = src[i];
         if (c == '"') {
+            if (out_idx + 2 > dst.len) break;
             dst[out_idx] = '\\';
             dst[out_idx + 1] = '"';
             out_idx += 2;
+            i += 1;
         } else if (c == '\\') {
+            if (out_idx + 2 > dst.len) break;
             dst[out_idx] = '\\';
             dst[out_idx + 1] = '\\';
             out_idx += 2;
+            i += 1;
         } else if (c == '\n') {
+            if (out_idx + 2 > dst.len) break;
             dst[out_idx] = '\\';
             dst[out_idx + 1] = 'n';
             out_idx += 2;
+            i += 1;
         } else if (c == '\r') {
+            if (out_idx + 2 > dst.len) break;
             dst[out_idx] = '\\';
             dst[out_idx + 1] = 'r';
             out_idx += 2;
+            i += 1;
         } else if (c == '\t') {
+            if (out_idx + 2 > dst.len) break;
             dst[out_idx] = '\\';
             dst[out_idx + 1] = 't';
             out_idx += 2;
+            i += 1;
         } else if (c < 0x20) {
             if (out_idx + 6 > dst.len) break;
             const hex = "0123456789abcdef";
@@ -153,9 +588,33 @@ pub fn escapeJsonString(src: []const u8, dst: []u8): []const u8 {
             dst[out_idx + 4] = hex[(c >> 4) & 0x0f];
             dst[out_idx + 5] = hex[c & 0x0f];
             out_idx += 6;
-        } else {
+            i += 1;
+        } else if (c < 0x80) {
+            if (out_idx + 1 > dst.len) break;
             dst[out_idx] = c;
             out_idx += 1;
+            i += 1;
+        } else {
+            const seq_len = utf8ValidSeqLen(src, i);
+            if (seq_len > 0) {
+                if (out_idx + seq_len > dst.len) break;
+                let k: usize = 0;
+                while (k < seq_len) : (k += 1) {
+                    dst[out_idx + k] = src[i + k];
+                }
+                out_idx += seq_len;
+                i += seq_len;
+            } else {
+                if (out_idx + 6 > dst.len) break;
+                dst[out_idx] = '\\';
+                dst[out_idx + 1] = 'u';
+                dst[out_idx + 2] = 'f';
+                dst[out_idx + 3] = 'f';
+                dst[out_idx + 4] = 'f';
+                dst[out_idx + 5] = 'd';
+                out_idx += 6;
+                i += 1;
+            }
         }
     }
     return dst[0..out_idx];
@@ -941,6 +1400,8 @@ fn extractUrlOrigin(url: []const u8): []const u8 {
     return "";
 }
 
+pub type SyncFetchHookFn = *const fn (server_ptr: *void, sess_ptr: *void, url: []const u8, method: []const u8, headers_json: []const u8, rtype: []const u8, net_id: []const u8, redirect_response_json: []const u8): bool;
+
 pub struct CdpPageSession {
     allocator: std.mem.Allocator,
     doc: Document,
@@ -957,6 +1418,10 @@ pub struct CdpPageSession {
     loader_seq: u32 = 1,
     target_id: []const u8 = "capsurf-target-001",
     has_opener: bool = false,
+    is_about_blank_popup: bool = false,
+    lifecycle_events_enabled: bool = false,
+    navigation_aborted: bool = false,
+    initial_blank_lifecycle_emitted: bool = false,
     skip_record_nav: bool = false,
     has_document: bool = false,
     raw_html: []const u8 = "",
@@ -979,6 +1444,8 @@ pub struct CdpPageSession {
     device_scale_factor: f32 = 1.0,
     is_mobile: bool = false,
     dark_color_scheme: bool = false,
+    has_bg_color_override: bool = false,
+    bg_color_override: CssColor = CssColor.rgb(255, 255, 255),
     emulated_media_print: bool = false,
     emulated_media_buf: [64]u8 = [0; 64],
     emulated_media_len: usize = 0,
@@ -993,12 +1460,30 @@ pub struct CdpPageSession {
     user_agent: []const u8 = DEFAULT_HTTP_USER_AGENT,
     js_user_agent: []const u8 = "",
     user_agent_buf: [512]u8 = [0; 512],
+    park_pending_promise: bool = false,
+    has_parked_promise: bool = false,
+    last_parked_slot: i32 = -1,
+    parked_promise_used: [16]bool = [false; 16],
+    parked_promise_iso: [16]bool = [false; 16],
+    parked_promise_ser_mode: [16]u8 = [0; 16],
+    parked_promise_max_depth: [16]i32 = [99; 16],
+    parked_promise_vals: [16]JSValue = [JSValue{ .u = .{ .uint64 = 0 }, .tag = 0 }; 16],
 
     // Network & Fetch state
     extra_headers: []const u8 = "{}",
     cookie_jar: CookieJar,
     fetch_enabled: bool = false,
     fetch_state: FetchState = FetchState{},
+    sync_fetch_hook: (SyncFetchHookFn)? = null,
+    sync_fetch_server_ptr: (*void)? = null,
+    active_net_req_id_buf: [64]u8 = [0; 64],
+    active_net_req_id_len: usize = 0,
+    redirect_live_emitted: bool = false,
+    pending_fetch_js: [32]PendingJsFetchSlot = [PendingJsFetchSlot{}; 32],
+    pending_fetch_events: [64]PendingFetchEventSlot = [PendingFetchEventSlot{}; 64],
+    pending_fetch_event_head: usize = 0,
+    pending_fetch_event_tail: usize = 0,
+    pending_fetch_event_count: usize = 0,
     target_registry: TargetRegistry = TargetRegistry.init(),
     owner_target_registry: (*TargetRegistry)? = null,
     network_enabled: bool = false,
@@ -1020,6 +1505,7 @@ pub struct CdpPageSession {
     log_enabled: bool = false,
     binding_names: [2048]u8 = [0; 2048],
     binding_name_lens: [16]usize = [0; 16],
+    binding_context_ids: [16]i64 = [1; 16],
     binding_count: usize = 0,
     dedicated_workers: DedicatedWorkerPool = DedicatedWorkerPool.init(),
 
@@ -1040,11 +1526,13 @@ pub struct CdpPageSession {
     webmcp_invocation_count: u32 = 0,
     nav_seq: u64 = 0,
     rt_ctx_event_buf: [512]u8 = [0; 512],
-    page_frame_event_buf: [2048]u8 = [0; 2048],
-    binding_event_buf: [1024]u8 = [0; 1024],
+    page_frame_event_buf: [8192]u8 = [0; 8192],
+    binding_event_buf: [16384]u8 = [0; 16384],
     same_doc_event_buf: [2048]u8 = [0; 2048],
     iframe_ctx_event_buf: [512]u8 = [0; 512],
     css_event_buf: [8192]u8 = [0; 8192],
+    intercept_file_chooser: bool = false,
+    file_chooser_event_buf: [16384]u8 = [0; 16384],
 
     // CSS domain state & Dynamic StyleSheet Tracking
     css_enabled: bool = false,
@@ -1065,9 +1553,9 @@ pub struct CdpPageSession {
 
     // Execution context tracking
     next_context_id: i64 = 3,
-    isolated_worlds: [16]IsolatedWorldEntry = [IsolatedWorldEntry{}; 16],
+    isolated_worlds: [64]IsolatedWorldEntry = [IsolatedWorldEntry{}; 64],
     isolated_world_count: usize = 0,
-    retired_isolated_world_ids: [32]i64 = [0; 32],
+    retired_isolated_world_ids: [128]i64 = [0; 128],
     retired_isolated_world_count: usize = 0,
     iframe_ctx_created: bool = false,
     iframe_ctx_id: i64 = 3,
@@ -1079,6 +1567,7 @@ pub struct CdpPageSession {
     emitted_child_frame_count: usize = 0,
     known_child_frames: [48]KnownChildFrame = [KnownChildFrame{}; 48],
     known_child_frame_count: usize = 0,
+    next_child_frame_seq: usize = 0,
     net_req_seq: u64 = 0,
 
     // Navigation History state
@@ -1086,6 +1575,7 @@ pub struct CdpPageSession {
     nav_entry_count: usize = 0,
     current_nav_index: usize = 0,
     next_nav_id: i32 = 1,
+    doc_gen_counter: u32 = 1,
     pending_same_doc_urls: [4][]const u8 = [""; 4],
     pending_same_doc_count: usize = 0,
 
@@ -1095,6 +1585,7 @@ pub struct CdpPageSession {
     range_drag_changed: bool = false,
     scroll_x: f32 = 0.0,
     scroll_y: f32 = 0.0,
+    mouse_buttons: i32 = 0,
     next_object_id: u32 = 1,
     outbound_reject_websocket: bool = false,
     outbound_reject_patterns: [8][256]u8 = [[0; 256]; 8],
@@ -1115,6 +1606,7 @@ pub struct CdpPageSession {
     deferred_font_count: usize = 0,
     new_document_scripts: std.ArrayListUnmanaged(NewDocumentScriptEntry) = .empty,
     next_new_doc_script_id: u64 = 1,
+    init_world_names: std.ArrayListUnmanaged([]const u8) = .empty,
 
     pub static fn init(allocator: std.mem.Allocator): (*CdpPageSession)! {
         let ptr = std.heap.c_allocator.create(CdpPageSession) catch return error.AllocFailed;
@@ -1130,6 +1622,7 @@ pub struct CdpPageSession {
         ptr.rt = js_rt;
         ptr.new_document_scripts = .empty;
         ptr.next_new_doc_script_id = 1;
+        ptr.init_world_names = .empty;
         ptr.ctx = JsContext { raw_ctx: undefined, runtime: undefined };
         ptr.dom_ctx = null;
         ptr.url = "about:blank";
@@ -1139,6 +1632,11 @@ pub struct CdpPageSession {
         ptr.loader_id = "capsurf-loader-001";
         ptr.target_id = "capsurf-target-001";
         ptr.has_document = false;
+        ptr.is_about_blank_popup = false;
+        ptr.lifecycle_events_enabled = false;
+        ptr.navigation_aborted = false;
+        ptr.initial_blank_lifecycle_emitted = false;
+        ptr.intercept_file_chooser = false;
         ptr.raw_html = "";
         ptr.paint_prepares = 0;
         ptr.renderer_active = false;
@@ -1158,6 +1656,10 @@ pub struct CdpPageSession {
         ptr.cookie_jar = jar;
         ptr.fetch_enabled = false;
         ptr.fetch_state = FetchState{};
+        ptr.sync_fetch_hook = null;
+        ptr.sync_fetch_server_ptr = null;
+        ptr.active_net_req_id_len = 0;
+        ptr.redirect_live_emitted = false;
         ptr.target_registry = TargetRegistry.init();
         ptr.owner_target_registry = null;
         ptr.network_enabled = false;
@@ -1191,6 +1693,238 @@ pub struct CdpPageSession {
         JS_SetModuleLoaderFunc2(ptr.rt.raw_rt, sessionModuleNormalize, sessionModuleLoader, sessionModuleCheckAttrs, unsafe { @ptrCast(ptr) });
         ptr.navigate("<!DOCTYPE html><html><head><title>Blank Page</title></head><body></body></html>", "about:blank", "") catch {};
         return ptr;
+    }
+
+    pub fn setSyncFetchHook(*_, srv_ptr: *void, hook: SyncFetchHookFn) {
+        _.sync_fetch_server_ptr = srv_ptr;
+        _.sync_fetch_hook = hook;
+    }
+
+    pub fn setActiveNetReqId(*_, id: []const u8) {
+        const n = @min(id.len, _.active_net_req_id_buf.len);
+        if (n > 0) @memcpy(_.active_net_req_id_buf[0..n], id[0..n]);
+        _.active_net_req_id_len = n;
+    }
+
+    pub fn activeNetReqId(): []const u8 {
+        return _.active_net_req_id_buf[0.._.active_net_req_id_len];
+    }
+
+    pub fn fetchSubresourceWithFetchHook(
+        *_,
+        target_url: []const u8,
+        referrer_url: []const u8,
+        rtype: []const u8,
+        accept_hdr: []const u8,
+        out_buf: []u8,
+    ): (HttpLoaderResult)! {
+        let sync_hooked = false;
+        let net_id_buf: [64]u8 = [0; 64];
+        let net_id: []const u8 = "";
+        if ((_.fetch_enabled || _.fetch_state.enabled) &&
+            _.fetch_state.shouldIntercept(target_url, rtype) &&
+            _.fetch_state.findParkedByUrl(target_url) == null)
+        {
+            if (hook := _.sync_fetch_hook) {
+                if (srv_ptr := _.sync_fetch_server_ptr) {
+                    let ua_esc_buf: [1024]u8 = [0; 1024];
+                    const ua_val = if (_.user_agent.len > 0) _.user_agent else DEFAULT_HTTP_USER_AGENT;
+                    const esc_ua = escapeJsonString(ua_val, &ua_esc_buf);
+
+                    let acc_esc_buf: [512]u8 = [0; 512];
+                    const acc_val = if (accept_hdr.len > 0) accept_hdr else "*/*";
+                    const esc_acc = escapeJsonString(acc_val, &acc_esc_buf);
+
+                    let ref_kv_buf: [2048]u8 = [0; 2048];
+                    let ref_kv: []const u8 = "";
+                    if (referrer_url.len > 0) {
+                        let ref_esc_buf: [2048]u8 = [0; 2048];
+                        const esc_ref = escapeJsonString(referrer_url, &ref_esc_buf);
+                        ref_kv = std.fmt.bufPrint(&ref_kv_buf, ",\"Referer\":\"{s}\"", .{esc_ref}) catch "";
+                    }
+
+                    let has_accept_hdr = false;
+                    let has_cookie_hdr = false;
+                    let extra_kv_buf: [2048]u8 = [0; 2048];
+                    let extra_kv: []const u8 = "";
+                    const trimmed_eh = std.mem.trim(u8, _.extra_headers, " \t\r\n");
+                    if (trimmed_eh.len > 2 && trimmed_eh[0] == '{' && trimmed_eh[trimmed_eh.len - 1] == '}') {
+                        const inner_eh = std.mem.trim(u8, trimmed_eh[1 .. trimmed_eh.len - 1], " \t\r\n");
+                        if (inner_eh.len > 0) {
+                            extra_kv = std.fmt.bufPrint(&extra_kv_buf, ",{s}", .{inner_eh}) catch "";
+                            let ai: usize = 0;
+                            while (ai + 8 <= inner_eh.len) : (ai += 1) {
+                                if (std.ascii.eqlIgnoreCase(inner_eh[ai .. ai + 8], "\"accept\"")) {
+                                    has_accept_hdr = true;
+                                } else if (std.ascii.eqlIgnoreCase(inner_eh[ai .. ai + 8], "\"cookie\"")) {
+                                    has_cookie_hdr = true;
+                                }
+                                if (has_accept_hdr && has_cookie_hdr) break;
+                            }
+                        }
+                    }
+
+                    let accept_kv_buf: [600]u8 = [0; 600];
+                    let accept_kv: []const u8 = "";
+                    if (!has_accept_hdr) {
+                        accept_kv = std.fmt.bufPrint(&accept_kv_buf, ",\"Accept\":\"{s}\"", .{esc_acc}) catch "";
+                    }
+
+                    let cookie_kv_buf: [2048]u8 = [0; 2048];
+                    let cookie_kv: []const u8 = "";
+                    if (!has_cookie_hdr) {
+                        const cookie_hdr = _.getActiveCookieJar().cookieHeaderForUrl(target_url, null, _.allocator);
+                        if (cookie_hdr != null) {
+                            defer _.allocator.free(cookie_hdr.?);
+                            if (cookie_hdr.?.len > 0) {
+                                let cookie_esc_buf: [2048]u8 = [0; 2048];
+                                const esc_cookie = escapeJsonString(cookie_hdr.?, &cookie_esc_buf);
+                                cookie_kv = std.fmt.bufPrint(&cookie_kv_buf, ",\"Cookie\":\"{s}\"", .{esc_cookie}) catch "";
+                            }
+                        }
+                    }
+
+                    let hdrs_buf: [4096]u8 = [0; 4096];
+                    const headers_json = std.fmt.bufPrint(
+                        &hdrs_buf,
+                        "{{\"User-Agent\":\"{s}\"{s}{s}{s}{s}}}",
+                        .{ esc_ua, accept_kv, ref_kv, cookie_kv, extra_kv },
+                    ) catch "{}";
+
+                    _.net_req_seq += 1;
+                    net_id = std.fmt.bufPrint(&net_id_buf, "req-{d}", .{_.net_req_seq}) catch "req-1";
+
+                    sync_hooked = hook(srv_ptr, unsafe { @ptrCast(_) }, target_url, "GET", headers_json, rtype, net_id, "");
+                }
+            }
+        }
+        if (net_id.len == 0 && (_.fetch_enabled || _.fetch_state.enabled)) {
+            _.net_req_seq += 1;
+            net_id = std.fmt.bufPrint(&net_id_buf, "req-{d}", .{_.net_req_seq}) catch "req-1";
+        }
+        _.setActiveNetReqId(net_id);
+        _.redirect_live_emitted = false;
+        defer _.active_net_req_id_len = 0;
+        const res = HttpLoader.fetchDocumentWithReferrerType(_, target_url, out_buf, 0, referrer_url, rtype) catch |e| {
+            if (sync_hooked && _.network_enabled) {
+                let err_text: []const u8 = "net::ERR_FAILED";
+                if (e == error.EmptyResponse) {
+                    err_text = "net::ERR_EMPTY_RESPONSE";
+                } else if (e == error.ConnectionFailed || e == error.ConnectFailed) {
+                    err_text = "net::ERR_CONNECTION_REFUSED";
+                } else if (e == error.ReadFailed || e == error.SendFailed) {
+                    err_text = "net::ERR_CONNECTION_RESET";
+                } else if (e == error.TlsFailed) {
+                    err_text = "net::ERR_CERT_AUTHORITY_INVALID";
+                } else if (e == error.TooManyRedirects) {
+                    err_text = "net::ERR_TOO_MANY_REDIRECTS";
+                } else if (e == error.NameNotResolved) {
+                    err_text = "net::ERR_NAME_NOT_RESOLVED";
+                } else if (e == error.TimedOut) {
+                    err_text = "net::ERR_TIMED_OUT";
+                } else if (e == error.FileTooBig) {
+                    err_text = "net::ERR_FILE_TOO_BIG";
+                } else if (e == error.InternetDisconnected) {
+                    err_text = "net::ERR_INTERNET_DISCONNECTED";
+                } else if (e == error.RequestAborted) {
+                    err_text = "net::ERR_ABORTED";
+                } else if (e == error.BlockedByClient) {
+                    err_text = "net::ERR_BLOCKED_BY_CLIENT";
+                }
+                let esc_err_buf: [128]u8 = [0; 128];
+                const esc_err = escapeJsonString(err_text, &esc_err_buf);
+                let fail_buf: [512]u8 = [0; 512];
+                const fail_json = std.fmt.bufPrint(
+                    &fail_buf,
+                    "{{\"requestId\":\"{s}\",\"timestamp\":1700000000.2,\"type\":\"{s}\",\"errorText\":\"{s}\",\"canceled\":false}}",
+                    .{ net_id, rtype, esc_err },
+                ) catch "";
+                if (fail_json.len > 0) {
+                    * = _.addPendingFetchEvent("Network.loadingFailed", fail_json);
+                }
+            }
+            return e;
+        };
+        if (sync_hooked && _.network_enabled) {
+            recordResponseBody(net_id, res.html, false);
+            const resp_url = if (res.final_url.len > 0) res.final_url else target_url;
+            let esc_url_buf: [2048]u8 = [0; 2048];
+            const esc_url = escapeJsonString(resp_url, &esc_url_buf);
+            const status_text = if (res.status_text.len > 0 && !(res.status_code != 200 && std.mem.eql(u8, res.status_text, "OK")))
+                res.status_text
+            else
+                httpStatusText(@as(u16, @intCast(@min(res.status_code, 65535))));
+            let st_esc_buf: [128]u8 = [0; 128];
+            const st_esc = escapeJsonString(status_text, &st_esc_buf);
+            const mime_type = if (res.content_type.len > 0)
+                res.content_type
+            else if (std.mem.eql(u8, rtype, "Stylesheet"))
+                "text/css"
+            else if (std.mem.eql(u8, rtype, "Script"))
+                "application/javascript"
+            else
+                "";
+            let mime_esc_buf: [128]u8 = [0; 128];
+            const mime_esc = escapeJsonString(mime_type, &mime_esc_buf);
+            const hdrs_json = formatHttpHeadersJson(res.raw_headers, _.allocator);
+            defer if (hdrs_json.len > 2) _.allocator.free(hdrs_json);
+            let nev_buf: [4096]u8 = [0; 4096];
+            let nev_dyn: ([]u8)? = null;
+            defer {
+                if (d := nev_dyn) _.allocator.free(d);
+            }
+            const resp_json = std.fmt.bufPrint(
+                &nev_buf,
+                "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"timestamp\":1700000000.1,\"type\":\"{s}\",\"response\":{{\"url\":\"{s}\",\"status\":{d},\"statusText\":\"{s}\",\"headers\":{s},\"mimeType\":\"{s}\"}},\"frameId\":\"{s}\"}}",
+                .{ net_id, _.loader_id, rtype, esc_url, res.status_code, st_esc, hdrs_json, mime_esc, _.frame_id },
+            ) catch blk: {
+                if (dyn_buf := std.fmt.allocPrint(
+                    _.allocator,
+                    "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"timestamp\":1700000000.1,\"type\":\"{s}\",\"response\":{{\"url\":\"{s}\",\"status\":{d},\"statusText\":\"{s}\",\"headers\":{s},\"mimeType\":\"{s}\"}},\"frameId\":\"{s}\"}}",
+                    .{ net_id, _.loader_id, rtype, esc_url, res.status_code, st_esc, hdrs_json, mime_esc, _.frame_id },
+                ) catch null) {
+                    nev_dyn = dyn_buf;
+                    break :blk dyn_buf;
+                }
+                break :blk "";
+            };
+            if (resp_json.len > 0) {
+                * = _.addPendingFetchEvent("Network.responseReceived", resp_json);
+            }
+            let fin_buf: [512]u8 = [0; 512];
+            const fin_json = std.fmt.bufPrint(
+                &fin_buf,
+                "{{\"requestId\":\"{s}\",\"timestamp\":1700000000.2,\"encodedDataLength\":{d}}}",
+                .{ net_id, res.html.len },
+            ) catch "";
+            if (fin_json.len > 0) {
+                * = _.addPendingFetchEvent("Network.loadingFinished", fin_json);
+            }
+        }
+        return res;
+    }
+
+    pub fn clearInitWorldNames(*_) {
+        const alloc = std.heap.c_allocator;
+        let i: usize = 0;
+        while (i < _.init_world_names.items.len) : (i += 1) {
+            alloc.free(_.init_world_names.items[i]);
+        }
+        _.init_world_names.deinit(alloc);
+        _.init_world_names = .empty;
+    }
+
+    pub fn registerInitWorldName(*_, world_name: []const u8) {
+        if (world_name.len == 0) return;
+        let i: usize = 0;
+        while (i < _.init_world_names.items.len) : (i += 1) {
+            if (std.mem.eql(u8, _.init_world_names.items[i], world_name)) return;
+        }
+        const alloc = std.heap.c_allocator;
+        const dup = alloc.dupe(u8, world_name) catch return;
+        _.init_world_names.append(alloc, dup) catch {
+            alloc.free(dup);
+        };
     }
 
     pub fn clearNewDocumentScripts(*_) {
@@ -1502,8 +2236,32 @@ pub struct CdpPageSession {
             _.ctx.freeValue(cs_v);
         }
         let surl_buf: [512]u8 = [0; 512];
-        const fname = extractSourceUrl(code, &surl_buf);
-        const js_res = _.ctx.evalWithFilename(code, fname);
+        const parsed_fname = extractSourceUrl(code, &surl_buf);
+        const parsed_slice = std.mem.span(parsed_fname);
+        let url_z_buf: [512]u8 = [0; 512];
+        let fname: [*c]const u8 = parsed_fname;
+        if (std.mem.eql(u8, parsed_slice, "<eval>") && _.url.len > 0 && _.url.len < url_z_buf.len) {
+            @memcpy(url_z_buf[0.._.url.len], _.url);
+            url_z_buf[_.url.len] = 0;
+            fname = unsafe { @ptrCast(&url_z_buf) };
+        }
+        let eval_code: []const u8 = code;
+        let padded_buf: ([]u8)? = null;
+        defer if (pb := padded_buf) std.heap.page_allocator.free(pb);
+        if (!has_src && script_nid > 0 && script_nid < _.doc.nodes.items.len) {
+            const line_off = @as(usize, _.doc.nodes.items[script_nid].source_line);
+            if (line_off > 0 && line_off <= 10000) {
+                if (buf := std.heap.page_allocator.alloc(u8, line_off + code.len) catch null) {
+                    @memset(buf[0..line_off], '\n');
+                    if (code.len > 0) {
+                        @memcpy(buf[line_off..line_off + code.len], code);
+                    }
+                    padded_buf = buf;
+                    eval_code = buf;
+                }
+            }
+        }
+        const js_res = _.ctx.evalWithFilename(eval_code, fname);
         if (jsIsException(js_res)) {
             const exc = _.ctx.getException();
             _.pushExceptionEvent(exc);
@@ -1562,8 +2320,27 @@ pub struct CdpPageSession {
         _.wrappers_reclaimed = 0;
         _.target_registry.deinit();
         _.cookie_jar.deinit();
+        let pfi: usize = 0;
+        while (pfi < _.pending_fetch_js.len) : (pfi += 1) {
+            if (_.pending_fetch_js[pfi].active) {
+                JS_FreeValue(_.ctx.raw_ctx, _.pending_fetch_js[pfi].resolve_fn);
+                JS_FreeValue(_.ctx.raw_ctx, _.pending_fetch_js[pfi].reject_fn);
+                _.pending_fetch_js[pfi].resolve_fn = jsUndefined();
+                _.pending_fetch_js[pfi].reject_fn = jsUndefined();
+                _.pending_fetch_js[pfi].active = false;
+                _.pending_fetch_js[pfi].req_id_len = 0;
+                _.pending_fetch_js[pfi].net_id_len = 0;
+            }
+        }
         _.clearNewDocumentScripts();
+        _.clearInitWorldNames();
         _.clearModuleState();
+        let fei: usize = 0;
+        while (fei < _.pending_fetch_events.len) : (fei += 1) {
+            _.pending_fetch_events[fei].freeDyn();
+        }
+        terminateWorkersForRuntime(_.rt.raw_rt);
+        unregisterCtxSession(_.ctx.raw_ctx);
         _.ctx.deinit();
         _.rt.deinit();
         _.layout.deinit();
@@ -1652,7 +2429,25 @@ pub struct CdpPageSession {
         }
     }
 
+    pub fn checkWindowStopped(*_): bool {
+        if (_.navigation_aborted) return true;
+        const v = _.ctx.eval("(function(){return globalThis.__capsurf_window_stopped?1:0;})()");
+        defer _.ctx.freeValue(v);
+        let n: i32 = 0;
+        if (!jsIsException(v)) {
+            * = JS_ToInt32(_.ctx.raw_ctx, &n, v);
+        }
+        if (n == 1) {
+            _.navigation_aborted = true;
+            return true;
+        }
+        return false;
+    }
+
     pub fn navigate(*_, html: []const u8, nav_url: []const u8, nav_referrer: []const u8)! {
+        _.navigation_aborted = false;
+        const w_reg: *TargetRegistry = if (_.owner_target_registry != null) _.owner_target_registry.? else &_.target_registry;
+        _.dedicated_workers.terminateAllWorkers(w_reg);
         _.renderer_active = false;
         _.frames_rendered = 0;
         _.facade.stream_mgr.markNeedFullFrame();
@@ -1738,6 +2533,12 @@ pub struct CdpPageSession {
         let ext_css_buf = _.allocator.alloc(u8, 32768) catch null;
         defer if (ext_css_buf != null) _.allocator.free(ext_css_buf.?);
         let ext_css_len: usize = 0;
+        let ext_link_urls: [16][1024]u8 = undefined;
+        let ext_link_url_lens: [16]usize = [0; 16];
+        let ext_link_offs: [16]usize = [0; 16];
+        let ext_link_lens: [16]usize = [0; 16];
+        let ext_link_count: usize = 0;
+        let has_http_ext_css = false;
         if (css_buf != null) {
             const base_css = "";
             @memcpy(css_buf.?[0..base_css.len], base_css);
@@ -1804,6 +2605,14 @@ pub struct CdpPageSession {
                                             css_len += 1;
                                         }
                                         if (ext_css_buf != null && lcss.len > 0 && ext_css_len + lcss.len + 1 <= ext_css_buf.?.len) {
+                                            if (ext_link_count < ext_link_urls.len) {
+                                                const lu_len = @min(full_href.len, ext_link_urls[ext_link_count].len);
+                                                @memcpy(ext_link_urls[ext_link_count][0..lu_len], full_href[0..lu_len]);
+                                                ext_link_url_lens[ext_link_count] = lu_len;
+                                                ext_link_offs[ext_link_count] = ext_css_len;
+                                                ext_link_lens[ext_link_count] = lcss.len;
+                                                ext_link_count += 1;
+                                            }
                                             @memcpy(ext_css_buf.?[ext_css_len..ext_css_len + lcss.len], lcss);
                                             ext_css_len += lcss.len;
                                             ext_css_buf.?[ext_css_len] = '\n';
@@ -1823,7 +2632,7 @@ pub struct CdpPageSession {
         let sheet_ptr = std.heap.c_allocator.create(StyleSheet) catch null;
         defer if (sheet_ptr != null) std.heap.c_allocator.destroy(sheet_ptr.?);
         if (sheet_ptr != null) {
-            sheet_ptr.?.* = StyleSheet.parse(full_css, _.viewport_width, _.emulated_media_print);
+            sheet_ptr.?.* = StyleSheet.parse(full_css, _.viewport_width, _.dark_color_scheme);
             const count = @max(@as(usize, 1), _.doc.nodeCount());
             let styles = _.allocator.alloc(ComputedStyle, count) catch null;
             defer if (styles != null) _.allocator.free(styles.?);
@@ -1846,6 +2655,15 @@ pub struct CdpPageSession {
         _.wrappers_revived = 0;
         _.wrappers_reclaimed = 0;
         if (_.has_document) {
+            let pi: usize = 0;
+            while (pi < 16) : (pi += 1) {
+                if (_.parked_promise_used[pi]) {
+                    _.parked_promise_used[pi] = false;
+                    _.ctx.freeValue(_.parked_promise_vals[pi]);
+                    _.parked_promise_vals[pi] = JSValue{ .u = .{ .uint64 = 0 }, .tag = 0 };
+                }
+            }
+            terminateWorkersForRuntime(_.rt.raw_rt);
             _.ctx.deinit();
             _.rt.deinit();
             _.rt = JsRuntime.init(512 * 1024 * 1024, 1000000) catch return error.JsRuntimeFailed;
@@ -2110,8 +2928,17 @@ pub struct CdpPageSession {
                 const href_a = _.doc.nodes.items[link_nodes[li]].getAttribute("href") ?? "";
                 let u_buf: [1024]u8 = undefined;
                 const full_u = resolveSubresourceUrl(nav_url, href_a, &u_buf);
-                m.addFetchRecord(full_u, "text/css");
-                if (m.fetch_count > 0) {
+                const is_http_css = (std.mem.startsWith(u8, full_u, "http://") || std.mem.startsWith(u8, full_u, "https://")) && !_.isOutboundUrlRejected(full_u);
+                const sync_fetch_will_intercept = is_http_css &&
+                    !MockFixtures.isFixtureUrl(full_u) && !MockFixtures.isFixtureUrl(href_a) &&
+                    (_.fetch_enabled || _.fetch_state.enabled) &&
+                    _.fetch_state.shouldIntercept(full_u, "Stylesheet") &&
+                    _.fetch_state.findParkedByUrl(full_u) == null &&
+                    _.sync_fetch_hook != null && _.sync_fetch_server_ptr != null;
+                if (!sync_fetch_will_intercept) {
+                    m.addFetchRecord(full_u, "text/css");
+                }
+                if (m.fetch_count > 0 || sync_fetch_will_intercept) {
                     let tmp_css_buf: [16384]u8 = undefined;
                     if (MockFixtures.isFixtureUrl(full_u) || MockFixtures.isFixtureUrl(href_a)) {
                         let loaded_css: ([]const u8)? = MockFixtures.handleFixtureRequest(full_u, "", _.user_agent, &tmp_css_buf, null);
@@ -2121,6 +2948,92 @@ pub struct CdpPageSession {
                         if (lcss := loaded_css) {
                             recordPendingFetchBody(full_u, lcss);
                         }
+                    } else if (is_http_css) {
+                        if (http_css_buf := tryAllocBytes(_.allocator, 65536)) {
+                            defer _.allocator.free(http_css_buf);
+                            let fetch_ok = true;
+                            let fetch_err_text: []const u8 = "net::ERR_FAILED";
+                            const fetch_res = _.fetchSubresourceWithFetchHook(full_u, nav_url, "Stylesheet", "text/css,*/*;q=0.1", http_css_buf) catch |e| blk: {
+                                fetch_ok = false;
+                                if (e == error.EmptyResponse) {
+                                    fetch_err_text = "net::ERR_EMPTY_RESPONSE";
+                                } else if (e == error.ConnectionFailed || e == error.ConnectFailed) {
+                                    fetch_err_text = "net::ERR_CONNECTION_REFUSED";
+                                } else if (e == error.ReadFailed || e == error.SendFailed) {
+                                    fetch_err_text = "net::ERR_CONNECTION_RESET";
+                                } else if (e == error.TlsFailed) {
+                                    fetch_err_text = "net::ERR_CERT_AUTHORITY_INVALID";
+                                } else if (e == error.TooManyRedirects) {
+                                    fetch_err_text = "net::ERR_TOO_MANY_REDIRECTS";
+                                } else if (e == error.NameNotResolved) {
+                                    fetch_err_text = "net::ERR_NAME_NOT_RESOLVED";
+                                } else if (e == error.TimedOut) {
+                                    fetch_err_text = "net::ERR_TIMED_OUT";
+                                } else if (e == error.FileTooBig) {
+                                    fetch_err_text = "net::ERR_FILE_TOO_BIG";
+                                } else if (e == error.InternetDisconnected) {
+                                    fetch_err_text = "net::ERR_INTERNET_DISCONNECTED";
+                                } else if (e == error.RequestAborted) {
+                                    fetch_err_text = "net::ERR_ABORTED";
+                                } else if (e == error.BlockedByClient) {
+                                    fetch_err_text = "net::ERR_BLOCKED_BY_CLIENT";
+                                }
+                                break :blk HttpLoaderResult{};
+                            };
+                            if (fetch_ok) {
+                                recordPendingFetchMeta(
+                                    full_u,
+                                    fetch_res.html,
+                                    fetch_res.status_code,
+                                    fetch_res.status_text,
+                                    fetch_res.raw_headers,
+                                    fetch_res.content_type,
+                                    fetch_res.req_headers_text,
+                                    fetch_res.resp_headers_text,
+                                    fetch_res.wire_body_len,
+                                );
+                                if (fetch_res.status_code >= 200 && fetch_res.status_code < 300) {
+                                    if (css_buf != null && fetch_res.html.len > 0 && css_len + fetch_res.html.len + 1 <= css_buf.?.len) {
+                                        @memcpy(css_buf.?[css_len..css_len + fetch_res.html.len], fetch_res.html);
+                                        css_len += fetch_res.html.len;
+                                        css_buf.?[css_len] = '\n';
+                                        css_len += 1;
+                                        has_http_ext_css = true;
+                                    }
+                                    if (ext_css_buf != null && fetch_res.html.len > 0 && ext_css_len + fetch_res.html.len + 1 <= ext_css_buf.?.len) {
+                                        if (ext_link_count < ext_link_urls.len) {
+                                            const lu_len = @min(full_u.len, ext_link_urls[ext_link_count].len);
+                                            @memcpy(ext_link_urls[ext_link_count][0..lu_len], full_u[0..lu_len]);
+                                            ext_link_url_lens[ext_link_count] = lu_len;
+                                            ext_link_offs[ext_link_count] = ext_css_len;
+                                            ext_link_lens[ext_link_count] = fetch_res.html.len;
+                                            ext_link_count += 1;
+                                        }
+                                        @memcpy(ext_css_buf.?[ext_css_len..ext_css_len + fetch_res.html.len], fetch_res.html);
+                                        ext_css_len += fetch_res.html.len;
+                                        ext_css_buf.?[ext_css_len] = '\n';
+                                        ext_css_len += 1;
+                                    }
+                                }
+                            } else {
+                                recordPendingFetchFailedWithError(full_u, fetch_err_text);
+                            }
+                        }
+                    }
+                }
+            }
+            if (has_http_ext_css && css_buf != null) {
+                const updated_css = css_buf.?[0..css_len];
+                let ext_sheet_ptr = std.heap.c_allocator.create(StyleSheet) catch null;
+                defer if (ext_sheet_ptr != null) std.heap.c_allocator.destroy(ext_sheet_ptr.?);
+                if (ext_sheet_ptr != null) {
+                    ext_sheet_ptr.?.* = StyleSheet.parse(updated_css, _.viewport_width, _.dark_color_scheme);
+                    const count = @max(@as(usize, 1), _.doc.nodeCount());
+                    let ext_styles = _.allocator.alloc(ComputedStyle, count) catch null;
+                    defer if (ext_styles != null) _.allocator.free(ext_styles.?);
+                    if (ext_styles != null) {
+                        Cascade.computeStyles(&_.doc, ext_sheet_ptr.?, ext_styles.?, 16.0);
+                        _.layout.computeLayout(&_.doc, ext_styles.?) catch {};
                     }
                 }
             }
@@ -2161,7 +3074,7 @@ pub struct CdpPageSession {
             let f_nid: usize = 1;
             while (f_nid < _.doc.nodes.items.len) : (f_nid += 1) {
                 const fn_node = &_.doc.nodes.items[f_nid];
-                if (fn_node.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(fn_node.tag_name, "iframe")) {
+                if (fn_node.node_type == NodeType.Element && (std.ascii.eqlIgnoreCase(fn_node.tag_name, "iframe") || std.ascii.eqlIgnoreCase(fn_node.tag_name, "frame"))) {
                     const f_src = fn_node.getAttribute("src") ?? "";
                     if (f_src.len > 0 && !std.mem.eql(u8, f_src, "about:blank")) {
                         let f_url_buf: [1024]u8 = undefined;
@@ -2273,6 +3186,11 @@ pub struct CdpPageSession {
         _.outbound_reject_websocket = false;
         _.nav_seq += 1;
         registerHttpGetHook(unsafe { @ptrCast(_) }, &sessionHttpGetHook);
+        registerHttpRequestHook(&sessionHttpRequestHook);
+        registerSyncXhrHook(&sessionSyncXhrHook);
+        registerShouldInterceptHook(unsafe { @ptrCast(_) }, &sessionShouldInterceptHook);
+        registerFetchPauseHook(unsafe { @ptrCast(_) }, &sessionFetchPauseHook);
+        registerCtxSession(_.ctx.raw_ctx, unsafe { @ptrCast(_) });
         registerSessionHooksNative(_.ctx.raw_ctx);
         {
             const active_bctx = if (_.current_browser_context_id_len > 0)
@@ -2373,25 +3291,60 @@ pub struct CdpPageSession {
             _.syncOutboundRejectPatternsToJs();
         }
         if (ext_css_buf != null && ext_css_len > 0) {
-            let esc_ext_css = _.allocator.alloc(u8, ext_css_len * 2 + 16) catch null;
-            defer if (esc_ext_css != null) _.allocator.free(esc_ext_css.?);
-            if (esc_ext_css != null) {
-                const escaped_css = escapeJsonString(ext_css_buf.?[0..ext_css_len], esc_ext_css.?);
-                let inj_buf = _.allocator.alloc(u8, escaped_css.len + 256) catch null;
-                defer if (inj_buf != null) _.allocator.free(inj_buf.?);
-                if (inj_buf != null) {
-                    const inj_js = std.fmt.bufPrint(
-                        inj_buf.?,
-                        "(function(){{if(typeof document==='undefined')return;var ls=document.querySelectorAll?document.querySelectorAll('link'):[];for(var i=0;i<ls.length;i++){{var l=ls[i];if(l&&l.sheet)l.sheet._cascadeCssText=\"{s}\";}}}})()",
-                        .{escaped_css},
-                    ) catch "";
-                    if (inj_js.len > 0) {
-                        const iv = _.ctx.eval(inj_js);
-                        if (jsIsException(iv)) {
-                            const exc = _.ctx.getException();
-                            _.ctx.freeValue(exc);
+            if (ext_link_count > 0) {
+                let eli: usize = 0;
+                while (eli < ext_link_count) : (eli += 1) {
+                    const el_url = ext_link_urls[eli][0..ext_link_url_lens[eli]];
+                    const el_off = ext_link_offs[eli];
+                    const el_len = ext_link_lens[eli];
+                    if (el_len == 0) continue;
+                    const el_css = ext_css_buf.?[el_off .. el_off + el_len];
+                    let esc_el_url_buf: [2048]u8 = undefined;
+                    const esc_el_url = escapeJsonString(el_url, &esc_el_url_buf);
+                    let esc_el_css = _.allocator.alloc(u8, el_len * 2 + 16) catch null;
+                    defer if (esc_el_css != null) _.allocator.free(esc_el_css.?);
+                    if (esc_el_css != null) {
+                        const escaped_css = escapeJsonString(el_css, esc_el_css.?);
+                        let inj_buf = _.allocator.alloc(u8, escaped_css.len + esc_el_url.len + 512) catch null;
+                        defer if (inj_buf != null) _.allocator.free(inj_buf.?);
+                        if (inj_buf != null) {
+                            const inj_js = std.fmt.bufPrint(
+                                inj_buf.?,
+                                "(function(){{if(typeof document==='undefined')return;var ls=document.querySelectorAll?document.querySelectorAll('link'):[];var target=\"{s}\";var css=\"{s}\";for(var i=0;i<ls.length;i++){{var l=ls[i];if(!l||!l.sheet)continue;var rh=l.sheet.href||\"\";if(rh===target){{l.sheet._cascadeCssText=css;var co=(typeof l.hasAttribute==='function'&&l.hasAttribute('crossorigin'))?'1':'0';l.sheet._loadedHref=rh+'|co='+co;l.sheet._originClean=true;if(typeof l.sheet._reparseText==='function')l.sheet._reparseText(css);}}}}}})()",
+                                .{ esc_el_url, escaped_css },
+                            ) catch "";
+                            if (inj_js.len > 0) {
+                                const iv = _.ctx.eval(inj_js);
+                                if (jsIsException(iv)) {
+                                    const exc = _.ctx.getException();
+                                    _.ctx.freeValue(exc);
+                                }
+                                _.ctx.freeValue(iv);
+                            }
                         }
-                        _.ctx.freeValue(iv);
+                    }
+                }
+            } else {
+                let esc_ext_css = _.allocator.alloc(u8, ext_css_len * 2 + 16) catch null;
+                defer if (esc_ext_css != null) _.allocator.free(esc_ext_css.?);
+                if (esc_ext_css != null) {
+                    const escaped_css = escapeJsonString(ext_css_buf.?[0..ext_css_len], esc_ext_css.?);
+                    let inj_buf = _.allocator.alloc(u8, escaped_css.len + 512) catch null;
+                    defer if (inj_buf != null) _.allocator.free(inj_buf.?);
+                    if (inj_buf != null) {
+                        const inj_js = std.fmt.bufPrint(
+                            inj_buf.?,
+                            "(function(){{if(typeof document==='undefined')return;var ls=document.querySelectorAll?document.querySelectorAll('link'):[];var css=\"{s}\";for(var i=0;i<ls.length;i++){{var l=ls[i];if(l&&l.sheet){{l.sheet._cascadeCssText=css;var rh=l.sheet.href||\"\";if(rh){{var co=(typeof l.hasAttribute==='function'&&l.hasAttribute('crossorigin'))?'1':'0';l.sheet._loadedHref=rh+'|co='+co;}}l.sheet._originClean=true;if(typeof l.sheet._reparseText==='function')l.sheet._reparseText(css);}}}}}})()",
+                            .{escaped_css},
+                        ) catch "";
+                        if (inj_js.len > 0) {
+                            const iv = _.ctx.eval(inj_js);
+                            if (jsIsException(iv)) {
+                                const exc = _.ctx.getException();
+                                _.ctx.freeValue(exc);
+                            }
+                            _.ctx.freeValue(iv);
+                        }
                     }
                 }
             }
@@ -2403,11 +3356,11 @@ pub struct CdpPageSession {
         }
 
         // Sync viewport resolution into JS environment
-        let set_vp_buf: [512]u8 = undefined;
+        let set_vp_buf: [768]u8 = undefined;
         const set_vp_script = std.fmt.bufPrint(
             &set_vp_buf,
-            "(function(){{const w={d};const h={d};if(typeof window!=='undefined'){{window.innerWidth=w;window.innerHeight=h;}}if(typeof global!=='undefined'){{global.innerWidth=w;global.innerHeight=h;}}if(typeof globalThis!=='undefined'){{globalThis.innerWidth=w;globalThis.innerHeight=h;}}}})()",
-            .{ @as(i64, @intFromFloat(_.viewport_width)), @as(i64, @intFromFloat(_.viewport_height)) },
+            "(function(){{const w={d};const h={d};const dpr={d};if(typeof window!=='undefined'){{window.innerWidth=w;window.innerHeight=h;if(dpr>0)window.devicePixelRatio=dpr;}}if(typeof global!=='undefined'){{global.innerWidth=w;global.innerHeight=h;if(dpr>0)global.devicePixelRatio=dpr;}}if(typeof globalThis!=='undefined'){{globalThis.innerWidth=w;globalThis.innerHeight=h;if(dpr>0)globalThis.devicePixelRatio=dpr;}}}})()",
+            .{ @as(i64, @intFromFloat(_.viewport_width)), @as(i64, @intFromFloat(_.viewport_height)), @as(i64, @intFromFloat(_.device_scale_factor)) },
         ) catch "";
         if (set_vp_script.len > 0) {
             const v = _.ctx.eval(set_vp_script);
@@ -2428,7 +3381,7 @@ pub struct CdpPageSession {
 
         // Execute scripts registered via Page.addScriptToEvaluateOnNewDocument
         {
-            const init_arr = _.ctx.eval("globalThis.__capsurf_new_doc_scripts=[];");
+            const init_arr = _.ctx.eval("globalThis.__capsurf_window_stopped=false;globalThis.__capsurf_new_doc_scripts=[];");
             _.ctx.freeValue(init_arr);
             let ndi: usize = 0;
             while (ndi < _.new_document_scripts.items.len) : (ndi += 1) {
@@ -2456,6 +3409,7 @@ pub struct CdpPageSession {
                     }
                     _.ctx.freeValue(nd_v);
                     _.ctx.drainJobs();
+                    if (_.checkWindowStopped()) break;
                 }
             }
         }
@@ -2638,6 +3592,7 @@ pub struct CdpPageSession {
         let script_idx: usize = 0;
         let inline_module_idx: usize = 0;
         while (nid < initial_node_count) : (nid += 1) {
+            if (_.checkWindowStopped()) break;
             const n = &_.doc.nodes.items[nid];
             if (n.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(n.tag_name, "script")) {
                 let is_in_template = false;
@@ -2754,7 +3709,7 @@ pub struct CdpPageSession {
                                     code_len = fixture_code2.len;
                                 }
                             } else if (std.mem.startsWith(u8, cur_url, "http://") || std.mem.startsWith(u8, cur_url, "https://") || std.mem.startsWith(u8, cur_url, "data:")) {
-                                const fetch_res = HttpLoader.fetchDocument(_, cur_url, code_buf, 0) catch HttpLoaderResult{ status_code: 0 };
+                                const fetch_res = _.fetchSubresourceWithFetchHook(cur_url, nav_url, "Script", "*/*", code_buf) catch HttpLoaderResult{ status_code: 0 };
                                 if (fetch_res.status_code >= 200 && fetch_res.status_code < 300 && fetch_res.html.len > 0) {
                                     const body_len = @min(fetch_res.html.len, code_buf.len);
                                     std.mem.copyForwards(u8, code_buf[0..body_len], fetch_res.html[0..body_len]);
@@ -2850,7 +3805,7 @@ pub struct CdpPageSession {
                         } else if (du.len > 0) {
                             alloc.free(du);
                         }
-                    } else if (has_defer && has_src && !is_module) {
+                    } else if ((has_defer && has_src) || (is_module && !has_async)) {
                         const alloc = std.heap.c_allocator;
                         const dc = alloc.dupe(u8, code_buf[0..code_len]) catch "";
                         const du = alloc.dupe(u8, script_url) catch "";
@@ -2874,6 +3829,7 @@ pub struct CdpPageSession {
                     } else {
                         _.executeClassicScript(code_buf[0..code_len], nid, has_src);
                     }
+                    if (_.checkWindowStopped()) break;
                 } else if (has_src) {
                     _.dispatchScriptEventByNid(nid, "error");
                 }
@@ -2882,6 +3838,7 @@ pub struct CdpPageSession {
         // Execute defer scripts after parser-blocking scripts, before readystatechange:interactive
         let d_idx: usize = 0;
         while (d_idx < defer_scripts.items.len) : (d_idx += 1) {
+            if (_.checkWindowStopped()) break;
             const item = &defer_scripts.items[d_idx];
             if (item.is_module) {
                 _.executeModuleScript(item.code, item.url, item.script_nid, item.has_src);
@@ -2898,12 +3855,13 @@ pub struct CdpPageSession {
             _.ctx.freeValue(iframe_boot);
         }
         _.ctx.drainJobs();
-        {
+        if (!_.checkWindowStopped()) {
             // Pump due 0ms timers (e.g. late-timer-insert.html) and wait for non-lazy, non-dripping pending images before load
             usleep(2000);
             _.pumpTimers();
             let img_wait_iter: usize = 0;
             while (img_wait_iter < 300) : (img_wait_iter += 1) {
+                if (_.checkWindowStopped()) break;
                 const pv = _.ctx.eval("(function(){if(typeof document==='undefined'||!document.querySelectorAll)return 0;var imgs=document.querySelectorAll('img[src]');var p=0;for(var i=0;i<imgs.length;i++){var im=imgs[i];var ld=String(im.getAttribute('loading')||'').toLowerCase();var s=String(im.getAttribute('src')||'');if(ld!=='lazy'&&!im.complete&&s.indexOf('dripping-')===-1&&s.indexOf('ms=45000')===-1)p++;}return p;})()");
                 let pending_imgs: i32 = 0;
                 * = JS_ToInt32(_.ctx.raw_ctx, &pending_imgs, pv);
@@ -2935,27 +3893,33 @@ pub struct CdpPageSession {
         }
 
         // Dispatch HTML5 lifecycle events (DOMContentLoaded on document, async scripts, load on window)
-        if (async_scripts.items.len > 0) {
-            const dcl_res = _.ctx.eval("(function(){if(typeof document!=='undefined'){var ss=document.querySelectorAll?document.querySelectorAll('script'):[];for(var i=0;i<ss.length;i++)ss[i]._alreadyStarted=true;document._readyState='interactive';if(document.dispatchEvent)document.dispatchEvent(new Event('readystatechange',{bubbles:false,cancelable:false}));if(document.dispatchEvent)document.dispatchEvent(new Event('DOMContentLoaded',{bubbles:true,cancelable:false}));}})()");
-            _.ctx.freeValue(dcl_res);
-            _.ctx.drainJobs();
+        if (!_.checkWindowStopped()) {
+            if (async_scripts.items.len > 0) {
+                const dcl_res = _.ctx.eval("(function(){if(typeof document!=='undefined'){var ss=document.querySelectorAll?document.querySelectorAll('script'):[];for(var i=0;i<ss.length;i++)ss[i]._alreadyStarted=true;document._readyState='interactive';if(document.dispatchEvent)document.dispatchEvent(new Event('readystatechange',{bubbles:false,cancelable:false}));if(document.dispatchEvent)document.dispatchEvent(new Event('DOMContentLoaded',{bubbles:true,cancelable:false}));}})()");
+                _.ctx.freeValue(dcl_res);
+                _.ctx.drainJobs();
 
-            let a_idx: usize = 0;
-            while (a_idx < async_scripts.items.len) : (a_idx += 1) {
-                const item = &async_scripts.items[a_idx];
-                if (item.is_module) {
-                    _.executeModuleScript(item.code, item.url, item.script_nid, item.has_src);
-                } else {
-                    _.executeClassicScript(item.code, item.script_nid, item.has_src);
+                let a_idx: usize = 0;
+                while (a_idx < async_scripts.items.len) : (a_idx += 1) {
+                    if (_.checkWindowStopped()) break;
+                    const item = &async_scripts.items[a_idx];
+                    if (item.is_module) {
+                        _.executeModuleScript(item.code, item.url, item.script_nid, item.has_src);
+                    } else {
+                        _.executeClassicScript(item.code, item.script_nid, item.has_src);
+                    }
                 }
-            }
 
-            const load_res = _.ctx.eval("(function(){if(typeof document!=='undefined'){document._readyState='complete';if(document.dispatchEvent)document.dispatchEvent(new Event('readystatechange',{bubbles:false,cancelable:false}));}var t=typeof window!=='undefined'?window:globalThis;if(t&&typeof t.dispatchEvent==='function'){t.dispatchEvent(new Event('load',{bubbles:false,cancelable:false}));var ps=(typeof PageTransitionEvent==='function')?new PageTransitionEvent('pageshow',{bubbles:false,cancelable:false,persisted:false}):new Event('pageshow',{bubbles:false,cancelable:false});t.dispatchEvent(ps);}if(typeof document!=='undefined'&&document.querySelectorAll&&typeof globalThis.__capsurf_on_iframe_connected==='function'){var ifs=document.querySelectorAll('iframe');for(var i=0;i<ifs.length;i++){var f=ifs[i];var ld=f.getAttribute?String(f.getAttribute('loading')||'').toLowerCase():'';if(ld==='lazy'&&!f._lazyLoadTriggered){f._lazyLoadTriggered=true;globalThis.__capsurf_on_iframe_connected(f,{forceLazy:true});}}}if(typeof globalThis.__capsurf_initCssTransitionSnapshots==='function'){if(typeof setTimeout==='function')setTimeout(function(){try{globalThis.__capsurf_initCssTransitionSnapshots();}catch(e){}},0);else globalThis.__capsurf_initCssTransitionSnapshots();}})()");
-            _.ctx.freeValue(load_res);
-            _.ctx.drainJobs();
-        } else {
-            const lc_res = _.ctx.eval("(function(){if(typeof __capsurf_dispatch_lifecycle==='function')__capsurf_dispatch_lifecycle();})()");
-            _.ctx.freeValue(lc_res);
+                if (!_.checkWindowStopped()) {
+                    const load_res = _.ctx.eval("(function(){if(typeof document!=='undefined'){document._readyState='complete';if(document.dispatchEvent)document.dispatchEvent(new Event('readystatechange',{bubbles:false,cancelable:false}));}var t=typeof window!=='undefined'?window:globalThis;if(t&&typeof t.dispatchEvent==='function'){t.dispatchEvent(new Event('load',{bubbles:false,cancelable:false}));var ps=(typeof PageTransitionEvent==='function')?new PageTransitionEvent('pageshow',{bubbles:false,cancelable:false,persisted:false}):new Event('pageshow',{bubbles:false,cancelable:false});t.dispatchEvent(ps);}if(typeof document!=='undefined'&&document.querySelectorAll&&typeof globalThis.__capsurf_on_iframe_connected==='function'){var ifs=document.querySelectorAll('iframe');for(var i=0;i<ifs.length;i++){var f=ifs[i];var ld=f.getAttribute?String(f.getAttribute('loading')||'').toLowerCase():'';if(ld==='lazy'&&!f._lazyLoadTriggered){f._lazyLoadTriggered=true;globalThis.__capsurf_on_iframe_connected(f,{forceLazy:true});}}}if(typeof globalThis.__capsurf_initCssTransitionSnapshots==='function'){if(typeof setTimeout==='function')setTimeout(function(){try{globalThis.__capsurf_initCssTransitionSnapshots();}catch(e){}},0);else globalThis.__capsurf_initCssTransitionSnapshots();}})()");
+                    _.ctx.freeValue(load_res);
+                    _.ctx.drainJobs();
+                }
+            } else {
+                const lc_res = _.ctx.eval("(function(){if(typeof __capsurf_dispatch_lifecycle==='function')__capsurf_dispatch_lifecycle();})()");
+                _.ctx.freeValue(lc_res);
+                _.ctx.drainJobs();
+            }
         }
         // Post-load settle loop: pump 0ms timers in bounded passes (max 4) via globalThis.setTimeout
         // so settle-probe.html accounts for settle turns, stopping early if no due 0ms timers or no DOM mutations.
@@ -3001,6 +3965,8 @@ pub struct CdpPageSession {
             _.ctx.freeValue(wm_scan);
         }
 
+        * = _.checkWindowStopped();
+
         // Record navigation in history
         _.recordNavigation(nav_url, _.title);
         if (_.nav_entry_count > 0 && _.current_nav_index < _.nav_entry_count) {
@@ -3026,14 +3992,18 @@ pub struct CdpPageSession {
         _.network_enabled = false;
         _.fetch_enabled = false;
         _.dom_enabled = false;
+        _.intercept_file_chooser = false;
         _.next_context_id = 3;
         _.isolated_world_count = 0;
         _.retired_isolated_world_count = 0;
+        _.clearInitWorldNames();
+        _.next_child_frame_seq = 0;
         let wi: usize = 0;
         while (wi < _.isolated_worlds.len) : (wi += 1) {
             _.isolated_worlds[wi].active = false;
             _.isolated_worlds[wi].context_id = 0;
             _.isolated_worlds[wi].name_len = 0;
+            _.isolated_worlds[wi].frame_id_len = 0;
         }
         _.outbound_reject_websocket = false;
         _.outbound_reject_pattern_count = 0;
@@ -3058,10 +4028,11 @@ pub struct CdpPageSession {
         _.resetDomTracking();
     }
 
-    pub fn createIsolatedWorld(*_, world_name: []const u8, created_new: *bool): i64 {
+    pub fn createIsolatedWorld(*_, world_name: []const u8, frame_id: []const u8, created_new: *bool): i64 {
         let i: usize = 0;
         while (i < _.isolated_world_count) : (i += 1) {
-            if (std.mem.eql(u8, _.isolated_worlds[i].name(), world_name)) {
+            if (std.mem.eql(u8, _.isolated_worlds[i].name(), world_name) &&
+                std.mem.eql(u8, _.isolated_worlds[i].frameId(), frame_id)) {
                 if (_.isolated_worlds[i].active) {
                     created_new.* = false;
                     return _.isolated_worlds[i].context_id;
@@ -3081,6 +4052,9 @@ pub struct CdpPageSession {
             const copy_len = @min(world_name.len, _.isolated_worlds[idx].name_buf.len);
             @memcpy(_.isolated_worlds[idx].name_buf[0..copy_len], world_name[0..copy_len]);
             _.isolated_worlds[idx].name_len = copy_len;
+            const fid_len = @min(frame_id.len, _.isolated_worlds[idx].frame_id_buf.len);
+            if (fid_len > 0) @memcpy(_.isolated_worlds[idx].frame_id_buf[0..fid_len], frame_id[0..fid_len]);
+            _.isolated_worlds[idx].frame_id_len = fid_len;
             _.isolated_worlds[idx].context_id = cid;
             _.isolated_worlds[idx].active = true;
             _.isolated_world_count += 1;
@@ -3122,7 +4096,7 @@ pub struct CdpPageSession {
         let js_buf: [2048]u8 = [0; 2048];
         const js = std.fmt.bufPrint(
             &js_buf,
-            "(function(){{globalThis.__capsurf_emulated_media='{s}';try{{const arr={s};const f={{}};if(Array.isArray(arr)){{for(let i=0;i<arr.length;i++){{if(arr[i]&&arr[i].name)f[String(arr[i].name).toLowerCase()]=String(arr[i].value||'').toLowerCase();}}}}globalThis.__capsurf_emulated_features=f;globalThis.__capsurf_dark_color_scheme=(f['prefers-color-scheme']==='dark');}}catch(e){{globalThis.__capsurf_emulated_features={{}};globalThis.__capsurf_dark_color_scheme=false;}}}})()",
+            "(function(){{globalThis.__capsurf_emulated_media='{s}';try{{const arr={s};const f={{}};if(Array.isArray(arr)){{for(let i=0;i<arr.length;i++){{if(arr[i]&&arr[i].name)f[String(arr[i].name).toLowerCase()]=String(arr[i].value||'').toLowerCase();}}}}globalThis.__capsurf_emulated_features=f;globalThis.__capsurf_dark_color_scheme=(f['prefers-color-scheme']==='dark');}}catch(e){{globalThis.__capsurf_emulated_features={{}};globalThis.__capsurf_dark_color_scheme=false;}}globalThis.__capsurf_domMutationEpoch=(globalThis.__capsurf_domMutationEpoch||0)+1;}})()",
             .{ m_slice, f_slice },
         ) catch return;
         const v = _.ctx.eval(js);
@@ -3154,10 +4128,16 @@ pub struct CdpPageSession {
                 _.retired_isolated_world_ids[_.retired_isolated_world_count] = old_cid;
                 _.retired_isolated_world_count += 1;
             }
-            const cid = _.next_context_id;
-            _.next_context_id += 1;
-            _.isolated_worlds[i].context_id = cid;
-            _.isolated_worlds[i].active = true;
+            const iw_fid = _.isolated_worlds[i].frameId();
+            if (iw_fid.len == 0 || std.mem.eql(u8, iw_fid, _.frame_id)) {
+                const cid = _.next_context_id;
+                _.next_context_id += 1;
+                _.isolated_worlds[i].context_id = cid;
+                _.isolated_worlds[i].active = true;
+            } else {
+                _.isolated_worlds[i].active = false;
+                _.isolated_worlds[i].context_id = 0;
+            }
         }
     }
 
@@ -3177,6 +4157,16 @@ pub struct CdpPageSession {
             }
         }
         return false;
+    }
+
+    pub fn isolatedWorldFrameId(*_, cid: i64): ([]const u8)? {
+        let i: usize = 0;
+        while (i < _.isolated_world_count) : (i += 1) {
+            if (_.isolated_worlds[i].active && _.isolated_worlds[i].context_id == cid) {
+                return _.isolated_worlds[i].frameId();
+            }
+        }
+        return null;
     }
 
     pub fn isValidContextId(*_, cid: i64): bool {
@@ -3260,10 +4250,23 @@ pub struct CdpPageSession {
     }
 
     pub fn pumpTimers(*_) {
+        _.pumpFetchVerdicts();
         if (!_.has_document) return;
         const pump_res = _.ctx.eval("(function(){if(typeof __capsurf_pump_timers==='function')return __capsurf_pump_timers();return -1;})()");
         _.ctx.freeValue(pump_res);
-        _.ctx.drainJobs();
+        const iso_chk = _.ctx.eval("(function(){if(globalThis.__capsurf_iso_jobs_pending){globalThis.__capsurf_iso_jobs_pending=false;return 1;}return 0;})()");
+        let iso_pending: i32 = 0;
+        if (!jsIsException(iso_chk)) {
+            * = JS_ToInt32(_.ctx.raw_ctx, &iso_pending, iso_chk);
+        }
+        _.ctx.freeValue(iso_chk);
+        if (iso_pending != 0) {
+            const rmask = _.restoreIsolatedNodeIfNeeded();
+            defer _.clearIsolatedNode(rmask);
+            _.ctx.drainJobs();
+        } else {
+            _.ctx.drainJobs();
+        }
     }
 
     pub fn getStyleText(*_, node_id: NodeId, out_buf: []u8): []const u8 {
@@ -3503,6 +4506,35 @@ pub struct CdpPageSession {
         return true;
     }
 
+    fn normalizeStackEvalFrames(src: []const u8, out_buf: []u8): []const u8 {
+        const needle = "at <eval> (";
+        let si: usize = 0;
+        let oi: usize = 0;
+        while (si < src.len && oi < out_buf.len) {
+            if (si + needle.len <= src.len && std.mem.eql(u8, src[si .. si + needle.len], needle)) {
+                const rep = "at ";
+                const copy_len = @min(rep.len, out_buf.len - oi);
+                @memcpy(out_buf[oi .. oi + copy_len], rep[0..copy_len]);
+                oi += copy_len;
+                si += needle.len;
+                while (si < src.len && src[si] != '\n' && oi < out_buf.len) {
+                    if (src[si] == ')' && (si + 1 >= src.len || src[si + 1] == '\n' || src[si + 1] == '\r')) {
+                        si += 1;
+                        break;
+                    }
+                    out_buf[oi] = src[si];
+                    oi += 1;
+                    si += 1;
+                }
+            } else {
+                out_buf[oi] = src[si];
+                oi += 1;
+                si += 1;
+            }
+        }
+        return out_buf[0..oi];
+    }
+
     fn pushExceptionEvent(*_, exc: JSValue) {
         if (dom := _.dom_ctx) {
             const exc_str = _.ctx.toCString(exc);
@@ -3537,11 +4569,13 @@ pub struct CdpPageSession {
                     while (stack_str.len > 0 && (stack_str[stack_str.len - 1] == '\n' || stack_str[stack_str.len - 1] == '\r')) {
                         stack_str = stack_str[0 .. stack_str.len - 1];
                     }
-                    if (stack_str.len > 0) {
-                        if (std.mem.startsWith(u8, stack_str, norm_desc)) {
-                            full_desc = stack_str[0..@min(stack_str.len, full_desc_buf.len)];
+                    let norm_stack_buf: [1400]u8 = [0; 1400];
+                    const clean_stack = normalizeStackEvalFrames(stack_str, &norm_stack_buf);
+                    if (clean_stack.len > 0) {
+                        if (std.mem.startsWith(u8, clean_stack, norm_desc)) {
+                            full_desc = clean_stack[0..@min(clean_stack.len, full_desc_buf.len)];
                         } else {
-                            full_desc = std.fmt.bufPrint(&full_desc_buf, "{s}\n{s}", .{ norm_desc, stack_str[0..@min(stack_str.len, 500)] }) catch norm_desc;
+                            full_desc = std.fmt.bufPrint(&full_desc_buf, "{s}\n{s}", .{ norm_desc, clean_stack[0..@min(clean_stack.len, 500)] }) catch norm_desc;
                         }
                     }
                 }
@@ -3561,6 +4595,30 @@ pub struct CdpPageSession {
     }
 
     fn formatCdpException(*_, exc: JSValue, out_buf: []u8): usize {
+        if (exc.tag == 4) {
+            const err_json = std.fmt.bufPrint(
+                out_buf,
+                "{{\"result\":{{\"type\":\"undefined\"}},\"exceptionDetails\":{{\"text\":\"Uncaught\",\"exception\":{{\"type\":\"object\",\"subtype\":\"error\",\"className\":\"Error\",\"description\":\"Error\"}}}}}}",
+                .{},
+            ) catch return 0;
+            return err_json.len;
+        }
+        if (exc.tag != JS_TAG_OBJECT) {
+            const dup_exc = _.ctx.dupValue(exc);
+            defer _.ctx.freeValue(dup_exc);
+            let prim_buf: [2048]u8 = [0; 2048];
+            const prim_len = _.formatCdpRemoteObject(dup_exc, true, &prim_buf);
+            const prefix = "{\"result\":";
+            if (prim_len > prefix.len + 1 && std.mem.startsWith(u8, prim_buf[0..prim_len], prefix) && prim_buf[prim_len - 1] == '}') {
+                const exc_obj = prim_buf[prefix.len .. prim_len - 1];
+                const err_json = std.fmt.bufPrint(
+                    out_buf,
+                    "{{\"result\":{{\"type\":\"undefined\"}},\"exceptionDetails\":{{\"text\":\"Uncaught\",\"exception\":{s}}}}}",
+                    .{exc_obj},
+                ) catch return 0;
+                return err_json.len;
+            }
+        }
         const exc_str = _.ctx.toCString(exc);
         defer std.heap.page_allocator.free(exc_str);
 
@@ -3573,13 +4631,10 @@ pub struct CdpPageSession {
             }
         }
 
-        // Format description with trailing newline according to CDP error specs
-        let desc_buf: [2048]u8 = [0; 2048];
-        let desc_slice: []const u8 = "";
-        if (exc_str.len > 0 && exc_str[exc_str.len - 1] == '\n') {
-            desc_slice = exc_str;
-        } else {
-            desc_slice = std.fmt.bufPrint(&desc_buf, "{s}\n", .{exc_str}) catch exc_str;
+        // Format description without forced trailing newline so Playwright Call log formatting matches
+        let desc_slice: []const u8 = exc_str;
+        while (desc_slice.len > 0 && (desc_slice[desc_slice.len - 1] == '\n' || desc_slice[desc_slice.len - 1] == '\r')) {
+            desc_slice = desc_slice[0 .. desc_slice.len - 1];
         }
 
         let norm_desc_buf: [2048]u8 = [0; 2048];
@@ -3673,9 +4728,29 @@ pub struct CdpPageSession {
     }
 
     pub fn formatCdpRemoteObject(*_, val: JSValue, return_by_value: bool, out_buf: []u8): usize {
+        return _.formatCdpRemoteObjectWithOptions(val, return_by_value, 0, 99, out_buf);
+    }
+
+    pub fn formatCdpRemoteObjectWithOptions(*_, val: JSValue, return_by_value: bool, ser_mode: u8, max_depth: i32, out_buf: []u8): usize {
         _.ctx.setPropertyStr("__capsurf_temp_val", val);
-        if (return_by_value) {
-            const s_val = _.ctx.eval("globalThis.__capsurf_safe_stringify(globalThis.__capsurf_format_remote_object(globalThis.__capsurf_temp_val, true))");
+        const effective_rbv = if (ser_mode == 2) true else if (ser_mode == 3) false else return_by_value;
+        const ser_mode_str: []const u8 = if (ser_mode == 1)
+            "'deep'"
+        else if (ser_mode == 2)
+            "'json'"
+        else if (ser_mode == 3)
+            "'idOnly'"
+        else
+            "''";
+        const rbv_str: []const u8 = if (effective_rbv) "true" else "false";
+        let script_buf: [256]u8 = [0; 256];
+        if (effective_rbv || ser_mode == 1) {
+            const safe_script = std.fmt.bufPrint(
+                &script_buf,
+                "globalThis.__capsurf_safe_stringify(globalThis.__capsurf_format_remote_object(globalThis.__capsurf_temp_val, {s}, {s}, {d}))",
+                .{ rbv_str, ser_mode_str, max_depth },
+            ) catch "globalThis.__capsurf_safe_stringify(globalThis.__capsurf_format_remote_object(globalThis.__capsurf_temp_val, true))";
+            const s_val = _.ctx.eval(safe_script);
             defer _.ctx.freeValue(s_val);
             if (!jsIsException(s_val)) {
                 const json_s = _.ctx.toCString(s_val);
@@ -3685,25 +4760,46 @@ pub struct CdpPageSession {
                 }
             } else {
                 const exc = _.ctx.getException();
+                const exc_s = _.ctx.toCString(exc);
+                const is_too_deep = std.mem.indexOf(u8, exc_s, "Object reference chain is too long") != null;
+                std.heap.page_allocator.free(exc_s);
                 _.ctx.freeValue(exc);
+                if (is_too_deep) {
+                    const deep_err = std.fmt.bufPrint(
+                        out_buf,
+                        "__CAPSURF_CDP_ERROR__:Object reference chain is too long",
+                        .{},
+                    ) catch return 0;
+                    return deep_err.len;
+                }
             }
         }
-        const script = if (return_by_value)
-            "globalThis.__capsurf_format_remote_object(globalThis.__capsurf_temp_val, true)"
-        else
-            "globalThis.__capsurf_format_remote_object(globalThis.__capsurf_temp_val, false)";
+        let fmt_buf: [256]u8 = [0; 256];
+        const script = std.fmt.bufPrint(
+            &fmt_buf,
+            "globalThis.__capsurf_format_remote_object(globalThis.__capsurf_temp_val, {s}, {s}, {d})",
+            .{ rbv_str, ser_mode_str, max_depth },
+        ) catch "globalThis.__capsurf_format_remote_object(globalThis.__capsurf_temp_val, false)";
         const res_val = _.ctx.eval(script);
         defer _.ctx.freeValue(res_val);
 
         if (jsIsException(res_val)) {
             const exc = _.ctx.getException();
             defer _.ctx.freeValue(exc);
+            if (effective_rbv && val.tag == JS_TAG_OBJECT) {
+                const u_res = std.fmt.bufPrint(out_buf, "{{\"result\":{{\"type\":\"undefined\"}}}}", .{}) catch return 0;
+                return u_res.len;
+            }
             return _.formatCdpResult(val, out_buf);
         }
 
         const json_str = _.ctx.jsonStringify(res_val);
         defer std.heap.page_allocator.free(json_str);
         if (json_str.len == 0 || std.mem.eql(u8, json_str, "undefined")) {
+            if (effective_rbv && val.tag == JS_TAG_OBJECT) {
+                const u_res = std.fmt.bufPrint(out_buf, "{{\"result\":{{\"type\":\"undefined\"}}}}", .{}) catch return 0;
+                return u_res.len;
+            }
             return _.formatCdpResult(val, out_buf);
         }
 
@@ -3711,7 +4807,103 @@ pub struct CdpPageSession {
         return formatted.len;
     }
 
-    pub fn callFunctionOn(*_, objectId: []const u8, functionDeclaration: []const u8, argumentsJson: []const u8, return_by_value: bool, await_promise: bool, out_buf: []u8): usize {
+    pub fn allocParkedPromiseSlot(*_, val: JSValue): i32? {
+        let i: usize = 0;
+        while (i < 16) : (i += 1) {
+            if (!_.parked_promise_used[i]) {
+                _.parked_promise_used[i] = true;
+                _.parked_promise_vals[i] = _.ctx.dupValue(val);
+                return @as(i32, @intCast(i));
+            }
+        }
+        return null;
+    }
+
+    pub fn takeLastParkedPromiseSlot(*_): i32? {
+        if (!_.has_parked_promise || _.last_parked_slot < 0) return null;
+        _.has_parked_promise = false;
+        const s = _.last_parked_slot;
+        _.last_parked_slot = -1;
+        return s;
+    }
+
+    pub fn freeParkedPromiseSlot(*_, slot: i32) {
+        if (slot < 0 || slot >= 16) return;
+        const idx = @as(usize, @intCast(slot));
+        if (_.parked_promise_used[idx]) {
+            _.parked_promise_used[idx] = false;
+            _.ctx.freeValue(_.parked_promise_vals[idx]);
+            _.parked_promise_vals[idx] = JSValue{ .u = .{ .uint64 = 0 }, .tag = 0 };
+        }
+    }
+
+    pub fn tryResolveParkedPromiseSlot(*_, slot: i32, return_by_value: bool, out_buf: []u8, out_len: *usize): u8 {
+        if (slot < 0 || slot >= 16) return 3;
+        const idx = @as(usize, @intCast(slot));
+        if (!_.parked_promise_used[idx]) return 3;
+        const rmask: i32 = if (_.parked_promise_iso[idx]) _.restoreIsolatedNodeIfNeeded() else -1;
+        defer if (rmask >= 0) _.clearIsolatedNode(rmask);
+        _.pumpTimers();
+        if (_.parked_promise_iso[idx]) * = _.restoreIsolatedNodeIfNeeded();
+        _.ctx.drainJobs();
+        const val = _.parked_promise_vals[idx];
+        const st = _.ctx.promiseState(val);
+        if (st == 0) {
+            return if (_.hasPendingNavigation()) 3 else 0;
+        }
+        if (st == 1) {
+            const res_val = _.ctx.promiseResult(val);
+            defer _.ctx.freeValue(res_val);
+            out_len.* = _.formatCdpRemoteObjectWithOptions(res_val, return_by_value, _.parked_promise_ser_mode[idx], _.parked_promise_max_depth[idx], out_buf);
+            return 1;
+        }
+        const rej_val = _.ctx.promiseResult(val);
+        defer _.ctx.freeValue(rej_val);
+        out_len.* = _.formatCdpException(rej_val, out_buf);
+        return 2;
+    }
+
+    fn hasPendingNavigation(): bool {
+        const pnav_v = _.ctx.eval("(globalThis.__capsurf_pending_navigation || globalThis.__capsurf_pending_navigation_post) ? 1 : 0");
+        const has_pnav = (_.ctx.toInt64(pnav_v) catch 0) != 0;
+        _.ctx.freeValue(pnav_v);
+        return has_pnav;
+    }
+
+    pub fn resolveChildIframeIdx(*_, context_id: (i64)?): (i64)? {
+        if (context_id == null || context_id.? <= 1) return null;
+        const cid_val = context_id.?;
+        let route_iframe = false;
+        let target_fid: []const u8 = "";
+        if (!_.isIsolatedWorldId(cid_val)) {
+            route_iframe = true;
+        } else if (iso_fid := _.isolatedWorldFrameId(cid_val)) {
+            if (iso_fid.len > 0 && !std.mem.eql(u8, iso_fid, _.frame_id)) {
+                route_iframe = true;
+                target_fid = iso_fid;
+            }
+        }
+        if (!route_iframe) return null;
+        let iframe_idx: i64 = -1;
+        let active_idx: i64 = 0;
+        let ki: usize = 0;
+        while (ki < _.known_child_frame_count) : (ki += 1) {
+            const kf = &_.known_child_frames[ki];
+            if (!kf.active || kf.detached) continue;
+            if ((target_fid.len > 0 && std.mem.eql(u8, kf.frameId(), target_fid)) || kf.exec_context_id == cid_val) {
+                iframe_idx = active_idx;
+                break;
+            }
+            active_idx += 1;
+        }
+        return iframe_idx;
+    }
+
+    pub fn callFunctionOn(*_, objectId: []const u8, functionDeclaration: []const u8, argumentsJson: []const u8, return_by_value: bool, await_promise: bool, context_id: (i64)?, out_buf: []u8): usize {
+        return _.callFunctionOnWithSerialization(objectId, functionDeclaration, argumentsJson, return_by_value, await_promise, context_id, 0, 99, out_buf);
+    }
+
+    pub fn callFunctionOnWithSerialization(*_, objectId: []const u8, functionDeclaration: []const u8, argumentsJson: []const u8, return_by_value: bool, await_promise: bool, context_id: (i64)?, ser_mode: u8, max_depth: i32, out_buf: []u8): usize {
         const id_val = _.ctx.newString(objectId);
         defer _.ctx.freeValue(id_val);
         _.ctx.setPropertyStr("__capsurf_call_id", id_val);
@@ -3724,7 +4916,35 @@ pub struct CdpPageSession {
         defer _.ctx.freeValue(args_val);
         _.ctx.setPropertyStr("__capsurf_call_args", args_val);
 
-        const val = _.ctx.eval("globalThis.__capsurf_call_fn(globalThis.__capsurf_call_id, globalThis.__capsurf_call_decl, globalThis.__capsurf_call_args)");
+        let val: JSValue = undefined;
+        if (iframe_idx := _.resolveChildIframeIdx(context_id)) {
+            const iframe_call_expr =
+                "(function(){" ++
+                "const id=__capsurf_call_id;const fnDecl=__capsurf_call_decl;const argsJson=__capsurf_call_args;" ++
+                "const target=(id==='global'||id==='globalThis')?window:__capsurf_get_object(id);" ++
+                "if(!target)throw new Error('Could not find object with id '+id);" ++
+                "let fn;" ++
+                "try{fn=eval('('+fnDecl+')');}catch(e){" ++
+                "if(e instanceof SyntaxError){const obj=eval('({'+fnDecl+'})');const keys=Object.keys(obj);if(keys.length===1)fn=obj[keys[0]];}else{throw e;}}" ++
+                "if(typeof fn!=='function')throw new TypeError('functionDeclaration did not evaluate to a function');" ++
+                "const rawArgs=argsJson?JSON.parse(argsJson):[];const args=[];" ++
+                "for(let i=0;i<rawArgs.length;i++){const arg=rawArgs[i]||{};" ++
+                "if(arg.objectId){const r=(arg.objectId==='global'||arg.objectId==='globalThis')?window:__capsurf_get_object(arg.objectId);if(r===undefined)throw new Error('Could not find object with id '+arg.objectId);args.push(r);}" ++
+                "else if(arg.unserializableValue!==undefined){const u=arg.unserializableValue;if(u==='NaN')args.push(NaN);else if(u==='-0')args.push(-0);else if(u==='Infinity')args.push(Infinity);else if(u==='-Infinity')args.push(-Infinity);else if(/^-?\\d+n$/.test(u))args.push(BigInt(u.slice(0,-1)));else args.push(undefined);}" ++
+                "else if(arg.deepSerializedValue!==undefined){args.push(typeof __capsurf_deep_deserialize==='function'?__capsurf_deep_deserialize(arg.deepSerializedValue):arg.deepSerializedValue.value);}" ++
+                "else if(arg.subtype==='regexp'&&arg.value&&typeof arg.value.pattern==='string'){args.push(new RegExp(arg.value.pattern,arg.value.flags||''));}" ++
+                "else if('value' in arg){args.push(arg.value);}else{args.push(undefined);}}" ++
+                "return fn.apply(target,args);" ++
+                "})()";
+            const expr_val = _.ctx.newString(iframe_call_expr);
+            defer _.ctx.freeValue(expr_val);
+            _.ctx.setPropertyStr("__capsurf_eval_expr", expr_val);
+            let call_buf: [128]u8 = [0; 128];
+            const call_js = std.fmt.bufPrint(&call_buf, "globalThis.__capsurf_eval_in_iframe(globalThis.__capsurf_eval_expr, {d})", .{iframe_idx}) catch "globalThis.__capsurf_eval_in_iframe(globalThis.__capsurf_eval_expr, -1)";
+            val = _.ctx.eval(call_js);
+        } else {
+            val = _.ctx.eval("globalThis.__capsurf_call_fn(globalThis.__capsurf_call_id, globalThis.__capsurf_call_decl, globalThis.__capsurf_call_args)");
+        }
         defer _.ctx.freeValue(val);
 
         if (await_promise && !_.ctx.isPromise(val) && val.tag == JS_TAG_OBJECT) {
@@ -3733,15 +4953,31 @@ pub struct CdpPageSession {
         }
 
         if (await_promise && _.ctx.isPromise(val)) {
+            _.ctx.drainJobs();
+            if (_.ctx.promiseState(val) == 0 && _.park_pending_promise) {
+                if (_.hasPendingNavigation()) {
+                    const msg = std.fmt.bufPrint(out_buf, "{{\"__capsurf_ctx_destroyed\":true}}", .{}) catch "";
+                    return msg.len;
+                }
+                if (slot := _.allocParkedPromiseSlot(val)) {
+                    const iso_v = _.ctx.eval("globalThis.__capsurf_in_isolated ? 1 : 0");
+                    const is_iso_p = (_.ctx.toInt64(iso_v) catch 0) != 0;
+                    _.ctx.freeValue(iso_v);
+                    _.parked_promise_iso[@as(usize, @intCast(slot))] = is_iso_p;
+                    _.parked_promise_ser_mode[@as(usize, @intCast(slot))] = ser_mode;
+                    _.parked_promise_max_depth[@as(usize, @intCast(slot))] = max_depth;
+                    _.has_parked_promise = true;
+                    _.last_parked_slot = slot;
+                    const msg = std.fmt.bufPrint(out_buf, "{{\"__capsurf_promise_pending\":true}}", .{}) catch "";
+                    return msg.len;
+                }
+            }
             let limit: u32 = 100000;
             while (_.ctx.promiseState(val) == 0 && limit > 0) : (limit -= 1) {
                 const r = _.ctx.executePendingJobs();
                 if (r > 0) continue;
 
-                const pnav_v = _.ctx.eval("globalThis.__capsurf_pending_navigation ? 1 : 0");
-                const has_pnav = (_.ctx.toInt64(pnav_v) catch 0) != 0;
-                _.ctx.freeValue(pnav_v);
-                if (has_pnav) {
+                if (_.hasPendingNavigation()) {
                     const msg = std.fmt.bufPrint(out_buf, "{{\"__capsurf_ctx_destroyed\":true}}", .{}) catch "";
                     return msg.len;
                 }
@@ -3763,7 +4999,7 @@ pub struct CdpPageSession {
             if (_.ctx.promiseState(val) == 1) {
                 const res_val = _.ctx.promiseResult(val);
                 defer _.ctx.freeValue(res_val);
-                return _.formatCdpRemoteObject(res_val, return_by_value, out_buf);
+                return _.formatCdpRemoteObjectWithOptions(res_val, return_by_value, ser_mode, max_depth, out_buf);
             } else if (_.ctx.promiseState(val) == 2) {
                 const rej_val = _.ctx.promiseResult(val);
                 defer _.ctx.freeValue(rej_val);
@@ -3771,15 +5007,16 @@ pub struct CdpPageSession {
             }
         }
 
-        _.ctx.drainJobs();
-
         if (jsIsException(val)) {
             const exc = _.ctx.getException();
             defer _.ctx.freeValue(exc);
+            _.ctx.drainJobs();
             return _.formatCdpException(exc, out_buf);
         }
 
-        return _.formatCdpRemoteObject(val, return_by_value, out_buf);
+        _.ctx.drainJobs();
+
+        return _.formatCdpRemoteObjectWithOptions(val, return_by_value, ser_mode, max_depth, out_buf);
     }
 
     pub fn evaluate(*_, expr: []const u8, out_buf: []u8): usize {
@@ -3792,6 +5029,19 @@ pub struct CdpPageSession {
         expr: []const u8,
         return_by_value: bool,
         await_promise: bool,
+        out_buf: []u8,
+    ): usize {
+        return _.evaluateInContextWithSerialization(context_id, expr, return_by_value, await_promise, 0, 99, out_buf);
+    }
+
+    pub fn evaluateInContextWithSerialization(
+        *_,
+        context_id: (i64)?,
+        expr: []const u8,
+        return_by_value: bool,
+        await_promise: bool,
+        ser_mode: u8,
+        max_depth: i32,
         out_buf: []u8,
     ): usize {
         const sync_named_val = _.ctx.eval("(function(){if(typeof __capsurf_sync_named_elements==='function')__capsurf_sync_named_elements();if(typeof __capsurf_pump_timers==='function')__capsurf_pump_timers();})()");
@@ -3818,15 +5068,24 @@ pub struct CdpPageSession {
         }
 
         let val: JSValue = undefined;
-        if (context_id != null && context_id.? > 1 && !_.isIsolatedWorldId(context_id.?)) {
+        if (iframe_idx := _.resolveChildIframeIdx(context_id)) {
             const expr_val = _.ctx.newString(expr);
             defer _.ctx.freeValue(expr_val);
             _.ctx.setPropertyStr("__capsurf_eval_expr", expr_val);
-            val = _.ctx.eval("globalThis.__capsurf_eval_in_iframe(globalThis.__capsurf_eval_expr)");
+            let call_buf: [128]u8 = [0; 128];
+            const call_js = std.fmt.bufPrint(&call_buf, "globalThis.__capsurf_eval_in_iframe(globalThis.__capsurf_eval_expr, {d})", .{iframe_idx}) catch "globalThis.__capsurf_eval_in_iframe(globalThis.__capsurf_eval_expr, -1)";
+            val = _.ctx.eval(call_js);
         } else {
             val = _.ctx.eval(expr);
         }
         defer _.ctx.freeValue(val);
+
+        if (jsIsException(val)) {
+            const exc = _.ctx.getException();
+            defer _.ctx.freeValue(exc);
+            _.ctx.drainJobs();
+            return _.formatCdpException(exc, out_buf);
+        }
 
         if (await_promise && !_.ctx.isPromise(val) && has_proto_then) {
             let post_cookie_seq: i64 = _.cookie_jar.seq;
@@ -3850,10 +5109,7 @@ pub struct CdpPageSession {
                     while (_.ctx.promiseState(then_chk) == 0 && limit_t > 0) : (limit_t -= 1) {
                         const r_t = _.ctx.executePendingJobs();
                         if (r_t > 0) continue;
-                        const nav_v = _.ctx.eval("(function(){return globalThis.__capsurf_pending_navigation?1:0;})()");
-                        const has_nav = (_.ctx.toInt64(nav_v) catch 0) != 0;
-                        _.ctx.freeValue(nav_v);
-                        if (has_nav) break;
+                        if (_.hasPendingNavigation()) break;
                         const pump_res = _.ctx.eval("(function(){if(typeof __capsurf_pump_timers==='function')return __capsurf_pump_timers();return -1;})()");
                         const next_delay = _.ctx.toInt64(pump_res) catch -1;
                         _.ctx.freeValue(pump_res);
@@ -3871,15 +5127,31 @@ pub struct CdpPageSession {
         }
 
         if (await_promise && _.ctx.isPromise(val)) {
+            _.ctx.drainJobs();
+            if (_.ctx.promiseState(val) == 0 && _.park_pending_promise) {
+                if (_.hasPendingNavigation()) {
+                    const msg = std.fmt.bufPrint(out_buf, "{{\"__capsurf_ctx_destroyed\":true}}", .{}) catch "";
+                    return msg.len;
+                }
+                if (slot := _.allocParkedPromiseSlot(val)) {
+                    const iso_v = _.ctx.eval("globalThis.__capsurf_in_isolated ? 1 : 0");
+                    const is_iso_p = (_.ctx.toInt64(iso_v) catch 0) != 0;
+                    _.ctx.freeValue(iso_v);
+                    _.parked_promise_iso[@as(usize, @intCast(slot))] = is_iso_p;
+                    _.parked_promise_ser_mode[@as(usize, @intCast(slot))] = ser_mode;
+                    _.parked_promise_max_depth[@as(usize, @intCast(slot))] = max_depth;
+                    _.has_parked_promise = true;
+                    _.last_parked_slot = slot;
+                    const msg = std.fmt.bufPrint(out_buf, "{{\"__capsurf_promise_pending\":true}}", .{}) catch "";
+                    return msg.len;
+                }
+            }
             let limit: u32 = 100000;
             while (_.ctx.promiseState(val) == 0 && limit > 0) : (limit -= 1) {
                 const r = _.ctx.executePendingJobs();
                 if (r > 0) continue;
 
-                const pnav_v = _.ctx.eval("globalThis.__capsurf_pending_navigation ? 1 : 0");
-                const has_pnav = (_.ctx.toInt64(pnav_v) catch 0) != 0;
-                _.ctx.freeValue(pnav_v);
-                if (has_pnav) {
+                if (_.hasPendingNavigation()) {
                     const msg = std.fmt.bufPrint(out_buf, "{{\"__capsurf_ctx_destroyed\":true}}", .{}) catch "";
                     return msg.len;
                 }
@@ -3901,7 +5173,7 @@ pub struct CdpPageSession {
             if (_.ctx.promiseState(val) == 1) {
                 const res_val = _.ctx.promiseResult(val);
                 defer _.ctx.freeValue(res_val);
-                return _.formatCdpRemoteObject(res_val, return_by_value, out_buf);
+                return _.formatCdpRemoteObjectWithOptions(res_val, return_by_value, ser_mode, max_depth, out_buf);
             } else if (_.ctx.promiseState(val) == 2) {
                 const rej_val = _.ctx.promiseResult(val);
                 defer _.ctx.freeValue(rej_val);
@@ -3911,13 +5183,7 @@ pub struct CdpPageSession {
 
         _.ctx.drainJobs();
 
-        if (jsIsException(val)) {
-            const exc = _.ctx.getException();
-            defer _.ctx.freeValue(exc);
-            return _.formatCdpException(exc, out_buf);
-        }
-
-        return _.formatCdpRemoteObject(val, return_by_value, out_buf);
+        return _.formatCdpRemoteObjectWithOptions(val, return_by_value, ser_mode, max_depth, out_buf);
     }
 
     pub fn evaluateWithOptions(*_, expr: []const u8, return_by_value: bool, await_promise: bool, out_buf: []u8): usize {
@@ -3962,7 +5228,7 @@ pub struct CdpPageSession {
         let i: usize = 0;
         while (i < _.doc.nodes.items.len) : (i += 1) {
             const node = &_.doc.nodes.items[i];
-            if (node.isElement() && node.hasTag("iframe")) {
+            if (node.isElement() && (node.hasTag("iframe") || node.hasTag("frame"))) {
                 if (src_attr := _.doc.getAttribute(node.id, "src")) {
                     if (!CdpPageSession.isRefusedOopifKindUrl(src_attr)) {
                         const ifr_origin = extractOriginFromUrl(src_attr);
@@ -4154,6 +5420,10 @@ pub struct CdpPageSession {
     }
 
     pub fn ensureLayout(*_) {
+        if (_.has_document) {
+            const anim_v = _.ctx.eval("if (typeof globalThis.__capsurf_sample_active_animations === 'function') globalThis.__capsurf_sample_active_animations();");
+            _.ctx.freeValue(anim_v);
+        }
         const count = @max(@as(usize, 1), _.doc.nodeCount());
         let css_buf = _.allocator.alloc(u8, 65536) catch null;
         defer if (css_buf != null) _.allocator.free(css_buf.?);
@@ -4179,9 +5449,24 @@ pub struct CdpPageSession {
                     }
                 }
             }
+            if (dctx := _.dom_ctx) {
+                if (ac := dctx.adopted_css) {
+                    if (ac.len > 0 && css_len < css_buf.?.len) {
+                        if (css_len > 0 && css_len < css_buf.?.len) {
+                            css_buf.?[css_len] = '\n';
+                            css_len += 1;
+                        }
+                        const copy_len = @min(ac.len, css_buf.?.len - css_len);
+                        if (copy_len > 0) {
+                            @memcpy(css_buf.?[css_len .. css_len + copy_len], ac[0..copy_len]);
+                            css_len += copy_len;
+                        }
+                    }
+                }
+            }
         }
         const full_css = if (css_buf != null) css_buf.?[0..css_len] else "";
-        const sheet = StyleSheet.parse(full_css, _.viewport_width, _.emulated_media_print);
+        const sheet = StyleSheet.parse(full_css, _.viewport_width, _.dark_color_scheme);
         let styles = _.allocator.alloc(ComputedStyle, count) catch return;
         defer _.allocator.free(styles);
         Cascade.computeStyles(&_.doc, &sheet, styles, 16.0);
@@ -4692,9 +5977,24 @@ pub struct CdpPageSession {
                     }
                 }
             }
+            if (dctx := _.dom_ctx) {
+                if (ac := dctx.adopted_css) {
+                    if (ac.len > 0 && css_len < css_buf.?.len) {
+                        if (css_len > 0 && css_len < css_buf.?.len) {
+                            css_buf.?[css_len] = '\n';
+                            css_len += 1;
+                        }
+                        const copy_len = @min(ac.len, css_buf.?.len - css_len);
+                        if (copy_len > 0) {
+                            @memcpy(css_buf.?[css_len .. css_len + copy_len], ac[0..copy_len]);
+                            css_len += copy_len;
+                        }
+                    }
+                }
+            }
         }
         const full_css = if (css_buf != null) css_buf.?[0..css_len] else "";
-        const sheet = StyleSheet.parse(full_css, _.viewport_width, _.emulated_media_print);
+        const sheet = StyleSheet.parse(full_css, _.viewport_width, _.dark_color_scheme);
 
         let anim_nids: [64]u32 = [0; 64];
         let anim_orig_styles: [64][]const u8 = [""; 64];
@@ -4856,7 +6156,7 @@ pub struct CdpPageSession {
             let if_nid: usize = 1;
             while (if_nid < count && canvas_count < 8) : (if_nid += 1) {
                 const if_node = &_.doc.nodes.items[if_nid];
-                if (if_node.node_type != NodeType.Element || !std.ascii.eqlIgnoreCase(if_node.tag_name, "iframe")) continue;
+                if (if_node.node_type != NodeType.Element || (!std.ascii.eqlIgnoreCase(if_node.tag_name, "iframe") && !std.ascii.eqlIgnoreCase(if_node.tag_name, "frame"))) continue;
                 const if_src = if_node.getAttribute("src") ?? "";
                 const if_srcdoc = if_node.getAttribute("srcdoc");
                 if (if_src.len == 0 && if_srcdoc == null) continue;
@@ -5019,7 +6319,7 @@ pub struct CdpPageSession {
             }
         }
 
-        let bg_color = CssColor.rgb(255, 255, 255);
+        let bg_color = if (_.has_bg_color_override) _.bg_color_override else CssColor.rgb(255, 255, 255);
         if (_.doc.root_element != NULL_NODE && @as(usize, _.doc.root_element) < count) {
             const root_bg = styles[@as(usize, _.doc.root_element)].background_color;
             if (root_bg.a > 0) {
@@ -5202,8 +6502,10 @@ pub struct CdpPageSession {
             doc_url: _.url,
         };
 
-        if (pw := out_w) pw.* = vw;
-        if (ph := out_h) ph.* = vh;
+        const final_out_w = if (clip_w > 0 && clip_h > 0) clip_w else vw;
+        const final_out_h = if (clip_w > 0 && clip_h > 0) clip_h else vh;
+        if (pw := out_w) pw.* = final_out_w;
+        if (ph := out_h) ph.* = final_out_h;
         if (prh := out_rects_hash) {
             let rh: u64 = (@as(u64, 0xcbf29ce4) << 32) | 0x84222325;
             let ri: usize = 0;
@@ -5419,6 +6721,452 @@ pub struct CdpPageSession {
         }
     }
 
+    fn addPendingFetchEvent(*_, method: []const u8, payload: []const u8): bool {
+        if (_.pending_fetch_event_count >= _.pending_fetch_events.len) return false;
+        const idx = _.pending_fetch_event_tail;
+        _.pending_fetch_events[idx].freeDyn();
+        if (payload.len <= _.pending_fetch_events[idx].params_buf.len) {
+            if (payload.len > 0) {
+                @memcpy(_.pending_fetch_events[idx].params_buf[0..payload.len], payload);
+            }
+            _.pending_fetch_events[idx].params_len = payload.len;
+        } else {
+            const dyn_buf = std.heap.c_allocator.alloc(u8, payload.len) catch return false;
+            @memcpy(dyn_buf, payload);
+            _.pending_fetch_events[idx].params_dyn = dyn_buf;
+            _.pending_fetch_events[idx].params_len = payload.len;
+        }
+        _.pending_fetch_events[idx].params_dyn_consumed = false;
+        _.pending_fetch_events[idx].method = method;
+        _.pending_fetch_event_tail = (idx + 1) % _.pending_fetch_events.len;
+        _.pending_fetch_event_count += 1;
+        return true;
+    }
+
+    static fn jsonEscapedLen(src: []const u8): usize {
+        let len: usize = 0;
+        let i: usize = 0;
+        while (i < src.len) {
+            const c = src[i];
+            if (c == '"' || c == '\\' || c == '\n' || c == '\r' || c == '\t') {
+                len += 2;
+                i += 1;
+            } else if (c < 0x20) {
+                len += 6;
+                i += 1;
+            } else if (c < 0x80) {
+                len += 1;
+                i += 1;
+            } else {
+                const seq_len = utf8ValidSeqLen(src, i);
+                if (seq_len > 0) {
+                    len += seq_len;
+                    i += seq_len;
+                } else {
+                    len += 6;
+                    i += 1;
+                }
+            }
+        }
+        return len;
+    }
+
+    static fn escapeJsonStringExact(src: []const u8, dst: []u8): []const u8 {
+        let out_idx: usize = 0;
+        let i: usize = 0;
+        while (i < src.len) {
+            const c = src[i];
+            if (c == '"') {
+                if (out_idx + 2 > dst.len) break;
+                dst[out_idx] = '\\';
+                dst[out_idx + 1] = '"';
+                out_idx += 2;
+                i += 1;
+            } else if (c == '\\') {
+                if (out_idx + 2 > dst.len) break;
+                dst[out_idx] = '\\';
+                dst[out_idx + 1] = '\\';
+                out_idx += 2;
+                i += 1;
+            } else if (c == '\n') {
+                if (out_idx + 2 > dst.len) break;
+                dst[out_idx] = '\\';
+                dst[out_idx + 1] = 'n';
+                out_idx += 2;
+                i += 1;
+            } else if (c == '\r') {
+                if (out_idx + 2 > dst.len) break;
+                dst[out_idx] = '\\';
+                dst[out_idx + 1] = 'r';
+                out_idx += 2;
+                i += 1;
+            } else if (c == '\t') {
+                if (out_idx + 2 > dst.len) break;
+                dst[out_idx] = '\\';
+                dst[out_idx + 1] = 't';
+                out_idx += 2;
+                i += 1;
+            } else if (c < 0x20) {
+                if (out_idx + 6 > dst.len) break;
+                const hex = "0123456789abcdef";
+                dst[out_idx] = '\\';
+                dst[out_idx + 1] = 'u';
+                dst[out_idx + 2] = '0';
+                dst[out_idx + 3] = '0';
+                dst[out_idx + 4] = hex[(c >> 4) & 0x0f];
+                dst[out_idx + 5] = hex[c & 0x0f];
+                out_idx += 6;
+                i += 1;
+            } else if (c < 0x80) {
+                if (out_idx + 1 > dst.len) break;
+                dst[out_idx] = c;
+                out_idx += 1;
+                i += 1;
+            } else {
+                const seq_len = utf8ValidSeqLen(src, i);
+                if (seq_len > 0) {
+                    if (out_idx + seq_len > dst.len) break;
+                    let k: usize = 0;
+                    while (k < seq_len) : (k += 1) {
+                        dst[out_idx + k] = src[i + k];
+                    }
+                    out_idx += seq_len;
+                    i += seq_len;
+                } else {
+                    if (out_idx + 6 > dst.len) break;
+                    dst[out_idx] = '\\';
+                    dst[out_idx + 1] = 'u';
+                    dst[out_idx + 2] = 'f';
+                    dst[out_idx + 3] = 'f';
+                    dst[out_idx + 4] = 'f';
+                    dst[out_idx + 5] = 'd';
+                    out_idx += 6;
+                    i += 1;
+                }
+            }
+        }
+        return dst[0..out_idx];
+    }
+
+    pub fn enqueueSubresourceFetchPause(
+        *_,
+        url: []const u8,
+        method: []const u8,
+        headers_json: []const u8,
+        post_data: []const u8,
+        rtype: []const u8,
+        out_req_id: []u8,
+    ): usize {
+        let req_id_buf: [64]u8 = [0; 64];
+        const req_id = std.fmt.bufPrint(&req_id_buf, "fetch-js-{d}", .{_.fetch_state.next_id}) catch "fetch-js-1";
+        _.fetch_state.next_id += 1;
+
+        _.net_req_seq += 1;
+        let net_id_buf: [64]u8 = [0; 64];
+        const net_id = std.fmt.bufPrint(&net_id_buf, "req-{d}", .{_.net_req_seq}) catch req_id;
+
+        if (parked := _.fetch_state.parkRequest(req_id, url, method)) {
+            const rt_n = @min(rtype.len, parked.resource_type_buf.len);
+            if (rt_n > 0) @memcpy(parked.resource_type_buf[0..rt_n], rtype[0..rt_n]);
+            parked.resource_type_len = rt_n;
+            const nid_n = @min(net_id.len, parked.network_id_buf.len);
+            if (nid_n > 0) @memcpy(parked.network_id_buf[0..nid_n], net_id[0..nid_n]);
+            parked.network_id_len = nid_n;
+        }
+
+        let esc_url_buf: [2048]u8 = [0; 2048];
+        const esc_url = escapeJsonString(url, &esc_url_buf);
+        const hdr_obj = if (headers_json.len >= 2 && headers_json[0] == '{') headers_json else "{}";
+
+        if (_.network_enabled) {
+            let esc_doc_buf: [2048]u8 = [0; 2048];
+            const esc_doc = escapeJsonString(_.url, &esc_doc_buf);
+            let pd_kv_buf: [2048]u8 = [0; 2048];
+            let pd_kv_dyn: ([]u8)? = null;
+            defer {
+                if (d := pd_kv_dyn) std.heap.c_allocator.free(d);
+            }
+            let pd_kv: []const u8 = "";
+            if (post_data.len > 0) {
+                const esc_len = CdpPageSession.jsonEscapedLen(post_data);
+                if (esc_len <= 1536) {
+                    let pd_esc_buf: [1536]u8 = [0; 1536];
+                    const pd_esc = CdpPageSession.escapeJsonStringExact(post_data, &pd_esc_buf);
+                    pd_kv = std.fmt.bufPrint(&pd_kv_buf, ",\"hasPostData\":true,\"postData\":\"{s}\"", .{pd_esc}) catch blk: {
+                        if (dyn_buf := std.fmt.allocPrint(std.heap.c_allocator, ",\"hasPostData\":true,\"postData\":\"{s}\"", .{pd_esc}) catch null) {
+                            pd_kv_dyn = dyn_buf;
+                            break :blk dyn_buf;
+                        }
+                        break :blk "";
+                    };
+                } else {
+                    if (pd_esc_buf := std.heap.c_allocator.alloc(u8, esc_len) catch null) {
+                        defer std.heap.c_allocator.free(pd_esc_buf);
+                        const pd_esc = CdpPageSession.escapeJsonStringExact(post_data, pd_esc_buf);
+                        if (dyn_buf := std.fmt.allocPrint(std.heap.c_allocator, ",\"hasPostData\":true,\"postData\":\"{s}\"", .{pd_esc}) catch null) {
+                            pd_kv_dyn = dyn_buf;
+                            pd_kv = dyn_buf;
+                        }
+                    }
+                }
+            }
+            let nev_buf: [4096]u8 = [0; 4096];
+            let nev_dyn: ([]u8)? = null;
+            defer {
+                if (d := nev_dyn) std.heap.c_allocator.free(d);
+            }
+            const req_json = std.fmt.bufPrint(
+                &nev_buf,
+                "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"{s}\",\"headers\":{s},\"initialPriority\":\"High\",\"referrerPolicy\":\"no-referrer\"{s}}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"script\"}},\"type\":\"{s}\",\"frameId\":\"{s}\"}}",
+                .{ net_id, _.loader_id, esc_doc, esc_url, method, hdr_obj, pd_kv, rtype, _.frame_id },
+            ) catch blk: {
+                if (dyn_buf := std.fmt.allocPrint(
+                    std.heap.c_allocator,
+                    "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"{s}\",\"headers\":{s},\"initialPriority\":\"High\",\"referrerPolicy\":\"no-referrer\"{s}}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"script\"}},\"type\":\"{s}\",\"frameId\":\"{s}\"}}",
+                    .{ net_id, _.loader_id, esc_doc, esc_url, method, hdr_obj, pd_kv, rtype, _.frame_id },
+                ) catch null) {
+                    nev_dyn = dyn_buf;
+                    break :blk dyn_buf;
+                }
+                break :blk "";
+            };
+            if (req_json.len > 0) {
+                * = _.addPendingFetchEvent("Network.requestWillBeSent", req_json);
+            }
+        }
+
+        let fev_buf: [4096]u8 = [0; 4096];
+        let fev_dyn: ([]u8)? = null;
+        defer {
+            if (d := fev_dyn) std.heap.c_allocator.free(d);
+        }
+        if (fev := FetchHandler.buildRequestPausedEventWithHeadersAndPost(req_id, esc_url, method, rtype, _.frame_id, net_id, hdr_obj, post_data, &fev_buf, std.heap.c_allocator, &fev_dyn)) {
+            * = _.addPendingFetchEvent(fev.method, fev.params_json);
+        }
+
+        const copy_len = @min(req_id.len, out_req_id.len);
+        if (copy_len > 0) @memcpy(out_req_id[0..copy_len], req_id[0..copy_len]);
+        return copy_len;
+    }
+
+    pub fn pollFetchEvents(*_, out_events: []CdpEvent): usize {
+        let si: usize = 0;
+        while (si < _.pending_fetch_events.len) : (si += 1) {
+            if (_.pending_fetch_events[si].params_dyn_consumed) {
+                _.pending_fetch_events[si].freeDyn();
+            }
+        }
+        let emitted: usize = 0;
+        while (_.pending_fetch_event_count > 0 && emitted < out_events.len) : (emitted += 1) {
+            const idx = _.pending_fetch_event_head;
+            let slot = &_.pending_fetch_events[idx];
+            out_events[emitted] = CdpEvent.create(slot.method, slot.paramsSlice());
+            if (slot.params_dyn != null) {
+                slot.params_dyn_consumed = true;
+            }
+            _.pending_fetch_event_head = (idx + 1) % _.pending_fetch_events.len;
+            _.pending_fetch_event_count -= 1;
+        }
+        return emitted;
+    }
+
+    static fn buildHeadersJsObject(raw_ctx: *JSContext, raw_hdrs: []const u8): JSValue {
+        const hdr_obj = JS_NewObject(raw_ctx);
+        let pos: usize = 0;
+        while (pos < raw_hdrs.len) {
+            let line_end = raw_hdrs.len;
+            if (nl := std.mem.indexOfScalarPos(u8, raw_hdrs, pos, '\n')) {
+                line_end = nl;
+            }
+            let line = raw_hdrs[pos..line_end];
+            if (line.len > 0 && line[line.len - 1] == '\r') {
+                line = line[0 .. line.len - 1];
+            }
+            pos = if (line_end < raw_hdrs.len) line_end + 1 else raw_hdrs.len;
+            if (line.len == 0) continue;
+            if (colon := std.mem.indexOfScalar(u8, line, ':')) {
+                const key = std.mem.trim(u8, line[0..colon], " \t");
+                const val = std.mem.trim(u8, line[colon + 1 ..], " \t");
+                if (key.len > 0 && key.len < 256) {
+                    let key_z: [256]u8 = [0; 256];
+                    @memcpy(key_z[0..key.len], key);
+                    key_z[key.len] = 0;
+                    * = JS_SetPropertyStr(raw_ctx, hdr_obj, unsafe { @ptrCast(&key_z) }, JS_NewStringLen(raw_ctx, val.ptr, val.len));
+                }
+            }
+        }
+        return hdr_obj;
+    }
+
+    pub fn pumpFetchVerdicts(*_) {
+        if (!_.has_document) return;
+        const raw_ctx = _.ctx.raw_ctx;
+        const fetch_disabled = !_.fetch_enabled && !_.fetch_state.enabled;
+        let resolved_any = false;
+
+        let i: usize = 0;
+        while (i < _.pending_fetch_js.len) : (i += 1) {
+            let slot = &_.pending_fetch_js[i];
+            if (!slot.active) continue;
+
+            const req_id = slot.req_id_buf[0..slot.req_id_len];
+            const parked_opt = _.fetch_state.findParked(req_id);
+
+            if (parked_opt == null || fetch_disabled) {
+                if (parked_opt != null && parked_opt.?.verdict == InterceptVerdict.None && !fetch_disabled) {
+                    continue;
+                }
+                const obj = JS_NewObject(raw_ctx);
+                * = JS_SetPropertyStr(raw_ctx, obj, "action", JS_NewStringLen(raw_ctx, "continue", 8));
+                let call_args: [1]JSValue = [obj];
+                const call_res = JS_Call(raw_ctx, slot.resolve_fn, jsUndefined(), 1, unsafe { @ptrCast(&call_args) });
+                JS_FreeValue(raw_ctx, call_res);
+                JS_FreeValue(raw_ctx, obj);
+                JS_FreeValue(raw_ctx, slot.resolve_fn);
+                JS_FreeValue(raw_ctx, slot.reject_fn);
+                slot.resolve_fn = jsUndefined();
+                slot.reject_fn = jsUndefined();
+                slot.active = false;
+                slot.req_id_len = 0;
+                slot.net_id_len = 0;
+                resolved_any = true;
+                continue;
+            }
+
+            let p = parked_opt.?;
+            if (p.verdict == InterceptVerdict.None) continue;
+
+            const obj = JS_NewObject(raw_ctx);
+            if (p.verdict == InterceptVerdict.Continue) {
+                * = JS_SetPropertyStr(raw_ctx, obj, "action", JS_NewStringLen(raw_ctx, "continue", 8));
+                if (p.url().len > 0) {
+                    * = JS_SetPropertyStr(raw_ctx, obj, "url", JS_NewStringLen(raw_ctx, p.url().ptr, p.url().len));
+                }
+                if (p.method().len > 0) {
+                    * = JS_SetPropertyStr(raw_ctx, obj, "method", JS_NewStringLen(raw_ctx, p.method().ptr, p.method().len));
+                }
+                if (p.mockHeaders().len > 0) {
+                    * = JS_SetPropertyStr(raw_ctx, obj, "headers", CdpPageSession.buildHeadersJsObject(raw_ctx, p.mockHeaders()));
+                }
+                if (p.has_mock_body) {
+                    const raw_post = p.mockBody();
+                    if (raw_post.len > 0) {
+                        if (dec_buf := tryAllocBytes(_.allocator, raw_post.len)) {
+                            defer _.allocator.free(dec_buf);
+                            const dec_len = Base64.decode(dec_buf, raw_post) catch 0;
+                            if (dec_len > 0) {
+                                * = JS_SetPropertyStr(raw_ctx, obj, "body", JS_NewUint8ArrayCopy(raw_ctx, dec_buf.ptr, dec_len));
+                            } else {
+                                * = JS_SetPropertyStr(raw_ctx, obj, "body", JS_NewUint8ArrayCopy(raw_ctx, raw_post.ptr, raw_post.len));
+                            }
+                        } else {
+                            * = JS_SetPropertyStr(raw_ctx, obj, "body", JS_NewUint8ArrayCopy(raw_ctx, raw_post.ptr, raw_post.len));
+                        }
+                    } else {
+                        const empty_bytes: []const u8 = "";
+                        * = JS_SetPropertyStr(raw_ctx, obj, "body", JS_NewUint8ArrayCopy(raw_ctx, empty_bytes.ptr, 0));
+                    }
+                }
+            } else if (p.verdict == InterceptVerdict.Fulfill) {
+                const status_text = p.mockStatusText();
+                * = JS_SetPropertyStr(raw_ctx, obj, "action", JS_NewStringLen(raw_ctx, "respond", 7));
+                * = JS_SetPropertyStr(raw_ctx, obj, "status", jsInt(@as(i32, @intCast(p.mock_status))));
+                * = JS_SetPropertyStr(raw_ctx, obj, "statusText", JS_NewStringLen(raw_ctx, status_text.ptr, status_text.len));
+                if (p.mockHeaders().len > 0) {
+                    * = JS_SetPropertyStr(raw_ctx, obj, "headers", CdpPageSession.buildHeadersJsObject(raw_ctx, p.mockHeaders()));
+                }
+                const raw_b64 = p.mockBody();
+                let resp_body_len: usize = 0;
+                if (raw_b64.len > 0) {
+                    if (dec_buf := tryAllocBytes(_.allocator, raw_b64.len)) {
+                        defer _.allocator.free(dec_buf);
+                        const dec_len = Base64.decode(dec_buf, raw_b64) catch 0;
+                        if (dec_len > 0) {
+                            resp_body_len = dec_len;
+                            * = JS_SetPropertyStr(raw_ctx, obj, "body", JS_NewStringLen(raw_ctx, dec_buf.ptr, dec_len));
+                        } else {
+                            resp_body_len = raw_b64.len;
+                            * = JS_SetPropertyStr(raw_ctx, obj, "body", JS_NewStringLen(raw_ctx, raw_b64.ptr, raw_b64.len));
+                        }
+                    } else {
+                        resp_body_len = raw_b64.len;
+                        * = JS_SetPropertyStr(raw_ctx, obj, "body", JS_NewStringLen(raw_ctx, raw_b64.ptr, raw_b64.len));
+                    }
+                } else {
+                    * = JS_SetPropertyStr(raw_ctx, obj, "body", JS_NewStringLen(raw_ctx, "", 0));
+                }
+                if (_.network_enabled) {
+                    const net_id = if (slot.net_id_len > 0) slot.net_id_buf[0..slot.net_id_len] else if (p.networkId().len > 0) p.networkId() else req_id;
+                    const rtype = if (p.resourceType().len > 0) p.resourceType() else "Fetch";
+                    const resp_url = if (p.url().len > 0) p.url() else p.origUrl();
+                    let esc_url_buf: [2048]u8 = [0; 2048];
+                    const esc_url = escapeJsonString(resp_url, &esc_url_buf);
+                    let st_esc_buf: [128]u8 = [0; 128];
+                    const st_esc = escapeJsonString(status_text, &st_esc_buf);
+                    const hdrs_json = formatHttpHeadersJson(p.mockHeaders(), _.allocator);
+                    defer if (hdrs_json.len > 2) _.allocator.free(hdrs_json);
+                    let nev_buf: [4096]u8 = [0; 4096];
+                    const resp_json = std.fmt.bufPrint(
+                        &nev_buf,
+                        "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"timestamp\":1700000000.1,\"type\":\"{s}\",\"response\":{{\"url\":\"{s}\",\"status\":{d},\"statusText\":\"{s}\",\"headers\":{s},\"mimeType\":\"\"}},\"frameId\":\"{s}\"}}",
+                        .{ net_id, _.loader_id, rtype, esc_url, p.mock_status, st_esc, hdrs_json, _.frame_id },
+                    ) catch "";
+                    if (resp_json.len > 0) {
+                        * = _.addPendingFetchEvent("Network.responseReceived", resp_json);
+                    }
+                    let fin_buf: [512]u8 = [0; 512];
+                    const fin_json = std.fmt.bufPrint(
+                        &fin_buf,
+                        "{{\"requestId\":\"{s}\",\"timestamp\":1700000000.2,\"encodedDataLength\":{d}}}",
+                        .{ net_id, resp_body_len },
+                    ) catch "";
+                    if (fin_json.len > 0) {
+                        * = _.addPendingFetchEvent("Network.loadingFinished", fin_json);
+                    }
+                }
+            } else if (p.verdict == InterceptVerdict.Fail) {
+                * = JS_SetPropertyStr(raw_ctx, obj, "action", JS_NewStringLen(raw_ctx, "abort", 5));
+                if (p.errorReason().len > 0) {
+                    * = JS_SetPropertyStr(raw_ctx, obj, "errorReason", JS_NewStringLen(raw_ctx, p.errorReason().ptr, p.errorReason().len));
+                }
+                if (_.network_enabled) {
+                    const net_id = if (slot.net_id_len > 0) slot.net_id_buf[0..slot.net_id_len] else if (p.networkId().len > 0) p.networkId() else req_id;
+                    const rtype = if (p.resourceType().len > 0) p.resourceType() else "Fetch";
+                    const reason_raw = if (p.errorReason().len > 0) p.errorReason() else "net::ERR_FAILED";
+                    let esc_reason_buf: [128]u8 = [0; 128];
+                    const esc_reason = escapeJsonString(reason_raw, &esc_reason_buf);
+                    let fail_buf: [512]u8 = [0; 512];
+                    const fail_json = std.fmt.bufPrint(
+                        &fail_buf,
+                        "{{\"requestId\":\"{s}\",\"timestamp\":1700000000.2,\"type\":\"{s}\",\"errorText\":\"{s}\",\"canceled\":false}}",
+                        .{ net_id, rtype, esc_reason },
+                    ) catch "";
+                    if (fail_json.len > 0) {
+                        * = _.addPendingFetchEvent("Network.loadingFailed", fail_json);
+                    }
+                }
+            }
+
+            let call_args: [1]JSValue = [obj];
+            const call_res = JS_Call(raw_ctx, slot.resolve_fn, jsUndefined(), 1, unsafe { @ptrCast(&call_args) });
+            JS_FreeValue(raw_ctx, call_res);
+            JS_FreeValue(raw_ctx, obj);
+            JS_FreeValue(raw_ctx, slot.resolve_fn);
+            JS_FreeValue(raw_ctx, slot.reject_fn);
+            slot.resolve_fn = jsUndefined();
+            slot.reject_fn = jsUndefined();
+            slot.active = false;
+            slot.req_id_len = 0;
+            slot.net_id_len = 0;
+            p.reset();
+            resolved_any = true;
+        }
+
+        if (resolved_any) {
+            _.ctx.drainJobs();
+        }
+    }
+
     fn pollNetworkEvents(*_, out_events: []CdpEvent): usize {
         if (!_.network_enabled) return 0;
         _.checkDeferredFonts();
@@ -5428,7 +7176,7 @@ pub struct CdpPageSession {
             let ev_idx: usize = 0;
             let storage_pos: usize = 0;
             let i: usize = 0;
-            while (i < dom.fetch_count && ev_idx + 4 <= out_events.len) : (i += 1) {
+            while (i < dom.fetch_count && ev_idx + 5 <= out_events.len) : (i += 1) {
                 let rec = &dom.fetch_records[i];
                 const fetch_url_chk = rec.getUrl();
                 if (_.init_img_flushed || i >= _.init_subresource_record_count) {
@@ -5448,7 +7196,17 @@ pub struct CdpPageSession {
                 const req_seq = _.net_req_seq;
                 const fetch_url = rec.getUrl();
                 const fetch_mime = rec.getMimeType();
-                const fid = if (rec.getFrameId().len > 0) rec.getFrameId() else _.frame_id;
+                let fid = if (rec.getFrameId().len > 0) rec.getFrameId() else _.frame_id;
+                if (std.mem.eql(u8, fid, _.frame_id)) {
+                    let kfi: usize = 0;
+                    while (kfi < _.known_child_frame_count) : (kfi += 1) {
+                        const kf = &_.known_child_frames[kfi];
+                        if (kf.active && !kf.detached && kf.url_len > 0 && std.mem.eql(u8, kf.url_buf[0..kf.url_len], fetch_url)) {
+                            fid = kf.frame_id_buf[0..kf.frame_id_len];
+                            break;
+                        }
+                    }
+                }
                 const lid = if (rec.getLoaderId().len > 0) rec.getLoaderId() else _.loader_id;
 
                 const pending = consumePendingFetchBody(fetch_url);
@@ -5456,8 +7214,23 @@ pub struct CdpPageSession {
                 let resp_status_text: []const u8 = "OK";
                 let resp_headers_json: []const u8 = "{}";
                 let resp_extra_headers_json: []const u8 = "";
+                let req_headers_text_esc: []const u8 = "";
+                let req_headers_obj_json: []const u8 = "";
+                let resp_headers_text_esc: []const u8 = "";
+                let req_ht_esc_buf: [4096]u8 = undefined;
+                let resp_ht_esc_buf: [4096]u8 = undefined;
                 let resp_mime: []const u8 = fetch_mime;
+                let resp_body_len: usize = 0;
+                let final_url_esc_buf: [4096]u8 = undefined;
+                let has_final_url = false;
+                let final_url_esc: []const u8 = "";
                 if (pending.found) {
+                    if (pending.final_url.len > 0) {
+                        final_url_esc = escapeJsonString(pending.final_url, &final_url_esc_buf);
+                        has_final_url = true;
+                    }
+                    const wire_total = pending.resp_headers_text.len + pending.wire_body_len;
+                    resp_body_len = if (pending.has_meta && wire_total > 0) wire_total else pending.body.len;
                     let p_req_id_buf: [32]u8 = undefined;
                     const p_req_id = std.fmt.bufPrint(&p_req_id_buf, "req-{d}", .{ req_seq }) catch "req-1";
                     recordResponseBody(p_req_id, pending.body, false);
@@ -5479,8 +7252,29 @@ pub struct CdpPageSession {
                             resp_extra_headers_json = formatHttpHeadersExtraInfoJson(pending.raw_headers, _.allocator);
                             std.heap.c_allocator.free(pending.raw_headers);
                         }
-                    } else if (pending.raw_headers.len > 0) {
-                        std.heap.c_allocator.free(pending.raw_headers);
+                        if (pending.req_headers_text.len > 0) {
+                            if (crlf := std.mem.indexOf(u8, pending.req_headers_text, "\r\n")) {
+                                req_headers_obj_json = formatHttpHeadersExtraInfoJson(pending.req_headers_text[crlf + 2 ..], _.allocator);
+                            }
+                            req_headers_text_esc = escapeJsonString(pending.req_headers_text, &req_ht_esc_buf);
+                            if (pending.redirect_count == 0) {
+                                std.heap.c_allocator.free(pending.req_headers_text);
+                            }
+                        }
+                        if (pending.resp_headers_text.len > 0) {
+                            resp_headers_text_esc = escapeJsonString(pending.resp_headers_text, &resp_ht_esc_buf);
+                            std.heap.c_allocator.free(pending.resp_headers_text);
+                        }
+                    } else {
+                        if (pending.raw_headers.len > 0) {
+                            std.heap.c_allocator.free(pending.raw_headers);
+                        }
+                        if (pending.req_headers_text.len > 0 && pending.redirect_count == 0) {
+                            std.heap.c_allocator.free(pending.req_headers_text);
+                        }
+                        if (pending.resp_headers_text.len > 0) {
+                            std.heap.c_allocator.free(pending.resp_headers_text);
+                        }
                     }
                 }
 
@@ -5539,7 +7333,7 @@ pub struct CdpPageSession {
                      std.mem.indexOf(u8, fetch_url, "network-session-probe") != null);
                 const child_sid = if (is_child_net) _.child_network_session_id_buf[0.._.child_network_session_id_len] else "";
 
-                if (req_json.len > 0) {
+                if (req_json.len > 0 && ev_idx < out_events.len) {
                     storage_pos += req_json.len;
                     let req_evt = CdpEvent.create("Network.requestWillBeSent", req_json);
                     if (child_sid.len > 0) req_evt.session_id = child_sid;
@@ -5547,49 +7341,258 @@ pub struct CdpPageSession {
                     ev_idx += 1;
                 }
 
-                let st_esc_buf: [128]u8 = undefined;
-                const st_esc = escapeJsonString(resp_status_text, &st_esc_buf);
-                let rmime_esc_buf: [256]u8 = undefined;
-                const rmime_esc = escapeJsonString(resp_mime, &rmime_esc_buf);
-                const has_extra_kv = if (resp_extra_headers_json.len > 2) ",\"hasExtraInfo\":true" else "";
-                const resp_json = std.fmt.bufPrint(
-                    _.net_event_storage[storage_pos..],
-                    "{{\"requestId\":\"req-{d}\",\"loaderId\":\"{s}\",\"timestamp\":1700000000.1,\"type\":\"{s}\",\"response\":{{\"url\":\"{s}\",\"status\":{d},\"statusText\":\"{s}\",\"headers\":{s},\"mimeType\":\"{s}\"}},\"frameId\":\"{s}\"{s}{s}}}",
-                    .{ req_seq, lid, res_type, fetch_esc, resp_status, st_esc, resp_headers_json, rmime_esc, fid, has_extra_kv, bctx_kv },
-                ) catch "";
-                if (resp_json.len > 0) {
-                    storage_pos += resp_json.len;
-                    let resp_evt = CdpEvent.create("Network.responseReceived", resp_json);
-                    if (child_sid.len > 0) resp_evt.session_id = child_sid;
-                    out_events[ev_idx] = resp_evt;
-                    ev_idx += 1;
+                // Hop 0 requestWillBeSentExtraInfo
+                let hop0_req_ht_esc: []const u8 = req_headers_text_esc;
+                let hop0_req_obj_json: []const u8 = req_headers_obj_json;
+                let hop0_has_extra = resp_extra_headers_json.len > 2 || req_headers_text_esc.len > 0;
+                let hop0_ht_esc_buf: [4096]u8 = undefined;
+                if (pending.found && pending.redirect_count > 0) {
+                    const h0 = &pending.redirect_hops[0];
+                    if (h0.req_headers_text.len > 0) {
+                        if (crlf0 := std.mem.indexOf(u8, h0.req_headers_text, "\r\n")) {
+                            hop0_req_obj_json = formatHttpHeadersExtraInfoJson(h0.req_headers_text[crlf0 + 2 ..], _.allocator);
+                        } else {
+                            hop0_req_obj_json = "";
+                        }
+                        hop0_req_ht_esc = escapeJsonString(h0.req_headers_text, &hop0_ht_esc_buf);
+                        hop0_has_extra = true;
+                    } else if (h0.raw_headers.len > 0) {
+                        hop0_req_obj_json = "";
+                        hop0_req_ht_esc = "";
+                        hop0_has_extra = true;
+                    } else {
+                        hop0_req_obj_json = "";
+                        hop0_req_ht_esc = "";
+                    }
                 }
-                if (resp_extra_headers_json.len > 2 && ev_idx + 1 < out_events.len) {
-                    const extra_json = std.fmt.bufPrint(
-                        _.net_event_storage[storage_pos..],
-                        "{{\"requestId\":\"req-{d}\",\"blockedCookies\":[],\"headers\":{s}}}",
-                        .{ req_seq, resp_extra_headers_json },
-                    ) catch "";
-                    if (extra_json.len > 0) {
-                        storage_pos += extra_json.len;
-                        let extra_evt = CdpEvent.create("Network.responseReceivedExtraInfo", extra_json);
-                        if (child_sid.len > 0) extra_evt.session_id = child_sid;
-                        out_events[ev_idx] = extra_evt;
+                if (hop0_has_extra && ev_idx + 1 < out_events.len) {
+                    const req_ht_kv = if (hop0_req_ht_esc.len > 0)
+                        (std.fmt.allocPrint(_.allocator, ",\"headersText\":\"{s}\"", .{hop0_req_ht_esc}) catch "")
+                    else
+                        "";
+                    const req_extra_json = if (hop0_req_obj_json.len > 2)
+                        (std.fmt.bufPrint(
+                            _.net_event_storage[storage_pos..],
+                            "{{\"requestId\":\"req-{d}\",\"associatedCookies\":[],\"headers\":{s}{s}}}",
+                            .{ req_seq, hop0_req_obj_json, req_ht_kv },
+                        ) catch "")
+                    else
+                        (std.fmt.bufPrint(
+                            _.net_event_storage[storage_pos..],
+                            "{{\"requestId\":\"req-{d}\",\"associatedCookies\":[],\"headers\":{{\"user-agent\":\"{s}\",\"accept\":\"{s}\",\"referer\":\"{s}\"}}{s}}}",
+                            .{ req_seq, ua_esc, accept_val, ref_esc, req_ht_kv },
+                        ) catch "");
+                    if (req_extra_json.len > 0) {
+                        storage_pos += req_extra_json.len;
+                        let req_extra_evt = CdpEvent.create("Network.requestWillBeSentExtraInfo", req_extra_json);
+                        if (child_sid.len > 0) req_extra_evt.session_id = child_sid;
+                        out_events[ev_idx] = req_extra_evt;
                         ev_idx += 1;
                     }
                 }
 
-                const fin_json = std.fmt.bufPrint(
-                    _.net_event_storage[storage_pos..],
-                    "{{\"requestId\":\"req-{d}\",\"timestamp\":1700000000.2,\"encodedDataLength\":0{s}}}",
-                    .{ req_seq, bctx_kv },
-                ) catch "";
-                if (fin_json.len > 0) {
-                    storage_pos += fin_json.len;
-                    let fin_evt = CdpEvent.create("Network.loadingFinished", fin_json);
-                    if (child_sid.len > 0) fin_evt.session_id = child_sid;
-                    out_events[ev_idx] = fin_evt;
-                    ev_idx += 1;
+                // Redirect chain hops (hi = 1 .. pending.redirect_count)
+                if (pending.found && pending.redirect_count > 0) {
+                    const max_hops = @min(pending.redirect_count, 6);
+                    let hi: usize = 1;
+                    while (hi <= max_hops) : (hi += 1) {
+                        const prev_hop = &pending.redirect_hops[hi - 1];
+                        let prev_extra_hdrs: []const u8 = "";
+                        if (prev_hop.raw_headers.len > 0) {
+                            prev_extra_hdrs = formatHttpHeadersExtraInfoJson(prev_hop.raw_headers, _.allocator);
+                        }
+                        let prev_resp_ht_esc_buf: [4096]u8 = undefined;
+                        let prev_resp_ht_esc: []const u8 = "";
+                        if (prev_hop.resp_headers_text.len > 0) {
+                            prev_resp_ht_esc = escapeJsonString(prev_hop.resp_headers_text, &prev_resp_ht_esc_buf);
+                        }
+                        if ((prev_extra_hdrs.len > 2 || prev_resp_ht_esc.len > 0) && ev_idx < out_events.len) {
+                            const prev_ht_kv = if (prev_resp_ht_esc.len > 0)
+                                (std.fmt.allocPrint(_.allocator, ",\"headersText\":\"{s}\"", .{prev_resp_ht_esc}) catch "")
+                            else
+                                "";
+                            const prev_hdr_obj = if (prev_extra_hdrs.len > 2) prev_extra_hdrs else "{}";
+                            const prev_extra_json = std.fmt.bufPrint(
+                                _.net_event_storage[storage_pos..],
+                                "{{\"requestId\":\"req-{d}\",\"blockedCookies\":[],\"headers\":{s}{s}}}",
+                                .{ req_seq, prev_hdr_obj, prev_ht_kv },
+                            ) catch "";
+                            if (prev_extra_json.len > 0) {
+                                storage_pos += prev_extra_json.len;
+                                let prev_extra_evt = CdpEvent.create("Network.responseReceivedExtraInfo", prev_extra_json);
+                                if (child_sid.len > 0) prev_extra_evt.session_id = child_sid;
+                                out_events[ev_idx] = prev_extra_evt;
+                                ev_idx += 1;
+                            }
+                        }
+
+                        const next_url = if (hi < max_hops)
+                            pending.redirect_hops[hi].url
+                        else if (pending.final_url.len > 0)
+                            pending.final_url
+                        else
+                            fetch_url;
+                        const next_method = if (hi < max_hops && pending.redirect_hops[hi].method.len > 0)
+                            pending.redirect_hops[hi].method
+                        else
+                            "GET";
+                        let next_url_esc_buf: [4096]u8 = undefined;
+                        const next_url_esc = escapeJsonString(next_url, &next_url_esc_buf);
+                        let prev_url_esc_buf: [4096]u8 = undefined;
+                        const prev_url_esc = escapeJsonString(prev_hop.url, &prev_url_esc_buf);
+                        let prev_st_esc_buf: [128]u8 = undefined;
+                        const prev_st_esc = escapeJsonString(prev_hop.status_text, &prev_st_esc_buf);
+                        const prev_hdrs_json = if (prev_hop.raw_headers.len > 0)
+                            formatHttpHeadersJson(prev_hop.raw_headers, _.allocator)
+                        else
+                            "{}";
+                        const prev_enc_len = prev_hop.resp_headers_text.len + prev_hop.wire_body_len;
+                        const prev_has_extra_kv = if (prev_extra_hdrs.len > 2 || prev_resp_ht_esc.len > 0) ",\"redirectHasExtraInfo\":true" else "";
+
+                        if (ev_idx < out_events.len) {
+                            const redir_req_json = std.fmt.bufPrint(
+                                _.net_event_storage[storage_pos..],
+                                "{{\"requestId\":\"req-{d}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"{s}\",\"headers\":{{\"user-agent\":\"{s}\",\"accept\":\"{s}\",\"accept-language\":\"en-US,en;q=0.9\",\"referer\":\"{s}\"}},\"initialPriority\":\"High\",\"referrerPolicy\":\"no-referrer\"}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"{s}\"}},\"redirectResponse\":{{\"url\":\"{s}\",\"status\":{d},\"statusText\":\"{s}\",\"headers\":{s},\"mimeType\":\"text/plain\",\"encodedDataLength\":{d}}}{s},\"type\":\"{s}\",\"frameId\":\"{s}\"{s}}}",
+                                .{ req_seq, lid, ref_esc, next_url_esc, next_method, ua_esc, accept_val, ref_esc, init_type, prev_url_esc, prev_hop.status_code, prev_st_esc, prev_hdrs_json, prev_enc_len, prev_has_extra_kv, res_type, fid, bctx_kv },
+                            ) catch "";
+                            if (redir_req_json.len > 0) {
+                                storage_pos += redir_req_json.len;
+                                let redir_req_evt = CdpEvent.create("Network.requestWillBeSent", redir_req_json);
+                                if (child_sid.len > 0) redir_req_evt.session_id = child_sid;
+                                out_events[ev_idx] = redir_req_evt;
+                                ev_idx += 1;
+                            }
+                        }
+
+                        const hop_req_ht = if (hi < max_hops) pending.redirect_hops[hi].req_headers_text else pending.req_headers_text;
+                        if ((hop_req_ht.len > 0 || resp_extra_headers_json.len > 2) && ev_idx < out_events.len) {
+                            let h_req_ht_esc_buf: [4096]u8 = undefined;
+                            let h_req_ht_esc: []const u8 = "";
+                            let h_req_obj_json: []const u8 = "";
+                            if (hop_req_ht.len > 0) {
+                                if (crlf_h := std.mem.indexOf(u8, hop_req_ht, "\r\n")) {
+                                    h_req_obj_json = formatHttpHeadersExtraInfoJson(hop_req_ht[crlf_h + 2 ..], _.allocator);
+                                }
+                                h_req_ht_esc = escapeJsonString(hop_req_ht, &h_req_ht_esc_buf);
+                            }
+                            const h_req_ht_kv = if (h_req_ht_esc.len > 0)
+                                (std.fmt.allocPrint(_.allocator, ",\"headersText\":\"{s}\"", .{h_req_ht_esc}) catch "")
+                            else
+                                "";
+                            const h_req_extra_json = if (h_req_obj_json.len > 2)
+                                (std.fmt.bufPrint(
+                                    _.net_event_storage[storage_pos..],
+                                    "{{\"requestId\":\"req-{d}\",\"associatedCookies\":[],\"headers\":{s}{s}}}",
+                                    .{ req_seq, h_req_obj_json, h_req_ht_kv },
+                                ) catch "")
+                            else
+                                (std.fmt.bufPrint(
+                                    _.net_event_storage[storage_pos..],
+                                    "{{\"requestId\":\"req-{d}\",\"associatedCookies\":[],\"headers\":{{\"user-agent\":\"{s}\",\"accept\":\"{s}\",\"referer\":\"{s}\"}}{s}}}",
+                                    .{ req_seq, ua_esc, accept_val, ref_esc, h_req_ht_kv },
+                                ) catch "");
+                            if (h_req_extra_json.len > 0) {
+                                storage_pos += h_req_extra_json.len;
+                                let h_req_extra_evt = CdpEvent.create("Network.requestWillBeSentExtraInfo", h_req_extra_json);
+                                if (child_sid.len > 0) h_req_extra_evt.session_id = child_sid;
+                                out_events[ev_idx] = h_req_extra_evt;
+                                ev_idx += 1;
+                            }
+                        }
+                    }
+                    if (pending.req_headers_text.len > 0) {
+                        std.heap.c_allocator.free(pending.req_headers_text);
+                    }
+                }
+                if (pending.found) {
+                    if (pending.final_url.len > 0) {
+                        std.heap.c_allocator.free(pending.final_url);
+                    }
+                    let fhi: usize = 0;
+                    while (fhi < 6) : (fhi += 1) {
+                        const fhop = &pending.redirect_hops[fhi];
+                        if (fhop.url.len > 0) std.heap.c_allocator.free(fhop.url);
+                        if (fhop.method.len > 0) std.heap.c_allocator.free(fhop.method);
+                        if (fhop.status_text.len > 0) std.heap.c_allocator.free(fhop.status_text);
+                        if (fhop.raw_headers.len > 0) std.heap.c_allocator.free(fhop.raw_headers);
+                        if (fhop.req_headers_text.len > 0) std.heap.c_allocator.free(fhop.req_headers_text);
+                        if (fhop.resp_headers_text.len > 0) std.heap.c_allocator.free(fhop.resp_headers_text);
+                    }
+                }
+
+                if (pending.found && pending.failed) {
+                    if (ev_idx < out_events.len) {
+                        const err_text = if (pending.status_text_len > 0) pending.status_text_buf[0..pending.status_text_len] else "net::ERR_FAILED";
+                        let err_esc_buf: [128]u8 = undefined;
+                        const err_esc = escapeJsonString(err_text, &err_esc_buf);
+                        const fail_json = std.fmt.bufPrint(
+                            _.net_event_storage[storage_pos..],
+                            "{{\"requestId\":\"req-{d}\",\"timestamp\":1700000000.2,\"type\":\"{s}\",\"errorText\":\"{s}\",\"canceled\":false{s}}}",
+                            .{ req_seq, res_type, err_esc, bctx_kv },
+                        ) catch "";
+                        if (fail_json.len > 0) {
+                            storage_pos += fail_json.len;
+                            let fail_evt = CdpEvent.create("Network.loadingFailed", fail_json);
+                            if (child_sid.len > 0) fail_evt.session_id = child_sid;
+                            out_events[ev_idx] = fail_evt;
+                            ev_idx += 1;
+                        }
+                    }
+                } else {
+                    let st_esc_buf: [128]u8 = undefined;
+                    const st_esc = escapeJsonString(resp_status_text, &st_esc_buf);
+                    let rmime_esc_buf: [256]u8 = undefined;
+                    const rmime_esc = escapeJsonString(resp_mime, &rmime_esc_buf);
+                    const has_extra_kv = if (resp_extra_headers_json.len > 2) ",\"hasExtraInfo\":true" else "";
+                    const resp_url_esc = if (has_final_url) final_url_esc else fetch_esc;
+                    if (ev_idx < out_events.len) {
+                        const resp_json = std.fmt.bufPrint(
+                            _.net_event_storage[storage_pos..],
+                            "{{\"requestId\":\"req-{d}\",\"loaderId\":\"{s}\",\"timestamp\":1700000000.1,\"type\":\"{s}\",\"response\":{{\"url\":\"{s}\",\"status\":{d},\"statusText\":\"{s}\",\"headers\":{s},\"mimeType\":\"{s}\"}},\"frameId\":\"{s}\"{s}{s}}}",
+                            .{ req_seq, lid, res_type, resp_url_esc, resp_status, st_esc, resp_headers_json, rmime_esc, fid, has_extra_kv, bctx_kv },
+                        ) catch "";
+                        if (resp_json.len > 0) {
+                            storage_pos += resp_json.len;
+                            let resp_evt = CdpEvent.create("Network.responseReceived", resp_json);
+                            if (child_sid.len > 0) resp_evt.session_id = child_sid;
+                            out_events[ev_idx] = resp_evt;
+                            ev_idx += 1;
+                        }
+                    }
+                    if ((resp_extra_headers_json.len > 2 || resp_headers_text_esc.len > 0) && ev_idx + 1 < out_events.len) {
+                        const resp_ht_kv = if (resp_headers_text_esc.len > 0)
+                            (std.fmt.allocPrint(_.allocator, ",\"headersText\":\"{s}\"", .{resp_headers_text_esc}) catch "")
+                        else
+                            "";
+                        const hdr_obj = if (resp_extra_headers_json.len > 2) resp_extra_headers_json else "{}";
+                        const extra_json = std.fmt.bufPrint(
+                            _.net_event_storage[storage_pos..],
+                            "{{\"requestId\":\"req-{d}\",\"blockedCookies\":[],\"headers\":{s}{s}}}",
+                            .{ req_seq, hdr_obj, resp_ht_kv },
+                        ) catch "";
+                        if (extra_json.len > 0) {
+                            storage_pos += extra_json.len;
+                            let extra_evt = CdpEvent.create("Network.responseReceivedExtraInfo", extra_json);
+                            if (child_sid.len > 0) extra_evt.session_id = child_sid;
+                            out_events[ev_idx] = extra_evt;
+                            ev_idx += 1;
+                        }
+                    }
+
+                    if (ev_idx < out_events.len) {
+                        const fin_json = std.fmt.bufPrint(
+                            _.net_event_storage[storage_pos..],
+                            "{{\"requestId\":\"req-{d}\",\"timestamp\":1700000000.2,\"encodedDataLength\":{d}{s}}}",
+                            .{ req_seq, resp_body_len, bctx_kv },
+                        ) catch "";
+                        if (fin_json.len > 0) {
+                            storage_pos += fin_json.len;
+                            let fin_evt = CdpEvent.create("Network.loadingFinished", fin_json);
+                            if (child_sid.len > 0) fin_evt.session_id = child_sid;
+                            out_events[ev_idx] = fin_evt;
+                            ev_idx += 1;
+                        }
+                    }
                 }
             }
             if (i < dom.fetch_count) {
@@ -5681,11 +7684,24 @@ pub struct CdpPageSession {
                 if (_.runtime_enabled && ev_idx < out_events.len && rt_pos < _.console_event_storage.len) {
                     const args_slice = rec.getArgsJson();
                     const args_json = if (args_slice.len > 0) args_slice else "[{\"type\":\"string\",\"value\":\"\"}]";
-                    const rt_json = std.fmt.bufPrint(
-                        _.console_event_storage[rt_pos..],
-                        "{{\"type\":\"{s}\",\"args\":{s},\"executionContextId\":1,\"timestamp\":{d}}}",
-                        .{ lvl, args_json, rec.timestamp },
-                    ) catch "";
+                    let rt_json: []const u8 = "";
+                    if (rec.has_location) {
+                        let fn_esc_buf: [256]u8 = [0; 256];
+                        let url_esc_buf: [1024]u8 = [0; 1024];
+                        const fn_esc = escapeJsonString(rec.getFuncName(), &fn_esc_buf);
+                        const url_esc = escapeJsonString(rec.getUrl(), &url_esc_buf);
+                        rt_json = std.fmt.bufPrint(
+                            _.console_event_storage[rt_pos..],
+                            "{{\"type\":\"{s}\",\"args\":{s},\"executionContextId\":1,\"timestamp\":{d},\"stackTrace\":{{\"callFrames\":[{{\"functionName\":\"{s}\",\"scriptId\":\"1\",\"url\":\"{s}\",\"lineNumber\":{d},\"columnNumber\":{d}}}]}}}}",
+                            .{ lvl, args_json, rec.timestamp, fn_esc, url_esc, rec.line_number, rec.column_number },
+                        ) catch "";
+                    } else {
+                        rt_json = std.fmt.bufPrint(
+                            _.console_event_storage[rt_pos..],
+                            "{{\"type\":\"{s}\",\"args\":{s},\"executionContextId\":1,\"timestamp\":{d}}}",
+                            .{ lvl, args_json, rec.timestamp },
+                        ) catch "";
+                    }
                     if (rt_json.len > 0) {
                         rt_pos += rt_json.len;
                         out_events[ev_idx] = CdpEvent.create("Runtime.consoleAPICalled", rt_json);
@@ -5764,6 +7780,28 @@ pub struct CdpPageSession {
         return ev_idx;
     }
 
+    fn getBindingContextId(name: []const u8): i64 {
+        let i: usize = 0;
+        while (i < _.binding_count) : (i += 1) {
+            const len = _.binding_name_lens[i];
+            const off = i * 128;
+            if (std.mem.eql(u8, _.binding_names[off .. off + len], name)) return _.binding_context_ids[i];
+        }
+        return 1;
+    }
+
+    pub fn findIsolatedWorldContextId(world_name: []const u8): i64? {
+        if (world_name.len == 0) return null;
+        let i: usize = 0;
+        while (i < _.isolated_world_count) : (i += 1) {
+            const iw = &_.isolated_worlds[i];
+            if (iw.active && std.mem.eql(u8, iw.name_buf[0..iw.name_len], world_name)) {
+                return iw.context_id;
+            }
+        }
+        return null;
+    }
+
     fn hasBinding(name: []const u8): bool {
         let i: usize = 0;
         while (i < _.binding_count) : (i += 1) {
@@ -5797,11 +7835,28 @@ pub struct CdpPageSession {
     }
 
     pub fn addBinding(*_, name: []const u8) {
-        if (name.len > 0 && name.len <= 128 && !_.hasBinding(name) && _.binding_count < 16) {
-            const off = _.binding_count * 128;
-            @memcpy(_.binding_names[off .. off + name.len], name);
-            _.binding_name_lens[_.binding_count] = name.len;
-            _.binding_count += 1;
+        _.addBindingWithContext(name, 1);
+    }
+
+    pub fn addBindingWithContext(*_, name: []const u8, ctx_id: i64) {
+        if (name.len > 0 && name.len <= 128) {
+            let i: usize = 0;
+            while (i < _.binding_count) : (i += 1) {
+                const len = _.binding_name_lens[i];
+                const off = i * 128;
+                if (std.mem.eql(u8, _.binding_names[off .. off + len], name)) {
+                    _.binding_context_ids[i] = ctx_id;
+                    _.installBindingInJs(name);
+                    return;
+                }
+            }
+            if (_.binding_count < 16) {
+                const off = _.binding_count * 128;
+                @memcpy(_.binding_names[off .. off + name.len], name);
+                _.binding_name_lens[_.binding_count] = name.len;
+                _.binding_context_ids[_.binding_count] = ctx_id;
+                _.binding_count += 1;
+            }
         }
         _.installBindingInJs(name);
     }
@@ -5819,8 +7874,16 @@ pub struct CdpPageSession {
                     const src_off = (j + 1) * 128;
                     @memcpy(_.binding_names[dst_off .. dst_off + next_len], _.binding_names[src_off .. src_off + next_len]);
                     _.binding_name_lens[j] = next_len;
+                    _.binding_context_ids[j] = _.binding_context_ids[j + 1];
                 }
                 _.binding_count -= 1;
+                let esc_buf: [256]u8 = [0; 256];
+                const esc_name = escapeJsonString(name, &esc_buf);
+                let js_buf: [512]u8 = [0; 512];
+                if (js := std.fmt.bufPrint(&js_buf, "(function(){{try{{delete globalThis['{s}'];}}catch(e){{}}try{{if(typeof window!=='undefined')delete window['{s}'];}}catch(e){{}}}})()", .{ esc_name, esc_name }) catch null) {
+                    const dv = _.ctx.eval(js);
+                    _.ctx.freeValue(dv);
+                }
                 return;
             }
         }
@@ -5906,10 +7969,11 @@ pub struct CdpPageSession {
             }
             const payload = safe_payload_buf[0..sp_len];
 
+            const ctx_id = _.getBindingContextId(name);
             const rt_json = std.fmt.bufPrint(
                 _.binding_event_buf[bpos..],
-                "{{\"name\":\"{s}\",\"payload\":\"{s}\",\"executionContextId\":1}}",
-                .{ name, payload },
+                "{{\"name\":\"{s}\",\"payload\":\"{s}\",\"executionContextId\":{d}}}",
+                .{ name, payload, ctx_id },
             ) catch break;
             bpos += rt_json.len;
 
@@ -5920,7 +7984,102 @@ pub struct CdpPageSession {
         return ev_idx;
     }
 
+    pub fn pollFileChooserEvents(*_, out_events: []CdpEvent): usize {
+        const drain_expr = "(function(){var q=globalThis.__capsurf_pending_file_choosers;if(!q||!q.length)return '[]';globalThis.__capsurf_pending_file_choosers=[];return JSON.stringify(q);})()";
+        const val = _.ctx.eval(drain_expr);
+        defer _.ctx.freeValue(val);
+
+        if (!_.intercept_file_chooser || out_events.len == 0) return 0;
+
+        const json_str = _.ctx.toCString(val);
+        defer std.heap.page_allocator.free(json_str);
+
+        if (json_str.len <= 2) return 0;
+
+        let ev_idx: usize = 0;
+        let bpos: usize = 0;
+        let pos: usize = 0;
+        while (ev_idx < out_events.len) {
+            const obj_start_opt = std.mem.indexOfPos(u8, json_str, pos, "{");
+            if (obj_start_opt == null) break;
+            const obj_start = obj_start_opt.?;
+            const obj_end_opt = std.mem.indexOfPos(u8, json_str, obj_start, "}");
+            if (obj_end_opt == null) break;
+            const obj_end = obj_end_opt.?;
+            const obj_slice = json_str[obj_start .. obj_end + 1];
+            pos = obj_end + 1;
+
+            let backend_node_id: u32 = 0;
+            const nid_marker = "\"backendNodeId\":";
+            if (nid_start_opt := std.mem.indexOf(u8, obj_slice, nid_marker)) {
+                const nid_start = nid_start_opt + nid_marker.len;
+                let nid_end = nid_start;
+                while (nid_end < obj_slice.len && obj_slice[nid_end] >= '0' && obj_slice[nid_end] <= '9') : (nid_end += 1) {}
+                backend_node_id = std.fmt.parseInt(u32, obj_slice[nid_start..nid_end], 10) catch 0;
+            } else {
+                continue;
+            }
+
+            let mode_str: []const u8 = "selectSingle";
+            const mode_marker = "\"mode\":\"";
+            if (mode_start_opt := std.mem.indexOf(u8, obj_slice, mode_marker)) {
+                const mode_start = mode_start_opt + mode_marker.len;
+                if (mode_end_opt := std.mem.indexOfPos(u8, obj_slice, mode_start, "\"")) {
+                    const mode_raw = obj_slice[mode_start..mode_end_opt];
+                    if (std.mem.eql(u8, mode_raw, "selectMultiple")) {
+                        mode_str = "selectMultiple";
+                    }
+                }
+            }
+
+            let fid: []const u8 = _.frame_id;
+            const fid_marker = "\"frameId\":\"";
+            if (fid_start_opt := std.mem.indexOf(u8, obj_slice, fid_marker)) {
+                const fid_start = fid_start_opt + fid_marker.len;
+                if (fid_end_opt := std.mem.indexOfPos(u8, obj_slice, fid_start, "\"")) {
+                    const ev_fid = obj_slice[fid_start..fid_end_opt];
+                    if (ev_fid.len > 0) {
+                        if (std.mem.eql(u8, ev_fid, _.frame_id)) {
+                            fid = _.frame_id;
+                        } else {
+                            let ki: usize = 0;
+                            while (ki < _.known_child_frame_count) : (ki += 1) {
+                                const kf = &_.known_child_frames[ki];
+                                if (kf.active && !kf.detached && std.mem.eql(u8, kf.frameId(), ev_fid)) {
+                                    fid = kf.frameId();
+                                    break;
+                                }
+                            }
+                            if (std.mem.eql(u8, fid, _.frame_id)) {
+                                fid = ev_fid;
+                            }
+                        }
+                    }
+                }
+            }
+
+            const ev_json = std.fmt.bufPrint(
+                _.file_chooser_event_buf[bpos..],
+                "{{\"frameId\":\"{s}\",\"backendNodeId\":{d},\"mode\":\"{s}\"}}",
+                .{ fid, backend_node_id, mode_str },
+            ) catch break;
+            bpos += ev_json.len;
+
+            out_events[ev_idx] = CdpEvent.create("Page.fileChooserOpened", ev_json);
+            ev_idx += 1;
+        }
+
+        return ev_idx;
+    }
+
     fn recordNavigation(*_, nav_url: []const u8, nav_title: []const u8) {
+        if (_.skip_record_nav) return;
+        const gen = _.doc_gen_counter;
+        _.doc_gen_counter += 1;
+        _.recordNavigationWithGen(nav_url, nav_title, gen);
+    }
+
+    fn recordNavigationWithGen(*_, nav_url: []const u8, nav_title: []const u8, gen: u32) {
         if (_.skip_record_nav) return;
         // If current entry has the same URL, update its title (e.g. reload)
         if (_.nav_entry_count > 0 && _.current_nav_index < _.nav_entry_count) {
@@ -5931,6 +8090,7 @@ pub struct CdpPageSession {
                     }
                     _.nav_entries[_.current_nav_index].title = _.allocator.dupe(u8, nav_title) catch "";
                 }
+                _.nav_entries[_.current_nav_index].doc_gen = gen;
                 return;
             }
         }
@@ -5966,6 +8126,7 @@ pub struct CdpPageSession {
                 id: entry_id,
                 url: dup_url,
                 title: dup_title,
+                doc_gen: gen,
             };
             _.current_nav_index = idx;
             _.nav_entry_count += 1;
@@ -5987,6 +8148,7 @@ pub struct CdpPageSession {
                 id: entry_id,
                 url: dup_url,
                 title: dup_title,
+                doc_gen: gen,
             };
             _.current_nav_index = 15;
         }
@@ -6025,8 +8187,16 @@ pub struct CdpPageSession {
 
     pub fn recordSameDocNavigation(*_, url: []const u8, is_push: bool) {
         if (!canRewriteDocumentUrl(_.url, url)) return;
+        let cur_doc_gen: u32 = 0;
+        if (_.nav_entry_count > 0 && _.current_nav_index < _.nav_entry_count) {
+            cur_doc_gen = _.nav_entries[_.current_nav_index].doc_gen;
+        }
+        if (cur_doc_gen == 0) {
+            cur_doc_gen = _.doc_gen_counter;
+            _.doc_gen_counter += 1;
+        }
         if (is_push) {
-            _.recordNavigation(url, _.title);
+            _.recordNavigationWithGen(url, _.title, cur_doc_gen);
             if (_.nav_entry_count > 0 && _.current_nav_index < _.nav_entry_count) {
                 _.url = _.nav_entries[_.current_nav_index].url;
             }
@@ -6036,6 +8206,7 @@ pub struct CdpPageSession {
                     _.allocator.free(_.nav_entries[_.current_nav_index].url);
                 }
                 _.nav_entries[_.current_nav_index].url = _.allocator.dupe(u8, url) catch "";
+                _.nav_entries[_.current_nav_index].doc_gen = cur_doc_gen;
                 _.url = _.nav_entries[_.current_nav_index].url;
             }
         }
@@ -6169,10 +8340,12 @@ pub struct CdpPageSession {
 
     pub fn formatFrameNavigatedEvent(*_, url: []const u8): []const u8 {
         const mime = if (std.mem.indexOf(u8, url, ".svg") != null) "image/svg+xml" else "text/html";
+        let esc_url_buf: [4096]u8 = undefined;
+        const esc_url = escapeJsonString(url, &esc_url_buf);
         return std.fmt.bufPrint(
             &_.page_frame_event_buf,
             "{{\"frame\":{{\"id\":\"{s}\",\"loaderId\":\"{s}\",\"url\":\"{s}\",\"securityOrigin\":\"{s}\",\"mimeType\":\"{s}\"}}}}",
-            .{ _.frame_id, _.loader_id, url, url, mime },
+            .{ _.frame_id, _.loader_id, esc_url, esc_url, mime },
         ) catch "{}";
     }
 

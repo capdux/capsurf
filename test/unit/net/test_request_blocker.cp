@@ -40,7 +40,7 @@ fn main() {
     test("1. classifyRequest passes normalized request facts to the host blocker", () => {
         let tracker = TestTrackerContext{};
         let blocker = RequestBlocker {
-            ctx: @ptrCast(&tracker),
+            ctx: unsafe { @ptrCast(&tracker) },
             classify_fn: trackerClassify,
         };
 
@@ -70,7 +70,7 @@ fn main() {
     test("2. Marks same-site requests as first party and opaque pages as third party", () => {
         let tracker = TestTrackerContext{};
         let blocker = RequestBlocker {
-            ctx: @ptrCast(&tracker),
+            ctx: unsafe { @ptrCast(&tracker) },
             classify_fn: trackerClassify,
         };
 
@@ -87,7 +87,7 @@ fn main() {
     test("3. Never blocks without a blocker, for non-http schemes or unparseable URLs", () => {
         let tracker = TestTrackerContext{};
         let blocker = RequestBlocker {
-            ctx: @ptrCast(&tracker),
+            ctx: unsafe { @ptrCast(&tracker) },
             classify_fn: trackerClassify,
         };
 
@@ -101,7 +101,7 @@ fn main() {
     test("4. Request blocker registry scopes blockers to their connection", () => {
         let tracker = TestTrackerContext{};
         let blocker = RequestBlocker {
-            ctx: @ptrCast(&tracker),
+            ctx: unsafe { @ptrCast(&tracker) },
             classify_fn: trackerClassify,
         };
 

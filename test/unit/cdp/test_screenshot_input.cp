@@ -23,7 +23,7 @@ fn testCaptureScreenshot()! {
     session.viewport_height = 300.0;
 
     let out_buf: [131072]u8 = undefined;
-    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
+    let out_evts: [128]CdpEvent = [CdpEvent{}; 128];
     let evt_cnt: usize = 0;
 
     // Navigate to page
@@ -87,7 +87,7 @@ fn testDispatchMouseEvent()! {
     session.viewport_height = 600.0;
 
     let out_buf: [4096]u8 = undefined;
-    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
+    let out_evts: [128]CdpEvent = [CdpEvent{}; 128];
     let evt_cnt: usize = 0;
 
     const html_data = "data:text/html,<html><body><button id='action-btn' onclick='globalThis.clickCount = (globalThis.clickCount || 0) + 1; globalThis.btnClicked = true;' style='width: 120px; height: 50px;'>Click Me</button><div style='width: 2000px; height: 2000px;'></div></body></html>";
@@ -163,7 +163,7 @@ fn testInsertText()! {
     session.viewport_height = 600.0;
 
     let out_buf: [4096]u8 = undefined;
-    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
+    let out_evts: [128]CdpEvent = [CdpEvent{}; 128];
     let evt_cnt: usize = 0;
 
     const html_data = "data:text/html,<html><body><input id='search-box' value='' style='width: 200px; height: 30px;' /><div id='target-div' style='width: 150px; height: 40px;'>Init</div></body></html>";
@@ -224,6 +224,7 @@ fn testInsertText()! {
     expect_eq(std.mem.indexOf(u8, eval_buf[0..eval_len], "CapSurf Engine") != null, true);
 
     // 3. Test on regular element (div)
+    * = session.evaluate("document.getElementById('search-box').blur()", eval_buf[0..]);
     const div_id = Matcher.querySelector(&session.doc, "#target-div");
     expect_eq(div_id != NULL_NODE, true);
     session.focused_node = div_id;
@@ -245,7 +246,7 @@ fn testScreencastProtocol()! {
     defer session.deinit();
 
     let out_buf: [4096]u8 = undefined;
-    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
+    let out_evts: [128]CdpEvent = [CdpEvent{}; 128];
     let evt_cnt: usize = 0;
 
     // 1. Page.startScreencast
@@ -284,7 +285,7 @@ fn testDispatchKeyPressEvent()! {
     session.viewport_height = 600.0;
 
     let out_buf: [4096]u8 = undefined;
-    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
+    let out_evts: [128]CdpEvent = [CdpEvent{}; 128];
     let evt_cnt: usize = 0;
 
     const html_data = "data:text/html,<html><body><script>" ++

@@ -746,12 +746,14 @@ markNative(HTMLOptionsCollection.prototype.remove, "remove");
 
 function getSelectOptions(selectEl) {
   const opts = [];
+  const seen = new Set();
   const up = typeof upgradeElement === "function" ? upgradeElement : (typeof globalThis !== "undefined" && globalThis.upgradeElement);
   function collect(node) {
     if (!node) return;
     if (node.firstChild !== undefined) {
       let child = node.firstChild;
-      while (child) {
+      while (child && !seen.has(child)) {
+        seen.add(child);
         const tag = (child.tagName || "").toLowerCase();
         if (tag === "option") {
           if (up) up(child);

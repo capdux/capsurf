@@ -14,6 +14,80 @@ pub const NULL_NODE: NodeId = 0;
 pub const MAX_ATTRS_PER_NODE: usize = 16;
 pub const MAX_CLASSES_PER_NODE: usize = 16;
 
+pub const DEFAULT_STRING_SLAB_SIZE: usize = 4096;
+pub const MAX_STRING_SLAB_SIZE: usize = 65536;
+
+pub struct StringArena {
+    slabs: std.ArrayListUnmanaged([]u8) = std.ArrayListUnmanaged([]u8).empty;
+    curr_idx: usize = 0;
+    cursor: usize = 0;
+    next_slab_size: usize = DEFAULT_STRING_SLAB_SIZE;
+    total_bytes: usize = 0;
+
+    fn deinit(*_, allocator: std.mem.Allocator) {
+        for (slab of _.slabs.items) {
+            allocator.free(slab);
+        }
+        _.slabs.deinit(allocator);
+        _.curr_idx = 0;
+        _.cursor = 0;
+        _.total_bytes = 0;
+    }
+
+    fn alloc(*_, allocator: std.mem.Allocator, len: usize): ([]u8)! {
+        if (len == 0) {
+            return allocator.alloc(u8, 0);
+        }
+        if (_.slabs.items.len > 0) {
+            const curr = _.slabs.items[_.curr_idx];
+            if (_.cursor + len <= curr.len) {
+                const out = curr[_.cursor .. _.cursor + len];
+                _.cursor += len;
+                _.total_bytes += len;
+                return out;
+            }
+        }
+        let slab_size = _.next_slab_size;
+        if (len > slab_size) {
+            slab_size = len;
+        }
+        const new_slab = allocator.alloc(u8, slab_size)?;
+        errdefer allocator.free(new_slab);
+        _.slabs.append(allocator, new_slab)?;
+        _.curr_idx = _.slabs.items.len - 1;
+        _.cursor = len;
+        _.total_bytes += len;
+        if (_.next_slab_size < MAX_STRING_SLAB_SIZE) {
+            const doubled = _.next_slab_size * 2;
+            _.next_slab_size = if (doubled > MAX_STRING_SLAB_SIZE) MAX_STRING_SLAB_SIZE else doubled;
+        }
+        return new_slab[0..len];
+    }
+
+    fn dupe(*_, allocator: std.mem.Allocator, s: []const u8): ([]const u8)! {
+        if (s.len == 0) {
+            return "";
+        }
+        const buf = _.alloc(allocator, s.len)?;
+        @memcpy(buf, s);
+        return buf;
+    }
+
+    fn concat(*_, allocator: std.mem.Allocator, a: []const u8, b: []const u8): ([]const u8)! {
+        if (a.len == 0 && b.len == 0) {
+            return "";
+        }
+        const buf = _.alloc(allocator, a.len + b.len)?;
+        if (a.len > 0) {
+            @memcpy(buf[0..a.len], a);
+        }
+        if (b.len > 0) {
+            @memcpy(buf[a.len .. a.len + b.len], b);
+        }
+        return buf;
+    }
+}
+
 pub enum NodeType {
     Document,
     Element,
@@ -25,6 +99,11 @@ pub struct Attr {
     name: []const u8 = "";
     value: []const u8 = "";
     namespace: []const u8 = "";
+}
+
+pub struct IdEntry {
+    primary: NodeId = NULL_NODE;
+    dup_count: u32 = 0;
 }
 
 pub fn containsDisplayNone(style: []const u8): bool {
@@ -59,6 +138,7 @@ pub struct NodeData {
     last_child: NodeId = NULL_NODE;
     prev_sibling: NodeId = NULL_NODE;
     next_sibling: NodeId = NULL_NODE;
+    shadow_root: NodeId = NULL_NODE;
 
     // Precomputed structural indices for O(1) :first-child, :last-child, :only-child, :nth-child
     child_element_count: u32 = 0;
@@ -83,6 +163,8 @@ pub struct NodeData {
     needs_restyle: bool = false;
     needs_layout: bool = false;
     is_display_none: bool = false;
+    popover_open: bool = false;
+    source_line: u32 = 0;
 
     static fn hashLowerAscii(s: []const u8): u32 {
         let h: u32 = 2166136261;
@@ -629,8 +711,10 @@ pub struct HtmlSerializer {
 
 pub struct Document {
     allocator: std.mem.Allocator;
+    str_arena: StringArena = StringArena{};
     nodes: std.ArrayListUnmanaged(NodeData) = std.ArrayListUnmanaged(NodeData).empty;
     damaged_nodes: std.ArrayListUnmanaged(NodeId) = std.ArrayListUnmanaged(NodeId).empty;
+    id_map: std.StringHashMapUnmanaged(IdEntry) = std.StringHashMapUnmanaged(IdEntry).empty;
     paint_damage_marked: bool = false;
     mutation_seq: u32 = 1;
     root_element: NodeId = NULL_NODE;
@@ -641,8 +725,10 @@ pub struct Document {
     static fn init(allocator: std.mem.Allocator): Document! {
         let doc = Document {
             allocator: allocator,
+            str_arena: StringArena{},
             nodes: std.ArrayListUnmanaged(NodeData).empty,
             damaged_nodes: std.ArrayListUnmanaged(NodeId).empty,
+            id_map: std.StringHashMapUnmanaged(IdEntry).empty,
             paint_damage_marked: false,
             mutation_seq: 1,
             root_element: NULL_NODE,
@@ -659,19 +745,59 @@ pub struct Document {
     }
 
     fn deinit(*_) {
+        _.id_map.deinit(_.allocator);
         _.nodes.deinit(_.allocator);
         _.damaged_nodes.deinit(_.allocator);
+        _.str_arena.deinit(_.allocator);
+    }
+
+    fn allocString(*_, s: []const u8): ([]const u8)! {
+        return _.str_arena.dupe(_.allocator, s);
+    }
+
+    fn concatString(*_, a: []const u8, b: []const u8): ([]const u8)! {
+        return _.str_arena.concat(_.allocator, a, b);
+    }
+
+    fn idMapAdd(*_, id_val: []const u8, node_id: NodeId) {
+        if (id_val.len == 0) return;
+        if (*entry := _.id_map.getPtr(id_val)) {
+            if (entry.dup_count == 0) {
+                entry.primary = node_id;
+            }
+            entry.dup_count += 1;
+            return;
+        }
+        const key_copy = _.str_arena.dupe(_.allocator, id_val) catch return;
+        _.id_map.put(_.allocator, key_copy, IdEntry {
+            primary: node_id,
+            dup_count: 1,
+        }) catch {};
+    }
+
+    fn idMapRemove(*_, id_val: []const u8, node_id: NodeId) {
+        if (id_val.len == 0) return;
+        if (*entry := _.id_map.getPtr(id_val)) {
+            if (entry.dup_count <= 1) {
+                * = _.id_map.fetchRemove(id_val);
+            } else {
+                entry.dup_count -= 1;
+                if (entry.primary == node_id) {
+                    entry.primary = NULL_NODE;
+                }
+            }
+        }
     }
 
     fn nodeCount(): usize {
         return _.nodes.items.len;
     }
 
-    fn getNode(node_id: NodeId): (*const NodeData)? {
+    fn getNode(node_id: NodeId): NodeData? {
         if (node_id == NULL_NODE || @as(usize, node_id) >= _.nodes.items.len) {
             return null;
         }
-        return &_.nodes.items[@as(usize, node_id)];
+        return _.nodes.items[@as(usize, node_id)];
     }
 
     fn getNodeMut(*_, node_id: NodeId): (*NodeData)? {
@@ -740,6 +866,28 @@ pub struct Document {
         return new_id;
     }
 
+    fn attachShadowRoot(*_, host_nid: NodeId): NodeId! {
+        if (host_nid == NULL_NODE || @as(usize, host_nid) >= _.nodes.items.len) {
+            return NULL_NODE;
+        }
+        const existing = _.nodes.items[@as(usize, host_nid)].shadow_root;
+        if (existing != NULL_NODE && @as(usize, existing) < _.nodes.items.len) {
+            return existing;
+        }
+        const new_id: NodeId = @intCast(_.nodes.items.len);
+        const sr_node = NodeData {
+            id: new_id,
+            node_type: NodeType.Document,
+            parent: host_nid,
+            tag_name: "#shadow-root",
+        };
+        _.nodes.append(_.allocator, sr_node)?;
+        _.nodes.items[@as(usize, host_nid)].shadow_root = new_id;
+        _.mutation_seq += 1;
+        _.recordDamage(host_nid);
+        return new_id;
+    }
+
     fn cloneElementNode(*_, node_id: NodeId): NodeId! {
         if (node_id == NULL_NODE || @as(usize, node_id) >= _.nodes.items.len) {
             return NULL_NODE;
@@ -759,8 +907,14 @@ pub struct Document {
             attrs: src.attrs,
             attr_count: src.attr_count,
             is_display_none: src.is_display_none,
+            popover_open: false,
+            shadow_root: NULL_NODE,
         };
+        const cloned_id = clone.id_attr;
         _.nodes.append(_.allocator, clone)?;
+        if (cloned_id.len > 0) {
+            _.idMapAdd(cloned_id, new_id);
+        }
         return new_id;
     }
 
@@ -805,9 +959,7 @@ pub struct Document {
     }
 
     fn setId(*_, node_id: NodeId, id_val: []const u8) {
-        if (*n := _.getNodeMut(node_id)) {
-            n.setAttribute("id", id_val);
-        }
+        _.setAttribute(node_id, "id", id_val);
     }
 
     fn setClassName(*_, node_id: NodeId, class_val: []const u8) {
@@ -870,8 +1022,19 @@ pub struct Document {
     fn setAttribute(*_, node_id: NodeId, name: []const u8, value: []const u8) {
         _.mutation_seq += 1;
         _.recordDamage(node_id);
+        const is_id = std.ascii.eqlIgnoreCase(name, "id");
+        let old_id: []const u8 = "";
+        let found = false;
         if (*n := _.getNodeMut(node_id)) {
+            found = true;
+            if (is_id) {
+                old_id = n.id_attr;
+            }
             n.setAttribute(name, value);
+        }
+        if (found && is_id && !std.mem.eql(u8, old_id, value)) {
+            _.idMapRemove(old_id, node_id);
+            _.idMapAdd(value, node_id);
         }
         if (std.ascii.eqlIgnoreCase(name, "dir") || std.ascii.eqlIgnoreCase(name, "lang")) {
             _.markSubtreeNeedsRestyle(node_id);
@@ -881,8 +1044,19 @@ pub struct Document {
     fn setAttributeNS(*_, node_id: NodeId, ns: []const u8, qualified_name: []const u8, value: []const u8) {
         _.mutation_seq += 1;
         _.recordDamage(node_id);
+        const is_id = std.ascii.eqlIgnoreCase(qualified_name, "id");
+        let old_id: []const u8 = "";
+        let found = false;
         if (*n := _.getNodeMut(node_id)) {
+            found = true;
+            if (is_id) {
+                old_id = n.id_attr;
+            }
             n.setAttributeNS(ns, qualified_name, value);
+        }
+        if (found && is_id && !std.mem.eql(u8, old_id, value)) {
+            _.idMapRemove(old_id, node_id);
+            _.idMapAdd(value, node_id);
         }
         let local_name = qualified_name;
         if (idx := std.mem.indexOfScalar(u8, qualified_name, ':')) {
@@ -896,9 +1070,17 @@ pub struct Document {
     fn removeAttribute(*_, node_id: NodeId, name: []const u8): bool {
         _.mutation_seq += 1;
         _.recordDamage(node_id);
+        const is_id = std.ascii.eqlIgnoreCase(name, "id");
+        let old_id: []const u8 = "";
         let res = false;
         if (*n := _.getNodeMut(node_id)) {
+            if (is_id) {
+                old_id = n.id_attr;
+            }
             res = n.removeAttribute(name);
+        }
+        if (is_id && old_id.len > 0) {
+            _.idMapRemove(old_id, node_id);
         }
         if (std.ascii.eqlIgnoreCase(name, "dir") || std.ascii.eqlIgnoreCase(name, "lang")) {
             _.markSubtreeNeedsRestyle(node_id);
@@ -909,9 +1091,18 @@ pub struct Document {
     fn removeAttributeNS(*_, node_id: NodeId, ns: []const u8, local_name: []const u8): bool {
         _.mutation_seq += 1;
         _.recordDamage(node_id);
+        let old_id: []const u8 = "";
+        let id_cleared = false;
         let res = false;
         if (*n := _.getNodeMut(node_id)) {
+            old_id = n.id_attr;
             res = n.removeAttributeNS(ns, local_name);
+            if (res && old_id.len > 0 && n.id_attr.len == 0) {
+                id_cleared = true;
+            }
+        }
+        if (id_cleared) {
+            _.idMapRemove(old_id, node_id);
         }
         if (std.ascii.eqlIgnoreCase(local_name, "dir") || std.ascii.eqlIgnoreCase(local_name, "lang")) {
             _.markSubtreeNeedsRestyle(node_id);
@@ -1318,6 +1509,19 @@ pub struct Document {
         if (target_id.len == 0) {
             return NULL_NODE;
         }
+        if (entry := _.id_map.get(target_id)) {
+            if (entry.dup_count == 0) {
+                return NULL_NODE;
+            }
+            if (entry.dup_count == 1 && entry.primary != NULL_NODE) {
+                if (_.isConnectedNode(entry.primary)) {
+                    return entry.primary;
+                }
+                return NULL_NODE;
+            }
+        } else {
+            return NULL_NODE;
+        }
         let i: usize = 1;
         while (i < _.nodes.items.len) : (i += 1) {
             const node = &_.nodes.items[i];
@@ -1402,28 +1606,28 @@ pub struct Document {
         HtmlParser.parse(_, html)?;
     }
 
-    // 深拷贝 src 文档中的 src_id 子树到本文档并挂到 parent_id 下（字符串全部 dupe）
+    // 深拷贝 src 文档中的 src_id 子树到本文档并挂到 parent_id 下（字符串全部经 str_arena 分配）
     fn copySubtreeFrom(*_, src: *Document, src_id: NodeId, parent_id: NodeId)! {
         const sn = &src.nodes.items[@as(usize, src_id)];
         let new_id: NodeId = NULL_NODE;
         if (sn.node_type == NodeType.Element) {
-            const tag = _.allocator.dupe(u8, sn.tag_name)?;
+            const tag = _.allocString(sn.tag_name)?;
             new_id = _.createElement(tag)?;
             let ai: usize = 0;
             while (ai < sn.attr_count) : (ai += 1) {
-                const an = _.allocator.dupe(u8, sn.attrs[ai].name)?;
-                const av = _.allocator.dupe(u8, sn.attrs[ai].value)?;
+                const an = _.allocString(sn.attrs[ai].name)?;
+                const av = _.allocString(sn.attrs[ai].value)?;
                 if (sn.attrs[ai].namespace.len > 0) {
-                    const ans = _.allocator.dupe(u8, sn.attrs[ai].namespace)?;
+                    const ans = _.allocString(sn.attrs[ai].namespace)?;
                     _.setAttributeNS(new_id, ans, an, av);
                 } else {
                     _.setAttribute(new_id, an, av);
                 }
             }
         } else if (sn.node_type == NodeType.Text) {
-            new_id = _.createTextNode(_.allocator.dupe(u8, sn.text_content)?)?;
+            new_id = _.createTextNode(_.allocString(sn.text_content)?)?;
         } else if (sn.node_type == NodeType.Comment) {
-            new_id = _.createCommentNode(_.allocator.dupe(u8, sn.text_content)?)?;
+            new_id = _.createCommentNode(_.allocString(sn.text_content)?)?;
         } else {
             return;
         }

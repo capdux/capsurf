@@ -52,7 +52,7 @@ pub struct DebuggerState {
         return true;
     }
 
-    fn getScript(scriptId: []const u8): (*const CompiledScriptMeta)? {
+    fn getScript(*_, scriptId: []const u8): (*const CompiledScriptMeta)? {
         let i: usize = 0;
         while (i < _.script_count) : (i += 1) {
             if (std.mem.eql(u8, _.scripts[i].scriptId, scriptId)) {

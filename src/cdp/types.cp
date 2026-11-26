@@ -216,7 +216,43 @@ pub struct CdpRequest {
             while (p_idx < trimmed.len && (trimmed[p_idx] == ' ' || trimmed[p_idx] == ':' || trimmed[p_idx] == '\t' || trimmed[p_idx] == '\r' || trimmed[p_idx] == '\n')) : (p_idx += 1) {}
             if (p_idx < trimmed.len) {
                 if (trimmed[p_idx] == '{') {
-                    p_raw = trimmed;
+                    const p_start = p_idx;
+                    let p_depth: i32 = 0;
+                    let p_in_str = false;
+                    let p_escaped = false;
+                    let p_end: usize? = null;
+                    let k = p_start;
+                    while (k < trimmed.len) : (k += 1) {
+                        const c = trimmed[k];
+                        if (p_escaped) {
+                            p_escaped = false;
+                            continue;
+                        }
+                        if (c == '\\' && p_in_str) {
+                            p_escaped = true;
+                            continue;
+                        }
+                        if (c == '"') {
+                            p_in_str = !p_in_str;
+                            continue;
+                        }
+                        if (!p_in_str) {
+                            if (c == '{') {
+                                p_depth += 1;
+                            } else if (c == '}') {
+                                p_depth -= 1;
+                                if (p_depth == 0) {
+                                    p_end = k + 1;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if (end_idx := p_end) {
+                        p_raw = trimmed[p_start..end_idx];
+                    } else {
+                        p_raw = trimmed;
+                    }
                 } else if (trimmed[p_idx] == 'n') {
                     p_raw = "{}";
                 } else {
@@ -377,6 +413,51 @@ pub fn extractJsonArray(json: []const u8, key: []const u8): ([]const u8)? {
         if (!in_str) {
             if (ch == '[') depth += 1;
             if (ch == ']') {
+                depth -= 1;
+                if (depth == 0) {
+                    return json[start .. idx + 1];
+                }
+            }
+        }
+    }
+    return null;
+}
+
+pub fn extractJsonObject(json: []const u8, key: []const u8): ([]const u8)? {
+    let key_pat_buf: [64]u8 = [0; 64];
+    if (key.len + 3 > key_pat_buf.len) return null;
+    key_pat_buf[0] = '"';
+    @memcpy(key_pat_buf[1 .. 1 + key.len], key);
+    key_pat_buf[1 + key.len] = '"';
+    const key_pat = key_pat_buf[0 .. 2 + key.len];
+
+    const pos = std.mem.indexOf(u8, json, key_pat) orelse return null;
+    let idx = pos + key_pat.len;
+
+    while (idx < json.len && (json[idx] == ' ' || json[idx] == ':' || json[idx] == '\t' || json[idx] == '\r' || json[idx] == '\n')) : (idx += 1) {}
+    if (idx >= json.len || json[idx] != '{') return null;
+
+    const start = idx;
+    let depth: i32 = 0;
+    let in_str = false;
+    let escaped = false;
+    while (idx < json.len) : (idx += 1) {
+        const ch = json[idx];
+        if (escaped) {
+            escaped = false;
+            continue;
+        }
+        if (ch == '\\' && in_str) {
+            escaped = true;
+            continue;
+        }
+        if (ch == '"') {
+            in_str = !in_str;
+            continue;
+        }
+        if (!in_str) {
+            if (ch == '{') depth += 1;
+            if (ch == '}') {
                 depth -= 1;
                 if (depth == 0) {
                     return json[start .. idx + 1];
@@ -589,6 +670,16 @@ pub fn normalizeExceptionMessage(input: []const u8, out: []u8): []const u8 {
                 @memcpy(out[out_idx .. out_idx + repl.len], repl);
                 out_idx += repl.len;
                 in_idx += 20;
+                continue;
+            }
+        }
+
+        if (std.mem.eql(u8, rem, "not a function") && (in_idx == 0 || (in_idx >= 2 && input[in_idx - 2] == ':' && input[in_idx - 1] == ' '))) {
+            const repl = "is not a function";
+            if (out_idx + repl.len <= out.len) {
+                @memcpy(out[out_idx .. out_idx + repl.len], repl);
+                out_idx += repl.len;
+                in_idx += 14;
                 continue;
             }
         }

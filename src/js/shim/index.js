@@ -76,6 +76,9 @@ function installShim(global) {
         MessageEvent: MessageEvent,
         HashChangeEvent: HashChangeEvent,
         PopStateEvent: PopStateEvent,
+        Touch: Touch,
+        TouchList: TouchList,
+        TouchEvent: TouchEvent,
       },
       configurable: true,
       writable: true,
@@ -111,6 +114,9 @@ function installShim(global) {
   Object.defineProperty(global, "TransitionEvent", { value: TransitionEvent, writable: true, enumerable: false, configurable: true });
   Object.defineProperty(global, "AnimationEvent", { value: AnimationEvent, writable: true, enumerable: false, configurable: true });
   global.BeforeUnloadEvent = BeforeUnloadEvent;
+  global.Touch = Touch;
+  global.TouchList = TouchList;
+  global.TouchEvent = TouchEvent;
 
   if (typeof globalThis !== "undefined") {
     globalThis.Event = Event;
@@ -142,6 +148,9 @@ function installShim(global) {
     Object.defineProperty(globalThis, "TransitionEvent", { value: TransitionEvent, writable: true, enumerable: false, configurable: true });
     Object.defineProperty(globalThis, "AnimationEvent", { value: AnimationEvent, writable: true, enumerable: false, configurable: true });
     globalThis.BeforeUnloadEvent = BeforeUnloadEvent;
+    globalThis.Touch = Touch;
+    globalThis.TouchList = TouchList;
+    globalThis.TouchEvent = TouchEvent;
   }
 
   // 2. Expose DOM Collections and Nodes
@@ -670,7 +679,7 @@ function installShim(global) {
       case "source": Object.setPrototypeOf(el, (global.HTMLSourceElement || global.HTMLElement).prototype); break;
       case "canvas": Object.setPrototypeOf(el, global.HTMLCanvasElement.prototype); break;
       case "script": Object.setPrototypeOf(el, global.HTMLScriptElement.prototype); break;
-      case "frame":
+      case "frame": Object.setPrototypeOf(el, (global.HTMLFrameElement || global.HTMLIFrameElement).prototype); break;
       case "iframe": Object.setPrototypeOf(el, global.HTMLIFrameElement.prototype); break;
       case "template": Object.setPrototypeOf(el, global.HTMLTemplateElement.prototype); break;
       case "slot": Object.setPrototypeOf(el, (global.HTMLSlotElement || global.HTMLElement).prototype); break;
@@ -728,6 +737,12 @@ function installShim(global) {
   if (docProto) {
     // Inherit from Node
     Object.setPrototypeOf(docProto, Node.prototype);
+    if (!("parentNode" in docProto)) {
+      Object.defineProperty(docProto, "parentNode", {
+        get: function () { return null; },
+        configurable: true,
+      });
+    }
 
     const origQS = docProto.querySelector;
     docProto.querySelector = wrapQuerySelector(origQS);
@@ -1221,6 +1236,14 @@ function installShim(global) {
         const hadScripts = enqueueWrittenScripts(markup, this);
         const nonScriptMarkup = hadScripts ? markup.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "") : markup;
         if (nonScriptMarkup) {
+          const bodyOpenMatch = /<body\b([^>]*)>/i.exec(nonScriptMarkup);
+          if (bodyOpenMatch && bodyOpenMatch[1] && this.body && typeof this.body.setAttribute === "function") {
+            const attrRe = /([a-zA-Z_:][\w:.-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g;
+            let am;
+            while ((am = attrRe.exec(bodyOpenMatch[1])) !== null) {
+              this.body.setAttribute(am[1], am[2] !== undefined ? am[2] : (am[3] !== undefined ? am[3] : (am[4] || "")));
+            }
+          }
           const target = this.body || this.documentElement;
           if (target && typeof this.createElement === "function") {
             const temp = this.createElement("div");
@@ -1247,6 +1270,24 @@ function installShim(global) {
       }, "writeln");
       if (global.document) {
         global.document.writeln = docProto.writeln;
+      }
+    }
+    if (typeof ParsedDocument !== "undefined" && ParsedDocument.prototype) {
+      if (!ParsedDocument.prototype.open) {
+        ParsedDocument.prototype.open = markNative(function () {
+          if (this.head && this.head._children) this.head._children.length = 0;
+          if (this.body && this.body._children) this.body._children.length = 0;
+          return docProto.open.apply(this, arguments);
+        }, "open");
+      }
+      if (!ParsedDocument.prototype.close) {
+        ParsedDocument.prototype.close = docProto.close;
+      }
+      if (!ParsedDocument.prototype.write) {
+        ParsedDocument.prototype.write = docProto.write;
+      }
+      if (!ParsedDocument.prototype.writeln) {
+        ParsedDocument.prototype.writeln = docProto.writeln;
       }
     }
 
@@ -2292,20 +2333,20 @@ function installShim(global) {
                 if (cachedBody) {
                   setDocOwner(cachedBody);
                   setParent(cachedBody, cachedDocEl || doc);
-                  Object.defineProperty(doc, "body", {
-                    get: function () {
-                      const de = this.documentElement;
-                      if (de && de.children) {
-                        for (let i = 0; i < de.children.length; i++) {
-                          const t = (de.children[i].tagName || "").toUpperCase();
-                          if (t === "BODY" || t === "FRAMESET") return upgradeElement(de.children[i]);
-                        }
-                      }
-                      return cachedBody;
-                    },
-                    configurable: true
-                  });
                 }
+                Object.defineProperty(doc, "body", {
+                  get: function () {
+                    const de = this.documentElement;
+                    if (de && de.children) {
+                      for (let i = 0; i < de.children.length; i++) {
+                        const t = (de.children[i].tagName || "").toUpperCase();
+                        if (t === "BODY" || t === "FRAMESET") return upgradeElement(de.children[i]);
+                      }
+                    }
+                    return cachedBody;
+                  },
+                  configurable: true
+                });
                 const origDocCreateElement = doc.createElement;
                 if (typeof origDocCreateElement === "function") {
                   doc.createElement = function (tagName) {

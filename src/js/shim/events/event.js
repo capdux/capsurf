@@ -35,6 +35,9 @@ const _popStateEventState = new WeakMap();
 const _transitionEventState = new WeakMap();
 const _animationEventState = new WeakMap();
 const _beforeUnloadEventState = new WeakMap();
+const _touchState = new WeakMap();
+const _touchListState = new WeakMap();
+const _touchEventState = new WeakMap();
 
 const _internalConstruct = Symbol("internalConstruct");
 
@@ -1464,4 +1467,142 @@ Object.defineProperty(BeforeUnloadEvent.prototype, "returnValue", {
   },
   enumerable: false,
   configurable: true,
+});
+
+// -------------------------------------------------------------
+// Touch, TouchList, TouchEvent
+// -------------------------------------------------------------
+function Touch(init) {
+  if (arguments.length === 0 || init === null || typeof init !== "object") {
+    throw new TypeError("Failed to construct 'Touch': 1 argument required, and it must be an object.");
+  }
+  if (init.identifier === undefined || init.target === null || typeof init.target !== "object") {
+    throw new TypeError("Failed to construct 'Touch': 'identifier' and 'target' are required.");
+  }
+  _touchState.set(this, {
+    identifier: Number(init.identifier) || 0,
+    target: init.target,
+    clientX: Number(init.clientX) || 0,
+    clientY: Number(init.clientY) || 0,
+    screenX: Number(init.screenX) || 0,
+    screenY: Number(init.screenY) || 0,
+    pageX: Number(init.pageX) || 0,
+    pageY: Number(init.pageY) || 0,
+    radiusX: Number(init.radiusX) || 0,
+    radiusY: Number(init.radiusY) || 0,
+    rotationAngle: Number(init.rotationAngle) || 0,
+    force: Number(init.force) || 0,
+  });
+}
+Object.defineProperty(Touch.prototype, Symbol.toStringTag, {
+  value: "Touch",
+  writable: false,
+  enumerable: false,
+  configurable: true,
+});
+markNative(Touch, "Touch");
+
+["identifier", "target", "clientX", "clientY", "screenX", "screenY", "pageX", "pageY", "radiusX", "radiusY", "rotationAngle", "force"].forEach(function (prop) {
+  Object.defineProperty(Touch.prototype, prop, {
+    get: function () {
+      const s = _touchState.get(this);
+      if (!s) throw new TypeError("Illegal invocation");
+      return s[prop];
+    },
+    enumerable: true,
+    configurable: true,
+  });
+});
+
+function TouchList(token, touches) {
+  if (token !== _internalConstruct) {
+    throw new TypeError("Illegal constructor");
+  }
+  const list = Array.isArray(touches) ? touches.slice() : [];
+  _touchListState.set(this, list);
+  for (let i = 0; i < list.length; i++) {
+    Object.defineProperty(this, i, {
+      value: list[i],
+      writable: false,
+      enumerable: true,
+      configurable: true,
+    });
+  }
+}
+Object.defineProperty(TouchList.prototype, Symbol.toStringTag, {
+  value: "TouchList",
+  writable: false,
+  enumerable: false,
+  configurable: true,
+});
+markNative(TouchList, "TouchList");
+
+Object.defineProperty(TouchList.prototype, "length", {
+  get: function () {
+    const s = _touchListState.get(this);
+    if (!s) throw new TypeError("Illegal invocation");
+    return s.length;
+  },
+  enumerable: true,
+  configurable: true,
+});
+
+TouchList.prototype.item = function (index) {
+  const s = _touchListState.get(this);
+  if (!s) throw new TypeError("Illegal invocation");
+  const idx = index >>> 0;
+  return idx < s.length ? s[idx] : null;
+};
+markNative(TouchList.prototype.item, "item");
+
+TouchList.prototype[Symbol.iterator] = function () {
+  const s = _touchListState.get(this);
+  if (!s) throw new TypeError("Illegal invocation");
+  return s[Symbol.iterator]();
+};
+
+function _toTouchList(input) {
+  if (input instanceof TouchList) return input;
+  if (input && typeof input[Symbol.iterator] === "function") {
+    return new TouchList(_internalConstruct, Array.from(input));
+  }
+  return new TouchList(_internalConstruct, []);
+}
+
+function TouchEvent(type, options) {
+  if (arguments.length === 0) {
+    throw new TypeError("Failed to construct 'TouchEvent': 1 argument required, but only 0 present.");
+  }
+  UIEvent.call(this, type, options);
+  const opts = (options !== null && typeof options === "object") ? options : {};
+  _touchEventState.set(this, {
+    touches: _toTouchList(opts.touches),
+    targetTouches: _toTouchList(opts.targetTouches),
+    changedTouches: _toTouchList(opts.changedTouches),
+    altKey: Boolean(opts.altKey),
+    metaKey: Boolean(opts.metaKey),
+    ctrlKey: Boolean(opts.ctrlKey),
+    shiftKey: Boolean(opts.shiftKey),
+  });
+}
+TouchEvent.prototype = Object.create(UIEvent.prototype);
+TouchEvent.prototype.constructor = TouchEvent;
+Object.defineProperty(TouchEvent.prototype, Symbol.toStringTag, {
+  value: "TouchEvent",
+  writable: false,
+  enumerable: false,
+  configurable: true,
+});
+markNative(TouchEvent, "TouchEvent");
+
+["touches", "targetTouches", "changedTouches", "altKey", "metaKey", "ctrlKey", "shiftKey"].forEach(function (prop) {
+  Object.defineProperty(TouchEvent.prototype, prop, {
+    get: function () {
+      const s = _touchEventState.get(this);
+      if (!s) throw new TypeError("Illegal invocation");
+      return s[prop];
+    },
+    enumerable: true,
+    configurable: true,
+  });
 });

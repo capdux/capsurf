@@ -1,6 +1,9 @@
 // src/js/shim/element/element.js
 // Aligned with vendor/kitesurf/packages/dom-shim/src/element/element.ts
 
+const _elIsArray = Array.isArray;
+const _elArrayFrom = Array.from;
+
 const STYLE_DECL_MEMBERS = new Set([
   "cssText", "length", "parentRule", "item", "setProperty",
   "getPropertyValue", "getPropertyPriority", "removeProperty"
@@ -407,6 +410,9 @@ function createStyleProxy(element) {
   }
 
   function serializeStyleMap(map) {
+    if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_ensureBeforeChangeSnapshot === "function") {
+      globalThis.__capsurf_ensureBeforeChangeSnapshot(element);
+    }
     const res = formatStyleMap(map);
     if (res.length > 0) {
       element.setAttribute("style", res);
@@ -1218,7 +1224,7 @@ function installElementExtensions(proto) {
       const isHtml = isHtmlElement(this);
       if (typeof this._getRawAttrs === "function") {
         const raw = this._getRawAttrs();
-        if (raw && Array.isArray(raw)) {
+        if (raw && _elIsArray(raw)) {
           for (let i = 0; i < raw.length; i++) {
             const item = raw[i];
             if (item && item.name) {
@@ -1303,6 +1309,9 @@ function installElementExtensions(proto) {
     const isHtml = isHtmlElement(this);
     const key = isHtml ? String(name).toLowerCase() : String(name);
     const val = String(value);
+    if ((key === "class" || key === "style") && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_ensureBeforeChangeSnapshot === "function") {
+      globalThis.__capsurf_ensureBeforeChangeSnapshot(this);
+    }
     if (!this._attrs) this._syncAttrs();
     let existing = null;
     if (this._attrList) {
@@ -1338,11 +1347,9 @@ function installElementExtensions(proto) {
       this._attrList.push(entry);
     }
     this._attrs.set(key, { name: key, value: val });
-    if (key === "style" || key === "class" || key === "id") {
-      if (typeof globalThis !== "undefined") {
-        globalThis.__capsurf_cssom_epoch = (globalThis.__capsurf_cssom_epoch || 0) + 1;
-        globalThis.__capsurf_domMutationEpoch = (globalThis.__capsurf_domMutationEpoch || 0) + 1;
-      }
+    if (typeof globalThis !== "undefined") {
+      globalThis.__capsurf_cssom_epoch = (globalThis.__capsurf_cssom_epoch || 0) + 1;
+      globalThis.__capsurf_domMutationEpoch = (globalThis.__capsurf_domMutationEpoch || 0) + 1;
     }
     if (key.toLowerCase() === "async") {
       if (typeof globalThis !== "undefined" && globalThis.__capsurf_clearScriptForceAsync) {
@@ -1418,6 +1425,9 @@ function installElementExtensions(proto) {
   proto.removeAttribute = function (name) {
     const isHtml = isHtmlElement(this);
     const key = isHtml ? String(name).toLowerCase() : String(name);
+    if ((key === "class" || key === "style") && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_ensureBeforeChangeSnapshot === "function") {
+      globalThis.__capsurf_ensureBeforeChangeSnapshot(this);
+    }
     if (!this._attrs) this._syncAttrs();
     let oldVal = null;
     if (this._attrList) {
@@ -1466,6 +1476,10 @@ function installElementExtensions(proto) {
 
     if (origRemoveAttribute) {
       origRemoveAttribute.call(this, name);
+    }
+    if (typeof globalThis !== "undefined") {
+      globalThis.__capsurf_cssom_epoch = (globalThis.__capsurf_cssom_epoch || 0) + 1;
+      globalThis.__capsurf_domMutationEpoch = (globalThis.__capsurf_domMutationEpoch || 0) + 1;
     }
     if (this._attributesMap) {
       this._attributesMap._sync();
@@ -1869,6 +1883,9 @@ function installElementExtensions(proto) {
       return this.getAttribute("class") || "";
     },
     set: function (v) {
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_ensureBeforeChangeSnapshot === "function") {
+        globalThis.__capsurf_ensureBeforeChangeSnapshot(this);
+      }
       if (!isHtmlElement(this) && typeof v === "object" && v !== null && v.baseVal !== undefined) {
         v = v.baseVal;
       }
@@ -2619,7 +2636,7 @@ function installElementExtensions(proto) {
         this._inShadowRect = true;
         let shadowH = 0;
         try {
-          const sKids = Array.from(this._shadowRoot.childNodes || this._shadowRoot._children || []);
+          const sKids = _elArrayFrom(this._shadowRoot.childNodes || this._shadowRoot._children || []);
           for (let i = 0; i < sKids.length; i++) {
             const sk = sKids[i];
             if (sk && sk.nodeType === 1) {
@@ -2631,6 +2648,8 @@ function installElementExtensions(proto) {
               } else if (getShadowEffectiveText(sk).length > 0) {
                 shadowH += 16;
               }
+            } else if (sk && sk.nodeType === 3 && String(sk.textContent || "").trim().length > 0) {
+              shadowH += 16;
             }
           }
         } finally {
@@ -2710,7 +2729,7 @@ function installElementExtensions(proto) {
         } else {
           pr = parent.getBoundingClientRect();
         }
-        if (!childW) childW = pr.width;
+        if (!childW && !(this.style && (this.style.width === "0" || this.style.width === "0px"))) childW = pr.width;
         let offsetTop = 0;
         if (!inSiblingOffsetCalc) {
           const siblings = (this.parentNode && (this.parentNode.children || this.parentNode._children || this.parentNode.childNodes)) ||
@@ -2850,8 +2869,10 @@ function installElementExtensions(proto) {
 
   Object.defineProperty(proto, "clientHeight", {
     get: function () {
-      if (this === document.documentElement || this === document.body) {
-        return (typeof window !== "undefined" && window.innerHeight) || 720;
+      const ownerDoc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
+      if (ownerDoc && (this === ownerDoc.documentElement || this === ownerDoc.body)) {
+        const win = ownerDoc.defaultView || (typeof window !== "undefined" ? window : null);
+        return (win && win.innerHeight) || 720;
       }
       if (isElementDisplayNone(this)) return 0;
       const r = origGetBoundingClientRect ? origGetBoundingClientRect.call(this) : this.getBoundingClientRect();
@@ -2864,8 +2885,10 @@ function installElementExtensions(proto) {
 
   Object.defineProperty(proto, "clientWidth", {
     get: function () {
-      if (this === document.documentElement || this === document.body) {
-        return (typeof window !== "undefined" && window.innerWidth) || 1280;
+      const ownerDoc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
+      if (ownerDoc && (this === ownerDoc.documentElement || this === ownerDoc.body)) {
+        const win = ownerDoc.defaultView || (typeof window !== "undefined" ? window : null);
+        return (win && win.innerWidth) || 1280;
       }
       if (isElementDisplayNone(this)) return 0;
       const r = origGetBoundingClientRect ? origGetBoundingClientRect.call(this) : this.getBoundingClientRect();
@@ -2913,6 +2936,20 @@ function installElementExtensions(proto) {
   function collectRootScrollExtents(rootEl, isDocEl) {
     const vw = (typeof window !== "undefined" && window.innerWidth) || 1280;
     const vh = (typeof window !== "undefined" && window.innerHeight) || 720;
+
+    if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_get_root_scroll_size === "function" && rootEl && typeof rootEl._nid === "number") {
+      const epoch = globalThis.__capsurf_domMutationEpoch || 0;
+      const rootStyleAttr = (rootEl.getAttribute && rootEl.getAttribute("style")) || "";
+      const cache = globalThis.__capsurf_rootScrollCache;
+      if (cache && cache.epoch === epoch && cache.vw === vw && cache.vh === vh && cache.nid === rootEl._nid && cache.isDocEl === !!isDocEl && cache.styleAttr === rootStyleAttr) {
+        return cache.res;
+      }
+      const nativeRes = globalThis.__capsurf_get_root_scroll_size(rootEl._nid, isDocEl ? 1 : 0);
+      if (nativeRes && typeof nativeRes.width === "number" && typeof nativeRes.height === "number") {
+        globalThis.__capsurf_rootScrollCache = { epoch: epoch, vw: vw, vh: vh, nid: rootEl._nid, isDocEl: !!isDocEl, styleAttr: rootStyleAttr, res: nativeRes };
+        return nativeRes;
+      }
+    }
 
     let originX = 0;
     let originY = 0;
@@ -2970,7 +3007,7 @@ function installElementExtensions(proto) {
     let startYIsBottom = false;
     if (gcsFn) {
       try {
-        const elCs = gcsFn(el);
+        const elCs = gcsFn(rootEl);
         if (elCs) {
           const elOx = String(elCs.overflowX || elCs.overflow || "visible").trim().toLowerCase();
           const elOy = String(elCs.overflowY || elCs.overflow || "visible").trim().toLowerCase();
@@ -2998,7 +3035,9 @@ function installElementExtensions(proto) {
         let isFixed = false;
         let clipped = false;
         const inlineStyle = (child.getAttribute && child.getAttribute("style")) || "";
-        if (hasFixedOrOverflowCss || inlineStyle) {
+        const inlineLower = inlineStyle ? String(inlineStyle).toLowerCase() : "";
+        const hasInlinePosOrOverflow = inlineLower.indexOf("position") !== -1 || inlineLower.indexOf("overflow") !== -1;
+        if (hasFixedOrOverflowCss || hasInlinePosOrOverflow) {
           if (gcsFn) {
             try {
               const cs = gcsFn(child);
@@ -3108,8 +3147,8 @@ function installElementExtensions(proto) {
         let r = relX + childW;
         let b = relY + childH;
         const outsideStart = elIsScrollContainer && (
-          (startXIsRight ? (relX >= maxRightBase) : (r <= 0)) ||
-          (startYIsBottom ? (relY >= maxBottomBase) : (b <= 0))
+          (startXIsRight ? (relX >= maxRight) : (r <= 0)) ||
+          (startYIsBottom ? (relY >= maxBottom) : (b <= 0))
         );
         if (!outsideStart) {
           if (limitRight !== null && r > limitRight) r = limitRight;
@@ -3206,6 +3245,14 @@ function installElementExtensions(proto) {
     if (!el) return;
     const vw = (typeof window !== "undefined" && window.innerWidth) || 1280;
     const vh = (typeof window !== "undefined" && window.innerHeight) || 720;
+    let isFixed = false;
+    try {
+      const st = (typeof window !== "undefined" && window.getComputedStyle) ? window.getComputedStyle(el) : el.style;
+      isFixed = st && st.position === "fixed";
+    } catch (_) {}
+    if (onlyIfNeeded && isFixed) {
+      return;
+    }
 
     const r = el.getBoundingClientRect();
     const inWin = (r.top >= 0 && r.bottom <= vh && r.left >= 0 && r.right <= vw);
@@ -3440,6 +3487,18 @@ function installElementExtensions(proto) {
     const ShadowRootCtor = typeof ShadowRoot !== "undefined" ? ShadowRoot : (global.ShadowRoot || null);
     const shadow = ShadowRootCtor ? new ShadowRootCtor(this, mode) : new DocumentFragment();
     shadow.slotAssignment = init.slotAssignment === "manual" ? "manual" : "named";
+    if (typeof global.__capsurf_attach_shadow_native === "function" && typeof this._nid === "number" && this._nid > 0) {
+      try {
+        const snid = global.__capsurf_attach_shadow_native(this);
+        if (typeof snid === "number" && snid > 0) {
+          Object.defineProperty(shadow, "_nid", {
+            value: snid,
+            writable: true,
+            configurable: true,
+          });
+        }
+      } catch (e) {}
+    }
     elementShadowRootMap.set(this, shadow);
     try {
       Object.defineProperty(this, "_shadowRoot", {
@@ -3616,9 +3675,17 @@ function installElementExtensions(proto) {
     configurable: true,
   });
 
+  const DISABLED_TAGS = new Set(["button", "fieldset", "input", "optgroup", "option", "select", "textarea"]);
   Object.defineProperty(proto, "disabled", {
-    get: function () { return this.hasAttribute("disabled"); },
-    set: function (v) { if (v) this.setAttribute("disabled", ""); else this.removeAttribute("disabled"); },
+    get: function () {
+      const t = String(this.localName || this.tagName || "").toLowerCase();
+      return DISABLED_TAGS.has(t) ? this.hasAttribute("disabled") : undefined;
+    },
+    set: function (v) {
+      const t = String(this.localName || this.tagName || "").toLowerCase();
+      if (!DISABLED_TAGS.has(t)) return;
+      if (v) this.setAttribute("disabled", ""); else this.removeAttribute("disabled");
+    },
     configurable: true,
   });
 

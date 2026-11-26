@@ -2709,7 +2709,8 @@
     if (prop === "outline-color") {
       const toks = splitCssTokens(trimmed);
       if (toks.length !== 1) return false;
-      if (toks[0].toLowerCase() === "auto") return true;
+      const tl = toks[0].toLowerCase();
+      if (tl === "auto" || tl === "invert") return true;
       return isValidColor(toks[0]);
     }
     if (prop === "caret-color") {
@@ -3879,7 +3880,7 @@
         } else if (tl === "thin" || tl === "medium" || tl === "thick" || tl === "hairline" ||
                    (!tl.endsWith("%") && !(/^(?:calc|min|max|clamp)\(/i.test(tl) && tl.includes("%")) && isValidLenPct(tl, false))) {
           if (seenW) return false; seenW = true;
-        } else if (isValidColor(t)) {
+        } else if (isValidColor(t) || (prop === "outline" && tl === "invert")) {
           if (seenC) return false; seenC = true;
         } else {
           return false;
@@ -5390,7 +5391,7 @@
         if (STY.has(tl)) st = tl;
         else if (tl === "thin" || tl === "medium" || tl === "thick" || tl === "hairline" || /^[+-]?(?:\d|\.)/.test(tl) || /^(?:calc|min|max|clamp)\(/i.test(tl)) {
           w = (tl === "0" || tl === "+0" || tl === "-0") ? "0px" : (/^calc\(/i.test(t) ? canonicalizeCalcToken(t) : t);
-        } else c = t;
+        } else c = (key === "outline" && tl === "invert") ? "invert" : t;
       }
       if (key === "outline") {
         const oc = c.toLowerCase() === "currentcolor" ? "" : c;
@@ -6944,7 +6945,7 @@
             }
             if (!isValidCssValue("background-position", pToks.join(" "))) return false;
             pos = normalizeCssSpecifiedValue("background-position", pToks.join(" "));
-          } else if (isValidColor(t)) {
+          } else if (isValidColor(t) || (prop === "outline" && tl === "invert")) {
             if (li < layers.length - 1 || seenCol) return false;
             seenCol = true;
             color = t;
@@ -7696,7 +7697,7 @@
         if (STY.has(tl)) st = tl;
         else if (tl === "thin" || tl === "medium" || tl === "thick" || tl === "hairline" || /^[+-]?(?:\d|\.)/.test(tl) || /^(?:calc|min|max|clamp)\(/i.test(tl)) {
           w = (tl === "0" || tl === "+0" || tl === "-0") ? "0px" : (/^calc\(/i.test(t) ? canonicalizeCalcToken(t) : t);
-        } else c = t;
+        } else c = (key === "outline" && tl === "invert") ? "invert" : t;
       }
       if (key !== "border") return [[key + "-width", w], [key + "-style", st], [key + "-color", c]];
       return [
@@ -7720,7 +7721,7 @@
         if (STY.has(tl)) st = tl;
         else if (tl === "thin" || tl === "medium" || tl === "thick" || tl === "hairline" || /^[+-]?(?:\d|\.)/.test(tl) || /^(?:calc|min|max|clamp)\(/i.test(tl)) {
           w = (tl === "0" || tl === "+0" || tl === "-0") ? "0px" : (/^calc\(/i.test(t) ? canonicalizeCalcToken(t) : t);
-        } else c = t;
+        } else c = (key === "outline" && tl === "invert") ? "invert" : t;
       }
       return [[key + "-width", w], [key + "-style", st], [key + "-color", c]];
     }
@@ -7855,7 +7856,7 @@
         if (STY.has(tl)) st = tl;
         else if (tl === "thin" || tl === "medium" || tl === "thick" || tl === "hairline" || /^[+-]?(?:\d|\.)/.test(tl) || /^(?:calc|min|max|clamp)\(/i.test(tl)) {
           w = (tl === "0" || tl === "+0" || tl === "-0") ? "0px" : (/^calc\(/i.test(t) ? canonicalizeCalcToken(t) : t);
-        } else c = t;
+        } else c = (key === "outline" && tl === "invert") ? "invert" : t;
       }
       if (key === "border-block" || key === "border-inline") {
         return [
@@ -8619,7 +8620,9 @@
 
   const CSS = {
     escape(ident) {
-      return String(ident).replace(/[^a-zA-Z0-9_-]/g, (c) => "\\" + c);
+      const s = String(ident);
+      if (s === "-") return "\\-";
+      return s.replace(/[^a-zA-Z0-9_-]/g, (c) => "\\" + c).replace(/^-?[0-9]/, (m) => (m.length === 2 ? "-\\3" + m[1] + " " : "\\3" + m[0] + " "));
     },
     supports(propertyOrCondition, value) {
       if (typeof propertyOrCondition === "string" && typeof value === "string") {
@@ -11306,14 +11309,70 @@
     this._cascadeCssText = text;
   };
 
+  const _docShadowRootsMap = new WeakMap();
+
+  function syncAdoptedAndInvalidate(doc) {
+    try {
+      globalThis.__capsurf_cssom_epoch = (globalThis.__capsurf_cssom_epoch || 0) + 1;
+      globalThis.__capsurf_domMutationEpoch = (globalThis.__capsurf_domMutationEpoch || 0) + 1;
+      const isShadow = !!(doc && doc.host);
+      const targetDoc = isShadow
+        ? (doc.host.ownerDocument || doc.ownerDocument || global.document || (typeof document !== "undefined" ? document : null))
+        : (doc || global.document || (typeof document !== "undefined" ? document : null));
+      if (isShadow && targetDoc) {
+        let srSet = _docShadowRootsMap.get(targetDoc);
+        if (!srSet) {
+          srSet = new Set();
+          _docShadowRootsMap.set(targetDoc, srSet);
+        }
+        srSet.add(doc);
+      }
+      if (typeof globalThis.__capsurf_set_adopted_css === "function") {
+        const parts = [];
+        const sheets = targetDoc ? getAdoptedStyleSheets(targetDoc) : [];
+        for (let i = 0; i < sheets.length; i++) {
+          const s = sheets[i];
+          if (s && !s.disabled && s._cascadeCssText) {
+            parts.push(s._cascadeCssText);
+          }
+        }
+        const srSet = targetDoc ? _docShadowRootsMap.get(targetDoc) : null;
+        if (srSet) {
+          for (const sr of srSet) {
+            const srSheets = getAdoptedStyleSheets(sr);
+            for (let i = 0; i < srSheets.length; i++) {
+              const s = srSheets[i];
+              if (s && !s.disabled && s._cascadeCssText) {
+                parts.push(s._cascadeCssText);
+              }
+            }
+          }
+        } else if (isShadow) {
+          const srSheets = getAdoptedStyleSheets(doc);
+          for (let i = 0; i < srSheets.length; i++) {
+            const s = srSheets[i];
+            if (s && !s.disabled && s._cascadeCssText) {
+              parts.push(s._cascadeCssText);
+            }
+          }
+        }
+        globalThis.__capsurf_set_adopted_css(parts.join("\n"));
+      }
+    } catch (e) {}
+  }
+
   CSSStyleSheet.prototype._remirror = function () {
     const text = this._rules.map((r) => r.cssText).join("\n");
     this._cascadeCssText = text;
-    if (!this.ownerNode) return;
+    if (!this.ownerNode) {
+      syncAdoptedAndInvalidate(null);
+      return;
+    }
     const tag = String(this.ownerNode.localName || this.ownerNode.tagName || "").toLowerCase();
     if (tag !== "link") {
       this._lastParsedText = String(this.ownerNode.textContent || "");
     }
+    syncAdoptedAndInvalidate(this.ownerNode.ownerDocument || null);
   };
 
   CSSStyleSheet.prototype._isCrossOriginOpaque = function () {
@@ -11571,10 +11630,26 @@
   }
 
   const _adoptedSheetsMap = new WeakMap();
+  function wrapAdoptedSheetArray(target, arr) {
+    const mutators = ["push", "pop", "splice", "shift", "unshift"];
+    for (let i = 0; i < mutators.length; i++) {
+      const m = mutators[i];
+      Object.defineProperty(arr, m, {
+        value: function () {
+          const res = Array.prototype[m].apply(this, arguments);
+          syncAdoptedAndInvalidate(target);
+          return res;
+        },
+        writable: true,
+        configurable: true,
+      });
+    }
+    return arr;
+  }
   function getAdoptedStyleSheets(doc) {
     let arr = _adoptedSheetsMap.get(doc);
     if (!arr) {
-      arr = [];
+      arr = wrapAdoptedSheetArray(doc, []);
       _adoptedSheetsMap.set(doc, arr);
     }
     return arr;
@@ -11589,21 +11664,28 @@
         throw new TypeError("Failed to set 'adoptedStyleSheets': Failed to convert value to 'CSSStyleSheet'.");
       }
     }
-    _adoptedSheetsMap.set(doc, next);
+    _adoptedSheetsMap.set(doc, wrapAdoptedSheetArray(doc, next));
+    syncAdoptedAndInvalidate(doc);
   }
+  function defineAdoptedStyleSheets(targetProto) {
+    if (targetProto && !Object.getOwnPropertyDescriptor(targetProto, "adoptedStyleSheets")) {
+      Object.defineProperty(targetProto, "adoptedStyleSheets", {
+        get: function () { return getAdoptedStyleSheets(this); },
+        set: function (v) { setAdoptedStyleSheets(this, v); },
+        configurable: true,
+      });
+    }
+  }
+  global.__capsurf_defineAdoptedStyleSheets = defineAdoptedStyleSheets;
   if (docProtoForStylesheets && !Object.getOwnPropertyDescriptor(docProtoForStylesheets, "adoptedStyleSheets")) {
-    Object.defineProperty(docProtoForStylesheets, "adoptedStyleSheets", {
-      get: function () { return getAdoptedStyleSheets(this); },
-      set: function (v) { setAdoptedStyleSheets(this, v); },
-      configurable: true,
-    });
+    defineAdoptedStyleSheets(docProtoForStylesheets);
   }
   if (global.document && !Object.getOwnPropertyDescriptor(global.document, "adoptedStyleSheets")) {
-    Object.defineProperty(global.document, "adoptedStyleSheets", {
-      get: function () { return getAdoptedStyleSheets(this); },
-      set: function (v) { setAdoptedStyleSheets(this, v); },
-      configurable: true,
-    });
+    defineAdoptedStyleSheets(global.document);
+  }
+  const shadowRootProtoForStylesheets = (global.ShadowRoot && global.ShadowRoot.prototype) ? global.ShadowRoot.prototype : null;
+  if (shadowRootProtoForStylesheets) {
+    defineAdoptedStyleSheets(shadowRootProtoForStylesheets);
   }
 
   // =========================================================================
@@ -12777,7 +12859,10 @@
   const MULTI_COLOR_PROPS = new Set(["border-color", "border-block-color", "border-inline-color", "caret-color", "scrollbar-color"]);
   function normalizePropColors(k, val, curColor) {
     if (!val || typeof val !== "string") return val;
-    if (k === "outline-color" && val.trim().toLowerCase() === "auto") return "auto";
+    if (k === "outline-color") {
+      const vl = val.trim().toLowerCase();
+      if (vl === "auto" || vl === "invert") return vl;
+    }
     if (k === "animation-name" || k === "font-family" || k === "content" || k === "quotes" ||
         k === "grid-row-start" || k === "grid-row-end" || k === "grid-column-start" || k === "grid-column-end" ||
         k === "grid-row" || k === "grid-column" || k === "grid-area") return val;
@@ -12799,9 +12884,10 @@
     return out;
   }
 
-  function wrapComputedStyleDecl(decl, element) {
+  function wrapComputedStyleDecl(decl, element, pseudoElt) {
     if (!decl || typeof decl !== "object") return decl;
-    const linkOverrides = getDynamicLinkOverrides(element);
+    const hasPseudo = String(pseudoElt || "").trim().length > 0;
+    const linkOverrides = hasPseudo ? null : getDynamicLinkOverrides(element);
     return new Proxy(decl, {
       get: function (target, prop, receiver) {
         if (typeof prop === "symbol") return target[prop];
@@ -12813,7 +12899,8 @@
               const k = rawName.startsWith("--") ? rawName : rawName.toLowerCase();
               if (linkOverrides && Object.prototype.hasOwnProperty.call(linkOverrides, k)) {
                 let ov = resolveCssVars(element, linkOverrides[k]);
-                if (k === "color" || k.endsWith("-color")) ov = normalizePropColors(k, ov, receiver.color);
+                const curCol = (k === "color") ? ((target.getPropertyValue ? target.getPropertyValue("color") : target.color) || "rgb(0, 0, 0)") : receiver.color;
+                if (k === "color" || k.endsWith("-color")) ov = normalizePropColors(k, ov, curCol);
                 return ov;
               }
               if (k === "-webkit-transform" || k === "transform") {
@@ -12862,7 +12949,8 @@
 
           if (linkOverrides && Object.prototype.hasOwnProperty.call(linkOverrides, kebab)) {
             let ov = resolveCssVars(element, linkOverrides[kebab]);
-            if (kebab === "color" || kebab.endsWith("-color")) ov = normalizePropColors(kebab, ov, receiver.color);
+            const curCol = (kebab === "color") ? ((target.getPropertyValue ? target.getPropertyValue("color") : target.color) || "rgb(0, 0, 0)") : receiver.color;
+            if (kebab === "color" || kebab.endsWith("-color")) ov = normalizePropColors(kebab, ov, curCol);
             return ov;
           }
 
@@ -12971,7 +13059,7 @@
       throw new TypeError("getComputedStyle is not initialized");
     }
     const raw = _capturedGetComputedStyle.call(this, element, pseudoElt);
-    return wrapComputedStyleDecl(raw, element);
+    return wrapComputedStyleDecl(raw, element, pseudoElt);
   }
   markNative(enhancedGetComputedStyle, "getComputedStyle");
 

@@ -2,7 +2,7 @@
 // CDP Emulation Domain & Viewport Clamping for CapSurf
 // Migrated from vendor/kitesurf/packages/engine/src/cdp/viewport.ts
 
-import { CdpRequest, CdpResponse, extractJsonString, extractJsonInt, extractJsonArray } from "./types.cp";
+import { CdpRequest, CdpResponse, extractJsonString, extractJsonInt, extractJsonFloat, extractJsonArray } from "./types.cp";
 import { CdpPageSession } from "./session.cp";
 
 pub const DEFAULT_VIEWPORT_WIDTH: f32 = 1280.0;
@@ -72,8 +72,8 @@ pub struct EmulationHandler {
                 let js_buf: [1024]u8 = [0; 1024];
                 const js_expr = std.fmt.bufPrint(
                     &js_buf,
-                    "(() => {{ const w = {d}; const h = {d}; if (typeof window !== 'undefined') {{ window.innerWidth = w; window.innerHeight = h; }} if (typeof global !== 'undefined') {{ global.innerWidth = w; global.innerHeight = h; }} if (typeof globalThis !== 'undefined') {{ globalThis.innerWidth = w; globalThis.innerHeight = h; }} }})()",
-                    .{ @as(i64, @intFromFloat(clamped.width)), @as(i64, @intFromFloat(clamped.height)) },
+                    "(() => {{ const w = {d}; const h = {d}; const dpr = {d}; if (typeof window !== 'undefined') {{ window.innerWidth = w; window.innerHeight = h; if (dpr > 0) window.devicePixelRatio = dpr; }} if (typeof global !== 'undefined') {{ global.innerWidth = w; global.innerHeight = h; if (dpr > 0) global.devicePixelRatio = dpr; }} if (typeof globalThis !== 'undefined') {{ globalThis.innerWidth = w; globalThis.innerHeight = h; if (dpr > 0) globalThis.devicePixelRatio = dpr; }} }})()",
+                    .{ @as(i64, @intFromFloat(clamped.width)), @as(i64, @intFromFloat(clamped.height)), @as(i64, @intFromFloat(session.device_scale_factor)) },
                 ) catch null;
                 if (e := js_expr) {
                     const val = session.ctx.eval(e);
@@ -94,6 +94,10 @@ pub struct EmulationHandler {
             session.is_mobile = false;
             if (dctx := session.dom_ctx) {
                 dctx.layout_dirty = true;
+            }
+            if (session.has_document) {
+                const rst = session.ctx.eval("(() => { if (typeof window !== 'undefined') window.devicePixelRatio = 1; if (typeof global !== 'undefined') global.devicePixelRatio = 1; if (typeof globalThis !== 'undefined') globalThis.devicePixelRatio = 1; })()");
+                session.ctx.freeValue(rst);
             }
             return CdpResponse.ok(req.id, "{}");
         }
@@ -117,11 +121,37 @@ pub struct EmulationHandler {
                 const flen = @min(raw_features.len, session.emulated_features_buf.len);
                 if (flen > 0) @memcpy(session.emulated_features_buf[0..flen], raw_features[0..flen]);
                 session.emulated_features_len = flen;
+                session.dark_color_scheme = std.mem.indexOf(u8, raw_features, "\"prefers-color-scheme\"") != null &&
+                    std.mem.indexOf(u8, raw_features, "\"dark\"") != null;
             }
             if (dctx := session.dom_ctx) {
                 dctx.layout_dirty = true;
             }
             session.applyEmulatedMediaToJs();
+            return CdpResponse.ok(req.id, "{}");
+        }
+
+        if (std.mem.eql(u8, req.method, "Emulation.setDefaultBackgroundColorOverride")) {
+            if (std.mem.indexOf(u8, req.params_raw, "\"color\"") == null ||
+                std.mem.indexOf(u8, req.params_raw, "\"color\":null") != null ||
+                std.mem.indexOf(u8, req.params_raw, "\"color\": null") != null) {
+                session.has_bg_color_override = false;
+                return CdpResponse.ok(req.id, "{}");
+            }
+            const r_i = extractJsonInt(req.params_raw, "r") ?? 255;
+            const g_i = extractJsonInt(req.params_raw, "g") ?? 255;
+            const b_i = extractJsonInt(req.params_raw, "b") ?? 255;
+            const a_f = extractJsonFloat(req.params_raw, "a") ?? 1.0;
+            const r_c: u8 = @as(u8, @intCast(if (r_i < 0) 0 else if (r_i > 255) 255 else r_i));
+            const g_c: u8 = @as(u8, @intCast(if (g_i < 0) 0 else if (g_i > 255) 255 else g_i));
+            const b_c: u8 = @as(u8, @intCast(if (b_i < 0) 0 else if (b_i > 255) 255 else b_i));
+            const a_clamped: f32 = if (a_f < 0.0) 0.0 else if (a_f > 1.0) 1.0 else a_f;
+            const a_c: u8 = @as(u8, @intFromFloat(@round(a_clamped * 255.0)));
+            session.bg_color_override.r = r_c;
+            session.bg_color_override.g = g_c;
+            session.bg_color_override.b = b_c;
+            session.bg_color_override.a = a_c;
+            session.has_bg_color_override = true;
             return CdpResponse.ok(req.id, "{}");
         }
 

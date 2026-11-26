@@ -9,6 +9,9 @@ import {
     JSClassDef,
     JsRuntime,
     JsContext,
+    TaskQueueKind,
+    ScheduledTask,
+    TaskScheduler,
     jsNull,
     jsUndefined,
     jsTrue,
@@ -17,6 +20,7 @@ import {
     jsToBool,
     JS_TAG_NULL,
     JS_TAG_UNDEFINED,
+    JS_TAG_OBJECT,
     jsInt,
     jsFloat,
     jsException,
@@ -48,11 +52,15 @@ import {
     JS_Eval,
     JS_ToCStringLen2,
     JS_FreeCString,
+    JS_GetUint8Array,
+    JS_GetException,
     JS_ToInt32,
+    JS_ToInt64,
     JS_ToFloat64,
+    JS_NewError,
 } from "./qjs_engine.cp";
 
-import { Document, NodeId, NULL_NODE, NodeType } from "../dom/dom.cp";
+import { Document, NodeId, NULL_NODE, NodeType, containsDisplayNone } from "../dom/dom.cp";
 import { Matcher } from "../css/matcher.cp";
 import { StyleSheet, Cascade, ComputedStyle, CssPosition } from "../css/cascade.cp";
 import {
@@ -143,6 +151,13 @@ pub struct ConsoleRecord {
     args_json: [2048]u8 = [0; 2048],
     args_json_len: usize = 0,
     timestamp: i64 = 0,
+    url: [512]u8 = [0; 512],
+    url_len: usize = 0,
+    func_name: [128]u8 = [0; 128],
+    func_name_len: usize = 0,
+    line_number: i32 = 0,
+    column_number: i32 = 0,
+    has_location: bool = false,
 
     fn getLevel(*_): []const u8 {
         return _.level[0.._.level_len];
@@ -154,6 +169,14 @@ pub struct ConsoleRecord {
 
     fn getArgsJson(*_): []const u8 {
         return _.args_json[0.._.args_json_len];
+    }
+
+    fn getUrl(*_): []const u8 {
+        return _.url[0.._.url_len];
+    }
+
+    fn getFuncName(*_): []const u8 {
+        return _.func_name[0.._.func_name_len];
     }
 }
 
@@ -254,6 +277,9 @@ pub struct JsDomContext {
     loader_id_len: usize = 0,
     dom_events_enabled: bool = false,
     dom_mutations: std.ArrayListUnmanaged(DomMutationRecord) = std.ArrayListUnmanaged(DomMutationRecord).empty,
+    adopted_css: ([]u8)? = null,
+    raw_ctx: (*JSContext)? = null,
+    scheduler: TaskScheduler = TaskScheduler{},
 
     fn recordDomMutation(*_, rec: DomMutationRecord) {
         if (!_.dom_events_enabled) return;
@@ -334,6 +360,14 @@ pub struct JsDomContext {
     fn deinitDomMutations(*_) {
         _.dom_mutations.deinit(std.heap.c_allocator);
         _.dom_mutations = std.ArrayListUnmanaged(DomMutationRecord).empty;
+        if (ac := _.adopted_css) {
+            std.heap.c_allocator.free(ac);
+            _.adopted_css = null;
+        }
+        if (rc := _.raw_ctx) {
+            _.scheduler.deinitValues(rc);
+            _.raw_ctx = null;
+        }
     }
 
     fn addFetchRecord(*_, url: []const u8, mime_type: []const u8) {
@@ -399,6 +433,20 @@ pub struct JsDomContext {
     }
 
     fn addConsoleRecord(*_, level: []const u8, text: []const u8, args_json: []const u8) {
+        _.addConsoleRecordWithLoc(level, text, args_json, "", "", 0, 0, false);
+    }
+
+    fn addConsoleRecordWithLoc(
+        *_,
+        level: []const u8,
+        text: []const u8,
+        args_json: []const u8,
+        url: []const u8,
+        func_name: []const u8,
+        line_number: i32,
+        column_number: i32,
+        has_location: bool,
+    ) {
         if (_.console_count >= MAX_CONSOLE_RECORDS) {
             let j: usize = 1;
             while (j < MAX_CONSOLE_RECORDS) : (j += 1) {
@@ -418,6 +466,18 @@ pub struct JsDomContext {
         const a_len = @min(args_json.len, rec.args_json.len);
         @memcpy(rec.args_json[0..a_len], args_json[0..a_len]);
         rec.args_json_len = a_len;
+
+        const u_len = @min(url.len, rec.url.len);
+        if (u_len > 0) @memcpy(rec.url[0..u_len], url[0..u_len]);
+        rec.url_len = u_len;
+
+        const f_len = @min(func_name.len, rec.func_name.len);
+        if (f_len > 0) @memcpy(rec.func_name[0..f_len], func_name[0..f_len]);
+        rec.func_name_len = f_len;
+
+        rec.line_number = line_number;
+        rec.column_number = column_number;
+        rec.has_location = has_location;
 
         rec.timestamp = getMilliTimestamp();
         _.console_count += 1;
@@ -497,8 +557,8 @@ pub fn createJsElement(ctx: *JSContext, dom_ctx: *JsDomContext, node_id: NodeId)
         node_id: node_id,
     };
     * = JS_SetOpaque(el_val, unsafe { @ptrCast(el) });
-    * = JS_SetPropertyStr(ctx, el_val, "_nid", jsInt(@intCast(node_id)));
-    * = JS_SetPropertyStr(ctx, el_val, "_id", jsInt(@intCast(node_id)));
+    * = JS_DefinePropertyValueStr(ctx, el_val, "_nid", jsInt(@intCast(node_id)), 3);
+    * = JS_DefinePropertyValueStr(ctx, el_val, "_id", jsInt(@intCast(node_id)), 3);
     if (key.len > 0) {
         * = JS_SetPropertyStr(ctx, cache, unsafe { @ptrCast(&key_z) }, JS_DupValue(ctx, el_val));
     }
@@ -580,8 +640,8 @@ fn setNodeText(doc: *Document, node_id: NodeId, text: []const u8) {
     defer std.heap.page_allocator.free(attr_name);
     const attr_val = jsToSlice(ctx, unsafe { argv[1] });
     defer std.heap.page_allocator.free(attr_val);
-    const attr_name_dup = el.dom_ctx.doc.allocator.dupe(u8, attr_name) catch attr_name;
-    const attr_val_dup = el.dom_ctx.doc.allocator.dupe(u8, attr_val) catch attr_val;
+    const attr_name_dup = el.dom_ctx.doc.allocString(attr_name) catch attr_name;
+    const attr_val_dup = el.dom_ctx.doc.allocString(attr_val) catch attr_val;
     el.dom_ctx.doc.setAttribute(el.node_id, attr_name_dup, attr_val_dup);
     el.dom_ctx.recordAttrModified(el.node_id, attr_name_dup, attr_val_dup);
     el.dom_ctx.layout_dirty = true;
@@ -656,10 +716,113 @@ fn resolveOrCreateNativeChild(ctx: *JSContext, doc: *Document, child_val: JSValu
         defer JS_FreeValue(ctx, data_val);
         const data_str = jsToSlice(ctx, data_val);
         defer std.heap.page_allocator.free(data_str);
-        const duped = doc.allocator.dupe(u8, data_str) catch return NULL_NODE;
+        const duped = doc.allocString(data_str) catch return NULL_NODE;
         return doc.createTextNode(duped) catch NULL_NODE;
     }
     return NULL_NODE;
+}
+
+fn resolveNodeIdArg(ctx: *JSContext, val: JSValue): NodeId {
+    const ptr = JS_GetOpaque(val, g_element_class_id);
+    if (ptr != null) {
+        const el: *JsElement = unsafe { @ptrCast(@alignCast(ptr.?)) };
+        return el.node_id;
+    }
+    let nid_i32: i32 = 0;
+    if (val.tag == JS_TAG_OBJECT) {
+        const nid_val = JS_GetPropertyStr(ctx, val, "_nid");
+        const rc = JS_ToInt32(ctx, &nid_i32, nid_val);
+        JS_FreeValue(ctx, nid_val);
+        if (rc == 0 && nid_i32 > 0) {
+            return @intCast(nid_i32);
+        }
+        return NULL_NODE;
+    }
+    if (JS_ToInt32(ctx, &nid_i32, val) == 0 && nid_i32 > 0) {
+        return @intCast(nid_i32);
+    }
+    return NULL_NODE;
+}
+
+@c fn js_capsurf_attach_shadow_native(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 1) return jsInt(-1);
+    const opaque_ptr = JS_GetContextOpaque(ctx);
+    if (opaque_ptr == null) return jsInt(-1);
+    const dom_ctx: *JsDomContext = unsafe { @ptrCast(@alignCast(opaque_ptr.?)) };
+    const host_nid = resolveNodeIdArg(ctx, unsafe { argv[0] });
+    if (host_nid == NULL_NODE || @as(usize, host_nid) >= dom_ctx.doc.nodes.items.len) return jsInt(-1);
+    const shadow_nid = dom_ctx.doc.attachShadowRoot(host_nid) catch return jsInt(-1);
+    dom_ctx.layout_dirty = true;
+    return jsInt(@intCast(shadow_nid));
+}
+
+@c fn js_capsurf_node_append_child(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 2) return jsFalse();
+    const opaque_ptr = JS_GetContextOpaque(ctx);
+    if (opaque_ptr == null) return jsFalse();
+    const dom_ctx: *JsDomContext = unsafe { @ptrCast(@alignCast(opaque_ptr.?)) };
+    const parent_nid = resolveNodeIdArg(ctx, unsafe { argv[0] });
+    if (parent_nid == NULL_NODE || @as(usize, parent_nid) >= dom_ctx.doc.nodes.items.len) return jsFalse();
+    const child_nid = resolveOrCreateNativeChild(ctx, dom_ctx.doc, unsafe { argv[1] });
+    if (child_nid == NULL_NODE || @as(usize, child_nid) >= dom_ctx.doc.nodes.items.len) return jsFalse();
+    const old_parent = dom_ctx.doc.nodes.items[@as(usize, child_nid)].parent;
+    if (old_parent != NULL_NODE) {
+        dom_ctx.doc.removeChild(child_nid);
+        dom_ctx.recordChildRemoved(old_parent, child_nid);
+    }
+    dom_ctx.doc.appendChild(parent_nid, child_nid);
+    const prev_id = dom_ctx.doc.nodes.items[@as(usize, child_nid)].prev_sibling;
+    dom_ctx.recordChildInserted(parent_nid, prev_id, child_nid);
+    dom_ctx.layout_dirty = true;
+    return jsTrue();
+}
+
+@c fn js_capsurf_node_insert_before(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 2) return jsFalse();
+    const opaque_ptr = JS_GetContextOpaque(ctx);
+    if (opaque_ptr == null) return jsFalse();
+    const dom_ctx: *JsDomContext = unsafe { @ptrCast(@alignCast(opaque_ptr.?)) };
+    const parent_nid = resolveNodeIdArg(ctx, unsafe { argv[0] });
+    if (parent_nid == NULL_NODE || @as(usize, parent_nid) >= dom_ctx.doc.nodes.items.len) return jsFalse();
+    const child_nid = resolveOrCreateNativeChild(ctx, dom_ctx.doc, unsafe { argv[1] });
+    if (child_nid == NULL_NODE || @as(usize, child_nid) >= dom_ctx.doc.nodes.items.len) return jsFalse();
+    let ref_nid: NodeId = NULL_NODE;
+    if (argc >= 3) {
+        ref_nid = resolveNodeIdArg(ctx, unsafe { argv[2] });
+    }
+    const old_parent = dom_ctx.doc.nodes.items[@as(usize, child_nid)].parent;
+    if (old_parent != NULL_NODE) {
+        dom_ctx.doc.removeChild(child_nid);
+        dom_ctx.recordChildRemoved(old_parent, child_nid);
+    }
+    dom_ctx.doc.insertBefore(parent_nid, child_nid, ref_nid);
+    const prev_id = dom_ctx.doc.nodes.items[@as(usize, child_nid)].prev_sibling;
+    dom_ctx.recordChildInserted(parent_nid, prev_id, child_nid);
+    dom_ctx.layout_dirty = true;
+    return jsTrue();
+}
+
+@c fn js_capsurf_node_remove_child(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 2) return jsFalse();
+    const opaque_ptr = JS_GetContextOpaque(ctx);
+    if (opaque_ptr == null) return jsFalse();
+    const dom_ctx: *JsDomContext = unsafe { @ptrCast(@alignCast(opaque_ptr.?)) };
+    const parent_nid = resolveNodeIdArg(ctx, unsafe { argv[0] });
+    const child_nid = resolveNodeIdArg(ctx, unsafe { argv[1] });
+    if (child_nid == NULL_NODE || @as(usize, child_nid) >= dom_ctx.doc.nodes.items.len) return jsFalse();
+    let eff_parent = parent_nid;
+    const cur_parent = dom_ctx.doc.nodes.items[@as(usize, child_nid)].parent;
+    if (cur_parent != NULL_NODE) eff_parent = cur_parent;
+    dom_ctx.doc.removeChild(child_nid);
+    if (eff_parent != NULL_NODE) {
+        dom_ctx.recordChildRemoved(eff_parent, child_nid);
+    }
+    dom_ctx.layout_dirty = true;
+    return jsTrue();
 }
 
 @c fn js_element_append_child(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
@@ -681,6 +844,7 @@ fn resolveOrCreateNativeChild(ctx: *JSContext, doc: *Document, child_val: JSValu
         prev_id = el.dom_ctx.doc.nodes.items[@as(usize, child_nid)].prev_sibling;
     }
     el.dom_ctx.recordChildInserted(el.node_id, prev_id, child_nid);
+    el.dom_ctx.layout_dirty = true;
     return JS_DupValue(ctx, unsafe { argv[0] });
 }
 
@@ -712,6 +876,7 @@ fn resolveOrCreateNativeChild(ctx: *JSContext, doc: *Document, child_val: JSValu
         prev_id = el.dom_ctx.doc.nodes.items[@as(usize, child_nid)].prev_sibling;
     }
     el.dom_ctx.recordChildInserted(el.node_id, prev_id, child_nid);
+    el.dom_ctx.layout_dirty = true;
     return JS_DupValue(ctx, unsafe { argv[0] });
 }
 
@@ -730,6 +895,7 @@ fn resolveOrCreateNativeChild(ctx: *JSContext, doc: *Document, child_val: JSValu
     }
     el.dom_ctx.doc.removeChild(child_el.node_id);
     el.dom_ctx.recordChildRemoved(parent_id, child_el.node_id);
+    el.dom_ctx.layout_dirty = true;
     return JS_DupValue(ctx, unsafe { argv[0] });
 }
 
@@ -757,6 +923,7 @@ fn resolveOrCreateNativeChild(ctx: *JSContext, doc: *Document, child_val: JSValu
         prev_id = el.dom_ctx.doc.nodes.items[@as(usize, new_el.node_id)].prev_sibling;
     }
     el.dom_ctx.recordChildInserted(el.node_id, prev_id, new_el.node_id);
+    el.dom_ctx.layout_dirty = true;
     return JS_DupValue(ctx, unsafe { argv[1] });
 }
 
@@ -1384,8 +1551,92 @@ fn collectDocCssInto(doc: *const Document, cookie_jar: (*CookieJar)?, css_buf: [
     return css_len;
 }
 
+fn appendAdoptedCss(buf: []u8, cur_len: usize, adopted: ([]u8)?): usize {
+    if (adopted == null) return cur_len;
+    const ac = adopted.?;
+    if (ac.len == 0 || cur_len >= buf.len) return cur_len;
+    let pos = cur_len;
+    if (pos > 0 && pos < buf.len) {
+        buf[pos] = '\n';
+        pos += 1;
+    }
+    const copy_len = @min(ac.len, buf.len - pos);
+    if (copy_len > 0) {
+        @memcpy(buf[pos .. pos + copy_len], ac[0..copy_len]);
+        pos += copy_len;
+    }
+    return pos;
+}
+
+@c fn js_set_adopted_css(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    const opaque_ptr = JS_GetContextOpaque(ctx);
+    if (opaque_ptr == null) return jsUndefined();
+    const dom_ctx: *JsDomContext = unsafe { @ptrCast(@alignCast(opaque_ptr.?)) };
+    if (old_ac := dom_ctx.adopted_css) {
+        std.heap.c_allocator.free(old_ac);
+        dom_ctx.adopted_css = null;
+    }
+    if (argc >= 1) {
+        const css_slice = jsToSlice(ctx, unsafe { argv[0] });
+        defer if (css_slice.len > 0) std.heap.page_allocator.free(css_slice);
+        if (css_slice.len > 0) {
+            dom_ctx.adopted_css = std.heap.c_allocator.dupe(u8, css_slice) catch null;
+        }
+    }
+    dom_ctx.layout_dirty = true;
+    return jsUndefined();
+}
+
+@c fn js_set_popover_open(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 2) return jsUndefined();
+    const opaque_ptr = JS_GetContextOpaque(ctx);
+    if (opaque_ptr == null) return jsUndefined();
+    const dom_ctx: *JsDomContext = unsafe { @ptrCast(@alignCast(opaque_ptr.?)) };
+
+    let nid_i32: i32 = 0;
+    const arg0 = unsafe { argv[0] };
+    if (arg0.tag == JS_TAG_OBJECT) {
+        const nid_val = JS_GetPropertyStr(ctx, arg0, "_nid");
+        const rc = JS_ToInt32(ctx, &nid_i32, nid_val);
+        JS_FreeValue(ctx, nid_val);
+        if (rc != 0 || nid_i32 <= 0) return jsUndefined();
+    } else {
+        if (JS_ToInt32(ctx, &nid_i32, arg0) != 0 || nid_i32 <= 0) return jsUndefined();
+    }
+    const nid_u = @as(usize, @intCast(nid_i32));
+    if (nid_u >= dom_ctx.doc.nodes.items.len) return jsUndefined();
+
+    dom_ctx.doc.nodes.items[nid_u].popover_open = jsToBool(ctx, unsafe { argv[1] });
+    dom_ctx.layout_dirty = true;
+    return jsUndefined();
+}
+
 fn ensureLayoutUpToDate(dom_ctx: *JsDomContext) {
-    if (!dom_ctx.layout_dirty && (dom_ctx.paint_prepares > 0 || !docHasContainerQuery(dom_ctx.doc))) return;
+    let anim_buf: [4096]u8 = [0; 4096];
+    let anim_len: usize = 0;
+    if (dom_ctx.raw_ctx != null) {
+        const global_obj = JS_GetGlobalObject(dom_ctx.raw_ctx.?);
+        const anim_fn = JS_GetPropertyStr(dom_ctx.raw_ctx.?, global_obj, "__capsurf_sample_active_animations");
+        if (JS_IsFunction(dom_ctx.raw_ctx.?, anim_fn)) {
+            let dummy_args: [1]JSValue = [jsUndefined()];
+            const anim_val = JS_Call(dom_ctx.raw_ctx.?, anim_fn, global_obj, 0, unsafe { @ptrCast(&dummy_args) });
+            const raw_slice = jsToSlice(dom_ctx.raw_ctx.?, anim_val);
+            const copy_n = @min(raw_slice.len, anim_buf.len);
+            if (copy_n > 0) {
+                @memcpy(anim_buf[0..copy_n], raw_slice[0..copy_n]);
+                anim_len = copy_n;
+            }
+            if (raw_slice.len > 0) std.heap.page_allocator.free(raw_slice);
+            JS_FreeValue(dom_ctx.raw_ctx.?, anim_val);
+        }
+        JS_FreeValue(dom_ctx.raw_ctx.?, anim_fn);
+        JS_FreeValue(dom_ctx.raw_ctx.?, global_obj);
+    }
+    const anim_slice = anim_buf[0..anim_len];
+
+    if (anim_slice.len == 0 && !dom_ctx.layout_dirty && (dom_ctx.paint_prepares > 0 || !docHasContainerQuery(dom_ctx.doc))) return;
     dom_ctx.layout_dirty = false;
     if (lt := dom_ctx.layout) {
         const doc = dom_ctx.doc;
@@ -1395,9 +1646,59 @@ fn ensureLayoutUpToDate(dom_ctx: *JsDomContext) {
         let css_len: usize = 0;
         if (css_buf != null) {
             css_len = collectDocCssInto(doc, dom_ctx.cookie_jar, css_buf.?);
+            css_len = appendAdoptedCss(css_buf.?, css_len, dom_ctx.adopted_css);
         }
         const full_css = if (css_buf != null) css_buf.?[0..css_len] else "";
         const sheet = StyleSheet.parse(full_css, lt.viewport_width, false);
+
+        let anim_nids: [64]u32 = [0; 64];
+        let anim_orig_styles: [64][]const u8 = [""; 64];
+        let anim_alloc_bufs: [64]([]u8)? = [null; 64];
+        let anim_override_count: usize = 0;
+        if (anim_slice.len > 0) {
+            let anim_lines = std.mem.splitScalar(u8, anim_slice, '\n');
+            while (line := anim_lines.next()) {
+                if (line.len == 0 || anim_override_count >= 64) continue;
+                if (bar_idx := std.mem.indexOfScalar(u8, line, '|')) {
+                    const nid_s = line[0..bar_idx];
+                    const decls_s = line[bar_idx + 1 ..];
+                    const anid = std.fmt.parseInt(u32, nid_s, 10) catch 0;
+                    if (anid > 0 && @as(usize, anid) < doc.nodes.items.len && decls_s.len > 0) {
+                        const orig = doc.nodes.items[@as(usize, anid)].inline_style;
+                        const need_len = if (orig.len > 0) orig.len + 1 + decls_s.len else decls_s.len;
+                        if (maybe_buf := std.heap.page_allocator.alloc(u8, need_len) catch null) {
+                            let buf = maybe_buf;
+                            if (orig.len > 0) {
+                                @memcpy(buf[0..orig.len], orig);
+                                buf[orig.len] = ';';
+                                @memcpy(buf[orig.len + 1 .. need_len], decls_s);
+                            } else {
+                                @memcpy(buf[0..need_len], decls_s);
+                            }
+                            anim_nids[anim_override_count] = anid;
+                            anim_orig_styles[anim_override_count] = orig;
+                            anim_alloc_bufs[anim_override_count] = buf;
+                            anim_override_count += 1;
+                            doc.nodes.items[@as(usize, anid)].inline_style = buf;
+                        }
+                    }
+                }
+            }
+        }
+        defer {
+            let ai = anim_override_count;
+            while (ai > 0) {
+                ai -= 1;
+                const anid = anim_nids[ai];
+                if (@as(usize, anid) < doc.nodes.items.len) {
+                    doc.nodes.items[@as(usize, anid)].inline_style = anim_orig_styles[ai];
+                }
+                if (b := anim_alloc_bufs[ai]) {
+                    std.heap.page_allocator.free(b);
+                }
+            }
+        }
+
         let styles = std.heap.page_allocator.alloc(ComputedStyle, count) catch return;
         defer std.heap.page_allocator.free(styles);
         Cascade.computeStyles(doc, &sheet, styles, 16.0);
@@ -1445,7 +1746,8 @@ fn ensureLayoutUpToDate(dom_ctx: *JsDomContext) {
     const count = @max(@as(usize, 1), doc.nodeCount());
     const css_buf = std.heap.page_allocator.alloc(u8, 65536) catch return jsNewString(ctx, "");
     defer std.heap.page_allocator.free(css_buf);
-    const css_len = collectDocCssInto(doc, dom_ctx.cookie_jar, css_buf);
+    let css_len = collectDocCssInto(doc, dom_ctx.cookie_jar, css_buf);
+    css_len = appendAdoptedCss(css_buf, css_len, dom_ctx.adopted_css);
     const full_css = css_buf[0..css_len];
     let vw: f32 = 1280.0;
     let vh: f32 = 720.0;
@@ -1553,6 +1855,111 @@ fn ensureLayoutUpToDate(dom_ctx: *JsDomContext) {
         }
     }
     return jsNull();
+}
+
+@c fn js_capsurf_get_root_scroll_size(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    const opaque_ptr = JS_GetContextOpaque(ctx);
+    if (opaque_ptr == null) return jsNull();
+    const dom_ctx: *JsDomContext = unsafe { @ptrCast(@alignCast(opaque_ptr.?)) };
+
+    ensureLayoutUpToDate(dom_ctx);
+    const lt = dom_ctx.layout ?? return jsNull();
+    const doc = dom_ctx.doc;
+
+    const vw: f32 = if (lt.viewport_width > 0.0) lt.viewport_width else 1280.0;
+    const vh: f32 = if (lt.viewport_height > 0.0) lt.viewport_height else 720.0;
+
+    let root_nid_i32: i32 = 0;
+    if (argc >= 1) {
+        * = JS_ToInt32(ctx, &root_nid_i32, unsafe { argv[0] });
+    }
+    let is_doc_el_i32: i32 = 1;
+    if (argc >= 2) {
+        * = JS_ToInt32(ctx, &is_doc_el_i32, unsafe { argv[1] });
+    }
+    const is_doc_el = (is_doc_el_i32 != 0);
+
+    let max_w: f32 = vw;
+    let max_h: f32 = vh;
+
+    if (root_nid_i32 > 0) {
+        const root_u = @as(usize, @intCast(root_nid_i32));
+        if (root_u < doc.nodes.items.len && root_u < lt.boxes.items.len) {
+            const root_box = &lt.boxes.items[root_u];
+            const origin_x: f32 = root_box.rect.x;
+            const origin_y: f32 = root_box.rect.y;
+
+            if (!is_doc_el) {
+                if (root_box.rect.width > max_w) max_w = @round(root_box.rect.width);
+                if (root_box.rect.height > max_h) max_h = @round(root_box.rect.height);
+            }
+
+            const root_nid = @as(NodeId, @intCast(root_nid_i32));
+            let cur: NodeId = doc.nodes.items[root_u].first_child;
+            while (cur != NULL_NODE) {
+                const cur_u = @as(usize, cur);
+                if (cur_u >= doc.nodes.items.len || cur_u >= lt.boxes.items.len) break;
+                const node = &doc.nodes.items[cur_u];
+                const box = &lt.boxes.items[cur_u];
+
+                let skip_node = false;
+                let skip_children = false;
+
+                if (node.node_type != NodeType.Element) {
+                    skip_node = true;
+                    skip_children = true;
+                } else if (node.hasTag("head") || node.hasTag("style") || node.hasTag("script") ||
+                    node.hasTag("meta") || node.hasTag("link") || node.hasTag("title") || node.hasTag("template")) {
+                    skip_node = true;
+                    skip_children = true;
+                } else if (node.is_display_none || (node.inline_style.len > 0 && containsDisplayNone(node.inline_style))) {
+                    skip_node = true;
+                    skip_children = true;
+                } else if (box.position == CssPosition.Fixed) {
+                    skip_node = true;
+                    skip_children = true;
+                }
+
+                if (!skip_node) {
+                    if (!node.hasTag("br") && !node.hasTag("wbr")) {
+                        if (box.rect.width > 0.0 || box.rect.height > 0.0) {
+                            const rel_right = (box.rect.x + box.rect.width) - origin_x;
+                            const rel_bottom = (box.rect.y + box.rect.height) - origin_y;
+                            if (rel_right > max_w) max_w = rel_right;
+                            if (rel_bottom > max_h) max_h = rel_bottom;
+                        }
+                    }
+                    if (!box.overflow_visible) {
+                        skip_children = true;
+                    }
+                }
+
+                if (!skip_children && node.first_child != NULL_NODE) {
+                    cur = node.first_child;
+                } else {
+                    while (cur != NULL_NODE) {
+                        const n_cur = &doc.nodes.items[@as(usize, cur)];
+                        if (n_cur.next_sibling != NULL_NODE) {
+                            cur = n_cur.next_sibling;
+                            break;
+                        }
+                        const p = n_cur.parent;
+                        if (p == NULL_NODE || p == root_nid) {
+                            cur = NULL_NODE;
+                            break;
+                        }
+                        cur = p;
+                    }
+                }
+            }
+        }
+    }
+
+    const obj = JS_NewObject(ctx);
+    * = JS_SetPropertyStr(ctx, obj, "width", jsFloat(@floatCast(@round(max_w))));
+    * = JS_SetPropertyStr(ctx, obj, "height", jsFloat(@floatCast(@round(max_h))));
+    return obj;
 }
 
 fn getJsNumberProp(ctx: *JSContext, obj: JSValue, prop: [*c]const u8): f32 {
@@ -2026,9 +2433,10 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
     const el: *JsElement = unsafe { @ptrCast(@alignCast(ptr.?)) };
     const new_id = jsToSlice(ctx, unsafe { argv[0] });
     defer std.heap.page_allocator.free(new_id);
-    const new_id_dup = el.dom_ctx.doc.allocator.dupe(u8, new_id) catch new_id;
+    const new_id_dup = el.dom_ctx.doc.allocString(new_id) catch new_id;
     el.dom_ctx.doc.setAttribute(el.node_id, "id", new_id_dup);
     el.dom_ctx.recordAttrModified(el.node_id, "id", new_id_dup);
+    el.dom_ctx.layout_dirty = true;
     return jsUndefined();
 }
 
@@ -2050,9 +2458,10 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
     const el: *JsElement = unsafe { @ptrCast(@alignCast(ptr.?)) };
     const new_cls = jsToSlice(ctx, unsafe { argv[0] });
     defer std.heap.page_allocator.free(new_cls);
-    const new_cls_dup = el.dom_ctx.doc.allocator.dupe(u8, new_cls) catch new_cls;
+    const new_cls_dup = el.dom_ctx.doc.allocString(new_cls) catch new_cls;
     el.dom_ctx.doc.setAttribute(el.node_id, "class", new_cls_dup);
     el.dom_ctx.recordAttrModified(el.node_id, "class", new_cls_dup);
+    el.dom_ctx.layout_dirty = true;
     return jsUndefined();
 }
 
@@ -2136,7 +2545,7 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
     const el: *JsElement = unsafe { @ptrCast(@alignCast(ptr.?)) };
     const new_text = jsToSlice(ctx, unsafe { argv[0] });
     defer std.heap.page_allocator.free(new_text);
-    const new_text_dup = el.dom_ctx.doc.allocator.dupe(u8, new_text) catch new_text;
+    const new_text_dup = el.dom_ctx.doc.allocString(new_text) catch new_text;
     if (@as(usize, el.node_id) < el.dom_ctx.doc.nodes.items.len) {
         const ntype = el.dom_ctx.doc.nodes.items[@as(usize, el.node_id)].node_type;
         if (ntype == NodeType.Text || ntype == NodeType.Comment) {
@@ -2264,12 +2673,13 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
     const val = jsToSlice(ctx, unsafe { argv[2] });
     defer std.heap.page_allocator.free(val);
 
-    const ns_dup = if (ns.len > 0) el.dom_ctx.doc.allocator.dupe(u8, ns) catch ns else "";
-    const qname_dup = el.dom_ctx.doc.allocator.dupe(u8, qname) catch qname;
-    const val_dup = el.dom_ctx.doc.allocator.dupe(u8, val) catch val;
+    const ns_dup = if (ns.len > 0) el.dom_ctx.doc.allocString(ns) catch ns else "";
+    const qname_dup = el.dom_ctx.doc.allocString(qname) catch qname;
+    const val_dup = el.dom_ctx.doc.allocString(val) catch val;
 
     el.dom_ctx.doc.setAttributeNS(el.node_id, ns_dup, qname_dup, val_dup);
     el.dom_ctx.recordAttrModified(el.node_id, qname_dup, val_dup);
+    el.dom_ctx.layout_dirty = true;
     return jsUndefined();
 }
 
@@ -2353,7 +2763,7 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
 
 @c fn js_element_set_parent_node(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     if (argc >= 1) {
-        * = JS_SetPropertyStr(ctx, this_val, "_parentNode", JS_DupValue(ctx, unsafe { argv[0] }));
+        * = JS_DefinePropertyValueStr(ctx, this_val, "_parentNode", JS_DupValue(ctx, unsafe { argv[0] }), 3);
     }
     return jsUndefined();
 }
@@ -2489,7 +2899,7 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
     const dom_ctx: *JsDomContext = unsafe { @ptrCast(@alignCast(ptr.?)) };
     const tag_str = jsToSlice(ctx, unsafe { argv[0] });
     defer std.heap.page_allocator.free(tag_str);
-    const tag_dup = dom_ctx.doc.allocator.dupe(u8, tag_str) catch tag_str;
+    const tag_dup = dom_ctx.doc.allocString(tag_str) catch tag_str;
     const new_id = dom_ctx.doc.createElement(tag_dup) catch return jsNull();
     return createJsElement(ctx, dom_ctx, new_id);
 }
@@ -2596,7 +3006,7 @@ fn findFirstTitleInTree(doc: *Document, root: NodeId): NodeId {
     const dom_ctx: *JsDomContext = unsafe { @ptrCast(@alignCast(ptr.?)) };
     const str = jsToSlice(ctx, unsafe { argv[0] });
     defer std.heap.page_allocator.free(str);
-    const str_dup = dom_ctx.doc.allocator.dupe(u8, str) catch str;
+    const str_dup = dom_ctx.doc.allocString(str) catch str;
 
     const existing_tid = findFirstTitleInTree(dom_ctx.doc, dom_ctx.doc.root_element);
     if (existing_tid != NULL_NODE) {
@@ -2688,7 +3098,7 @@ fn findFirstTitleInTree(doc: *Document, root: NodeId): NodeId {
     if (argc >= 1 && !jsIsUndefined(unsafe { argv[0] })) {
         const title_str = jsToSlice(ctx, unsafe { argv[0] });
         defer std.heap.page_allocator.free(title_str);
-        const title_dup = alloc.dupe(u8, title_str) catch return jsNull();
+        const title_dup = new_doc.allocString(title_str) catch return jsNull();
         const title_id = new_doc.createElement("title") catch return jsNull();
         const text_id = new_doc.createTextNode(title_dup) catch return jsNull();
         new_doc.appendChild(head_id, title_id);
@@ -2732,6 +3142,63 @@ fn findFirstTitleInTree(doc: *Document, root: NodeId): NodeId {
 }
 
 fn handleJsConsole(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, level: []const u8): JSValue {
+    let loc_url_buf: [512]u8 = [0; 512];
+    let loc_url_len: usize = 0;
+    let loc_fn_buf: [128]u8 = [0; 128];
+    let loc_fn_len: usize = 0;
+    let loc_line: i32 = 0;
+    let loc_col: i32 = 0;
+    let has_loc = false;
+    {
+        const err_val = JS_NewError(ctx);
+        defer JS_FreeValue(ctx, err_val);
+        const stack_val = JS_GetPropertyStr(ctx, err_val, "stack");
+        defer JS_FreeValue(ctx, stack_val);
+        let slen: usize = 0;
+        const sptr = JS_ToCStringLen2(ctx, &slen, stack_val, 0);
+        if (sptr != null) {
+            defer JS_FreeCString(ctx, sptr);
+            const stack_str = unsafe { sptr.?[0..slen] };
+            let skip_frames: usize = if (std.mem.eql(u8, level, "timeEnd")) 1 else 0;
+            let pos: usize = 0;
+            while (pos < stack_str.len) {
+                const nl = std.mem.indexOfScalarPos(u8, stack_str, pos, '\n') ?? stack_str.len;
+                const line_raw = std.mem.trim(u8, stack_str[pos..nl], " \t\r");
+                pos = if (nl < stack_str.len) nl + 1 else stack_str.len;
+                if (!std.mem.startsWith(u8, line_raw, "at ")) continue;
+                const rest = line_raw[3..];
+                const lp = std.mem.lastIndexOf(u8, rest, " (") orelse continue;
+                if (rest.len == 0 || rest[rest.len - 1] != ')') continue;
+                const fname = rest[0..lp];
+                const loc = rest[lp + 2 .. rest.len - 1];
+                if (std.mem.eql(u8, loc, "native") || std.mem.eql(u8, loc, "missing")) continue;
+                if (skip_frames > 0) {
+                    skip_frames -= 1;
+                    continue;
+                }
+                let u_slice: []const u8 = loc;
+                if (c2 := std.mem.lastIndexOfScalar(u8, loc, ':')) {
+                    if (c1 := std.mem.lastIndexOfScalar(u8, loc[0..c2], ':')) {
+                        const l_num = std.fmt.parseInt(i32, loc[c1 + 1 .. c2], 10) catch 0;
+                        const c_num = std.fmt.parseInt(i32, loc[c2 + 1 ..], 10) catch 0;
+                        if (l_num > 0) {
+                            loc_line = l_num - 1;
+                            loc_col = if (c_num > 0) c_num - 1 else 0;
+                            u_slice = loc[0..c1];
+                        }
+                    }
+                }
+                const fn_clean = if (std.mem.eql(u8, fname, "<anonymous>")) "" else fname;
+                loc_fn_len = @min(fn_clean.len, loc_fn_buf.len);
+                if (loc_fn_len > 0) @memcpy(loc_fn_buf[0..loc_fn_len], fn_clean[0..loc_fn_len]);
+                loc_url_len = @min(u_slice.len, loc_url_buf.len);
+                if (loc_url_len > 0) @memcpy(loc_url_buf[0..loc_url_len], u_slice[0..loc_url_len]);
+                has_loc = true;
+                break;
+            }
+        }
+    }
+
     let text_buf: [512]u8 = [0; 512];
     let offset: usize = 0;
     let i: usize = 0;
@@ -2783,7 +3250,16 @@ fn handleJsConsole(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, level: [
     const opaque_ptr = JS_GetContextOpaque(ctx);
     if (opaque_ptr != null) {
         const dom_ctx: *JsDomContext = unsafe { @ptrCast(@alignCast(opaque_ptr)) };
-        dom_ctx.addConsoleRecord(level, full_text, args_buf[0..args_len]);
+        dom_ctx.addConsoleRecordWithLoc(
+            level,
+            full_text,
+            args_buf[0..args_len],
+            loc_url_buf[0..loc_url_len],
+            loc_fn_buf[0..loc_fn_len],
+            loc_line,
+            loc_col,
+            has_loc,
+        );
     }
     return jsUndefined();
 }
@@ -2869,7 +3345,7 @@ fn handleJsConsole(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, level: [
 
 @c fn js_console_warn(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     * = this_val;
-    return handleJsConsole(ctx, argc, argv, "warn");
+    return handleJsConsole(ctx, argc, argv, "warning");
 }
 
 @c fn js_console_error(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
@@ -2880,6 +3356,21 @@ fn handleJsConsole(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, level: [
 @c fn js_console_debug(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
     * = this_val;
     return handleJsConsole(ctx, argc, argv, "debug");
+}
+
+@c fn js_console_dir(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return handleJsConsole(ctx, argc, argv, "dir");
+}
+
+@c fn js_console_trace(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return handleJsConsole(ctx, argc, argv, "trace");
+}
+
+@c fn js_console_time_end(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    return handleJsConsole(ctx, argc, argv, "timeEnd");
 }
 
 @c fn js_capsurf_find_node_by_id(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
@@ -3045,11 +3536,29 @@ fn handleJsConsole(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, level: [
         let pd_ptr: ([*c]const u8)? = null;
         let has_pd = false;
         if (argc >= 4 && unsafe { argv[3].tag != 2 && argv[3].tag != 3 }) {
-            let pd_len: usize = 0;
-            pd_ptr = JS_ToCStringLen2(ctx, &pd_len, unsafe { argv[3] }, 0);
-            if (pd_ptr != null) {
-                pd_str = unsafe { pd_ptr.?[0..pd_len] };
-                has_pd = true;
+            const arg3 = unsafe { argv[3] };
+            let got_u8 = false;
+            if (arg3.tag == JS_TAG_OBJECT) {
+                let u8_len: usize = 0;
+                const u8_ptr = JS_GetUint8Array(ctx, &u8_len, arg3);
+                if (u8_ptr != null) {
+                    if (u8_len > 0) {
+                        pd_str = unsafe { u8_ptr.?[0..u8_len] };
+                    }
+                    has_pd = true;
+                    got_u8 = true;
+                } else {
+                    const exc = JS_GetException(ctx);
+                    JS_FreeValue(ctx, exc);
+                }
+            }
+            if (!got_u8) {
+                let pd_len: usize = 0;
+                pd_ptr = JS_ToCStringLen2(ctx, &pd_len, arg3, 0);
+                if (pd_ptr != null) {
+                    pd_str = unsafe { pd_ptr.?[0..pd_len] };
+                    has_pd = true;
+                }
             }
         }
         defer if (pd_ptr != null) JS_FreeCString(ctx, pd_ptr);
@@ -3070,6 +3579,80 @@ fn handleJsConsole(ctx: *JSContext, argc: i32, argv: [*]const JSValue!, level: [
         return jsNull();
     }
     return jsNewString(ctx, dom_ctx.extra_headers);
+}
+
+@c fn js_capsurf_native_set_timeout(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 1) return jsInt(0);
+    const ptr = JS_GetContextOpaque(ctx);
+    if (ptr == null) return jsInt(0);
+    const dom_ctx: *JsDomContext = unsafe { @ptrCast(@alignCast(ptr.?)) };
+
+    const cb = unsafe { argv[0] };
+    if (!JS_IsFunction(ctx, cb)) return jsInt(0);
+
+    let delay_ms: i64 = 0;
+    if (argc >= 2) {
+        let d: i64 = 0;
+        if (JS_ToInt64(ctx, &d, unsafe { argv[1] }) == 0) {
+            delay_ms = d;
+        }
+    }
+    let is_interval = false;
+    if (argc >= 3) {
+        is_interval = jsToBool(ctx, unsafe { argv[2] });
+    }
+    const now_ms = getMilliTimestamp();
+    const kind = if (!is_interval && delay_ms <= 0) TaskQueueKind.Immediate else TaskQueueKind.Timed;
+    const tid = dom_ctx.scheduler.schedule(ctx, kind, cb, delay_ms, now_ms, is_interval);
+    if (tid <= 0x7FFFFFFF) {
+        return jsInt(@as(i32, @intCast(tid)));
+    }
+    return jsFloat(@as(f64, @floatFromInt(tid)));
+}
+
+@c fn js_capsurf_native_clear_timer(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 1) return jsUndefined();
+    const ptr = JS_GetContextOpaque(ctx);
+    if (ptr == null) return jsUndefined();
+    const dom_ctx: *JsDomContext = unsafe { @ptrCast(@alignCast(ptr.?)) };
+
+    let tid: i64 = 0;
+    if (JS_ToInt64(ctx, &tid, unsafe { argv[0] }) == 0 && tid > 0) {
+        * = dom_ctx.scheduler.cancel(ctx, @as(u64, @intCast(tid)));
+    }
+    return jsUndefined();
+}
+
+@c fn js_capsurf_native_pump_timers(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    const ptr = JS_GetContextOpaque(ctx);
+    if (ptr == null) return jsInt(0);
+    const dom_ctx: *JsDomContext = unsafe { @ptrCast(@alignCast(ptr.?)) };
+
+    let max_steps: u32 = 256;
+    if (argc >= 1) {
+        let ms: i32 = 0;
+        if (JS_ToInt32(ctx, &ms, unsafe { argv[0] }) == 0 && ms > 0) {
+            max_steps = @as(u32, @intCast(ms));
+        }
+    }
+    let now_ms = getMilliTimestamp();
+    if (argc >= 2) {
+        let nm: i64 = 0;
+        if (JS_ToInt64(ctx, &nm, unsafe { argv[1] }) == 0) {
+            now_ms = nm;
+        }
+    }
+
+    let executed: u32 = 0;
+    while (executed < max_steps) : (executed += 1) {
+        if (!dom_ctx.scheduler.stepScheduler(ctx, now_ms)) {
+            break;
+        }
+    }
+    return jsInt(@as(i32, @intCast(executed)));
 }
 
 pub fn mountDom(
@@ -3172,6 +3755,7 @@ pub fn mountDom(
         extra_headers: extra_headers,
         element_class_id: g_element_class_id,
         document_class_id: g_document_class_id,
+        raw_ctx: raw_ctx,
     };
     JS_SetContextOpaque(raw_ctx, unsafe { @ptrCast(dom_ctx) });
 
@@ -3187,6 +3771,16 @@ pub fn mountDom(
     * = JS_SetPropertyStr(raw_ctx, global_obj, "_nid", jsInt(-1));
     defineMethod(raw_ctx, global_obj, "__capsurf_get_computed_prop", js_get_computed_prop, 2);
     defineMethod(raw_ctx, global_obj, "__capsurf_get_layout_box", js_get_layout_box, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_get_root_scroll_size", js_capsurf_get_root_scroll_size, 2);
+    defineMethod(raw_ctx, global_obj, "__capsurf_set_adopted_css", js_set_adopted_css, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_set_popover_open", js_set_popover_open, 2);
+    defineMethod(raw_ctx, global_obj, "__capsurf_attach_shadow_native", js_capsurf_attach_shadow_native, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_node_append_child", js_capsurf_node_append_child, 2);
+    defineMethod(raw_ctx, global_obj, "__capsurf_node_insert_before", js_capsurf_node_insert_before, 3);
+    defineMethod(raw_ctx, global_obj, "__capsurf_node_remove_child", js_capsurf_node_remove_child, 2);
+    defineMethod(raw_ctx, global_obj, "__capsurf_native_set_timeout", js_capsurf_native_set_timeout, 3);
+    defineMethod(raw_ctx, global_obj, "__capsurf_native_clear_timer", js_capsurf_native_clear_timer, 1);
+    defineMethod(raw_ctx, global_obj, "__capsurf_native_pump_timers", js_capsurf_native_pump_timers, 2);
 
     // Expose Element and Document constructors
     const el_ctor = JS_NewObject(raw_ctx);
@@ -3217,6 +3811,9 @@ pub fn mountDom(
     defineMethod(raw_ctx, console_obj, "warn", js_console_warn, 1);
     defineMethod(raw_ctx, console_obj, "error", js_console_error, 1);
     defineMethod(raw_ctx, console_obj, "debug", js_console_debug, 1);
+    defineMethod(raw_ctx, console_obj, "dir", js_console_dir, 1);
+    defineMethod(raw_ctx, console_obj, "trace", js_console_trace, 1);
+    defineMethod(raw_ctx, console_obj, "__capsurf_timeEnd", js_console_time_end, 1);
     * = JS_SetPropertyStr(raw_ctx, global_obj, "console", console_obj);
     defineMethod(raw_ctx, global_obj, "__capsurf_native_find_node_by_id", js_capsurf_find_node_by_id, 1);
     defineMethod(raw_ctx, global_obj, "__capsurf_native_load_fixture", js_capsurf_load_fixture, 1);
@@ -3342,6 +3939,7 @@ pub fn mountDom(
         "  };" +
         "  globalThis.__capsurf_get_object = function (id) {" +
         "    if (id === 'global' || id === 'globalThis') return globalThis;" +
+        "    if (id === 'doc:0') return typeof document !== 'undefined' ? document : undefined;" +
         "    if (typeof id === 'string' && id.startsWith('node:')) {" +
         "      const nid = parseInt(id.slice(5), 10);" +
         "      if (nid > 0 && typeof document !== 'undefined' && document) {" +
@@ -3382,27 +3980,213 @@ pub fn mountDom(
         "    if (t === 'function') return 'Function';" +
         "    return 'Object';" +
         "  };" +
-        "  globalThis.__capsurf_format_remote_object = function (val, returnByValue) {" +
-        "    if (val === undefined) return { type: 'undefined' };" +
-        "    if (val === null) return { type: 'object', subtype: 'null', value: null };" +
-        "    const t = typeof val;" +
-        "    if (t === 'boolean' || t === 'string') return { type: t, value: val };" +
+        "  globalThis.__capsurf_deep_serialize = function (val, maxDepth) {" +
+        "    const limit = (typeof maxDepth === 'number' && maxDepth >= 0) ? maxDepth : 99;" +
+        "    const seen = typeof Map !== 'undefined' ? new Map() : null;" +
+        "    let nextRefId = 1;" +
+        "    const ser = function (v, depth) {" +
+        "      if (v === undefined) return { type: 'undefined' };" +
+        "      if (v === null) return { type: 'null' };" +
+        "      const t = typeof v;" +
+        "      if (t === 'boolean' || t === 'string') return { type: t, value: v };" +
+        "      if (t === 'number') {" +
+        "        if (Number.isNaN(v)) return { type: 'number', value: 'NaN' };" +
+        "        if (Object.is(v, -0)) return { type: 'number', value: '-0' };" +
+        "        if (v === Infinity) return { type: 'number', value: 'Infinity' };" +
+        "        if (v === -Infinity) return { type: 'number', value: '-Infinity' };" +
+        "        return { type: 'number', value: v };" +
+        "      }" +
+        "      if (t === 'bigint') return { type: 'bigint', value: String(v) };" +
+        "      if (t === 'symbol') return { type: 'symbol' };" +
+        "      if (t !== 'object' && t !== 'function') return { type: 'undefined' };" +
+        "      if (seen && seen.has(v)) {" +
+        "        const entry = seen.get(v);" +
+        "        if (entry.refId === 0) {" +
+        "          entry.refId = nextRefId++;" +
+        "          entry.dsv.weakLocalObjectReference = entry.refId;" +
+        "        }" +
+        "        return { type: entry.dsv.type, weakLocalObjectReference: entry.refId };" +
+        "      }" +
+        "      if (t === 'function') {" +
+        "        const fnDsv = { type: 'function' };" +
+        "        if (seen) seen.set(v, { dsv: fnDsv, refId: 0 });" +
+        "        return fnDsv;" +
+        "      }" +
+        "      const isWin = (v === globalThis) || (typeof window !== 'undefined' && v === window);" +
+        "      if (isWin) {" +
+        "        const wDsv = { type: 'window' };" +
+        "        if (seen) seen.set(v, { dsv: wDsv, refId: 0 });" +
+        "        return wDsv;" +
+        "      }" +
+        "      if (typeof v.nodeType === 'number') {" +
+        "        const nDsv = { type: 'node' };" +
+        "        if (seen) seen.set(v, { dsv: nDsv, refId: 0 });" +
+        "        return nDsv;" +
+        "      }" +
+        "      if (typeof Date === 'function' && v instanceof Date) {" +
+        "        const iso = Number.isNaN(v.getTime()) ? 'Invalid Date' : v.toISOString();" +
+        "        const dDsv = { type: 'date', value: iso };" +
+        "        if (seen) seen.set(v, { dsv: dDsv, refId: 0 });" +
+        "        return dDsv;" +
+        "      }" +
+        "      if (typeof RegExp === 'function' && v instanceof RegExp) {" +
+        "        const rDsv = { type: 'regexp', value: { pattern: v.source, flags: v.flags || '' } };" +
+        "        if (seen) seen.set(v, { dsv: rDsv, refId: 0 });" +
+        "        return rDsv;" +
+        "      }" +
+        "      if (typeof Error === 'function' && v instanceof Error) {" +
+        "        const eDsv = { type: 'error' };" +
+        "        if (seen) seen.set(v, { dsv: eDsv, refId: 0 });" +
+        "        return eDsv;" +
+        "      }" +
+        "      if (typeof WeakMap === 'function' && v instanceof WeakMap) {" +
+        "        const wmDsv = { type: 'weakmap' };" +
+        "        if (seen) seen.set(v, { dsv: wmDsv, refId: 0 });" +
+        "        return wmDsv;" +
+        "      }" +
+        "      if (typeof WeakSet === 'function' && v instanceof WeakSet) {" +
+        "        const wsDsv = { type: 'weakset' };" +
+        "        if (seen) seen.set(v, { dsv: wsDsv, refId: 0 });" +
+        "        return wsDsv;" +
+        "      }" +
+        "      if (typeof Promise === 'function' && v instanceof Promise) {" +
+        "        const pDsv = { type: 'promise' };" +
+        "        if (seen) seen.set(v, { dsv: pDsv, refId: 0 });" +
+        "        return pDsv;" +
+        "      }" +
+        "      if (typeof ArrayBuffer === 'function' && v instanceof ArrayBuffer) {" +
+        "        const abDsv = { type: 'arraybuffer' };" +
+        "        if (seen) seen.set(v, { dsv: abDsv, refId: 0 });" +
+        "        return abDsv;" +
+        "      }" +
+        "      if (typeof ArrayBuffer === 'function' && ArrayBuffer.isView && ArrayBuffer.isView(v)) {" +
+        "        const taDsv = { type: 'typedarray' };" +
+        "        if (seen) seen.set(v, { dsv: taDsv, refId: 0 });" +
+        "        return taDsv;" +
+        "      }" +
+        "      if (Array.isArray(v)) {" +
+        "        const aDsv = { type: 'array' };" +
+        "        if (seen) seen.set(v, { dsv: aDsv, refId: 0 });" +
+        "        if (depth < limit) {" +
+        "          const items = [];" +
+        "          for (let i = 0; i < v.length; i++) items.push(ser(v[i], depth + 1));" +
+        "          aDsv.value = items;" +
+        "        }" +
+        "        return aDsv;" +
+        "      }" +
+        "      if (typeof Map === 'function' && v instanceof Map) {" +
+        "        const mDsv = { type: 'map' };" +
+        "        if (seen) seen.set(v, { dsv: mDsv, refId: 0 });" +
+        "        if (depth < limit) {" +
+        "          const entries = [];" +
+        "          v.forEach(function (mv, mk) {" +
+        "            const kSer = typeof mk === 'string' ? mk : ser(mk, depth + 1);" +
+        "            entries.push([kSer, ser(mv, depth + 1)]);" +
+        "          });" +
+        "          mDsv.value = entries;" +
+        "        }" +
+        "        return mDsv;" +
+        "      }" +
+        "      if (typeof Set === 'function' && v instanceof Set) {" +
+        "        const sDsv = { type: 'set' };" +
+        "        if (seen) seen.set(v, { dsv: sDsv, refId: 0 });" +
+        "        if (depth < limit) {" +
+        "          const vals = [];" +
+        "          v.forEach(function (sv) { vals.push(ser(sv, depth + 1)); });" +
+        "          sDsv.value = vals;" +
+        "        }" +
+        "        return sDsv;" +
+        "      }" +
+        "      const oDsv = { type: 'object' };" +
+        "      if (seen) seen.set(v, { dsv: oDsv, refId: 0 });" +
+        "      if (depth < limit) {" +
+        "        const pairs = [];" +
+        "        const ks = Object.keys(v);" +
+        "        for (let i = 0; i < ks.length; i++) {" +
+        "          const k = ks[i];" +
+        "          pairs.push([k, ser(v[k], depth + 1)]);" +
+        "        }" +
+        "        oDsv.value = pairs;" +
+        "      }" +
+        "      return oDsv;" +
+        "    };" +
+        "    return ser(val, 0);" +
+        "  };" +
+        "  globalThis.__capsurf_deep_deserialize = function (dsv) {" +
+        "    if (!dsv || typeof dsv !== 'object') return dsv;" +
+        "    const t = dsv.type;" +
+        "    if (t === 'undefined') return undefined;" +
+        "    if (t === 'null') return null;" +
+        "    if (t === 'boolean' || t === 'string') return dsv.value;" +
         "    if (t === 'number') {" +
-        "      if (Number.isNaN(val)) return { type: 'number', unserializableValue: 'NaN' };" +
-        "      if (Object.is(val, -0)) return { type: 'number', unserializableValue: '-0' };" +
-        "      if (val === Infinity) return { type: 'number', unserializableValue: 'Infinity' };" +
-        "      if (val === -Infinity) return { type: 'number', unserializableValue: '-Infinity' };" +
-        "      return { type: 'number', value: val };" +
+        "      if (dsv.value === 'NaN') return NaN;" +
+        "      if (dsv.value === '-0') return -0;" +
+        "      if (dsv.value === 'Infinity') return Infinity;" +
+        "      if (dsv.value === '-Infinity') return -Infinity;" +
+        "      return dsv.value;" +
+        "    }" +
+        "    if (t === 'bigint') return BigInt(dsv.value);" +
+        "    if (t === 'date') return new Date(dsv.value);" +
+        "    if (t === 'regexp' && dsv.value && typeof dsv.value.pattern === 'string') {" +
+        "      return new RegExp(dsv.value.pattern, dsv.value.flags || '');" +
+        "    }" +
+        "    if (t === 'array' && Array.isArray(dsv.value)) {" +
+        "      const out = [];" +
+        "      for (let i = 0; i < dsv.value.length; i++) out.push(globalThis.__capsurf_deep_deserialize(dsv.value[i]));" +
+        "      return out;" +
+        "    }" +
+        "    if (t === 'object' && Array.isArray(dsv.value)) {" +
+        "      const out = {};" +
+        "      for (let i = 0; i < dsv.value.length; i++) {" +
+        "        const pair = dsv.value[i];" +
+        "        if (Array.isArray(pair) && pair.length >= 2) out[pair[0]] = globalThis.__capsurf_deep_deserialize(pair[1]);" +
+        "      }" +
+        "      return out;" +
+        "    }" +
+        "    if (t === 'map' && Array.isArray(dsv.value)) {" +
+        "      const m = new Map();" +
+        "      for (let i = 0; i < dsv.value.length; i++) {" +
+        "        const pair = dsv.value[i];" +
+        "        if (Array.isArray(pair) && pair.length >= 2) m.set(typeof pair[0] === 'string' ? pair[0] : globalThis.__capsurf_deep_deserialize(pair[0]), globalThis.__capsurf_deep_deserialize(pair[1]));" +
+        "      }" +
+        "      return m;" +
+        "    }" +
+        "    if (t === 'set' && Array.isArray(dsv.value)) {" +
+        "      const s = new Set();" +
+        "      for (let i = 0; i < dsv.value.length; i++) s.add(globalThis.__capsurf_deep_deserialize(dsv.value[i]));" +
+        "      return s;" +
+        "    }" +
+        "    return dsv.value;" +
+        "  };" +
+        "  globalThis.__capsurf_format_remote_object = function (val, returnByValue, serMode, maxDepth) {" +
+        "    if (serMode === 'json') returnByValue = true;" +
+        "    else if (serMode === 'idOnly') returnByValue = false;" +
+        "    const isDeep = (serMode === 'deep');" +
+        "    const attachDeep = function (o) {" +
+        "      if (isDeep) o.deepSerializedValue = globalThis.__capsurf_deep_serialize(val, maxDepth);" +
+        "      return o;" +
+        "    };" +
+        "    if (val === undefined) return attachDeep({ type: 'undefined' });" +
+        "    if (val === null) return attachDeep({ type: 'object', subtype: 'null', value: null });" +
+        "    const t = typeof val;" +
+        "    if (t === 'boolean' || t === 'string') return attachDeep({ type: t, value: val });" +
+        "    if (t === 'number') {" +
+        "      if (Number.isNaN(val)) return attachDeep({ type: 'number', unserializableValue: 'NaN' });" +
+        "      if (Object.is(val, -0)) return attachDeep({ type: 'number', unserializableValue: '-0' });" +
+        "      if (val === Infinity) return attachDeep({ type: 'number', unserializableValue: 'Infinity' });" +
+        "      if (val === -Infinity) return attachDeep({ type: 'number', unserializableValue: '-Infinity' });" +
+        "      return attachDeep({ type: 'number', value: val });" +
         "    }" +
         "    if (t === 'symbol') {" +
+        "      if (returnByValue && !isDeep) return { type: 'undefined' };" +
         "      const obj = { type: 'symbol', description: String(val) };" +
         "      if (!returnByValue) {" +
         "        obj.objectId = globalThis.__capsurf_store_object(val);" +
         "        if (globalThis.__capsurf_in_isolated) (globalThis.__capsurf_isolated_oids || (globalThis.__capsurf_isolated_oids = new Set())).add(obj.objectId);" +
         "      }" +
-        "      return obj;" +
+        "      return attachDeep(obj);" +
         "    }" +
-        "    if (t === 'bigint') return { type: 'bigint', unserializableValue: String(val) + 'n' };" +
+        "    if (t === 'bigint') return attachDeep({ type: 'bigint', unserializableValue: String(val) + 'n' });" +
         "    if (t === 'function') {" +
         "      const className = 'Function';" +
         "      const desc = String(val);" +
@@ -3411,32 +4195,54 @@ pub fn mountDom(
         "        obj.objectId = globalThis.__capsurf_store_object(val);" +
         "        if (globalThis.__capsurf_in_isolated) (globalThis.__capsurf_isolated_oids || (globalThis.__capsurf_isolated_oids = new Set())).add(obj.objectId);" +
         "      }" +
-        "      return obj;" +
+        "      return attachDeep(obj);" +
         "    }" +
         "    if (t === 'object') {" +
         "      const isArr = Array.isArray(val);" +
-        "      const className = globalThis.__capsurf_get_class_name(val);" +
+        "      const isWin = (val === globalThis) || (typeof window !== 'undefined' && val === window);" +
+        "      const className = isWin ? 'Window' : globalThis.__capsurf_get_class_name(val);" +
         "      const obj = { type: 'object', className: className };" +
-        "      if (isArr) obj.subtype = 'array';" +
+        "      if (isWin) obj.subtype = 'window';" +
+        "      else if (isArr) obj.subtype = 'array';" +
         "      else if (typeof val.nodeType === 'number') obj.subtype = 'node';" +
-        "      else if (val instanceof Date) obj.subtype = 'date';" +
-        "      else if (val instanceof RegExp) obj.subtype = 'regexp';" +
-        "      else if (val instanceof Error) obj.subtype = 'error';" +
-        "      else if (typeof Map !== 'undefined' && val instanceof Map) obj.subtype = 'map';" +
-        "      else if (typeof Set !== 'undefined' && val instanceof Set) obj.subtype = 'set';" +
-        "      if (returnByValue) {" +
-        "        obj.value = val;" +
+        "      else if (typeof Date === 'function' && val instanceof Date) obj.subtype = 'date';" +
+        "      else if (typeof RegExp === 'function' && val instanceof RegExp) obj.subtype = 'regexp';" +
+        "      else if (typeof Error === 'function' && val instanceof Error) obj.subtype = 'error';" +
+        "      else if (typeof Map === 'function' && val instanceof Map) obj.subtype = 'map';" +
+        "      else if (typeof Set === 'function' && val instanceof Set) obj.subtype = 'set';" +
+        "      else if (typeof WeakMap === 'function' && val instanceof WeakMap) obj.subtype = 'weakmap';" +
+        "      else if (typeof WeakSet === 'function' && val instanceof WeakSet) obj.subtype = 'weakset';" +
+        "      else if (typeof Promise === 'function' && val instanceof Promise) obj.subtype = 'promise';" +
+        "      else if (typeof ArrayBuffer === 'function' && val instanceof ArrayBuffer) obj.subtype = 'arraybuffer';" +
+        "      else if (typeof DataView === 'function' && val instanceof DataView) obj.subtype = 'dataview';" +
+        "      else if (typeof ArrayBuffer === 'function' && ArrayBuffer.isView && ArrayBuffer.isView(val)) obj.subtype = 'typedarray';" +
+        "      if (returnByValue && !isDeep) {" +
+        "        const _seen = typeof WeakSet !== 'undefined' ? new WeakSet() : null;" +
+        "        const _chkDepth = function(x, d) {" +
+        "          if (!x || typeof x !== 'object') return;" +
+        "          if (_seen) { if (_seen.has(x)) throw new Error('Object reference chain is too long'); _seen.add(x); }" +
+        "          if (d > 100) throw new Error('Object reference chain is too long');" +
+        "          if (Array.isArray(x)) { for (let i = 0; i < x.length; i++) _chkDepth(x[i], d + 1); }" +
+        "          else { const ks = Object.keys(x); for (let i = 0; i < ks.length; i++) _chkDepth(x[ks[i]], d + 1); }" +
+        "          if (_seen) _seen.delete(x);" +
+        "        };" +
+        "        _chkDepth(val, 0);" +
+        "        if (obj.subtype === 'regexp' || obj.subtype === 'date') { obj.description = String(val); }" +
+        "        if (obj.subtype !== 'regexp') { obj.value = val; }" +
         "      } else {" +
-        "        obj.objectId = globalThis.__capsurf_store_object(val);" +
-        "        if (globalThis.__capsurf_in_isolated) (globalThis.__capsurf_isolated_oids || (globalThis.__capsurf_isolated_oids = new Set())).add(obj.objectId);" +
+        "        if (!returnByValue) {" +
+        "          obj.objectId = globalThis.__capsurf_store_object(val);" +
+        "          if (globalThis.__capsurf_in_isolated) (globalThis.__capsurf_isolated_oids || (globalThis.__capsurf_isolated_oids = new Set())).add(obj.objectId);" +
+        "        }" +
         "        if (obj.subtype === 'regexp' || obj.subtype === 'date') obj.description = String(val);" +
-        "        else if (obj.subtype === 'error') obj.description = val.stack || String(val);" +
+        "        else if (obj.subtype === 'error') obj.description = String(val.stack || val).replace(/\\bat evaluate \\(/g, 'at UtilityScript.evaluate (');" +
         "        else obj.description = className;" +
+        "        if (isDeep) obj.deepSerializedValue = globalThis.__capsurf_deep_serialize(val, maxDepth);" +
         "        if (globalThis.__capsurf_fmt_hook) return globalThis.__capsurf_fmt_hook(obj, val);" +
         "      }" +
         "      return obj;" +
         "    }" +
-        "    return { type: 'undefined' };" +
+        "    return attachDeep({ type: 'undefined' });" +
         "  };" +
         "  const _origJsonParse = JSON.parse;" +
         "  const _origJsonStringify = JSON.stringify;" +
@@ -3486,6 +4292,10 @@ pub fn mountDom(
         "        else if (u === '-Infinity') args.push(-Infinity);" +
         "        else if (/^-?\\d+n$/.test(u)) args.push(BigInt(u.slice(0, -1)));" +
         "        else args.push(undefined);" +
+        "      } else if (arg.deepSerializedValue !== undefined) {" +
+        "        args.push(globalThis.__capsurf_deep_deserialize(arg.deepSerializedValue));" +
+        "      } else if (arg.subtype === 'regexp' && arg.value && typeof arg.value.pattern === 'string') {" +
+        "        args.push(new RegExp(arg.value.pattern, arg.value.flags || ''));" +
         "      } else if ('value' in arg) {" +
         "        args.push(arg.value);" +
         "      } else {" +
@@ -3502,10 +4312,28 @@ pub fn mountDom(
         "      globalThis.MutationObserver = globalThis.__capsurf_orig_MutationObserver;" +
         "      restoredMo = true;" +
         "    }" +
-        "    try { return fn.apply(target || globalThis, args); }" +
-        "    finally {" +
+        "    let hasSavedEvent = false;" +
+        "    let savedEvent;" +
+        "    if (isIso && typeof globalThis.Event !== 'function' && globalThis.__capsurf_nativeEvents && globalThis.__capsurf_nativeEvents.Event) {" +
+        "      savedEvent = globalThis.Event;" +
+        "      hasSavedEvent = true;" +
+        "      globalThis.Event = globalThis.__capsurf_nativeEvents.Event;" +
+        "    }" +
+        "    const _restoreIso = function() {" +
         "      if (restoredNode) { try { delete globalThis.Node; } catch (e) {} }" +
         "      if (restoredMo) { try { delete globalThis.MutationObserver; } catch (e) {} }" +
+        "      if (hasSavedEvent) { try { globalThis.Event = savedEvent; } catch (e) {} }" +
+        "    };" +
+        "    let _isAsyncRes = false;" +
+        "    try {" +
+        "      const _res = fn.apply(target || globalThis, args);" +
+        "      if (_res && typeof _res.then === 'function') {" +
+        "        _isAsyncRes = true;" +
+        "        return _res.then(function(v) { _restoreIso(); return v; }, function(e) { _restoreIso(); throw e; });" +
+        "      }" +
+        "      return _res;" +
+        "    } finally {" +
+        "      if (!_isAsyncRes) _restoreIso();" +
         "    }" +
         "  };" +
         "  if (typeof document !== 'undefined' && !document.fonts) {" +
@@ -3545,7 +4373,7 @@ pub fn mountDom(
         " const _wrappedGcs = function (el, pseudo) { const cs = _origGcs(el, pseudo); return new Proxy(cs, { get: function (target, prop) { if (prop === 'getPropertyValue') { return function (name) { const ln = String(name).trim().toLowerCase(); if (ln === 'accent-color') return _resolveAccent(el, target); if (ln === 'direction') { const idir = (el && el.style && typeof el.style.getPropertyValue === 'function') ? String(el.style.getPropertyValue('direction') || '').trim().toLowerCase() : ''; if (idir !== 'ltr' && idir !== 'rtl') { const fd = _formDirAuto(el); if (fd) return fd; } } if (ln === 'container-type' || ln === 'container-name') { const cv = _cpProp(el, ln); const cl = cv ? cv.trim().toLowerCase() : ''; if (cv && cl !== 'initial' && cl !== 'unset' && cl !== 'inherit' && cl !== 'revert' && cl !== 'revert-layer') return cv; } if (_hasContainerRules() && (ln === 'padding-left' || ln === 'padding-right' || ln === 'padding-top' || ln === 'padding-bottom' || ln === 'color' || ln === 'background-color')) { const cv = _cpProp(el, ln); if (cv) return cv; } let res = target.getPropertyValue(name); if (typeof res === 'string' && res.toLowerCase().indexOf('light-dark(') !== -1) res = _resolveLightDark(res, el, ln); if (!res && ln === 'visibility') return 'visible'; if (!res && ln === 'background-color' && _hasLinkSheets()) { const cv = _cpProp(el, 'background-color'); if (cv && cv !== 'rgba(0, 0, 0, 0)') return cv; } return res; }; } if (prop === 'accentColor' || prop === 'accent-color') return _resolveAccent(el, target); if (prop === 'direction') { const idir = (el && el.style && typeof el.style.getPropertyValue === 'function') ? String(el.style.getPropertyValue('direction') || '').trim().toLowerCase() : ''; if (idir !== 'ltr' && idir !== 'rtl') { const fd = _formDirAuto(el); if (fd) return fd; } } if (prop === 'containerType' || prop === 'container-type') { const cv = _cpProp(el, 'container-type'); const cl = cv ? cv.trim().toLowerCase() : ''; if (cv && cl !== 'initial' && cl !== 'unset' && cl !== 'inherit' && cl !== 'revert' && cl !== 'revert-layer') return cv; } if (prop === 'containerName' || prop === 'container-name') { const cv = _cpProp(el, 'container-name'); const cl = cv ? cv.trim().toLowerCase() : ''; if (cv && cl !== 'initial' && cl !== 'unset' && cl !== 'inherit' && cl !== 'revert' && cl !== 'revert-layer') return cv; } if (_hasContainerRules() && (prop === 'paddingLeft' || prop === 'paddingRight' || prop === 'paddingTop' || prop === 'paddingBottom' || prop === 'color' || prop === 'backgroundColor')) { const cv = _cpProp(el, String(prop)); if (cv) return cv; } let v = target[prop]; if (typeof v === 'string' && v.toLowerCase().indexOf('light-dark(') !== -1) v = _resolveLightDark(v, el, String(prop)); if (!v && prop === 'visibility') return 'visible'; if (!v && (prop === 'backgroundColor' || prop === 'background-color') && _hasLinkSheets()) { const cv = _cpProp(el, 'background-color'); if (cv && cv !== 'rgba(0, 0, 0, 0)') return cv; } return typeof v === 'function' ? v.bind(target) : v; } }); };" +
         " globalThis.getComputedStyle = _wrappedGcs; if (typeof window !== 'undefined') window.getComputedStyle = _wrappedGcs;" +
         " (function () { if (typeof globalThis.fetch === 'function') { const _origFetch = globalThis.fetch; const _wrappedFetch = function (input, init) { try { const raw = typeof input === 'string' ? input : (input && input.url ? String(input.url) : String(input || '')); const pth = raw.replace(/^https?:\\/\\/[^\\/]+/i, '').split('?')[0].split('#')[0]; if (pth.startsWith('/__ks_resource/')) { return Promise.resolve({ ok: false, status: 404, statusText: 'Not Found', url: raw, headers: { get: function () { return null; } }, text: function () { return Promise.resolve(''); }, arrayBuffer: function () { return Promise.resolve(new ArrayBuffer(0)); } }); } } catch (e) {} return _origFetch.apply(this, arguments); }; globalThis.fetch = _wrappedFetch; if (typeof window !== 'undefined') window.fetch = _wrappedFetch; } })();" +
-        " (function () { if (typeof Element === 'undefined' || !Element.prototype || typeof Element.prototype.getBoundingClientRect !== 'function') return; const _origGbcr = Element.prototype.getBoundingClientRect; const _animStarts = new WeakMap(); function _parseDurMs(tok) { const m = String(tok || '').trim().match(/^([0-9.]+)(ms|s)$/i); if (!m) return 0; const v = parseFloat(m[1]); return m[2].toLowerCase() === 's' ? v * 1000 : v; } function _findKeyframes(name) { const styles = document.querySelectorAll('style'); for (let i = 0; i < styles.length; i++) { const txt = styles[i].textContent || ''; const idx = txt.toLowerCase().indexOf('@keyframes'); if (idx === -1) continue; let pos = 0; while (true) { const kpos = txt.toLowerCase().indexOf('@keyframes', pos); if (kpos === -1) break; const after = txt.slice(kpos + 10); const nm = after.match(/^\\s+([a-zA-Z0-9_-]+)\\s*\\{/); if (nm && nm[1] === name) { const bStart = kpos + 10 + nm[0].length; let depth = 1, j = bStart; while (j < txt.length && depth > 0) { if (txt[j] === '{') depth++; else if (txt[j] === '}') depth--; j++; } return txt.slice(bStart, j - 1); } pos = kpos + 10; } } return null; } function _extractKfPx(body, prop) { const reFrom = new RegExp('(?:from|0%)\\s*\\{([^}]*)\\}', 'i'); const reTo = new RegExp('(?:to|100%)\\s*\\{([^}]*)\\}', 'i'); const mf = body.match(reFrom), mt = body.match(reTo); if (!mf || !mt) return null; const reP = new RegExp(prop + '\\s*:\\s*([0-9.]+)px', 'i'); const pf = mf[1].match(reP), pt = mt[1].match(reP); if (!pf || !pt) return null; return [parseFloat(pf[1]), parseFloat(pt[1])]; } Element.prototype.getBoundingClientRect = function () { const rect = _origGbcr.call(this); try { const sts0 = document.querySelectorAll('style'); let hasKf = false; for (let ki = 0; ki < sts0.length; ki++) { if ((sts0[ki].textContent || '').toLowerCase().indexOf('@keyframes') !== -1) { hasKf = true; break; } } if (!hasKf) return rect; const cs = _origGcs(this); let anim = String((cs && (cs.getPropertyValue('animation') || cs.getPropertyValue('animation-name'))) || '').trim(); if (!anim) { const sts = sts0; for (let si = 0; si < sts.length; si++) { let t = sts[si].textContent || ''; while (true) { const kp = t.toLowerCase().indexOf('@keyframes'); if (kp === -1) break; const ob = t.indexOf('{', kp); if (ob === -1) break; let d = 1, jj = ob + 1; while (jj < t.length && d > 0) { if (t[jj] === '{') d++; else if (t[jj] === '}') d--; jj++; } t = t.slice(0, kp) + t.slice(jj); } const rr = /([^{}]+)\\{([^{}]*)\\}/g; let mm; while ((mm = rr.exec(t)) !== null) { const sels = mm[1].split(','); let hit = false; for (let k = 0; k < sels.length; k++) { const ss = sels[k].trim(); if (ss && typeof this.matches === 'function' && this.matches(ss)) { hit = true; break; } } if (hit) { const am = mm[2].match(/(?:^|;)\\s*animation\\s*:\\s*([^;]+)/i); if (am) anim = am[1].trim(); } } } } if (anim && anim !== 'none') { const toks = anim.split(/\\s+/); let name = '', durMs = 0, isInf = false, isAlt = false; for (let i = 0; i < toks.length; i++) { const t = toks[i].toLowerCase(); if (t === 'infinite') isInf = true; else if (t === 'alternate' || t === 'alternate-reverse') isAlt = true; else if (!durMs && /^[0-9.]+(ms|s)$/.test(t)) durMs = _parseDurMs(t); else if (!name && t !== 'linear' && t !== 'ease' && t !== 'ease-in' && t !== 'ease-out' && t !== 'ease-in-out' && t !== 'normal' && t !== 'reverse' && t !== 'forwards' && t !== 'backwards' && t !== 'both' && t !== 'none' && t !== 'running' && t !== 'paused' && !/^[0-9.]+$/.test(t)) name = toks[i]; } if (!durMs) durMs = _parseDurMs(cs.getPropertyValue('animation-duration')); if (name && durMs > 0) { const kf = _findKeyframes(name); if (kf) { const wPair = _extractKfPx(kf, 'width'); const hPair = _extractKfPx(kf, 'height'); if (wPair || hPair) { let t0 = _animStarts.get(this); const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); if (t0 === undefined) { t0 = now; _animStarts.set(this, t0); } const elapsed = Math.max(0, now - t0); const cyc = elapsed / durMs; const iter = Math.floor(cyc); let frac = isInf ? (cyc - iter) : Math.min(1, cyc); if (isAlt && (iter % 2 === 1)) frac = 1 - frac; const nw = wPair ? (wPair[0] + (wPair[1] - wPair[0]) * frac) : rect.width; const nh = hPair ? (hPair[0] + (hPair[1] - hPair[0]) * frac) : rect.height; return { x: rect.x, y: rect.y, left: rect.left, top: rect.top, width: nw, height: nh, right: rect.left + nw, bottom: rect.top + nh }; } } } } } catch (e) {} return rect; }; })();" +
+        " (function () { if (typeof Element === 'undefined' || !Element.prototype || typeof Element.prototype.getBoundingClientRect !== 'function') return; const _origGbcr = Element.prototype.getBoundingClientRect; const _animStarts = new WeakMap(); const _transStates = new WeakMap(); function _parseDurMs(tok) { const m = String(tok || '').trim().match(/^([0-9.]+)(ms|s)$/i); if (!m) return 0; const v = parseFloat(m[1]); return m[2].toLowerCase() === 's' ? v * 1000 : v; } function _parseMaxDurMs(str) { if (!str) return 0; const parts = String(str).split(','); let maxMs = 0; for (let i = 0; i < parts.length; i++) { const d = _parseDurMs(parts[i]); if (d > maxMs) maxMs = d; } return maxMs; } function _parseTransitionDurMs(el, cs) { const inlineTrans = (el && el.style && el.style.transition !== undefined) ? String(el.style.transition || '').trim() : ''; const inlineDur = (el && el.style && el.style.transitionDuration !== undefined) ? String(el.style.transitionDuration || '').trim() : ''; const inlineProp = (el && el.style && el.style.transitionProperty !== undefined) ? String(el.style.transitionProperty || '').trim().toLowerCase() : ''; if (inlineProp === 'none' || inlineTrans.toLowerCase() === 'none') return 0; const tp = String((cs && cs.getPropertyValue('transition-property')) || '').trim().toLowerCase(); if (!inlineTrans && !inlineDur && tp === 'none') return 0; let durMs = _parseMaxDurMs(inlineDur || (cs && cs.getPropertyValue('transition-duration')) || ''); if (!durMs) { const src = inlineTrans || String((cs && cs.getPropertyValue('transition')) || '').trim(); if (src && src.toLowerCase() !== 'none') { const items = src.split(','); for (let i = 0; i < items.length; i++) { const toks = items[i].trim().split(/\\s+/); for (let j = 0; j < toks.length; j++) { if (/^[0-9.]+(ms|s)$/i.test(toks[j])) { const d = _parseDurMs(toks[j]); if (d > durMs) durMs = d; break; } } } } } return durMs; } function _findKeyframes(name) { const styles = document.querySelectorAll('style'); for (let i = 0; i < styles.length; i++) { const txt = styles[i].textContent || ''; const idx = txt.toLowerCase().indexOf('@keyframes'); if (idx === -1) continue; let pos = 0; while (true) { const kpos = txt.toLowerCase().indexOf('@keyframes', pos); if (kpos === -1) break; const after = txt.slice(kpos + 10); const nm = after.match(/^\\s+([a-zA-Z0-9_-]+)\\s*\\{/); if (nm && nm[1] === name) { const bStart = kpos + 10 + nm[0].length; let depth = 1, j = bStart; while (j < txt.length && depth > 0) { if (txt[j] === '{') depth++; else if (txt[j] === '}') depth--; j++; } return txt.slice(bStart, j - 1); } pos = kpos + 10; } } return null; } function _extractKfPx(body, prop) { const reFrom = /(?:from|0%)\\s*\\{([^}]*)\\}/i; const reTo = /(?:to|100%)\\s*\\{([^}]*)\\}/i; const mf = body.match(reFrom), mt = body.match(reTo); if (!mf || !mt) return null; const reP = new RegExp('(?:^|;|\\\\s)' + prop + '\\\\s*:\\\\s*(-?[0-9.]+)(?:px|(?=\\\\s*(?:;|$)))', 'i'); const pf = mf[1].match(reP), pt = mt[1].match(reP); if (!pf || !pt) return null; return [parseFloat(pf[1]), parseFloat(pt[1])]; } Element.prototype.getBoundingClientRect = function () { const rect = _origGbcr.call(this); try { const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); const cs = _origGcs(this); const sts0 = document.querySelectorAll('style'); let hasKf = false; for (let ki = 0; ki < sts0.length; ki++) { if ((sts0[ki].textContent || '').toLowerCase().indexOf('@keyframes') !== -1) { hasKf = true; break; } } if (hasKf) { let anim = String((cs && (cs.getPropertyValue('animation') || cs.getPropertyValue('animation-name'))) || (this.style && (this.style.animation || this.style.animationName)) || '').trim(); if (!anim) { const sts = sts0; for (let si = 0; si < sts.length; si++) { let t = sts[si].textContent || ''; while (true) { const kp = t.toLowerCase().indexOf('@keyframes'); if (kp === -1) break; const ob = t.indexOf('{', kp); if (ob === -1) break; let d = 1, jj = ob + 1; while (jj < t.length && d > 0) { if (t[jj] === '{') d++; else if (t[jj] === '}') d--; jj++; } t = t.slice(0, kp) + t.slice(jj); } const rr = /([^{}]+)\\{([^{}]*)\\}/g; let mm; while ((mm = rr.exec(t)) !== null) { const sels = mm[1].split(','); let hit = false; for (let k = 0; k < sels.length; k++) { const ss = sels[k].trim(); if (ss && typeof this.matches === 'function' && this.matches(ss)) { hit = true; break; } } if (hit) { const am = mm[2].match(/(?:^|;)\\s*animation\\s*:\\s*([^;]+)/i); if (am) anim = am[1].trim(); } } } } if (anim && anim !== 'none') { const toks = anim.split(/\\s+/); let name = '', durMs = 0, isInf = false, isAlt = false; for (let i = 0; i < toks.length; i++) { const t = toks[i].toLowerCase(); if (t === 'infinite') isInf = true; else if (t === 'alternate' || t === 'alternate-reverse') isAlt = true; else if (!durMs && /^[0-9.]+(ms|s)$/.test(t)) durMs = _parseDurMs(t); else if (!name && t !== 'linear' && t !== 'ease' && t !== 'ease-in' && t !== 'ease-out' && t !== 'ease-in-out' && t !== 'normal' && t !== 'reverse' && t !== 'forwards' && t !== 'backwards' && t !== 'both' && t !== 'none' && t !== 'running' && t !== 'paused' && !/^[0-9.]+$/.test(t)) name = toks[i]; } if (!durMs) durMs = _parseDurMs(cs && cs.getPropertyValue('animation-duration')); if (name && durMs > 0) { const kf = _findKeyframes(name); if (kf) { const wPair = _extractKfPx(kf, 'width'); const hPair = _extractKfPx(kf, 'height'); const mlPair = _extractKfPx(kf, 'margin-left'); const lPair = _extractKfPx(kf, 'left'); const mtPair = _extractKfPx(kf, 'margin-top'); const tPair = _extractKfPx(kf, 'top'); if (wPair || hPair || mlPair || lPair || mtPair || tPair) { let t0 = _animStarts.get(this); if (t0 === undefined) { t0 = now; _animStarts.set(this, t0); } const elapsed = Math.max(0, now - t0); const cyc = elapsed / durMs; const iter = Math.floor(cyc); let frac = isInf ? (cyc - iter) : Math.min(1, cyc); if (isAlt && (iter % 2 === 1)) frac = 1 - frac; const dx = (mlPair ? (mlPair[0] + (mlPair[1] - mlPair[0]) * frac) : 0) + (lPair ? (lPair[0] + (lPair[1] - lPair[0]) * frac) : 0); const dy = (mtPair ? (mtPair[0] + (mtPair[1] - mtPair[0]) * frac) : 0) + (tPair ? (tPair[0] + (tPair[1] - tPair[0]) * frac) : 0); const nx = rect.left + dx; const ny = rect.top + dy; const nw = wPair ? (wPair[0] + (wPair[1] - wPair[0]) * frac) : rect.width; const nh = hPair ? (hPair[0] + (hPair[1] - hPair[0]) * frac) : rect.height; return { x: rect.x + dx, y: rect.y + dy, left: nx, top: ny, width: nw, height: nh, right: nx + nw, bottom: ny + nh }; } } } } } const transDurMs = _parseTransitionDurMs(this, cs); let st = _transStates.get(this); if (transDurMs <= 0) { if (st) { st.startTime = 0; st.lastX = rect.x; st.lastY = rect.y; st.lastW = rect.width; st.lastH = rect.height; } return rect; } if (!st) { st = { lastX: rect.x, lastY: rect.y, lastW: rect.width, lastH: rect.height, fromX: rect.x, fromY: rect.y, fromW: rect.width, fromH: rect.height, startTime: 0 }; _transStates.set(this, st); return rect; } let curX = rect.x, curY = rect.y, curW = rect.width, curH = rect.height; if (st.startTime > 0) { const elap = Math.max(0, now - st.startTime); if (elap < transDurMs) { const f = elap / transDurMs; curX = st.fromX + (st.lastX - st.fromX) * f; curY = st.fromY + (st.lastY - st.fromY) * f; curW = st.fromW + (st.lastW - st.fromW) * f; curH = st.fromH + (st.lastH - st.fromH) * f; } else { st.startTime = 0; } } const changed = Math.abs(rect.x - st.lastX) > 0.01 || Math.abs(rect.y - st.lastY) > 0.01 || Math.abs(rect.width - st.lastW) > 0.01 || Math.abs(rect.height - st.lastH) > 0.01; if (changed) { st.fromX = curX; st.fromY = curY; st.fromW = curW; st.fromH = curH; st.lastX = rect.x; st.lastY = rect.y; st.lastW = rect.width; st.lastH = rect.height; st.startTime = now; return { x: curX, y: curY, left: curX, top: curY, width: curW, height: curH, right: curX + curW, bottom: curY + curH }; } if (st.startTime > 0) { const elap = Math.max(0, now - st.startTime); if (elap < transDurMs) { const f = elap / transDurMs; const nx = st.fromX + (rect.x - st.fromX) * f; const ny = st.fromY + (rect.y - st.fromY) * f; const nw = st.fromW + (rect.width - st.fromW) * f; const nh = st.fromH + (rect.height - st.fromH) * f; return { x: nx, y: ny, left: nx, top: ny, width: nw, height: nh, right: nx + nw, bottom: ny + nh }; } st.startTime = 0; } } catch (e) {} return rect; }; })();" +
         " (function () { const proto = (typeof HTMLElement !== 'undefined' && HTMLElement.prototype) ? HTMLElement.prototype : (typeof Element !== 'undefined' ? Element.prototype : null); if (!proto) return; function _isNoBox(el) { if (!el || el.nodeType !== 1 || !el.isConnected) return true; const cs = _wrappedGcs(el); const d = String((cs && cs.display) || '').trim().toLowerCase(); return d === 'none' || d === 'contents'; } function _calcOffsetParent(el) { if (!el || el.nodeType !== 1 || !el.isConnected) return null; const tag = String(el.localName || el.tagName || '').toLowerCase(); if (tag === 'html' || tag === 'body') return null; if (_isNoBox(el)) return null; const cs = _wrappedGcs(el); const pos = String((cs && cs.position) || 'static').trim().toLowerCase(); if (pos === 'fixed') return null; let anc = el.parentElement; while (anc) { const atag = String(anc.localName || anc.tagName || '').toLowerCase(); if (atag === 'body') return anc; if (atag === 'html') return null; const acs = _wrappedGcs(anc); const apos = String((acs && acs.position) || 'static').trim().toLowerCase(); if (apos && apos !== 'static') return anc; if (pos === 'static' && (atag === 'td' || atag === 'th' || atag === 'table')) return anc; anc = anc.parentElement; } return null; } function _calcOffsetCoord(el, axis) { if (!el || el.nodeType !== 1 || !el.isConnected) return 0; const tag = String(el.localName || el.tagName || '').toLowerCase(); if (tag === 'html' || tag === 'body') return 0; if (_isNoBox(el)) return 0; const box = (typeof el._nid === 'number' && el._nid > 0 && typeof globalThis.__capsurf_get_layout_box === 'function') ? globalThis.__capsurf_get_layout_box(el._nid) : null; if (!box) return 0; const op = _calcOffsetParent(el); const elCoord = axis === 'y' ? box.y : box.x; if (!op) return Math.round(elCoord); const optag = String(op.localName || op.tagName || '').toLowerCase(); if (optag === 'body') { const bcs = _wrappedGcs(op); const bpos = String((bcs && bcs.position) || 'static').trim().toLowerCase(); if (bpos === 'static') return Math.round(elCoord); } const opBox = (typeof op._nid === 'number' && op._nid > 0 && typeof globalThis.__capsurf_get_layout_box === 'function') ? globalThis.__capsurf_get_layout_box(op._nid) : null; if (!opBox) return Math.round(elCoord); const opOrigin = axis === 'y' ? (opBox.y + opBox.borderTop) : (opBox.x + opBox.borderLeft); return Math.round(elCoord - opOrigin); } Object.defineProperty(proto, 'offsetParent', { get: function () { return _calcOffsetParent(this); }, configurable: true }); Object.defineProperty(proto, 'offsetTop', { get: function () { return _calcOffsetCoord(this, 'y'); }, configurable: true }); Object.defineProperty(proto, 'offsetLeft', { get: function () { return _calcOffsetCoord(this, 'x'); }, configurable: true }); })();" +
         " (function () { if (typeof Range === 'undefined' || !Range.prototype || typeof Range.prototype.getClientRects !== 'function') return; const _origGcr = Range.prototype.getClientRects; function _isWideCp(cp) { return (cp >= 0x2E80 && cp <= 0x9FFF) || (cp >= 0xAC00 && cp <= 0xD7AF) || (cp >= 0xF900 && cp <= 0xFAFF) || (cp >= 0xFE30 && cp <= 0xFE6F) || (cp >= 0xFF00 && cp <= 0xFF60) || (cp >= 0xFFE0 && cp <= 0xFFE6) || (cp >= 0x20000 && cp <= 0x2FA1F); } function _measureRangeStr(str, fsz) { let w = 0; for (let i = 0; i < str.length; i++) { const cp = str.codePointAt(i); if (cp > 0xFFFF) i++; w += _isWideCp(cp) ? fsz : (fsz * 0.5); } return w; } Range.prototype.getClientRects = function () { const list = _origGcr.call(this); try { if (!this.collapsed && list && list.length > 0 && this.startContainer) { const sc = this.startContainer; const ec = this.endContainer; let txt = ''; let hostEl = null; if (sc === ec && sc.nodeType === 3) { txt = String(sc.data || sc.textContent || '').slice(this.startOffset, this.endOffset); hostEl = sc.parentElement || sc.parentNode; } else if (sc === ec && sc.nodeType === 1 && this.startOffset === 0 && this.endOffset === (sc.childNodes ? sc.childNodes.length : 0)) { txt = String(sc.textContent || ''); hostEl = sc; } if (txt) { let hasWide = false; for (let i = 0; i < txt.length; i++) { const cp = txt.codePointAt(i); if (cp > 0xFFFF) i++; if (_isWideCp(cp)) { hasWide = true; break; } } if (hasWide) { let fsz = 16; if (hostEl && hostEl.nodeType === 1) { try { const cs = _origGcs(hostEl); const fs = parseFloat(String((cs && cs.fontSize) || '')); if (Number.isFinite(fs) && fs > 0) fsz = fs; } catch (e) {} } const mw = _measureRangeStr(txt, fsz); const r0 = list[0]; const nr = typeof DOMRect === 'function' ? new DOMRect(r0.x, r0.y, mw, Math.max(r0.height || 0, fsz)) : { x: r0.x, y: r0.y, left: r0.left, top: r0.top, width: mw, height: Math.max(r0.height || 0, fsz), right: r0.left + mw, bottom: r0.top + Math.max(r0.height || 0, fsz) }; const out = [nr]; out.item = function (idx) { return out[idx] || null; }; return out; } } } } catch (e) {} return list; }; })();" +
         " })();";

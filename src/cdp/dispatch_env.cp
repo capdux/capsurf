@@ -11,7 +11,7 @@ pub struct DispatchEnv {
     font_assets_path: []const u8 = "",
     loader_url: []const u8 = "",
 
-    fn initDefault(): DispatchEnv {
+    static fn initDefault(): DispatchEnv {
         return DispatchEnv{};
     }
 

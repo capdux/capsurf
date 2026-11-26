@@ -68,7 +68,7 @@ Object.defineProperty(Node.prototype, "previousSibling", {
   get: function () {
     const p = this.parentNode;
     if (!p) return null;
-    const kids = (p.childNodes && p.childNodes.length) ? p.childNodes : p._children;
+    const kids = ensureChildren(p);
     if (!kids || !kids.length) return null;
     const nid = typeof this._nid === "number" && this._nid > 0 ? this._nid : 0;
     for (let i = 0; i < kids.length; i++) {
@@ -86,7 +86,7 @@ Object.defineProperty(Node.prototype, "nextSibling", {
   get: function () {
     const p = this.parentNode;
     if (!p) return null;
-    const kids = (p.childNodes && p.childNodes.length) ? p.childNodes : p._children;
+    const kids = ensureChildren(p);
     if (!kids || !kids.length) return null;
     const nid = typeof this._nid === "number" && this._nid > 0 ? this._nid : 0;
     for (let i = 0; i < kids.length; i++) {
@@ -186,10 +186,14 @@ Object.defineProperty(Node.prototype, "ownerDocument", {
     return typeof document !== "undefined" ? document : null;
   },
   set: function (doc) {
-    this._ownerDocument = doc;
+    Object.defineProperty(this, "_ownerDocument", { value: doc, writable: true, configurable: true, enumerable: false });
   },
   configurable: true,
 });
+
+Node.prototype.toJSON = function () {
+  return {};
+};
 
 Node.prototype.contains = function (other) {
   if (!other) return false;
@@ -370,6 +374,11 @@ const nativeElementSetTextContent = (typeof Element !== "undefined" && Element.p
 const nativeElementFirstChild = (typeof Element !== "undefined" && Element.prototype) ? Object.getOwnPropertyDescriptor(Element.prototype, "firstChild")?.get : null;
 const nativeElementNextSibling = (typeof Element !== "undefined" && Element.prototype) ? Object.getOwnPropertyDescriptor(Element.prototype, "nextSibling")?.get : null;
 
+function _setHidden(obj, k, v) {
+  Object.defineProperty(obj, k, { value: v, writable: true, configurable: true, enumerable: false });
+  return v;
+}
+
 function ensureChildren(node) {
   if (!node || typeof node !== "object") return [];
   const tag = String(node.localName || node.tagName || "").toLowerCase();
@@ -377,11 +386,11 @@ function ensureChildren(node) {
     if (typeof node.content !== "undefined") {
       const _ = node.content;
     }
-    if (!node._children) node._children = [];
+    if (!node._children) _setHidden(node, "_children", []);
     return node._children;
   }
   if (!node._children) {
-    node._children = [];
+    _setHidden(node, "_children", []);
     try {
       let child = null;
       if (node.nodeType === 9) { // DOCUMENT_NODE
@@ -633,9 +642,9 @@ Node.prototype.appendChild = function (child) {
     try {
       child._ownerFragment.removeChild(child);
     } catch (e) {}
-    child._ownerFragment = null;
+    _setHidden(child, "_ownerFragment", null);
   }
-  if (child.parentNode && child.parentNode !== this && typeof child.parentNode.removeChild === "function") {
+  if (child.parentNode && typeof child.parentNode.removeChild === "function") {
     try {
       child.parentNode.removeChild(child);
     } catch (e) {}
@@ -664,6 +673,11 @@ Node.prototype.appendChild = function (child) {
       nativeElementAppendChild.call(this, child);
     } catch (e) {}
   }
+  if (typeof this._nid === "number" && this._nid > 0 && this.nodeType === DOCUMENT_FRAGMENT_NODE && typeof global.__capsurf_node_append_child === "function") {
+    try {
+      global.__capsurf_node_append_child(this._nid, child);
+    } catch (e) {}
+  }
 
   if (typeof notifyMutation === "function") {
     const rec = new MutationRecord("childList", this);
@@ -679,12 +693,16 @@ Node.prototype.appendChild = function (child) {
   notifyConnectedCustomElements(child);
   if (child && child.nodeType === 1 && child.isConnected) {
     const ctag = String(child.localName || child.tagName || "").toLowerCase();
-    if (ctag === "iframe" && typeof global !== "undefined" && typeof global.__capsurf_on_iframe_connected === "function") {
+    if ((ctag === "iframe" || ctag === "frame") && typeof global !== "undefined" && typeof global.__capsurf_on_iframe_connected === "function") {
       global.__capsurf_on_iframe_connected(child);
     }
   }
   if (this.isConnected && typeof global !== "undefined" && typeof global.__capsurf_syncNamedGlobals === "function") {
-    global.__capsurf_syncNamedGlobals();
+    const mayHaveNamed = child && child.nodeType === 1 && (
+      (typeof child.hasAttribute === "function" && (child.hasAttribute("id") || child.hasAttribute("name"))) ||
+      !!(child._children && child._children.some && child._children.some(function (k) { return k && k.nodeType === 1; }))
+    );
+    if (mayHaveNamed) global.__capsurf_syncNamedGlobals();
   }
 
   return child;
@@ -712,6 +730,10 @@ Node.prototype.insertBefore = function (newChild, refChild) {
     throw err;
   }
 
+  if (newChild === refChild) {
+    return newChild;
+  }
+
   if (newChild.nodeType === DOCUMENT_FRAGMENT_NODE) {
     const kids = Array.from(newChild.childNodes || newChild._children || []);
     for (let i = 0; i < kids.length; i++) {
@@ -727,7 +749,7 @@ Node.prototype.insertBefore = function (newChild, refChild) {
     } catch (e) {}
     newChild._ownerFragment = null;
   }
-  if (newChild.parentNode && newChild.parentNode !== this && typeof newChild.parentNode.removeChild === "function") {
+  if (newChild.parentNode && typeof newChild.parentNode.removeChild === "function") {
     try {
       newChild.parentNode.removeChild(newChild);
     } catch (e) {}
@@ -752,6 +774,11 @@ Node.prototype.insertBefore = function (newChild, refChild) {
       nativeElementInsertBefore.call(this, newChild, refChild);
     } catch (e) {}
   }
+  if (typeof this._nid === "number" && this._nid > 0 && this.nodeType === DOCUMENT_FRAGMENT_NODE && typeof global.__capsurf_node_insert_before === "function") {
+    try {
+      global.__capsurf_node_insert_before(this._nid, newChild, refChild);
+    } catch (e) {}
+  }
 
   if (typeof notifyMutation === "function") {
     const rec = new MutationRecord("childList", this);
@@ -767,12 +794,16 @@ Node.prototype.insertBefore = function (newChild, refChild) {
   notifyConnectedCustomElements(newChild);
   if (newChild && newChild.nodeType === 1 && newChild.isConnected) {
     const ctag = String(newChild.localName || newChild.tagName || "").toLowerCase();
-    if (ctag === "iframe" && typeof global !== "undefined" && typeof global.__capsurf_on_iframe_connected === "function") {
+    if ((ctag === "iframe" || ctag === "frame") && typeof global !== "undefined" && typeof global.__capsurf_on_iframe_connected === "function") {
       global.__capsurf_on_iframe_connected(newChild);
     }
   }
   if (this.isConnected && typeof global !== "undefined" && typeof global.__capsurf_syncNamedGlobals === "function") {
-    global.__capsurf_syncNamedGlobals();
+    const mayHaveNamed = newChild && newChild.nodeType === 1 && (
+      (typeof newChild.hasAttribute === "function" && (newChild.hasAttribute("id") || newChild.hasAttribute("name"))) ||
+      !!(newChild._children && newChild._children.some && newChild._children.some(function (k) { return k && k.nodeType === 1; }))
+    );
+    if (mayHaveNamed) global.__capsurf_syncNamedGlobals();
   }
 
   return newChild;
@@ -810,6 +841,11 @@ Node.prototype.removeChild = function (child) {
       nativeElementRemoveChild.call(this, child);
     } catch (e) {}
   }
+  if (typeof this._nid === "number" && this._nid > 0 && this.nodeType === DOCUMENT_FRAGMENT_NODE && typeof global.__capsurf_node_remove_child === "function") {
+    try {
+      global.__capsurf_node_remove_child(this._nid, child);
+    } catch (e) {}
+  }
 
   if (typeof notifyMutation === "function") {
     const rec = new MutationRecord("childList", this);
@@ -821,7 +857,11 @@ Node.prototype.removeChild = function (child) {
     global.__capsurf_scheduleSlotChange(this);
   }
   if (this.isConnected && typeof global !== "undefined" && typeof global.__capsurf_syncNamedGlobals === "function") {
-    global.__capsurf_syncNamedGlobals();
+    const mayHaveNamed = child && child.nodeType === 1 && (
+      (typeof child.hasAttribute === "function" && (child.hasAttribute("id") || child.hasAttribute("name"))) ||
+      !!(child._children && child._children.some && child._children.some(function (k) { return k && k.nodeType === 1; }))
+    );
+    if (mayHaveNamed) global.__capsurf_syncNamedGlobals();
   }
 
   return child;
@@ -865,7 +905,7 @@ Node.prototype.replaceChild = function (newChild, oldChild) {
     } catch (e) {}
     newChild._ownerFragment = null;
   }
-  if (newChild.parentNode && newChild.parentNode !== this && typeof newChild.parentNode.removeChild === "function") {
+  if (newChild.parentNode && typeof newChild.parentNode.removeChild === "function") {
     try {
       newChild.parentNode.removeChild(newChild);
     } catch (e) {}
@@ -978,7 +1018,7 @@ if (typeof Element !== "undefined" && Element.prototype) {
           nativeElementSetTextContent.call(this, val);
         } catch (e) {}
       }
-      this._children = [];
+      _setHidden(this, "_children", []);
       const newKids = [];
       if (val.length > 0) {
         const t = new Text(val);
@@ -1424,9 +1464,9 @@ DocumentFragment.prototype.appendChild = function (child) {
   if (child.parentNode && child.parentNode !== this && typeof child.parentNode.removeChild === "function") {
     try { child.parentNode.removeChild(child); } catch (e) {}
   }
-  child._ownerFragment = this;
+  _setHidden(child, "_ownerFragment", this);
   const res = Node.prototype.appendChild.call(this, child);
-  child._ownerFragment = this;
+  _setHidden(child, "_ownerFragment", this);
   return res;
 };
 DocumentFragment.prototype.insertBefore = function (newChild, refChild) {
@@ -1457,6 +1497,11 @@ DocumentFragment.prototype.removeChild = function (child) {
   if (idx >= 0) kids.splice(idx, 1);
   if (child._ownerFragment === this) child._ownerFragment = null;
   child.parentNode = null;
+  if (typeof this._nid === "number" && this._nid > 0 && typeof global.__capsurf_node_remove_child === "function") {
+    try {
+      global.__capsurf_node_remove_child(this._nid, child);
+    } catch (e) {}
+  }
   return child;
 };
 DocumentFragment.prototype.replaceChild = function (newChild, oldChild) {
@@ -1724,6 +1769,10 @@ Object.defineProperty(ShadowRoot.prototype, "nodeName", {
   get: function () { return "#document-fragment"; },
   configurable: true,
 });
+Object.defineProperty(ShadowRoot.prototype, "parentNode", {
+  get: function () { return null; },
+  configurable: true,
+});
 Object.defineProperty(ShadowRoot.prototype, "host", {
   get: function () {
     const st = shadowRootState.get(this);
@@ -1842,6 +1891,9 @@ ShadowRoot.prototype.elementsFromPoint = markNative(function (x, y) {
 global.ShadowRoot = ShadowRoot;
 if (typeof globalThis !== "undefined") {
   globalThis.ShadowRoot = ShadowRoot;
+}
+if (typeof global.__capsurf_defineAdoptedStyleSheets === "function") {
+  global.__capsurf_defineAdoptedStyleSheets(ShadowRoot.prototype);
 }
 
 if (typeof Document !== "undefined" && Document.prototype) {

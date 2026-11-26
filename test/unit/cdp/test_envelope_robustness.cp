@@ -56,7 +56,7 @@ fn runDispatcherCoverageTest()! {
     defer session.deinit();
 
     let out_buf: [4096]u8 = [0; 4096];
-    let events: [64]CdpEvent = [CdpEvent{}; 64];
+    let events: [128]CdpEvent = [CdpEvent{}; 128];
     let event_count: usize = 0;
 
     // 1. Dispatching envelope error directly yields formatted error response

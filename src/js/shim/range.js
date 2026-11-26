@@ -369,7 +369,64 @@ Range.prototype.toString = function () {
   return out;
 };
 
-Range.prototype.deleteContents = function () {};
+Range.prototype.deleteContents = function () {
+  if (this.collapsed || !this.startContainer || !this.endContainer) return;
+  const sc = this.startContainer;
+  const so = this.startOffset;
+  const ec = this.endContainer;
+  const eo = this.endOffset;
+  if (sc === ec) {
+    if (sc.nodeType === 3) {
+      const txt = String(sc.data !== undefined ? sc.data : (sc.textContent || ""));
+      const next = txt.slice(0, so) + txt.slice(eo);
+      if (typeof sc.data === "string") sc.data = next;
+      else sc.textContent = next;
+    } else if (sc.childNodes && sc.removeChild) {
+      for (let i = eo - 1; i >= so; i--) {
+        const ch = sc.childNodes[i];
+        if (ch) sc.removeChild(ch);
+      }
+    }
+    this.setEnd(sc, so);
+    return;
+  }
+  const root = this.commonAncestorContainer;
+  if (!root) return;
+  const toRemove = [];
+  function collect(n) {
+    if (!n) return;
+    if (n.nodeType === 3) {
+      const txt = String(n.data !== undefined ? n.data : (n.textContent || ""));
+      if (n === sc) {
+        const next = txt.slice(0, so);
+        if (typeof n.data === "string") n.data = next;
+        else n.textContent = next;
+      } else if (n === ec) {
+        const next = txt.slice(eo);
+        if (typeof n.data === "string") n.data = next;
+        else n.textContent = next;
+      } else if (compareBoundaryPoints(n, txt.length, sc, so) > 0 && compareBoundaryPoints(n, 0, ec, eo) < 0) {
+        toRemove.push(n);
+      }
+      return;
+    }
+    const cs = n.childNodes ? Array.prototype.slice.call(n.childNodes) : [];
+    for (let i = 0; i < cs.length; i++) collect(cs[i]);
+    if (n !== root && n !== sc && n !== ec && !n.contains(sc) && !n.contains(ec)) {
+      if (compareBoundaryPoints(n, 0, sc, so) >= 0 && compareBoundaryPoints(n, 0, ec, eo) < 0) {
+        toRemove.push(n);
+      }
+    }
+  }
+  collect(root);
+  for (let i = 0; i < toRemove.length; i++) {
+    const node = toRemove[i];
+    if (node.parentNode && node.parentNode.removeChild) {
+      node.parentNode.removeChild(node);
+    }
+  }
+  this.collapse(true);
+};
 Range.prototype.extractContents = function () {
   return new DocumentFragment();
 };
@@ -633,7 +690,7 @@ function isNodeInDocument(node, doc) {
   let curr = node;
   while (curr) {
     if (curr === doc) return true;
-    curr = curr.parentNode || curr.parentElement;
+    curr = curr.parentNode || curr.parentElement || (curr.nodeType === 11 ? curr.host : null);
   }
   return false;
 }

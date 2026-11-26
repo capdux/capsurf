@@ -325,24 +325,20 @@
 - **跨模块同源合批修复**：将共享底层逻辑的 CSS 模块打包在同一 Phase 中修改（如 `canonicalizeCalcToken` 同时覆盖 `css-logical` 与 `css-tables/border-spacing`），单次 `bundle_runtime.py` + `cap build` 同步打通多套件全绿，减少 50% 构建往返。
 - **后台持久化 `wpt-serve`**：使用 `IsDaemon: true` 在后台启动 `node test/wpt/scripts/wpt-serve.mjs` 监听 `8000` 端口；主智能体与各只读子智能体均**严禁**再传递 `--start-server`，各自使用隔离 CDP 端口（`19700` / `19710` / `19720`）并发运行，彻底消除重复启停开销。
 
-
 ### 11.9 纯 JS Shim 亚秒级预检与大文件多行上下文编辑铁律 (2026-11-24 3小时自进化固化)
 
 - **纯 JS Shim 0.1s `node -e` 预检免返工**：修改 `src/js/shim/selector.js`、`cssom.js`（正则/校验/序列化）或 `xpath.js` 等纯 JS 逻辑后，先用 `node -e` 直接加载并跑通关键用例（耗时 **< 0.1s**），确认无误后再执行 `bundle_runtime.py` + `cap build` + `wpt-batched.mjs`，避免每次因正则或循环边界小错浪费 25s+ 重编与 WPT 启动开销。
 - **万行大文件 `edit_file` 多行唯一上下文铁律**：在 `window.js`（16,000+ 行）或 `cssom.js`（6,600+ 行）等大文件中调用 `edit_file` 时，`Target` **严禁**使用通用短结尾（如 `return null;\n}` 或 `return;\n}`），必须包含至少 2~3 行独一无二的函数名/注释/分支上下文，杜绝全文件多点误替换引发的清理返工与 Token 浪费。
-
 
 ### 11.10 单批合并验证与多测试聚合提速 (2026-11-24 3小时自进化固化)
 
 - **合并同批 `wpt-batched.mjs` 执行减少引擎冷启动**：单次调用 `wpt-batched.mjs` 的引擎启动与端口释放固定开销约为 **2.0s–2.5s**；验证同属一个子目录或可合并前缀的多个修复点时，优先使用单次公共前缀 `--filter`（如 `--filter /css/css-grid/parsing/grid-template-areas`）或单条聚合命令，避免 3~4 次串行重复启停引擎及输出冗长日志，实测每阶段可节省 **50%+ 引擎冷启动时间与报告输出 Token**。
 - **单行 Python 失败差异提取铁律**：查看 `/tmp/wpt-*.json` 失败详情时，严格禁止 `cat` 或整文件 `read_file`，统一使用 `python3 -c` 仅输出 `status != "PASS"` 的 `subtests` 列表，单次上下文消耗控制在 `< 200` Tokens。
 
-
 ### 11.11 WPT 链式验证防早退与跨目录 `--tests-file` 合批规范 (2026-11-25 3小时自进化固化)
 
 - **`wpt-batched.mjs` 串联必须用 `;` 而非 `&&`**：`wpt-batched.mjs` 在出现任何 `unexpected PASS`（`FAIL→PASS`）时也会以退出码 `1` 退出；若用 `&&` 串联多个 `--filter` 与 `--smoke`，首个 `FAIL→PASS` 会直接中断后续验证，必须使用 `;` 串联以确保 `--smoke` 与后续批次完整执行。
 - **跨目录离散用例合并为 `--tests-file` 单批运行**：验证多个不同目录的离散用例（如同时复测 5 个基线收紧候选）时，先用 `python3` 生成临时 JSON 数组写入 `temp/batch.json`，再以单次 `--tests-file temp/batch.json` 运行，可将 5 次引擎冷启动（~12s）压缩为 1 次（~2s）。
-
 
 ### 11.12 高扇出集中攻坚、三路并发与批次汇总编译铁律 (2026-11-25 用户指令固化)
 
@@ -351,9 +347,25 @@
 - **汇总批次集中修复与集中编译（严禁一错一修一编译）**：测试中发现的多个错误必须先汇总到同一批次中一次性集中修改源码，再统一执行 **1 次** `bundle_runtime.py` + `cap build` + 聚合验证，杜绝“改一个错 -> 编译一次 -> 跑一次”的低效循环。
 - **3 小时自进化持续固化**：运行过程中发现的任何可进一步提速、省 Token 的技巧，在 3 小时自进化触发时及时写入 `GEMINI.md` 固化并按新规范执行。
 
-
 ### 11.13 批量清单过滤、精确参数与防误匹配编辑规范 (2026-11-25 3小时自进化固化)
 
 - **`--tests-file` 自动过滤 `*-ref.*`**：使用 `ls` 通配符生成 `--tests-file` JSON 列表时，必须排除 `*-ref.html` / `*-ref.*`（参考页本身不是 WPT 测试用例，误入清单会空耗 5s/页超时）。
 - **子智能体统一使用 `--results-out` / `--full-out`**：`wpt-batched.mjs` 的 JSON 输出参数为 `--results-out` 与 `--full-out`（无 `--json-out`），子智能体启动命令必须精确写全，避免参数报错浪费轮次。
 - **`edit_file` 禁止单行通用 Target（如 `return;`）**：大文件中编辑时，`Target` 必须包含至少 3~5 行唯一上下文，杜绝全文件多处误替换后的回滚重做开销。
+- 确保开启并三个子智能体,与主智能体一起工作, 主智能体不可空闲等待,也不可陷入长时间任务. 子智能体收回后立刻新发, 确保三个子智能体在线.
+- 临时文件, 放入当前项目的tmp目录!
+- 测试时, 先扫描收集错误, 集中修改后编译为debug版本, 再扫描收集错误,如此往复循环, 提高效率, 不要一错一改.
+- 测试结果及时写入 `test/stats.md`， 测试通过的， 不要重复测试（除非我下指令）， 浪费token。
+- 每波测试完成， 更新文档， 及时git 提交并push， 固化成果, 然后继续下一波, 不要停。
+
+### 11.14 Playwright / Puppeteer 精准单跑、端口隔离与 Clean-Room 规范 (2026-11-27 会话固化)
+
+- **PW/PPTR 运行器参数铁律（防误扫全量 123 spec）**：
+  - `pw-run.mjs` 与 `pptr-run.mjs` **不识别位置参数**，单跑必须使用 `--spec <file>`（取自 `pw-tests.json` 如 `page-route.spec.ts`，或 `pptr-tests.json` 如 `locator.test`，**不带 `tests/page/` 前缀**），输出参数为 `--results-out tmp/xxx.json --out-dir tmp/xxx`（无 `--json`）。
+  - 验证前必须对照 `test/stats.md` 跳过所有标注 `已全过不再重测` 的 spec，每次只跑目标批次。
+- **单端口互斥与 `TMPDIR` 隔离**：
+  - 统一设置 `export TMPDIR=/data/dev/capsurf/tmp` 与 `CAPSURF_BIN=./bin_dev/main`；禁止同一 `--port` 上并发运行两个 `pw-run.mjs` / `pptr-run.mjs` 实例（已支持 `PW_TEST_PORT_BASE` 按 `--port` 自动偏移隔离，若需双跑必须显式指定不同 `--port`）。
+- **高频 1-Line/2-Line 根因直击原则**：
+  - 遇到大面积 TIMEOUT 或 `TypeError` 时，优先用单点 `DEBUG=pw:protocol` 抓包或 `gdb` 定位共性基础设施断链（如 `TCP_NODELAY` 消除 40ms/包延迟、`evalInIframe` 尾分号 IIFE、`FRAME_WINDOW_GLOBALS` 补齐 `getComputedStyle`/`eval`、`escapeJsonString` 非法 UTF-8 `\ufffd` 转义），避免逐用例打补丁。
+- **第三方参考源码许可隔离**：
+  - `vendor/browser`（Lightpanda，**AGPL-3.0-only**）仅允许只读架构与测试场景参考，**严禁复制或 `zig2cp` 其任何代码**；`vendor/kitesurf`（Apache-2.0）可定期 `git pull --ff-only` 同步并直接借鉴/迁移修复与 E2E 用例。

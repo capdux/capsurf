@@ -660,6 +660,35 @@ pub struct TargetHandler {
         // Target.disposeBrowserContext
         if (std.mem.eql(u8, req.method, "Target.disposeBrowserContext")) {
             const cid = extractJsonString(req.params_raw, "browserContextId") ?? "";
+            let ec: usize = 0;
+            let ti: usize = 0;
+            while (ti < session.target_registry.targets.len) : (ti += 1) {
+                if (session.target_registry.targets[ti].active &&
+                    std.mem.eql(u8, session.target_registry.targets[ti].browserContextId(), cid))
+                {
+                    const tid = session.target_registry.targets[ti].targetId();
+                    const sid = session.target_registry.targets[ti].sessionId();
+                    if (session.target_registry.targets[ti].attached && sid.len > 0 && ec < MAX_CDP_EVENTS) {
+                        const det_json = std.fmt.allocPrint(
+                            session.allocator,
+                            "{{\"sessionId\":\"{s}\",\"targetId\":\"{s}\"}}",
+                            .{ sid, tid },
+                        ) catch "{}";
+                        out_events[ec] = CdpEvent.create("Target.detachedFromTarget", det_json);
+                        ec += 1;
+                    }
+                    if (ec < MAX_CDP_EVENTS) {
+                        const td_json = std.fmt.allocPrint(
+                            session.allocator,
+                            "{{\"targetId\":\"{s}\"}}",
+                            .{tid},
+                        ) catch "{}";
+                        out_events[ec] = CdpEvent.create("Target.targetDestroyed", td_json);
+                        ec += 1;
+                    }
+                }
+            }
+            event_count.* = ec;
             * = session.target_registry.disposeBrowserContext(cid);
             return CdpResponse.ok(req.id, "{}");
         }
@@ -764,6 +793,14 @@ pub struct TargetHandler {
             if (sid.len == 0) {
                 return CdpResponse.err(req.id, -32000, "No target with given id");
             }
+            if (w := session.dedicated_workers.findWorkerByTargetId(target_id)) {
+                w.attached = true;
+                w.state = .attached;
+                w.flatten = session.target_registry.flatten;
+                const sid_len = @min(sid.len, w.session_id.len);
+                if (sid_len > 0) @memcpy(w.session_id[0..sid_len], sid[0..sid_len]);
+                w.session_id_len = sid_len;
+            }
             const t_idx_opt = session.target_registry.findTargetIndex(target_id);
             if (t_idx_opt != null) {
                 const t_idx = t_idx_opt.?;
@@ -793,6 +830,13 @@ pub struct TargetHandler {
                 }
             }
             const success = session.target_registry.detachFromTarget(sid);
+            if (success) {
+                if (w := session.dedicated_workers.findWorkerBySessionId(sid)) {
+                    w.attached = false;
+                    w.state = .detached;
+                    w.session_id_len = 0;
+                }
+            }
             if (sid.len > 0 && session.has_document) {
                 let djs_buf: [256]u8 = [0; 256];
                 const djs = std.fmt.bufPrint(
@@ -822,10 +866,29 @@ pub struct TargetHandler {
             return CdpResponse.ok(req.id, "{}");
         }
 
+        // Target.sendMessageToTarget
+        if (std.mem.eql(u8, req.method, "Target.sendMessageToTarget")) {
+            const sid = extractJsonString(req.params_raw, "sessionId") ?? "";
+            const tid = extractJsonString(req.params_raw, "targetId") ?? "";
+            const msg = extractJsonString(req.params_raw, "message") ?? "";
+            if (w := session.dedicated_workers.findWorkerBySessionId(sid)) {
+                if (!w.enqueueDownMessage(msg)) {
+                    return CdpResponse.err(req.id, -32000, "Worker message queue full");
+                }
+                return CdpResponse.ok(req.id, "{}");
+            }
+            if (w := session.dedicated_workers.findWorkerByTargetId(tid)) {
+                if (!w.enqueueDownMessage(msg)) {
+                    return CdpResponse.err(req.id, -32000, "Worker message queue full");
+                }
+                return CdpResponse.ok(req.id, "{}");
+            }
+            return CdpResponse.err(req.id, -32000, "No session with given id");
+        }
+
         // Stubs for Puppeteer / Playwright compatibility
         if (std.mem.eql(u8, req.method, "Target.setRemoteLocations") ||
-            std.mem.eql(u8, req.method, "Target.exposeDevToolsProtocol") ||
-            std.mem.eql(u8, req.method, "Target.sendMessageToTarget")) {
+            std.mem.eql(u8, req.method, "Target.exposeDevToolsProtocol")) {
             return CdpResponse.ok(req.id, "{}");
         }
 

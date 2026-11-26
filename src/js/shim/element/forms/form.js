@@ -263,6 +263,7 @@ function performFormSubmission(form, submitter) {
   } else if (method === "post") {
     const postUrl = targetUrl.split("#")[0];
     let bodyStr = encodedParams;
+    let bodyPayload = bodyStr;
     let contentType = "application/x-www-form-urlencoded";
     if (enctype === "text/plain") {
       const lines = [];
@@ -270,32 +271,52 @@ function performFormSubmission(form, submitter) {
         lines.push(entries[ei].name + "=" + entries[ei].value + "\n");
       }
       bodyStr = lines.join("");
+      bodyPayload = bodyStr;
       contentType = "text/plain";
     } else if (enctype === "multipart/form-data") {
       const boundary = "----CapSurfFormBoundary7MA4YWxkTrZu0gW";
-      const parts = [];
+      const enc = new TextEncoder();
+      const chunks = [];
+      let totalLen = 0;
+      const pushBytes = function (u8) {
+        chunks.push(u8);
+        totalLen += u8.length;
+      };
+      const crlfBytes = enc.encode("\r\n");
       for (let ei = 0; ei < entries.length; ei++) {
         const ent = entries[ei];
         if (ent.file) {
           const fname = String(ent.file.name || "").replace(/"/g, "%22");
           const ftype = ent.file.type || "application/octet-stream";
-          const fbody = decodeFileBytesSync(ent.file);
-          parts.push(
+          const hdr =
             "--" + boundary + "\r\n" +
             'Content-Disposition: form-data; name="' + ent.name.replace(/"/g, "%22") + '"; filename="' + fname + '"\r\n' +
-            "Content-Type: " + ftype + "\r\n\r\n" +
-            fbody + "\r\n"
-          );
+            "Content-Type: " + ftype + "\r\n\r\n";
+          pushBytes(enc.encode(hdr));
+          const fbytes = ent.file._bytes;
+          if (fbytes && typeof fbytes.length === "number" && fbytes.length > 0) {
+            pushBytes(fbytes instanceof Uint8Array ? fbytes : new Uint8Array(fbytes));
+          }
+          pushBytes(crlfBytes);
         } else {
-          parts.push(
+          const partStr =
             "--" + boundary + "\r\n" +
             'Content-Disposition: form-data; name="' + ent.name.replace(/"/g, "%22") + '"\r\n\r\n' +
-            ent.value + "\r\n"
-          );
+            ent.value + "\r\n";
+          pushBytes(enc.encode(partStr));
         }
       }
-      parts.push("--" + boundary + "--\r\n");
-      bodyStr = parts.join("");
+      pushBytes(enc.encode("--" + boundary + "--\r\n"));
+      const out = new Uint8Array(totalLen);
+      let offset = 0;
+      for (let ci = 0; ci < chunks.length; ci++) {
+        out.set(chunks[ci], offset);
+        offset += chunks[ci].length;
+      }
+      bodyPayload = out;
+      if (targetIframe) {
+        bodyStr = typeof utf8ToString === "function" ? utf8ToString(out) : "";
+      }
       contentType = "multipart/form-data; boundary=" + boundary;
     }
     if (targetIframe && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_apply_iframe_html === "function") {
@@ -329,7 +350,7 @@ function performFormSubmission(form, submitter) {
       globalThis.__capsurf_pending_navigation_post = {
         url: postUrl,
         method: "POST",
-        body: bodyStr,
+        body: bodyPayload,
         contentType: contentType,
       };
     }
@@ -567,10 +588,15 @@ function installFormElement(global) {
         c._selectedIndex = undefined;
         const opts = c.options;
         if (opts) {
+          let anySel = false;
           for (let j = 0; j < opts.length; j++) {
-            if (typeof getOptionState === "function") getOptionState(opts[j]).selected = undefined;
-            opts[j]._selected = undefined;
-            opts[j].selected = typeof opts[j].hasAttribute === "function" ? opts[j].hasAttribute("selected") : false;
+            const hasSel = typeof opts[j].hasAttribute === "function" && opts[j].hasAttribute("selected");
+            if (hasSel) anySel = true;
+            if (typeof getOptionState === "function") getOptionState(opts[j]).selected = hasSel ? true : undefined;
+            opts[j]._selected = hasSel ? true : undefined;
+          }
+          if (!anySel && !c.multiple && opts.length > 0 && typeof getSelectState === "function") {
+            getSelectState(c).selectedIndex = undefined;
           }
         }
       }

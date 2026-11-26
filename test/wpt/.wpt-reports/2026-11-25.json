@@ -1,0 +1,103 @@
+{
+  "date": "2026-11-25",
+  "base": "http://web-platform.test:8000",
+  "ws": "ws://127.0.0.1:19740/devtools/browser",
+  "commit": "4cb77fe",
+  "slice": null,
+  "summary": {
+    "total": 4,
+    "expected": 4,
+    "unexpectedFail": 0,
+    "unexpectedPass": 0,
+    "byOutcome": {
+      "PASS": 4
+    }
+  },
+  "results": [
+    {
+      "test": "/css/css-color/light-dark-basic.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "light-dark(white, black)",
+          "status": "PASS",
+          "message": "assert_equals(\"rgb(0, 0, 0)\", \"rgb(0, 0, 0)\")\nError"
+        },
+        {
+          "name": "light-dark(light-dark(white, red), red)",
+          "status": "PASS",
+          "message": "assert_equals(\"rgb(255, 0, 0)\", \"rgb(255, 0, 0)\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 982,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-color/light-dark-currentcolor-in-color.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "curentColor in light-dark() refers to parent color",
+          "status": "PASS",
+          "message": "assert_equals(\"rgb(0, 128, 0)\", \"rgb(0, 128, 0)\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 698,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-color/color-mix-currentcolor-visited-getcomputedstyle.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "Property background-color value 'color-mix(in srgb, currentcolor, white)' should not leak :visited for computed style",
+          "status": "PASS",
+          "message": "assert_equals(\"color(srgb 1 0.5 0.5)\", \"color(srgb 1 0.5 0.5)\", \"computed value should round-trip\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 723,
+      "unexpected": false
+    },
+    {
+      "test": "/css/css-color/nested-color-mix-with-currentcolor.html",
+      "expected": "PASS",
+      "actual": "PASS",
+      "reason": null,
+      "subtests": [
+        {
+          "name": "Nested color-mix function with inner currentColor should inherit unresolved",
+          "status": "PASS",
+          "message": "assert_equals(\"lch(0 0 none)\", \"lch(0 0 none)\")\nError"
+        }
+      ],
+      "counts": null,
+      "harness": {
+        "status": "OK",
+        "message": null
+      },
+      "durationMs": 650,
+      "unexpected": false
+    }
+  ]
+}

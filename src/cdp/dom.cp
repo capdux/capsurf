@@ -60,6 +60,101 @@ pub fn appendJsonEscaped(allocator: std.mem.Allocator, list: *std.ArrayListUnman
     list.append(allocator, '"')?;
 }
 
+fn appendFileToDataTransferJs(
+    allocator: std.mem.Allocator,
+    js_list: *std.ArrayListUnmanaged(u8),
+    file_path: []const u8,
+    base_name: []const u8,
+    rel_path: []const u8,
+)! {
+    let fbytes_opt: ([]const u8)? = null;
+    let f_alloc: ([]u8)? = allocator.alloc(u8, 262144) catch null;
+    defer if (f_alloc != null) allocator.free(f_alloc.?);
+    defer if (fb_free := fbytes_opt) {
+        if (fb_free.len > 0) {
+            let from_tmp = false;
+            if (fb_tmp := f_alloc) {
+                if (@intFromPtr(fb_free.ptr) == @intFromPtr(fb_tmp.ptr)) from_tmp = true;
+            }
+            if (!from_tmp) {
+                std.heap.page_allocator.free(fb_free);
+            }
+        }
+    }
+    if (fb_buf := f_alloc) {
+        fbytes_opt = MockFixtures.readFileContent(file_path, fb_buf);
+        if (fbytes_opt == null && rel_path.len == 0) {
+            let pw_path_buf: [1024]u8 = [0; 1024];
+            if (pw_p := std.fmt.bufPrint(&pw_path_buf, "test/pw/.playwright/{s}", .{file_path}) catch null) {
+                fbytes_opt = MockFixtures.readFileContent(pw_p, fb_buf);
+            }
+        }
+    }
+
+    js_list.appendSlice(allocator, "{ const b = atob('")?;
+    if (fb := fbytes_opt) {
+        const enc_len = std.base64.standard.Encoder.calcSize(fb.len);
+        if (b64_buf := allocator.alloc(u8, enc_len) catch null) {
+            defer allocator.free(b64_buf);
+            const b64 = std.base64.standard.Encoder.encode(b64_buf, fb);
+            js_list.appendSlice(allocator, b64)?;
+        }
+    }
+    const mime_type = mimeTypeFromFilename(base_name);
+    js_list.appendSlice(allocator, "'); const u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); const f = new File([u], ")?;
+    appendJsonEscaped(allocator, js_list, base_name)?;
+    js_list.appendSlice(allocator, ", { type: \"")?;
+    js_list.appendSlice(allocator, mime_type)?;
+    js_list.appendSlice(allocator, "\"")?;
+    if (rel_path.len > 0) {
+        js_list.appendSlice(allocator, ", webkitRelativePath: ")?;
+        appendJsonEscaped(allocator, js_list, rel_path)?;
+    }
+    js_list.appendSlice(allocator, " }); dt.items.add(f); } ")?;
+}
+
+fn tryOpenDirC(path: []const u8): (*std.c.DIR)? {
+    if (path.len == 0 || path.len >= 1024) return null;
+    let zbuf: [1024]u8 = [0; 1024];
+    @memcpy(zbuf[0..path.len], path);
+    zbuf[path.len] = 0;
+    return unsafe { std.c.opendir(@ptrCast(&zbuf)) };
+}
+
+fn appendDirToDataTransferJs(
+    allocator: std.mem.Allocator,
+    js_list: *std.ArrayListUnmanaged(u8),
+    fs_dir_path: []const u8,
+    rel_prefix: []const u8,
+    depth: usize,
+)! {
+    if (depth > 32) return;
+    const dir_opt = tryOpenDirC(fs_dir_path);
+    if (dir_opt == null) return;
+    const dir = dir_opt.?;
+    defer * = unsafe { std.c.closedir(dir) };
+    while (entry := unsafe { std.c.readdir(dir) }) {
+        const name_slice = std.mem.sliceTo(&entry.name, 0);
+        if (std.mem.eql(u8, name_slice, ".") || std.mem.eql(u8, name_slice, "..")) continue;
+        const child_fs = std.fmt.allocPrint(allocator, "{s}/{s}", .{ fs_dir_path, name_slice }) catch continue;
+        defer allocator.free(child_fs);
+        const child_rel = std.fmt.allocPrint(allocator, "{s}/{s}", .{ rel_prefix, name_slice }) catch continue;
+        defer allocator.free(child_rel);
+        if (entry.type == 4) {
+            appendDirToDataTransferJs(allocator, js_list, child_fs, child_rel, depth + 1)?;
+        } else if (entry.type == 8 || entry.type == 0) {
+            if (entry.type == 0) {
+                if (sub_d := tryOpenDirC(child_fs)) {
+                    * = unsafe { std.c.closedir(sub_d) };
+                    appendDirToDataTransferJs(allocator, js_list, child_fs, child_rel, depth + 1)?;
+                    continue;
+                }
+            }
+            appendFileToDataTransferJs(allocator, js_list, child_fs, name_slice, child_rel)?;
+        }
+    }
+}
+
 pub struct ShadowRootEntry {
     nid: NodeId = NULL_NODE,
     json: []const u8 = "",
@@ -498,6 +593,31 @@ fn queryJsObjectRect(session: *CdpPageSession, obj_id: []const u8, node_id_val: 
     return true;
 }
 
+fn applyAncestorScrollAndFixed(session: *CdpPageSession, node_id: NodeId, sx: *f32, sy: *f32) {
+    if (!session.has_document || node_id == NULL_NODE) return;
+    let js_buf: [640]u8 = [0; 640];
+    const js_expr = std.fmt.bufPrint(
+        &js_buf,
+        "(() => {{ let el = globalThis.__capsurf_get_object ? globalThis.__capsurf_get_object('node:{d}') : null; if (!el) return ''; let ax = 0, ay = 0, fixed = false, cur = el; while (cur && cur.nodeType === 1) {{ const st = globalThis.getComputedStyle ? globalThis.getComputedStyle(cur) : null; if (st && st.position === 'fixed') {{ fixed = true; break; }} if (cur !== el) {{ const tag = String(cur.tagName || '').toLowerCase(); if (tag !== 'html' && tag !== 'body') {{ ax += Number(cur.scrollLeft || 0); ay += Number(cur.scrollTop || 0); }} }} cur = cur.parentElement; }} return (fixed ? '1,' : '0,') + ax + ',' + ay; }})()",
+        .{node_id},
+    ) catch return;
+    const val = session.ctx.eval(js_expr);
+    defer session.ctx.freeValue(val);
+    const rstr = session.ctx.toCString(val);
+    if (rstr.len == 0) return;
+    let it = std.mem.splitScalar(u8, rstr, ',');
+    const is_fixed = std.mem.eql(u8, it.next() ?? "0", "1");
+    const ax = std.fmt.parseFloat(f32, it.next() ?? "0") catch 0.0;
+    const ay = std.fmt.parseFloat(f32, it.next() ?? "0") catch 0.0;
+    if (is_fixed) {
+        sx.* = 0.0;
+        sy.* = 0.0;
+    } else {
+        sx.* += ax;
+        sy.* += ay;
+    }
+}
+
 fn formatJsBoxModelResp(rx: f32, ry: f32, rw: f32, rh: f32, req_id: i64, out_buf: []u8): CdpResponse {
     const x2 = rx + rw;
     const y2 = ry + rh;
@@ -517,6 +637,26 @@ fn formatJsBoxModelResp(rx: f32, ry: f32, rw: f32, rh: f32, req_id: i64, out_buf
     return CdpResponse.ok(req_id, res);
 }
 
+fn mimeTypeFromFilename(name: []const u8): []const u8 {
+    if (dot := std.mem.lastIndexOfScalar(u8, name, '.')) {
+        const ext = name[dot..];
+        if (std.ascii.eqlIgnoreCase(ext, ".png")) return "image/png";
+        if (std.ascii.eqlIgnoreCase(ext, ".jpg") || std.ascii.eqlIgnoreCase(ext, ".jpeg")) return "image/jpeg";
+        if (std.ascii.eqlIgnoreCase(ext, ".gif")) return "image/gif";
+        if (std.ascii.eqlIgnoreCase(ext, ".webp")) return "image/webp";
+        if (std.ascii.eqlIgnoreCase(ext, ".svg")) return "image/svg+xml";
+        if (std.ascii.eqlIgnoreCase(ext, ".txt")) return "text/plain";
+        if (std.ascii.eqlIgnoreCase(ext, ".html") || std.ascii.eqlIgnoreCase(ext, ".htm")) return "text/html";
+        if (std.ascii.eqlIgnoreCase(ext, ".css")) return "text/css";
+        if (std.ascii.eqlIgnoreCase(ext, ".js") || std.ascii.eqlIgnoreCase(ext, ".mjs")) return "text/javascript";
+        if (std.ascii.eqlIgnoreCase(ext, ".json")) return "application/json";
+        if (std.ascii.eqlIgnoreCase(ext, ".pdf")) return "application/pdf";
+        if (std.ascii.eqlIgnoreCase(ext, ".xml")) return "application/xml";
+        if (std.ascii.eqlIgnoreCase(ext, ".csv")) return "text/csv";
+    }
+    return "";
+}
+
 fn formatJsQuadsResp(rx: f32, ry: f32, rw: f32, rh: f32, req_id: i64, out_buf: []u8): CdpResponse {
     const x2 = rx + rw;
     const y2 = ry + rh;
@@ -526,6 +666,213 @@ fn formatJsQuadsResp(rx: f32, ry: f32, rw: f32, rh: f32, req_id: i64, out_buf: [
         .{ rx, ry, x2, ry, x2, y2, rx, y2 },
     ) catch return CdpResponse.err(req_id, -32000, "Buffer overflow");
     return CdpResponse.ok(req_id, res);
+}
+
+fn extractOriginSlice(url: []const u8): []const u8 {
+    if (scheme_end := std.mem.indexOf(u8, url, "://")) {
+        const after_scheme = scheme_end + 3;
+        if (slash_pos := std.mem.indexOfScalarPos(u8, url, after_scheme, '/')) {
+            return url[0..slash_pos];
+        }
+        if (q_pos := std.mem.indexOfScalarPos(u8, url, after_scheme, '?')) {
+            return url[0..q_pos];
+        }
+        return url;
+    }
+    return "";
+}
+
+fn resolveExecutionContextFrameId(session: *CdpPageSession, req_session_id: []const u8, exec_ctx_opt: (i64)?): []const u8 {
+    if (exec_ctx := exec_ctx_opt) {
+        if (exec_ctx == 1) {
+            return session.frame_id;
+        }
+        if (exec_ctx > 1) {
+            if (iso_fid := session.isolatedWorldFrameId(exec_ctx)) {
+                if (iso_fid.len > 0) return iso_fid;
+            }
+            let ki: usize = 0;
+            while (ki < session.known_child_frame_count) : (ki += 1) {
+                const kf = &session.known_child_frames[ki];
+                if (kf.active && !kf.detached && kf.exec_context_id == exec_ctx && kf.frame_id_len > 0) {
+                    return kf.frame_id_buf[0..kf.frame_id_len];
+                }
+            }
+            if (session.iframe_ctx_created && session.iframe_ctx_id == exec_ctx && session.iframe_frame_id_len > 0) {
+                return session.iframe_frame_id_buf[0..session.iframe_frame_id_len];
+            }
+        }
+    }
+    if (req_session_id.len > 0) {
+        if (sess_fid := session.target_registry.findFrameIdBySessionId(req_session_id)) {
+            return sess_fid;
+        }
+    }
+    return "";
+}
+
+fn findActiveKnownChildFrameIndex(session: *CdpPageSession, fid: []const u8): (usize)? {
+    let ki: usize = 0;
+    while (ki < session.known_child_frame_count) : (ki += 1) {
+        const kf = &session.known_child_frames[ki];
+        if (kf.active && !kf.detached && kf.frame_id_len > 0) {
+            if (std.mem.eql(u8, kf.frame_id_buf[0..kf.frame_id_len], fid)) {
+                return ki;
+            }
+        }
+    }
+    return null;
+}
+
+fn canFramesScriptEachOther(session: *CdpPageSession, fid_a: []const u8, fid_b: []const u8): bool {
+    if (fid_a.len == 0 || fid_b.len == 0) return true;
+    if (std.mem.eql(u8, fid_a, fid_b)) return true;
+    if (std.mem.eql(u8, fid_a, "__other_doc__") || std.mem.eql(u8, fid_b, "__other_doc__")) return false;
+
+    if (session.iframe_ctx_created && session.iframe_frame_id_len > 0) {
+        const legacy_fid = session.iframe_frame_id_buf[0..session.iframe_frame_id_len];
+        if (std.mem.eql(u8, fid_a, legacy_fid) || std.mem.eql(u8, fid_b, legacy_fid)) {
+            return false;
+        }
+    }
+
+    const idx_a = findActiveKnownChildFrameIndex(session, fid_a);
+    const idx_b = findActiveKnownChildFrameIndex(session, fid_b);
+
+    if (std.mem.eql(u8, fid_a, session.frame_id)) {
+        if (ib := idx_b) {
+            const kfb = &session.known_child_frames[ib];
+            return !kfb.is_cross_origin && !kfb.is_opaque;
+        }
+    }
+    if (std.mem.eql(u8, fid_b, session.frame_id)) {
+        if (ia := idx_a) {
+            const kfa = &session.known_child_frames[ia];
+            return !kfa.is_cross_origin && !kfa.is_opaque;
+        }
+    }
+    if (ia := idx_a) {
+        if (ib := idx_b) {
+            const kfa = &session.known_child_frames[ia];
+            const kfb = &session.known_child_frames[ib];
+            if (kfa.is_opaque || kfb.is_opaque) return false;
+            if (kfa.is_cross_origin != kfb.is_cross_origin) return false;
+            if (kfa.is_cross_origin && kfb.is_cross_origin) {
+                const orig_a = extractOriginSlice(kfa.url_buf[0..kfa.url_len]);
+                const orig_b = extractOriginSlice(kfb.url_buf[0..kfb.url_len]);
+                if (orig_a.len == 0 || orig_b.len == 0) return false;
+                return std.mem.eql(u8, orig_a, orig_b);
+            }
+            return true;
+        }
+    }
+    return true;
+}
+
+fn copyFidToOut(fid: []const u8, out_buf: []u8): usize {
+    const copy_len = @min(fid.len, out_buf.len);
+    @memcpy(out_buf[0..copy_len], fid[0..copy_len]);
+    return copy_len;
+}
+
+fn parseJsFrameResult(session: *CdpPageSession, res_str: []const u8, out_buf: []u8): usize {
+    if (std.mem.eql(u8, res_str, "MAIN")) {
+        return copyFidToOut(session.frame_id, out_buf);
+    }
+    if (std.mem.startsWith(u8, res_str, "FID:")) {
+        return copyFidToOut(res_str[4..], out_buf);
+    }
+    if (std.mem.startsWith(u8, res_str, "IDX:")) {
+        const target_idx = std.fmt.parseInt(usize, res_str[4..], 10) catch 999999;
+        let active_idx: usize = 0;
+        let ki: usize = 0;
+        while (ki < session.known_child_frame_count) : (ki += 1) {
+            const kf = &session.known_child_frames[ki];
+            if (!kf.active || kf.detached) continue;
+            if (active_idx == target_idx && kf.frame_id_len > 0) {
+                return copyFidToOut(kf.frame_id_buf[0..kf.frame_id_len], out_buf);
+            }
+            active_idx += 1;
+        }
+    }
+    if (std.mem.eql(u8, res_str, "OTHER")) {
+        return copyFidToOut("__other_doc__", out_buf);
+    }
+    return 0;
+}
+
+fn resolveNodeFrameId(session: *CdpPageSession, nid_val: i64, obj_id_opt: ([]const u8)?, out_buf: []u8): []const u8 {
+    if (obj_id := obj_id_opt) {
+        if (std.mem.eql(u8, obj_id, "doc:0")) {
+            return session.frame_id;
+        }
+        if (!std.mem.startsWith(u8, obj_id, "node:") && !std.mem.startsWith(u8, obj_id, "ps:") && session.has_document) {
+            const oid_val = session.ctx.newString(obj_id);
+            defer session.ctx.freeValue(oid_val);
+            session.ctx.setPropertyStr("__capsurf_resolve_oid", oid_val);
+            const js_expr =
+                "(() => {" ++
+                " const oid = globalThis.__capsurf_resolve_oid;" ++
+                " const o = globalThis.__capsurf_get_object ? globalThis.__capsurf_get_object(oid) : null;" ++
+                " if (!o) return '';" ++
+                " const d = (o.nodeType === 9) ? o : o.ownerDocument;" ++
+                " if (!d || d === document) return 'MAIN';" ++
+                " const dv = d.defaultView;" ++
+                " if (dv && dv.__capsurf_frame_id) return 'FID:' + dv.__capsurf_frame_id;" ++
+                " if (dv && dv.frameElement && dv.frameElement._capsurf_frame_id) return 'FID:' + dv.frameElement._capsurf_frame_id;" ++
+                " let idx = 0; const seen = new Set();" ++
+                " function walk(r, depth) {" ++
+                "  if (!r) return '';" ++
+                "  const cs = r.childNodes || r.children || [];" ++
+                "  for (let i = 0; i < cs.length; i++) {" ++
+                "   const el = cs[i];" ++
+                "   if (!el || el.nodeType !== 1) continue;" ++
+                "   const t = String(el.localName || el.tagName || '').toLowerCase();" ++
+                "   if (t === 'template') continue;" ++
+                "   if ((t === 'iframe' || t === 'frame') && !seen.has(el)) {" ++
+                "    seen.add(el);" ++
+                "    const cd = el._contentDocument || (el._contentWindow && el._contentWindow.document) || el.contentDocument || (el.contentWindow && el.contentWindow.document);" ++
+                "    if (cd === d || (dv && el._contentWindow && dv === el._contentWindow)) {" ++
+                "     if (el._capsurf_frame_id) return 'FID:' + el._capsurf_frame_id;" ++
+                "     return 'IDX:' + idx;" ++
+                "    }" ++
+                "    idx++;" ++
+                "    if (depth < 4 && cd && cd.documentElement) { const sub = walk(cd.documentElement, depth + 1); if (sub) return sub; }" ++
+                "   }" ++
+                "   if (el._shadowRoot) { const sr = walk(el._shadowRoot, depth); if (sr) return sr; }" ++
+                "   const ch = walk(el, depth); if (ch) return ch;" ++
+                "  }" ++
+                "  return '';" ++
+                " }" ++
+                " const found = document.documentElement ? walk(document.documentElement, 1) : '';" ++
+                " return found || 'OTHER';" ++
+                "})()";
+            const val = session.ctx.eval(js_expr);
+            defer session.ctx.freeValue(val);
+            const res_str = session.ctx.toCString(val);
+            const n_len = parseJsFrameResult(session, res_str, out_buf);
+            if (n_len > 0) return out_buf[0..n_len];
+        }
+    }
+    if (nid_val >= 1000000 && session.has_document) {
+        let js_buf: [2048]u8 = [0; 2048];
+        const js_expr = std.fmt.bufPrint(
+            &js_buf,
+            "(() => {{ const cm = globalThis.__capsurf_child_dom_nodes; const sm = globalThis.__capsurf_sr_bmap; let o = cm ? cm[{d}] : null; if (!o && sm && globalThis.__capsurf_get_object) {{ const oid = sm.get({d}); if (oid) o = globalThis.__capsurf_get_object(oid); }} if (!o) return ''; const d = (o.nodeType === 9) ? o : o.ownerDocument; if (!d || d === document) return 'MAIN'; const dv = d.defaultView; if (dv && dv.__capsurf_frame_id) return 'FID:' + dv.__capsurf_frame_id; if (dv && dv.frameElement && dv.frameElement._capsurf_frame_id) return 'FID:' + dv.frameElement._capsurf_frame_id; let idx = 0; const seen = new Set(); function walk(r, depth) {{ if (!r) return ''; const cs = r.childNodes || r.children || []; for (let i = 0; i < cs.length; i++) {{ const el = cs[i]; if (!el || el.nodeType !== 1) continue; const t = String(el.localName || el.tagName || '').toLowerCase(); if (t === 'template') continue; if ((t === 'iframe' || t === 'frame') && !seen.has(el)) {{ seen.add(el); const cd = el._contentDocument || (el._contentWindow && el._contentWindow.document) || el.contentDocument || (el.contentWindow && el.contentWindow.document); if (cd === d || (dv && el._contentWindow && dv === el._contentWindow)) {{ if (el._capsurf_frame_id) return 'FID:' + el._capsurf_frame_id; return 'IDX:' + idx; }} idx++; if (depth < 4 && cd && cd.documentElement) {{ const sub = walk(cd.documentElement, depth + 1); if (sub) return sub; }} }} if (el._shadowRoot) {{ const sr = walk(el._shadowRoot, depth); if (sr) return sr; }} const ch = walk(el, depth); if (ch) return ch; }} return ''; }} const found = document.documentElement ? walk(document.documentElement, 1) : ''; return found || 'OTHER'; }})()",
+            .{ nid_val, nid_val },
+        ) catch "";
+        if (js_expr.len > 0) {
+            const val = session.ctx.eval(js_expr);
+            defer session.ctx.freeValue(val);
+            const res_str = session.ctx.toCString(val);
+            const n_len = parseJsFrameResult(session, res_str, out_buf);
+            if (n_len > 0) return out_buf[0..n_len];
+        }
+    }
+    if (nid_val == 999999 || (nid_val > 0 && @as(usize, @intCast(nid_val)) < session.doc.nodes.items.len)) {
+        return session.frame_id;
+    }
+    return "";
 }
 
 pub struct DomHandler {
@@ -577,15 +924,17 @@ pub struct DomHandler {
                 session.focused_node = nid;
                 session.doc.focused_node = nid;
                 if (session.has_document) {
-                    let js_buf: [256]u8 = [0; 256];
+                    const obj_id_s = extractJsonString(req.params_raw, "objectId") ?? "";
+                    let js_buf: [512]u8 = [0; 512];
                     const js_expr = std.fmt.bufPrint(
                         &js_buf,
-                        "(() => {{ const el = (typeof __capsurf_get_object === 'function') ? __capsurf_get_object('node:{d}') : null; if (el && typeof el.focus === 'function') el.focus(); }})()",
-                        .{nid},
+                        "(() => {{ const g = globalThis.__capsurf_get_object; const f = globalThis.__capsurf_find_node_by_id; const el = (typeof g === 'function' ? (('{s}'.length > 0 ? g('{s}') : null) || g('node:{d}')) : null) || (typeof f === 'function' ? f({d}) : null); if (el && typeof el.focus === 'function') el.focus(); }})()",
+                        .{ obj_id_s, obj_id_s, nid, nid },
                     ) catch null;
                     if (e := js_expr) {
                         const v = session.ctx.eval(e);
                         session.ctx.freeValue(v);
+                        session.ctx.drainJobs();
                     }
                     let polled_binding_evts: [4]CdpEvent = [CdpEvent{}; 4];
                     const polled_b_count = session.pollBindingEvents(&polled_binding_evts);
@@ -848,6 +1197,7 @@ pub struct DomHandler {
             let cw: f32 = 0.0;
             let ch: f32 = 0.0;
             session.updateLayoutMetrics(&sx, &sy, &cw, &ch);
+            applyAncestorScrollAndFixed(session, node_id, &sx, &sy);
             const bm = session.getBoxModel(node_id);
             if (bm.width <= 0.0 && bm.height <= 0.0) {
                 const obj_s = extractJsonString(req.params_raw, "objectId") ?? "";
@@ -913,6 +1263,7 @@ pub struct DomHandler {
             let cw: f32 = 0.0;
             let ch: f32 = 0.0;
             session.updateLayoutMetrics(&sx, &sy, &cw, &ch);
+            applyAncestorScrollAndFixed(session, node_id, &sx, &sy);
             const bm = session.getBoxModel(node_id);
             if (bm.width <= 0.0 && bm.height <= 0.0) {
                 const obj_s = extractJsonString(req.params_raw, "objectId") ?? "";
@@ -968,7 +1319,7 @@ pub struct DomHandler {
 
             // Execute scroll into view in JS environment
             if (session.has_document) {
-                let conn_buf: [512]u8 = [0; 512];
+                let conn_buf: [1024]u8 = [0; 1024];
                 const conn_js = std.fmt.bufPrint(
                     &conn_buf,
                     "(() => {{ let el = null; if ('{s}'.length > 0 && globalThis.__capsurf_get_object) {{ el = globalThis.__capsurf_get_object('{s}'); }} if (!el && {d} > 0) {{ function f(r, nid) {{ if (!r) return null; if (r._nid === nid) return r; const all = r.querySelectorAll ? r.querySelectorAll('*') : []; for (let i = 0; i < all.length; i++) {{ if (all[i]._nid === nid) return all[i]; }} return null; }} el = f(document, {d}); }} return (el && el.isConnected !== false) ? 1 : 0; }})()",
@@ -998,16 +1349,44 @@ pub struct DomHandler {
                     }
                 }
 
-                let js_buf: [1024]u8 = [0; 1024];
-                const js_expr = std.fmt.bufPrint(
+                let has_rect = false;
+                let rect_x: f32 = 0.0;
+                let rect_y: f32 = 0.0;
+                let rect_w: f32 = 0.0;
+                let rect_h: f32 = 0.0;
+                if (rect_pos := std.mem.indexOf(u8, req.params_raw, "\"rect\"")) {
+                    const after_key = req.params_raw[rect_pos + 6 ..];
+                    if (ob := std.mem.indexOfScalar(u8, after_key, '{')) {
+                        if (cb := std.mem.indexOfScalar(u8, after_key[ob..], '}')) {
+                            const rect_json = after_key[ob .. ob + cb + 1];
+                            has_rect = true;
+                            rect_x = extractJsonFloat(rect_json, "x") ?? 0.0;
+                            rect_y = extractJsonFloat(rect_json, "y") ?? 0.0;
+                            rect_w = extractJsonFloat(rect_json, "width") ?? 0.0;
+                            rect_h = extractJsonFloat(rect_json, "height") ?? 0.0;
+                        }
+                    }
+                }
+
+                let js_buf: [2048]u8 = [0; 2048];
+                const js_expr = if (has_rect) (std.fmt.bufPrint(
+                    &js_buf,
+                    "(() => {{ let el = null; if ('{s}'.length > 0 && globalThis.__capsurf_get_object) {{ el = globalThis.__capsurf_get_object('{s}'); }} if (!el && {d} > 0) {{ function f(r, nid) {{ if (!r) return null; if (r._nid === nid) return r; const all = r.querySelectorAll ? r.querySelectorAll('*') : []; for (let i = 0; i < all.length; i++) {{ if (all[i]._nid === nid) return all[i]; }} return null; }} el = f(document, {d}); }} if (!el) return; const er = el.getBoundingClientRect(); let tx = er.left + ({d}); let ty = er.top + ({d}); const tw = {d}; const th = {d}; let cur = el.parentElement; let safety = 0; while (cur && cur !== document.body && cur !== document.documentElement && safety < 50) {{ safety++; const st = window.getComputedStyle ? window.getComputedStyle(cur) : cur.style; const ox = (st && (st.overflowX || st.overflow)) || ''; const oy = (st && (st.overflowY || st.overflow)) || ''; const sxOk = (ox === 'auto' || ox === 'scroll' || ox === 'hidden') && cur.clientWidth > 0 && cur.scrollWidth > cur.clientWidth; const syOk = (oy === 'auto' || oy === 'scroll' || oy === 'hidden') && cur.clientHeight > 0 && cur.scrollHeight > cur.clientHeight; if (sxOk || syOk) {{ const cr = cur.getBoundingClientRect(); if (syOk && (ty < cr.top || ty + th > cr.top + cur.clientHeight)) {{ const curT = cur.scrollTop || 0; const inY = (ty - cr.top) + curT; const nextT = Math.max(0, Math.min(inY + th / 2 - cur.clientHeight / 2, cur.scrollHeight - cur.clientHeight)); cur.scrollTop = nextT; ty -= (nextT - curT); }} if (sxOk && (tx < cr.left || tx + tw > cr.left + cur.clientWidth)) {{ const curL = cur.scrollLeft || 0; const inX = (tx - cr.left) + curL; const nextL = Math.max(0, Math.min(inX + tw / 2 - cur.clientWidth / 2, cur.scrollWidth - cur.clientWidth)); cur.scrollLeft = nextL; tx -= (nextL - curL); }} }} cur = cur.parentElement; }} const vw = window.innerWidth || 1280; const vh = window.innerHeight || 720; if (ty < 0 || ty + th > vh || tx < 0 || tx + tw > vw) {{ const wx = window.scrollX || 0; const wy = window.scrollY || 0; const nwx = (tx < 0 || tx + tw > vw) ? Math.max(0, tx + wx + tw / 2 - vw / 2) : wx; const nwy = (ty < 0 || ty + th > vh) ? Math.max(0, ty + wy + th / 2 - vh / 2) : wy; if (window.scrollTo) window.scrollTo(Math.round(nwx), Math.round(nwy)); }} }})()",
+                    .{ obj_id_val, obj_id_val, node_id, node_id, rect_x, rect_y, rect_w, rect_h },
+                ) catch null) else (std.fmt.bufPrint(
                     &js_buf,
                     "(() => {{ let el = null; if ('{s}'.length > 0 && globalThis.__capsurf_get_object) {{ el = globalThis.__capsurf_get_object('{s}'); }} if (!el && {d} > 0) {{ function f(r, nid) {{ if (!r) return null; if (r._nid === nid) return r; const all = r.querySelectorAll ? r.querySelectorAll('*') : []; for (let i = 0; i < all.length; i++) {{ if (all[i]._nid === nid) return all[i]; }} return null; }} el = f(document, {d}); }} if (el) {{ if (typeof el.scrollIntoViewIfNeeded === 'function') {{ el.scrollIntoViewIfNeeded(true); }} else if (typeof el.scrollIntoView === 'function') {{ el.scrollIntoView({{ block: 'center', inline: 'center' }}); }} }} }})()",
                     .{ obj_id_val, obj_id_val, node_id, node_id },
-                ) catch null;
+                ) catch null);
                 if (e := js_expr) {
                     const val = session.ctx.eval(e);
                     session.ctx.freeValue(val);
                 }
+                let sx: f32 = 0.0;
+                let sy: f32 = 0.0;
+                let cw: f32 = 0.0;
+                let ch: f32 = 0.0;
+                session.updateLayoutMetrics(&sx, &sy, &cw, &ch);
             }
 
             return CdpResponse.ok(req.id, "{}");
@@ -1037,39 +1416,83 @@ pub struct DomHandler {
         }
 
         if (std.mem.eql(u8, req.method, "DOM.resolveNode")) {
-            const nid_val = extractJsonInt(req.params_raw, "nodeId") ?? extractJsonInt(req.params_raw, "backendNodeId") ?? 0;
+            const obj_id_opt = extractJsonString(req.params_raw, "objectId");
+            const exec_ctx_opt = extractJsonInt(req.params_raw, "executionContextId");
+            let nid_val = extractJsonInt(req.params_raw, "nodeId") ?? extractJsonInt(req.params_raw, "backendNodeId") ?? 0;
+            if (nid_val == 0) {
+                if (obj_id := obj_id_opt) {
+                    if (std.mem.eql(u8, obj_id, "doc:0")) {
+                        nid_val = 999999;
+                    } else {
+                        const r_nid = resolveNodeIdFromObjectId(session, obj_id);
+                        if (r_nid > 0) nid_val = @as(i32, @intCast(r_nid));
+                    }
+                }
+            }
+            const target_frame_id = resolveExecutionContextFrameId(session, req.session_id, exec_ctx_opt);
+            if (target_frame_id.len > 0) {
+                let node_fid_buf: [64]u8 = [0; 64];
+                const node_frame_id = resolveNodeFrameId(session, nid_val, obj_id_opt, &node_fid_buf);
+                if (!canFramesScriptEachOther(session, target_frame_id, node_frame_id)) {
+                    return CdpResponse.err(req.id, -32000, "Unable to adopt element handle from a different document");
+                }
+            }
+            if (nid_val == 999999 && session.has_document) {
+                if (exec_ctx := extractJsonInt(req.params_raw, "executionContextId")) {
+                    if (exec_ctx > 1) {
+                        const iso_v = session.ctx.eval("(function(){globalThis.__capsurf_isolated_oids=globalThis.__capsurf_isolated_oids||new Set();globalThis.__capsurf_isolated_oids.add('doc:0');})()");
+                        session.ctx.freeValue(iso_v);
+                    }
+                }
+                return CdpResponse.ok(req.id, "{\"object\":{\"type\":\"object\",\"subtype\":\"node\",\"className\":\"HTMLDocument\",\"description\":\"#document\",\"objectId\":\"doc:0\"}}");
+            }
             if (nid_val >= 1000000 && session.has_document) {
-                let sr_buf: [256]u8 = [0; 256];
+                let sr_buf: [1024]u8 = [0; 1024];
                 const sr_js = std.fmt.bufPrint(
                     &sr_buf,
-                    "(() => {{ const m = globalThis.__capsurf_sr_bmap; return m ? (m.get({d}) || '') : ''; }})()",
-                    .{nid_val},
+                    "(() => {{ const m = globalThis.__capsurf_sr_bmap; let oid = m ? (m.get({d}) || '') : ''; let o = oid && globalThis.__capsurf_get_object ? globalThis.__capsurf_get_object(oid) : null; if (!o && globalThis.__capsurf_child_dom_nodes) {{ o = globalThis.__capsurf_child_dom_nodes[{d}] || null; if (o && globalThis.__capsurf_store_object) {{ oid = globalThis.__capsurf_store_object(o) || ''; if (oid && m) m.set({d}, oid); }} }} if (!oid) return ''; const nt = o ? o.nodeType : 11; return String(nt) + '|' + oid; }})()",
+                    .{ nid_val, nid_val, nid_val },
                 ) catch "";
                 if (sr_js.len > 0) {
                     const sr_val = session.ctx.eval(sr_js);
                     defer session.ctx.freeValue(sr_val);
-                    const oid = session.ctx.toCString(sr_val);
-                    if (oid.len > 0) {
-                        if (exec_ctx := extractJsonInt(req.params_raw, "executionContextId")) {
-                            if (exec_ctx > 1) {
-                                let iso_buf: [256]u8 = [0; 256];
-                                const iso_js = std.fmt.bufPrint(
-                                    &iso_buf,
-                                    "(function(){{globalThis.__capsurf_isolated_oids=globalThis.__capsurf_isolated_oids||new Set();globalThis.__capsurf_isolated_oids.add('{s}');}})()",
-                                    .{oid},
-                                ) catch "";
-                                if (iso_js.len > 0) {
-                                    const v = session.ctx.eval(iso_js);
-                                    session.ctx.freeValue(v);
+                    const sr_res = session.ctx.toCString(sr_val);
+                    if (sep := std.mem.indexOfScalar(u8, sr_res, '|')) {
+                        const nt_str = sr_res[0..sep];
+                        const oid = sr_res[sep + 1 ..];
+                        if (oid.len > 0) {
+                            if (exec_ctx := extractJsonInt(req.params_raw, "executionContextId")) {
+                                if (exec_ctx > 1) {
+                                    let iso_buf: [256]u8 = [0; 256];
+                                    const iso_js = std.fmt.bufPrint(
+                                        &iso_buf,
+                                        "(function(){{globalThis.__capsurf_isolated_oids=globalThis.__capsurf_isolated_oids||new Set();globalThis.__capsurf_isolated_oids.add('{s}');}})()",
+                                        .{oid},
+                                    ) catch "";
+                                    if (iso_js.len > 0) {
+                                        const v = session.ctx.eval(iso_js);
+                                        session.ctx.freeValue(v);
+                                    }
                                 }
                             }
+                            const cls: []const u8 = if (std.mem.eql(u8, nt_str, "1"))
+                                "Element"
+                            else if (std.mem.eql(u8, nt_str, "3"))
+                                "Text"
+                            else if (std.mem.eql(u8, nt_str, "8"))
+                                "Comment"
+                            else if (std.mem.eql(u8, nt_str, "9"))
+                                "HTMLDocument"
+                            else
+                                "ShadowRoot";
+                            const desc: []const u8 = if (std.mem.eql(u8, nt_str, "9")) "#document" else cls;
+                            const res = std.fmt.bufPrint(
+                                out_buf,
+                                "{{\"object\":{{\"type\":\"object\",\"subtype\":\"node\",\"className\":\"{s}\",\"description\":\"{s}\",\"objectId\":\"{s}\"}}}}",
+                                .{ cls, desc, oid },
+                            ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+                            return CdpResponse.ok(req.id, res);
                         }
-                        const res = std.fmt.bufPrint(
-                            out_buf,
-                            "{{\"object\":{{\"type\":\"object\",\"subtype\":\"node\",\"className\":\"ShadowRoot\",\"description\":\"ShadowRoot\",\"objectId\":\"{s}\"}}}}",
-                            .{oid},
-                        ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
-                        return CdpResponse.ok(req.id, res);
                     }
                 }
             }
@@ -1090,10 +1513,18 @@ pub struct DomHandler {
                     }
                 }
             }
+            const res_cls = if (nid_val > 0 && @as(usize, @intCast(nid_val)) < session.doc.nodes.items.len)
+                switch (session.doc.nodes.items[@as(usize, @intCast(nid_val))].node_type) {
+                    .Text => "Text",
+                    .Comment => "Comment",
+                    else => "Element",
+                }
+            else
+                "Element";
             const res = std.fmt.bufPrint(
                 out_buf,
-                "{{\"object\":{{\"type\":\"object\",\"subtype\":\"node\",\"className\":\"Element\",\"description\":\"Node#{d}\",\"objectId\":\"node:{d}\"}}}}",
-                .{ nid_val, nid_val },
+                "{{\"object\":{{\"type\":\"object\",\"subtype\":\"node\",\"className\":\"{s}\",\"description\":\"Node#{d}\",\"objectId\":\"node:{d}\"}}}}",
+                .{ res_cls, nid_val, nid_val },
             ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
             return CdpResponse.ok(req.id, res);
         }
@@ -1284,7 +1715,7 @@ pub struct DomHandler {
                 let nid_buf: [32]u8 = [0; 32];
                 const nid_s = std.fmt.bufPrint(&nid_buf, "{d}", .{nid}) catch "0";
                 js_list.appendSlice(session.allocator, nid_s) catch return CdpResponse.err(req.id, -32000, "Alloc failed");
-                js_list.appendSlice(session.allocator, "') : null; if (!el) return; const files = []; let firstBase = ''; ") catch return CdpResponse.err(req.id, -32000, "Alloc failed");
+                js_list.appendSlice(session.allocator, "') : null; if (!el) return; const dt = new DataTransfer(); ") catch return CdpResponse.err(req.id, -32000, "Alloc failed");
 
                 if (f_key := std.mem.indexOf(u8, req.params_raw, "\"files\"")) {
                     if (arr_start := std.mem.indexOfScalarPos(u8, req.params_raw, f_key + 7, '[')) {
@@ -1306,38 +1737,40 @@ pub struct DomHandler {
                                 const raw_path = req.params_raw[q1..q2];
                                 pos = q2 + 1;
 
-                                let base_name = raw_path;
-                                if (sl := std.mem.lastIndexOfScalar(u8, raw_path, '/')) {
-                                    base_name = raw_path[sl + 1 ..];
-                                }
-                                let fbytes_opt: ([]const u8)? = null;
-                                let f_alloc: ([]u8)? = session.allocator.alloc(u8, 262144) catch null;
-                                defer if (f_alloc != null) session.allocator.free(f_alloc.?);
-                                if (fb_buf := f_alloc) {
-                                    fbytes_opt = MockFixtures.readFileContent(raw_path, fb_buf);
+                                let clean_path: []const u8 = raw_path;
+                                while (clean_path.len > 1 && clean_path[clean_path.len - 1] == '/') {
+                                    clean_path = clean_path[0 .. clean_path.len - 1];
                                 }
 
-                                js_list.appendSlice(session.allocator, "{ const b = atob('") catch break;
-                                if (fb := fbytes_opt) {
-                                    const enc_len = std.base64.standard.Encoder.calcSize(fb.len);
-                                    if (b64_buf := session.allocator.alloc(u8, enc_len) catch null) {
-                                        defer session.allocator.free(b64_buf);
-                                        const b64 = std.base64.standard.Encoder.encode(b64_buf, fb);
-                                        js_list.appendSlice(session.allocator, b64) catch break;
+                                let dir_opt = tryOpenDirC(clean_path);
+                                let resolved_dir_path: []const u8 = clean_path;
+                                let dir_path_buf: [1024]u8 = [0; 1024];
+                                if (dir_opt == null) {
+                                    if (pw_dir := std.fmt.bufPrint(&dir_path_buf, "test/pw/.playwright/{s}", .{clean_path}) catch null) {
+                                        dir_opt = tryOpenDirC(pw_dir);
+                                        if (dir_opt != null) resolved_dir_path = pw_dir;
                                     }
                                 }
-                                js_list.appendSlice(session.allocator, "'); const u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); const f = new File([u], ") catch break;
-                                let bn_buf: [512]u8 = [0; 512];
-                                const bn_json = std.fmt.bufPrint(&bn_buf, "\"{s}\"", .{base_name}) catch "\"file\"";
-                                js_list.appendSlice(session.allocator, bn_json) catch break;
-                                js_list.appendSlice(session.allocator, "); files.push(f); if (!firstBase) firstBase = ") catch break;
-                                js_list.appendSlice(session.allocator, bn_json) catch break;
-                                js_list.appendSlice(session.allocator, "; } ") catch break;
+                                if (dir_opt != null) {
+                                    * = unsafe { std.c.closedir(dir_opt.?) };
+                                    let dir_base: []const u8 = clean_path;
+                                    if (sl := std.mem.lastIndexOfScalar(u8, clean_path, '/')) {
+                                        dir_base = clean_path[sl + 1 ..];
+                                    }
+                                    if (dir_base.len == 0) dir_base = "folder";
+                                    appendDirToDataTransferJs(session.allocator, &js_list, resolved_dir_path, dir_base, 0) catch break;
+                                } else {
+                                    let base_name: []const u8 = clean_path;
+                                    if (sl := std.mem.lastIndexOfScalar(u8, clean_path, '/')) {
+                                        base_name = clean_path[sl + 1 ..];
+                                    }
+                                    appendFileToDataTransferJs(session.allocator, &js_list, raw_path, base_name, "") catch break;
+                                }
                             }
                         }
                     }
                 }
-                js_list.appendSlice(session.allocator, "el.files = files; el._value = firstBase ? ('C:\\\\fakepath\\\\' + firstBase) : ''; if (typeof el.dispatchEvent === 'function') { el.dispatchEvent(new Event('input', { bubbles: true, composed: true })); el.dispatchEvent(new Event('change', { bubbles: true })); } })()") catch return CdpResponse.err(req.id, -32000, "Alloc failed");
+                js_list.appendSlice(session.allocator, "el.files = dt.files; if (typeof el.dispatchEvent === 'function') { el.dispatchEvent(new Event('input', { bubbles: true, composed: true })); el.dispatchEvent(new Event('change', { bubbles: true })); } })()") catch return CdpResponse.err(req.id, -32000, "Alloc failed");
                 const v = session.ctx.eval(js_list.items);
                 session.ctx.freeValue(v);
             }
@@ -1376,16 +1809,60 @@ pub struct DomHandler {
             }
             if (node_id_val == 0 && session.has_document) {
                 if (obj_id := extractJsonString(req.params_raw, "objectId")) {
-                    let sr_buf: [768]u8 = [0; 768];
+                    let sr_buf: [1536]u8 = [0; 1536];
                     const sr_js = std.fmt.bufPrint(
                         &sr_buf,
-                        "(() => {{ const o = globalThis.__capsurf_get_object ? globalThis.__capsurf_get_object('{s}') : null; if (!o || o.nodeType !== 11 || !o.host) return ''; const m = globalThis.__capsurf_sr_bmap || (globalThis.__capsurf_sr_bmap = new Map()); const rm = globalThis.__capsurf_sr_rmap || (globalThis.__capsurf_sr_rmap = new Map()); let bid = rm.get(o); if (!bid) {{ bid = 1000000 + (globalThis.__capsurf_sr_seq = (globalThis.__capsurf_sr_seq || 0) + 1); rm.set(o, bid); m.set(bid, '{s}'); }} return String(bid) + ',' + (o.mode || 'open'); }})()",
+                        "(() => {{ const o = globalThis.__capsurf_get_object ? globalThis.__capsurf_get_object('{s}') : null; if (!o) return ''; if (o.nodeType === 9 && o === document) return 'DOC'; if (o.nodeType !== 1 && o.nodeType !== 3 && o.nodeType !== 8 && o.nodeType !== 9 && (o.nodeType !== 11 || !o.host)) return ''; const m = globalThis.__capsurf_sr_bmap || (globalThis.__capsurf_sr_bmap = new Map()); const rm = globalThis.__capsurf_sr_rmap || (globalThis.__capsurf_sr_rmap = new Map()); let bid = rm.get(o); if (!bid) {{ bid = 1000000 + (globalThis.__capsurf_sr_seq = (globalThis.__capsurf_sr_seq || 0) + 1); rm.set(o, bid); m.set(bid, '{s}'); }} if (o.nodeType === 1) return 'ELEM,' + String(bid) + ',' + String(o.tagName || 'DIV'); if (o.nodeType === 3 || o.nodeType === 8 || o.nodeType === 9) return 'NODE,' + String(bid) + ',' + String(o.nodeType); return String(bid) + ',' + (o.mode || 'open'); }})()",
                         .{ obj_id, obj_id },
                     ) catch "";
                     if (sr_js.len > 0) {
                         const sr_val = session.ctx.eval(sr_js);
                         defer session.ctx.freeValue(sr_val);
                         const sr_str = session.ctx.toCString(sr_val);
+                        let node_fid_buf: [64]u8 = [0; 64];
+                        const raw_fid = resolveNodeFrameId(session, 0, obj_id, &node_fid_buf);
+                        const node_fid: []const u8 = if (raw_fid.len > 0 && !std.mem.eql(u8, raw_fid, "__other_doc__")) raw_fid else session.frame_id;
+                        if (std.mem.eql(u8, sr_str, "DOC")) {
+                            const res = std.fmt.bufPrint(
+                                out_buf,
+                                "{{\"node\":{{\"nodeId\":999999,\"backendNodeId\":999999,\"nodeType\":9,\"nodeName\":\"#document\",\"localName\":\"\",\"nodeValue\":\"\",\"frameId\":\"{s}\"}}}}",
+                                .{node_fid},
+                            ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+                            return CdpResponse.ok(req.id, res);
+                        }
+                        if (std.mem.startsWith(u8, sr_str, "ELEM,")) {
+                            let eit = std.mem.splitScalar(u8, sr_str[5..], ',');
+                            const ebid = std.fmt.parseInt(i64, eit.next() ?? "0", 10) catch 0;
+                            const etag = eit.next() ?? "DIV";
+                            let ltag_buf: [64]u8 = [0; 64];
+                            const ltag_len = @min(etag.len, ltag_buf.len);
+                            let li: usize = 0;
+                            while (li < ltag_len) : (li += 1) {
+                                ltag_buf[li] = std.ascii.toLower(etag[li]);
+                            }
+                            if (ebid >= 1000000) {
+                                const res = std.fmt.bufPrint(
+                                    out_buf,
+                                    "{{\"node\":{{\"nodeId\":{d},\"backendNodeId\":{d},\"nodeType\":1,\"nodeName\":\"{s}\",\"localName\":\"{s}\",\"nodeValue\":\"\",\"frameId\":\"{s}\"}}}}",
+                                    .{ ebid, ebid, etag, ltag_buf[0..ltag_len], node_fid },
+                                ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+                                return CdpResponse.ok(req.id, res);
+                            }
+                        }
+                        if (std.mem.startsWith(u8, sr_str, "NODE,")) {
+                            let nit = std.mem.splitScalar(u8, sr_str[5..], ',');
+                            const nbid = std.fmt.parseInt(i64, nit.next() ?? "0", 10) catch 0;
+                            const ntype = std.fmt.parseInt(i64, nit.next() ?? "3", 10) catch 3;
+                            const nname: []const u8 = if (ntype == 9) "#document" else if (ntype == 8) "#comment" else "#text";
+                            if (nbid >= 1000000) {
+                                const res = std.fmt.bufPrint(
+                                    out_buf,
+                                    "{{\"node\":{{\"nodeId\":{d},\"backendNodeId\":{d},\"nodeType\":{d},\"nodeName\":\"{s}\",\"localName\":\"\",\"nodeValue\":\"\",\"frameId\":\"{s}\"}}}}",
+                                    .{ nbid, nbid, ntype, nname, node_fid },
+                                ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+                                return CdpResponse.ok(req.id, res);
+                            }
+                        }
                         if (sr_str.len > 0) {
                             let it = std.mem.splitScalar(u8, sr_str, ',');
                             const bid = std.fmt.parseInt(i64, it.next() ?? "0", 10) catch 0;
@@ -1394,7 +1871,7 @@ pub struct DomHandler {
                                 const res = std.fmt.bufPrint(
                                     out_buf,
                                     "{{\"node\":{{\"nodeId\":{d},\"backendNodeId\":{d},\"nodeType\":11,\"nodeName\":\"#document-fragment\",\"localName\":\"\",\"nodeValue\":\"\",\"shadowRootType\":\"{s}\",\"frameId\":\"{s}\"}}}}",
-                                    .{ bid, bid, mode, session.frame_id },
+                                    .{ bid, bid, mode, node_fid },
                                 ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
                                 return CdpResponse.ok(req.id, res);
                             }
@@ -1402,10 +1879,59 @@ pub struct DomHandler {
                     }
                 }
             } else if (node_id_val >= 1000000) {
+                let node_fid_buf: [64]u8 = [0; 64];
+                const raw_fid = resolveNodeFrameId(session, node_id_val, null, &node_fid_buf);
+                const node_fid: []const u8 = if (raw_fid.len > 0 && !std.mem.eql(u8, raw_fid, "__other_doc__")) raw_fid else session.frame_id;
+                if (session.has_document) {
+                    let bn_buf: [768]u8 = [0; 768];
+                    const bn_js = std.fmt.bufPrint(
+                        &bn_buf,
+                        "(() => {{ const cm = globalThis.__capsurf_child_dom_nodes; const sm = globalThis.__capsurf_sr_bmap; let o = cm ? cm[{d}] : null; if (!o && sm && globalThis.__capsurf_get_object) {{ const oid = sm.get({d}); if (oid) o = globalThis.__capsurf_get_object(oid); }} if (!o) return ''; if (o.nodeType === 9) return 'DOC'; if (o.nodeType === 1) return 'ELEM,' + String(o.tagName || 'DIV'); if (o.nodeType === 3 || o.nodeType === 8) return 'NODE,' + String(o.nodeType); return 'SR,' + (o.mode || 'open'); }})()",
+                        .{ node_id_val, node_id_val },
+                    ) catch "";
+                    if (bn_js.len > 0) {
+                        const bn_val = session.ctx.eval(bn_js);
+                        defer session.ctx.freeValue(bn_val);
+                        const bn_str = session.ctx.toCString(bn_val);
+                        if (std.mem.eql(u8, bn_str, "DOC")) {
+                            const res = std.fmt.bufPrint(
+                                out_buf,
+                                "{{\"node\":{{\"nodeId\":{d},\"backendNodeId\":{d},\"nodeType\":9,\"nodeName\":\"#document\",\"localName\":\"\",\"nodeValue\":\"\",\"frameId\":\"{s}\"}}}}",
+                                .{ node_id_val, node_id_val, node_fid },
+                            ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+                            return CdpResponse.ok(req.id, res);
+                        }
+                        if (std.mem.startsWith(u8, bn_str, "ELEM,")) {
+                            const etag = bn_str[5..];
+                            let ltag_buf: [64]u8 = [0; 64];
+                            const ltag_len = @min(etag.len, ltag_buf.len);
+                            let li: usize = 0;
+                            while (li < ltag_len) : (li += 1) {
+                                ltag_buf[li] = std.ascii.toLower(etag[li]);
+                            }
+                            const res = std.fmt.bufPrint(
+                                out_buf,
+                                "{{\"node\":{{\"nodeId\":{d},\"backendNodeId\":{d},\"nodeType\":1,\"nodeName\":\"{s}\",\"localName\":\"{s}\",\"nodeValue\":\"\",\"frameId\":\"{s}\"}}}}",
+                                .{ node_id_val, node_id_val, etag, ltag_buf[0..ltag_len], node_fid },
+                            ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+                            return CdpResponse.ok(req.id, res);
+                        }
+                        if (std.mem.startsWith(u8, bn_str, "NODE,")) {
+                            const ntype = std.fmt.parseInt(i64, bn_str[5..], 10) catch 3;
+                            const nname: []const u8 = if (ntype == 9) "#document" else if (ntype == 8) "#comment" else "#text";
+                            const res = std.fmt.bufPrint(
+                                out_buf,
+                                "{{\"node\":{{\"nodeId\":{d},\"backendNodeId\":{d},\"nodeType\":{d},\"nodeName\":\"{s}\",\"localName\":\"\",\"nodeValue\":\"\",\"frameId\":\"{s}\"}}}}",
+                                .{ node_id_val, node_id_val, ntype, nname, node_fid },
+                            ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+                            return CdpResponse.ok(req.id, res);
+                        }
+                    }
+                }
                 const res = std.fmt.bufPrint(
                     out_buf,
                     "{{\"node\":{{\"nodeId\":{d},\"backendNodeId\":{d},\"nodeType\":11,\"nodeName\":\"#document-fragment\",\"localName\":\"\",\"nodeValue\":\"\",\"shadowRootType\":\"open\",\"frameId\":\"{s}\"}}}}",
-                    .{ node_id_val, node_id_val, session.frame_id },
+                    .{ node_id_val, node_id_val, node_fid },
                 ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
                 return CdpResponse.ok(req.id, res);
             }
@@ -1446,11 +1972,11 @@ pub struct DomHandler {
             if (session.has_document && std.mem.startsWith(u8, fid, "capsurf-child-")) {
                 const idx_1based = std.fmt.parseInt(usize, fid[14..], 10) catch 0;
                 if (idx_1based > 0) {
-                    let js_buf: [768]u8 = [0; 768];
+                    let js_buf: [1024]u8 = [0; 1024];
                     const js_expr = std.fmt.bufPrint(
                         &js_buf,
-                        "(() => {{ if (!document || !document.documentElement) return 0; var fs = []; var seen = new Set(); function walk(r) {{ if (!r) return; var cs = r.childNodes || r.children || []; for (var i = 0; i < cs.length; i++) {{ var el = cs[i]; if (!el || el.nodeType !== 1) continue; var t = String(el.localName || el.tagName || '').toLowerCase(); if (t === 'template') continue; if ((t === 'iframe' || t === 'frame') && !seen.has(el)) {{ seen.add(el); fs.push(el); }} if (el._shadowRoot) walk(el._shadowRoot); walk(el); }} }} walk(document.documentElement); var target = fs[{d}]; return (target && typeof target._nid === 'number' && target._nid > 0) ? target._nid : 0; }})()",
-                        .{idx_1based - 1},
+                        "(() => {{ if (!document || !document.documentElement) return 0; var fs = []; var seen = new Set(); var byId = null; function walk(r) {{ if (!r) return; var cs = r.childNodes || r.children || []; for (var i = 0; i < cs.length; i++) {{ var el = cs[i]; if (!el || el.nodeType !== 1) continue; var t = String(el.localName || el.tagName || '').toLowerCase(); if (t === 'template') continue; if ((t === 'iframe' || t === 'frame') && !seen.has(el)) {{ seen.add(el); if (el._capsurf_frame_id === '{s}') byId = el; fs.push(el); }} if (el._shadowRoot) walk(el._shadowRoot); walk(el); }} }} walk(document.documentElement); var target = byId || fs[{d}]; return (target && typeof target._nid === 'number' && target._nid > 0) ? target._nid : 0; }})()",
+                        .{ fid, idx_1based - 1 },
                     ) catch "";
                     if (js_expr.len > 0) {
                         const val = session.ctx.eval(js_expr);

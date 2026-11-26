@@ -115,6 +115,13 @@ function canonicalizeComplexSelector(raw, inHas, inFunc, inPart) {
     atStart = false;
     prevWasCombinator = false;
     if (atSimpleStart && /[0-9]/.test(s[i])) return null;
+    if (s[i] === "\\") {
+      const nx = consumeCssEscape(s, i);
+      if (nx < 0) return null;
+      out += s.slice(i, nx);
+      i = nx;
+      continue;
+    }
 
     // Attribute selector [...]
     if (s[i] === "[") {
@@ -525,8 +532,8 @@ function matchesCompoundSelector(el, compound, scopeRoot) {
     } else if (ch === "#") {
       i++;
       const start = i;
-      while (i < len && !/[.#:\[\s]/.test(s[i])) i++;
-      const id = s.slice(start, i);
+      i = scanIdentWithEscapes(s, i);
+      const id = unescapeCssIdent(s.slice(start, i));
       const doc = el.ownerDocument || (typeof document !== "undefined" ? document : null);
       const quirks = doc && doc.compatMode === "BackCompat";
       const actualId = el.id || (typeof el.getAttribute === "function" ? el.getAttribute("id") : "") || "";
@@ -536,8 +543,8 @@ function matchesCompoundSelector(el, compound, scopeRoot) {
     } else if (ch === ".") {
       i++;
       const start = i;
-      while (i < len && !/[.#:\[\s]/.test(s[i])) i++;
-      const cls = s.slice(start, i);
+      i = scanIdentWithEscapes(s, i);
+      const cls = unescapeCssIdent(s.slice(start, i));
       const doc = el.ownerDocument || (typeof document !== "undefined" ? document : null);
       const quirks = doc && doc.compatMode === "BackCompat";
       const clsStr = ((el.className || (typeof el.getAttribute === "function" && el.getAttribute("class")) || "") + "");
@@ -613,6 +620,25 @@ function matchesCompoundSelector(el, compound, scopeRoot) {
       else if (pseudo === ":popover-open") { if (!el._popoverOpen) return false; }
       else if (pseudo === ":disabled") { if (!el.disabled) return false; }
       else if (pseudo === ":enabled") { if (el.disabled) return false; }
+      else if (pseudo === ":focus") {
+        const doc = el.ownerDocument || (typeof document !== "undefined" ? document : null);
+        const ae = doc && (doc.activeElement || doc._activeElement);
+        if (!ae || (ae !== el && !(typeof ae._nid === "number" && typeof el._nid === "number" && ae._nid > 0 && ae._nid === el._nid))) return false;
+      }
+      else if (pseudo === ":hover") {
+        const hn = (typeof globalThis !== "undefined" ? Number(globalThis.__capsurf_hovered_nid) : 0) | 0;
+        if (!el || hn <= 0) return false;
+        let matchedHover = (el._nid === hn);
+        if (!matchedHover && typeof globalThis.__capsurf_find_node_by_id === "function") {
+          let cur = globalThis.__capsurf_find_node_by_id(hn);
+          let g = 0;
+          while (cur && g++ < 128) {
+            if (cur === el || (typeof cur._nid === "number" && typeof el._nid === "number" && cur._nid > 0 && cur._nid === el._nid)) { matchedHover = true; break; }
+            cur = cur.parentElement || (cur.parentNode && cur.parentNode.nodeType === 1 ? cur.parentNode : (cur.parentNode && cur.parentNode.host ? cur.parentNode.host : null));
+          }
+        }
+        if (!matchedHover) return false;
+      }
       else if (pseudo === ":host") {
         if (!scopeRoot || !scopeRoot.host) return false;
         const h = scopeRoot.host;
@@ -729,13 +755,46 @@ function matchesCompoundSelector(el, compound, scopeRoot) {
       i++;
     } else {
       const start = i;
-      while (i < len && !/[.#:\[\s]/.test(s[i])) i++;
-      const tag = s.slice(start, i).toLowerCase();
+      i = scanIdentWithEscapes(s, i);
+      const tag = unescapeCssIdent(s.slice(start, i)).toLowerCase();
       const elTag = String(el.localName || el.tagName || "").toLowerCase();
       if (elTag !== tag) return false;
     }
   }
   return true;
+}
+
+function consumeCssEscape(s, i) {
+  if (s[i] !== "\\" || i + 1 >= s.length) return -1;
+  const hm = /^[0-9a-fA-F]{1,6}[ \t\r\n\f]?/.exec(s.slice(i + 1));
+  if (hm) return i + 1 + hm[0].length;
+  if (s[i + 1] === "\n" || s[i + 1] === "\r" || s[i + 1] === "\f") return -1;
+  return i + 2;
+}
+
+function unescapeCssIdent(raw) {
+  if (!raw || raw.indexOf("\\") === -1) return raw;
+  return raw.replace(/\\([0-9a-fA-F]{1,6})[ \t\r\n\f]?|\\(.)/g, function (_, hex, ch) {
+    if (hex) {
+      const cp = parseInt(hex, 16);
+      if (cp === 0 || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff)) return "\uFFFD";
+      return String.fromCodePoint(cp);
+    }
+    return ch;
+  });
+}
+
+function scanIdentWithEscapes(s, i) {
+  const len = s.length;
+  while (i < len) {
+    if (s[i] === "\\") {
+      const nx = consumeCssEscape(s, i);
+      if (nx > i) { i = nx; continue; }
+    }
+    if (/[.#:\[\s]/.test(s[i])) break;
+    i++;
+  }
+  return i;
 }
 
 function splitComplexSelector(sel) {
@@ -754,6 +813,14 @@ function splitComplexSelector(sel) {
       if (ch === quote) quote = "";
       i++;
       continue;
+    }
+    if (ch === "\\") {
+      const nx = consumeCssEscape(sel, i);
+      if (nx > i) {
+        buf += sel.slice(i, nx);
+        i = nx;
+        continue;
+      }
     }
     if (ch === '"' || ch === "'") {
       quote = ch;
@@ -853,15 +920,27 @@ function matchesNthChild(el, exprRaw, fromLast, ofType) {
     idx = 1;
     total = 1;
   } else {
-    const kids = p.children || p._children || p.childNodes || [];
     const elTag = ofType ? String(el.localName || el.tagName || "").toLowerCase() : "";
-    for (let k = 0; k < kids.length; k++) {
-      const ch = kids[k];
-      if (ch && ch.nodeType === 1) {
-        if (ofType && String(ch.localName || ch.tagName || "").toLowerCase() !== elTag) continue;
-        total++;
-        if (ch === el || (typeof el._nid === "number" && el._nid > 0 && ch._nid === el._nid)) {
-          idx = total;
+    if (p.firstChild) {
+      for (let ch = p.firstChild; ch; ch = ch.nextSibling) {
+        if (ch.nodeType === 1) {
+          if (ofType && String(ch.localName || ch.tagName || "").toLowerCase() !== elTag) continue;
+          total++;
+          if (ch === el || (typeof el._nid === "number" && el._nid > 0 && ch._nid === el._nid)) {
+            idx = total;
+          }
+        }
+      }
+    } else {
+      const kids = p._children || p.childNodes || [];
+      for (let k = 0; k < kids.length; k++) {
+        const ch = kids[k];
+        if (ch && ch.nodeType === 1) {
+          if (ofType && String(ch.localName || ch.tagName || "").toLowerCase() !== elTag) continue;
+          total++;
+          if (ch === el || (typeof el._nid === "number" && el._nid > 0 && ch._nid === el._nid)) {
+            idx = total;
+          }
         }
       }
     }
@@ -944,13 +1023,11 @@ function findInSubtree(root, predicate, single) {
     let kids = null;
     if (node._children && node._children.length > 0) {
       kids = node._children;
-    } else if (node.childNodes && node.childNodes.length > 0) {
-      kids = node.childNodes;
-    } else if (node.children && node.children.length > 0) {
-      kids = node.children;
     } else if (node.firstChild) {
       kids = [];
       for (let c = node.firstChild; c; c = c.nextSibling) kids.push(c);
+    } else if (node.childNodes && node.childNodes.length > 0) {
+      kids = node.childNodes;
     }
     if (!kids) return false;
     for (let i = 0; i < kids.length; i++) {

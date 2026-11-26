@@ -49,7 +49,7 @@ fn testPageCaptureScreenshotCdp()! {
     session.navigate(html, "about:blank", "") catch unreachable;
 
     let out_buf: [131072]u8 = undefined;
-    let events: [64]CdpEvent = [CdpEvent{}; 64];
+    let events: [128]CdpEvent = [CdpEvent{}; 128];
     let event_count: usize = 0;
 
     // 1. Page.captureScreenshot default
@@ -91,7 +91,7 @@ fn testScreencastProtocolStubs()! {
     defer session.deinit();
 
     let out_buf: [4096]u8 = undefined;
-    let events: [64]CdpEvent = [CdpEvent{}; 64];
+    let events: [128]CdpEvent = [CdpEvent{}; 128];
     let event_count: usize = 0;
 
     // 1. Page.startScreencast

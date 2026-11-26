@@ -530,7 +530,7 @@ pub struct LayoutTree {
     }
 
     static fn getReplacedSize(node: *const NodeData): ReplacedSize? {
-        if (node.hasTag("canvas") || node.hasTag("video") || node.hasTag("iframe")) {
+        if (node.hasTag("canvas") || node.hasTag("video") || node.hasTag("iframe") || node.hasTag("frame")) {
             let nat_w: f32 = 300.0;
             let nat_h: f32 = 150.0;
             if (w_attr := node.getAttribute("width")) {
@@ -547,6 +547,12 @@ pub struct LayoutTree {
                 width: nat_w,
                 height: nat_h,
                 is_authored: true,
+            };
+        } else if (node.hasTag("select")) {
+            return ReplacedSize{
+                width: 120.0,
+                height: 22.0,
+                is_authored: false,
             };
         } else if (node.hasTag("img")) {
             let nat_w: f32 = 300.0;
@@ -1378,13 +1384,20 @@ pub struct LayoutTree {
         }
 
         const is_visible = (style.visibility == Visibility.Visible);
-        _.boxes.items[@as(usize, node_id)].rect = Rect {
+        const host_rect = Rect {
             x: rect_x,
             y: rect_y,
             width: final_w,
             height: final_h,
             visible: is_visible,
         };
+        _.boxes.items[@as(usize, node_id)].rect = host_rect;
+        if (@as(usize, node_id) < doc.nodes.items.len) {
+            const sr = doc.nodes.items[@as(usize, node_id)].shadow_root;
+            if (sr != NULL_NODE && @as(usize, sr) < _.boxes.items.len) {
+                _.boxes.items[@as(usize, sr)].rect = host_rect;
+            }
+        }
 
         if (tx_px != 0.0 || ty_px != 0.0) {
             if (@as(usize, node_id) < doc.nodes.items.len) {
@@ -1392,6 +1405,10 @@ pub struct LayoutTree {
                 while (ch != NULL_NODE && @as(usize, ch) < doc.nodes.items.len) {
                     _.shiftSubtree(doc, ch, tx_px, ty_px);
                     ch = doc.nodes.items[@as(usize, ch)].next_sibling;
+                }
+                const sr = doc.nodes.items[@as(usize, node_id)].shadow_root;
+                if (sr != NULL_NODE && @as(usize, sr) < doc.nodes.items.len) {
+                    _.shiftSubtree(doc, sr, tx_px, ty_px);
                 }
             }
         }
@@ -1815,6 +1832,16 @@ pub struct LayoutTree {
         return 1;
     }
 
+    static fn effectiveContentParent(doc: *const Document, parent_id: NodeId): NodeId {
+        if (parent_id != NULL_NODE && @as(usize, parent_id) < doc.nodes.items.len) {
+            const sr = doc.nodes.items[@as(usize, parent_id)].shadow_root;
+            if (sr != NULL_NODE && @as(usize, sr) < doc.nodes.items.len) {
+                return sr;
+            }
+        }
+        return parent_id;
+    }
+
     fn shiftSubtree(*_, doc: *const Document, node_id: NodeId, dx: f32, dy: f32) {
         if (node_id == NULL_NODE || @as(usize, node_id) >= _.boxes.items.len) return;
         if (dx == 0.0 && dy == 0.0) return;
@@ -1824,6 +1851,10 @@ pub struct LayoutTree {
         while (ch != NULL_NODE && @as(usize, ch) < doc.nodes.items.len) {
             _.shiftSubtree(doc, ch, dx, dy);
             ch = doc.nodes.items[@as(usize, ch)].next_sibling;
+        }
+        const sr = doc.nodes.items[@as(usize, node_id)].shadow_root;
+        if (sr != NULL_NODE && @as(usize, sr) < doc.nodes.items.len) {
+            _.shiftSubtree(doc, sr, dx, dy);
         }
     }
 
@@ -3441,6 +3472,15 @@ pub struct LayoutTree {
                     const cr = _.boxes.items[@as(usize, it.node_id)].rect.right();
                     if (cr > max_child_right.*) max_child_right.* = cr;
                 }
+            } else if (it.kind == InlineItemKind.Break) {
+                const bst = &styles[@as(usize, it.node_id)];
+                _.boxes.items[@as(usize, it.node_id)].rect = Rect{
+                    x: content_x + float_left_w + it.line_x,
+                    y: line_y,
+                    width: 0.0,
+                    height: single_line_h,
+                    visible: (bst.visibility == Visibility.Visible),
+                };
             }
         }
         return total_line_h;
@@ -3534,6 +3574,7 @@ pub struct LayoutTree {
                 visible: is_vis,
             };
         }
+        _.boxes.items[@as(usize, wrapper_id)].pointer_events_none = wstyle.pointer_events_none;
     }
 
     /// Block formatting layout: stacks block children vertically and lays out inline runs via IFC.
@@ -3556,7 +3597,8 @@ pub struct LayoutTree {
         let last_baseline_rel: f32 = -1.0;
 
         const pstyle_blk = &styles[@as(usize, parent_id)];
-        const establishes_bfc = pstyle_blk.display.isFlowRoot() ||
+        const establishes_bfc = (parent_id == doc.root_element) ||
+            pstyle_blk.display.isFlowRoot() ||
             !pstyle_blk.overflow_visible ||
             pstyle_blk.contain_layout ||
             pstyle_blk.contain_paint ||
@@ -3586,7 +3628,7 @@ pub struct LayoutTree {
         let has_prev_block_mb: bool = false;
         let has_inflow_before_first_block: bool = false;
 
-        let child = doc.nodes.items[@as(usize, parent_id)].first_child;
+        let child = doc.nodes.items[@as(usize, LayoutTree.effectiveContentParent(doc, parent_id))].first_child;
         while (child != NULL_NODE && @as(usize, child) < doc.nodes.items.len) {
             const cnode = &doc.nodes.items[@as(usize, child)];
             if (cnode.node_type == NodeType.Element) {
@@ -3647,10 +3689,16 @@ pub struct LayoutTree {
                     const cbox = &_.boxes.items[@as(usize, child)];
                     if (!has_inflow_before_first_block) {
                         has_inflow_before_first_block = true;
-                        const pb = &_.boxes.items[@as(usize, parent_id)];
+                        let pb = &_.boxes.items[@as(usize, parent_id)];
                         if (!establishes_bfc && pb.padding_top == 0.0 && pb.border_top == 0.0 && cbox.margin_top > 0.0) {
+                            const extra_mt = @max(0.0, cbox.margin_top - pb.margin_top);
                             _.shiftSubtree(doc, child, 0.0, -cbox.margin_top);
                             cursor_y -= cbox.margin_top;
+                            if (extra_mt > 0.0) {
+                                pb.margin_top += extra_mt;
+                                _.shiftSubtree(doc, parent_id, 0.0, extra_mt);
+                                cursor_y += extra_mt;
+                            }
                         }
                     } else if (has_prev_block_mb && prev_block_mb > 0.0 && cbox.margin_top > 0.0) {
                         const overlap = @min(prev_block_mb, cbox.margin_top);
@@ -4003,7 +4051,7 @@ pub struct LayoutTree {
         let abs_children: [32]NodeId = [NULL_NODE; 32];
         let abs_count: usize = 0;
 
-        let child = doc.nodes.items[@as(usize, parent_id)].first_child;
+        let child = doc.nodes.items[@as(usize, LayoutTree.effectiveContentParent(doc, parent_id))].first_child;
         while (child != NULL_NODE) {
             const cnode = &doc.nodes.items[@as(usize, child)];
             if (cnode.node_type == NodeType.Element) {
@@ -4295,7 +4343,7 @@ pub struct LayoutTree {
         let abs_children: [16]NodeId = [NULL_NODE; 16];
         let abs_count: usize = 0;
 
-        let child = doc.nodes.items[@as(usize, parent_id)].first_child;
+        let child = doc.nodes.items[@as(usize, LayoutTree.effectiveContentParent(doc, parent_id))].first_child;
         while (child != NULL_NODE) {
             const cnode = &doc.nodes.items[@as(usize, child)];
             if (cnode.node_type == NodeType.Element) {
@@ -4769,7 +4817,7 @@ pub struct LayoutTree {
         if (pstyle_flex.overflow_visible && pstyle_flex.display.isInlineFlex()) {
             const pbox_y = _.boxes.items[@as(usize, parent_id)].rect.y;
             const pbox_h = _.boxes.items[@as(usize, parent_id)].rect.height;
-            let fch = doc.nodes.items[@as(usize, parent_id)].first_child;
+            let fch = doc.nodes.items[@as(usize, LayoutTree.effectiveContentParent(doc, parent_id))].first_child;
             while (fch != NULL_NODE && @as(usize, fch) < doc.nodes.items.len) {
                 const fn_d = &doc.nodes.items[@as(usize, fch)];
                 if (fn_d.node_type == NodeType.Element) {

@@ -128,7 +128,7 @@ fn testNamespaceAttributes(doc: *Document)! {
 }
 
 fn testJsDomBindings()! {
-    let rt = JsRuntime.init(16 * 1024 * 1024, 100000)?;
+    let rt = JsRuntime.init(32 * 1024 * 1024, 100000)?;
     defer rt.deinit();
 
     let ctx = rt.createContext()?;
@@ -214,6 +214,7 @@ fn testJsDomBindings()! {
     const cf_res = ctx.eval(
         "(() => {\n" ++
         "  let box = document.createElement('div');\n" ++
+        "  (document.body || document.documentElement || document.appendChild(document.createElement('html'))).appendChild(box);\n" ++
         "  box.style.cssText = 'float: left; width: 40px; height: 40px';\n" ++
         "  const r1 = box.style.cssFloat;\n" ++
         "  const r2 = box.style.float;\n" ++
@@ -237,6 +238,7 @@ fn testJsDomBindings()! {
     const tr_res = ctx.eval(
         "(() => {\n" ++
         "  let el = document.createElement('div');\n" ++
+        "  (document.body || document.documentElement || document.appendChild(document.createElement('html'))).appendChild(el);\n" ++
         "  el.style.webkitTransform = 'scale(4)';\n" ++
         "  const r1 = el.style.getPropertyValue('-webkit-transform');\n" ++
         "  const r2 = el.style.getPropertyValue('transform');\n" ++

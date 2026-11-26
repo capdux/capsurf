@@ -143,17 +143,33 @@ pub struct TreeBuilder {
         return false;
     }
 
-    fn isTagInStack(tag: HtmlTag): bool {
+    fn findTagInStack(tag: HtmlTag): NodeId {
         let i: usize = 0;
         while (i < _.open_elements_len) : (i += 1) {
             const nid = _.open_elements[i];
             if (nid != NULL_NODE && @as(usize, nid) < _.doc.nodes.items.len) {
                 if (HtmlTag.fromStr(_.doc.nodes.items[@as(usize, nid)].tag_name) == tag) {
-                    return true;
+                    return nid;
                 }
             }
         }
-        return false;
+        return NULL_NODE;
+    }
+
+    fn isTagInStack(tag: HtmlTag): bool {
+        return _.findTagInStack(tag) != NULL_NODE;
+    }
+
+    fn mergeMissingAttrs(*_, nid: NodeId, tag_tok: *const TagToken) {
+        if (nid == NULL_NODE) return;
+        let i: usize = 0;
+        while (i < tag_tok.attr_count) : (i += 1) {
+            const attr_name = tag_tok.attrs[i].name;
+            if (_.doc.getAttribute(nid, attr_name) == null) {
+                const decoded_val = TreeBuilder.decodeAttrValue(_.doc, tag_tok.attrs[i].value);
+                _.doc.setAttribute(nid, attr_name, decoded_val);
+            }
+        }
     }
 
     fn removeElementFromStack(*_, nid: NodeId) {
@@ -493,24 +509,25 @@ pub struct TreeBuilder {
         }
     }
 
-    static fn decodeAttrValue(allocator: std.mem.Allocator, raw: []const u8): []const u8 {
+    static fn decodeAttrValue(doc: *Document, raw: []const u8): []const u8 {
         if (std.mem.indexOfScalar(u8, raw, '&') == null) return raw;
         let buf = std.ArrayListUnmanaged(u8).empty;
+        defer buf.deinit(doc.allocator);
         let pos: usize = 0;
         while (pos < raw.len) {
             if (raw[pos] == '&') {
                 if (ent := decodeEntity(raw[pos..], true)) {
                     let eb: [8]u8 = [0; 8];
                     const written = ent.toUtf8(eb[0..8]);
-                    buf.appendSlice(allocator, eb[0..written]) catch return raw;
+                    buf.appendSlice(doc.allocator, eb[0..written]) catch return raw;
                     pos += ent.bytes_consumed;
                     continue;
                 }
             }
-            buf.append(allocator, raw[pos]) catch return raw;
+            buf.append(doc.allocator, raw[pos]) catch return raw;
             pos += 1;
         }
-        return buf.toOwnedSlice(allocator) catch raw;
+        return doc.allocString(buf.items) catch raw;
     }
 
     static fn adjustSvgAttrName(name: []const u8): []const u8 {
@@ -588,11 +605,12 @@ pub struct TreeBuilder {
     fn insertElement(*_, tag_tok: *const TagToken): NodeId {
         const nid = _.doc.createElement(tag_tok.name) catch NULL_NODE;
         if (nid == NULL_NODE) return NULL_NODE;
+        _.doc.nodes.items[@as(usize, nid)].source_line = tag_tok.start_line;
 
         const is_svg = std.mem.eql(u8, tag_tok.name, "svg") || _.isInSvgContext();
         let i: usize = 0;
         while (i < tag_tok.attr_count) : (i += 1) {
-            const decoded_val = TreeBuilder.decodeAttrValue(_.doc.allocator, tag_tok.attrs[i].value);
+            const decoded_val = TreeBuilder.decodeAttrValue(_.doc, tag_tok.attrs[i].value);
             const attr_name = if (is_svg) TreeBuilder.adjustSvgAttrName(tag_tok.attrs[i].name) else tag_tok.attrs[i].name;
             _.doc.setAttribute(nid, attr_name, decoded_val);
         }
@@ -631,14 +649,14 @@ pub struct TreeBuilder {
                 const last_child = _.doc.nodes.items[@as(usize, parent_id)].last_child;
                 if (last_child != NULL_NODE && _.doc.nodes.items[@as(usize, last_child)].node_type == NodeType.Text) {
                     const old_text = _.doc.nodes.items[@as(usize, last_child)].text_content;
-                    const new_text = std.fmt.allocPrint(_.doc.allocator, "{s}{s}", .{old_text, text}) catch return;
+                    const new_text = _.doc.concatString(old_text, text) catch return;
                     _.doc.nodes.items[@as(usize, last_child)].text_content = new_text;
                     return;
                 }
             }
         }
 
-        const text_dup = _.doc.allocator.dupe(u8, text) catch text;
+        const text_dup = _.doc.allocString(text) catch text;
         const tid = _.doc.createTextNode(text_dup) catch NULL_NODE;
         if (tid == NULL_NODE) return;
 
@@ -1123,7 +1141,21 @@ pub struct TreeBuilder {
                 if (tag_tok.kind == TagKind.Start) {
                     const tag = tag_tok.tag;
 
-                    if (tag == HtmlTag.P) {
+                    if (tag == HtmlTag.Head) {
+                        return NextTokenizerState.Data;
+                    } else if (tag == HtmlTag.Html) {
+                        if (!_.isTagInStack(HtmlTag.Template)) {
+                            const html_nid = _.findTagInStack(HtmlTag.Html);
+                            _.mergeMissingAttrs(html_nid, tag_tok);
+                        }
+                        return NextTokenizerState.Data;
+                    } else if (tag == HtmlTag.Body) {
+                        if (!_.isTagInStack(HtmlTag.Template)) {
+                            const body_nid = _.findTagInStack(HtmlTag.Body);
+                            _.mergeMissingAttrs(body_nid, tag_tok);
+                        }
+                        return NextTokenizerState.Data;
+                    } else if (tag == HtmlTag.P) {
                         if (_.inButtonScope(HtmlTag.P)) {
                             _.generateImpliedEndTags(HtmlTag.P);
                             _.popUntil(HtmlTag.P);
@@ -1330,7 +1362,7 @@ pub struct TreeBuilder {
                 _.popElement();
                 _.mode = _.orig_mode;
                 _.text_tokenizer_state = NextTokenizerState.Data;
-                return NextTokenizerState.Data;
+                return _.processToken(tok);
             },
             * => {},
         }

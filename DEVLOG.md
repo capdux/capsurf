@@ -3720,3 +3720,9 @@
 ## Phase 936: 嵌套 `light-dark()` 与 `color-mix()` (`srgb`/`lch`) + `currentColor` 解析
 - **根因定位**：`dom_binding.cp` 的 `_resolveLightDark` 仅展开单层且未对 `currentColor` 回落解析；`window.js` 对含 `color-mix()` 的属性值直接送入 `normCol` 而未替换内嵌 `currentcolor`；`cssom.js` `normalizeSingleColor` 缺少 `color-mix()` 递归求值路径。
 - **修复方案**：改写 `_resolveLightDark` 为最多 16 层迭代展开并处理 `currentcolor` 继承/自身回落；在 `window.js` 调用 `normCol` 前替换 `\bcurrentcolor\b`；在 `cssom.js` 实现 `srgb` 与 `lch`（含 `sRGB -> XYZ D65 -> D50 -> Lab -> LCH` 转换及极坐标色相插值、`C < 1e-6` 输出 `none`）递归求值。4 个 `/css/css-color/` 用例全过，`--smoke` 3/3 PASS。
+
+## Phase 950-965 — Playwright/Puppeteer 全线突破与核心基础设施调优
+- **CDP `TCP_NODELAY`（40ms -> <1ms）**：`server.cp` 对所有 `accept` 的 `client_fd` 开启 `TCP_NODELAY`，消除 Linux Nagle + Delayed ACK 导致的每次 CDP 往返 41-45ms 延迟，Puppeteer `locator.test` 500ms 超时用例全绿且全量测试提速 3-5 倍。
+- **JS `scrollWidth`/`scrollHeight` 原生通道（5.28s -> <5ms）**：`collectRootScrollExtents` 原在 JS 层对每个内联样式节点调用 `getComputedStyle` 导致 `fullPage` 截图超时；接入 `dom_binding.cp` `__capsurf_get_root_scroll_size` 原生盒扫描与同帧缓存后，耗时降至 <5ms。
+- **`evalInIframe` 与 `FRAME_WINDOW_GLOBALS`**：修复带尾分号 IIFE 在 `evalInIframe` 中返回 `undefined` 导致 21 个子 frame 超时的问题，并在 `html-classes.js` 补齐 `getComputedStyle`/`eval`/`CSS`/`matchMedia` 及 `parser.js` `ParsedElement.attributes`。
+- **Worker UAF 与 WS UTF-8 校验**：使用 GDB 定位并修复 `WorkerCdpEventItem.asCdpEvent` 值拷贝悬垂切片与 `terminateWorkersForRuntime` 生命周期倒挂；在 `escapeJsonString` 补齐 RFC 3629 UTF-8 校验与 `\ufffd` 转义，消除二进制 `postData` 引发的 WS 断连。

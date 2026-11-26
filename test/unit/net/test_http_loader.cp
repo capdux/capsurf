@@ -162,8 +162,8 @@ fn testFetchErrorAndSizeBoundaries()! {
     expect_eq(std.mem.eql(u8, data_res.content_type, "text/html"), true);
     expect_eq(std.mem.eql(u8, data_res.html, "<h1>Hello</h1>"), true);
 
-    // 3. Redirect depth limit (> 5)
-    expect_eq(expectFetchError(session, "about:blank", &out_buf, 6), true);
+    // 3. Redirect depth limit (> 20)
+    expect_eq(expectFetchError(session, "about:blank", &out_buf, 21), true);
 
     // 4. Invalid data: URL and unsupported scheme
     expect_eq(expectFetchError(session, "data:text/plain", &out_buf, 0), true);
@@ -206,7 +206,7 @@ fn testOfflineMockFixturesAndInterception()! {
     if (p := parked_ok) {
         p.verdict = InterceptVerdict.Fulfill;
         p.mock_status = 201;
-        p.mock_body = "data:text/html,<div>Intercepted</div>";
+        p.setMockBody("data:text/html,<div>Intercepted</div>");
     }
     const int_res = HttpLoader.fetchDocumentWithContext(session, fulfill_url, &out_buf, 0, "", false)?;
     expect_eq(int_res.status_code, 201);

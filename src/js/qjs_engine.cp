@@ -82,6 +82,7 @@ pub @c {
 
     fn JS_Eval(ctx: *const JSContext, input: [*c]const u8, input_len: usize, filename: [*c]const u8, eval_flags: i32): JSValue;
     fn JS_GetException(ctx: *JSContext): JSValue;
+    fn JS_NewError(ctx: *JSContext): JSValue;
     fn JS_ToCStringLen2(ctx: *const JSContext, plen: *usize, val: JSValue, cesu8: i32): [*]const u8!?;
     fn JS_FreeCString(ctx: *const JSContext, ptr: [*]const u8!?);
     fn JS_FreeValue(ctx: *const JSContext, v: JSValue);
@@ -94,6 +95,8 @@ pub @c {
     fn JS_ToInt32(ctx: *JSContext, pres: *i32, val: JSValue): i32;
     fn JS_ToInt64(ctx: *JSContext, pres: *i64, val: JSValue): i32;
     fn JS_ToFloat64(ctx: *JSContext, pres: *f64, val: JSValue): i32;
+    fn JS_GetUint8Array(ctx: *const JSContext, psize: *usize, obj: JSValue): [*]u8!?;
+    fn JS_NewUint8ArrayCopy(ctx: *JSContext, buf: [*]const u8, len: usize): JSValue;
 }
 
 pub const JS_PROP_CONFIGURABLE: i32 = 1;
@@ -240,6 +243,261 @@ pub struct ReductionState {
     return 0;
 }
 
+/// Drain all pending QuickJS microtask jobs, extracting and freeing any job exception.
+pub fn drainPendingJobs(raw_rt: *JSRuntime) {
+    let pctx: (*JSContext)? = null;
+    let limit: u32 = 100000;
+    while (limit > 0) : (limit -= 1) {
+        const rc = JS_ExecutePendingJob(raw_rt, &pctx);
+        if (rc > 0) {
+            continue;
+        }
+        if (rc < 0) {
+            if (ectx := pctx) {
+                const exc = JS_GetException(ectx);
+                JS_FreeValue(ectx, exc);
+            }
+        }
+        break;
+    }
+}
+
+pub enum TaskQueueKind {
+    Front,
+    Immediate,
+    Timed,
+}
+
+pub struct ScheduledTask {
+    id: u64 = 0,
+    generation: u64 = 0,
+    due_ms: i64 = 0,
+    seq: u64 = 0,
+    interval_ms: i64 = 0,
+    is_interval: bool = false,
+    nesting_level: u32 = 0,
+    blocks_done: bool = true,
+    cb: JSValue = JSValue { u: JSValueUnion { uint64: 0 }, tag: JS_TAG_UNDEFINED },
+
+    fn deinitValues(*_, raw_ctx: *JSContext) {
+        if (!jsIsUndefined(_.cb) && !jsIsNull(_.cb)) {
+            JS_FreeValue(raw_ctx, _.cb);
+        }
+        _.cb = JSValue { u: JSValueUnion { uint64: 0 }, tag: JS_TAG_UNDEFINED };
+    }
+}
+
+pub struct TaskScheduler {
+    front: std.ArrayListUnmanaged(ScheduledTask) = std.ArrayListUnmanaged(ScheduledTask).empty,
+    immediate: std.ArrayListUnmanaged(ScheduledTask) = std.ArrayListUnmanaged(ScheduledTask).empty,
+    timed: std.ArrayListUnmanaged(ScheduledTask) = std.ArrayListUnmanaged(ScheduledTask).empty,
+    generation: u64 = 1,
+    next_id: u64 = 1,
+    next_seq: u64 = 1,
+    current_nesting: u32 = 0,
+    running_task_id: u64 = 0,
+    running_task_cancelled: bool = false,
+
+    fn advanceGeneration(*_): u64 {
+        _.generation += 1;
+        return _.generation;
+    }
+
+    fn deinitQueue(*_, queue: *std.ArrayListUnmanaged(ScheduledTask), raw_ctx: *JSContext) {
+        let i: usize = 0;
+        while (i < queue.items.len) : (i += 1) {
+            queue.items[i].deinitValues(raw_ctx);
+        }
+        queue.deinit(std.heap.c_allocator);
+        queue.* = std.ArrayListUnmanaged(ScheduledTask).empty;
+    }
+
+    fn deinitValues(*_, raw_ctx: *JSContext) {
+        _.deinitQueue(&_.front, raw_ctx);
+        _.deinitQueue(&_.immediate, raw_ctx);
+        _.deinitQueue(&_.timed, raw_ctx);
+    }
+
+    fn schedule(
+        *_,
+        raw_ctx: *JSContext,
+        kind: TaskQueueKind,
+        cb: JSValue,
+        delay_ms: i64,
+        now_ms: i64,
+        is_interval: bool,
+    ): u64 {
+        const nesting = _.current_nesting + 1;
+        let clamped_delay = if (delay_ms < 0) @as(i64, 0) else delay_ms;
+        if (nesting > 5 && clamped_delay < 4) {
+            clamped_delay = 4;
+        }
+        const blocks_done = nesting <= 10;
+        const effective_kind = if (clamped_delay > 0 || is_interval) TaskQueueKind.Timed else kind;
+
+        const id = _.next_id;
+        _.next_id += 1;
+        const seq = _.next_seq;
+        _.next_seq += 1;
+
+        const task = ScheduledTask {
+            id: id,
+            generation: _.generation,
+            due_ms: now_ms + clamped_delay,
+            seq: seq,
+            interval_ms: clamped_delay,
+            is_interval: is_interval,
+            nesting_level: nesting,
+            blocks_done: blocks_done,
+            cb: JS_DupValue(raw_ctx, cb),
+        };
+
+        switch (effective_kind) {
+            .Front => {
+                _.front.append(std.heap.c_allocator, task) catch {
+                    JS_FreeValue(raw_ctx, task.cb);
+                    return 0;
+                };
+            },
+            .Immediate => {
+                _.immediate.append(std.heap.c_allocator, task) catch {
+                    JS_FreeValue(raw_ctx, task.cb);
+                    return 0;
+                };
+            },
+            .Timed => {
+                _.timed.append(std.heap.c_allocator, task) catch {
+                    JS_FreeValue(raw_ctx, task.cb);
+                    return 0;
+                };
+            },
+        }
+        return id;
+    }
+
+    fn cancelFromQueue(*_, queue: *std.ArrayListUnmanaged(ScheduledTask), raw_ctx: *JSContext, id: u64): bool {
+        let i: usize = 0;
+        while (i < queue.items.len) : (i += 1) {
+            if (queue.items[i].id == id) {
+                let removed = queue.orderedRemove(i);
+                removed.deinitValues(raw_ctx);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    fn cancel(*_, raw_ctx: *JSContext, id: u64): bool {
+        if (id == 0) return false;
+        if (_.running_task_id == id) {
+            _.running_task_cancelled = true;
+            return true;
+        }
+        if (_.cancelFromQueue(&_.front, raw_ctx, id)) return true;
+        if (_.cancelFromQueue(&_.immediate, raw_ctx, id)) return true;
+        if (_.cancelFromQueue(&_.timed, raw_ctx, id)) return true;
+        return false;
+    }
+
+    fn popFifoReady(*_, queue: *std.ArrayListUnmanaged(ScheduledTask), raw_ctx: *JSContext): ScheduledTask? {
+        while (queue.items.len > 0) {
+            let task = queue.orderedRemove(0);
+            if (task.generation != _.generation) {
+                task.deinitValues(raw_ctx);
+                continue;
+            }
+            return task;
+        }
+        return null;
+    }
+
+    fn popNextReady(*_, raw_ctx: *JSContext, now_ms: i64): ScheduledTask? {
+        if (t := _.popFifoReady(&_.front, raw_ctx)) return t;
+        if (t := _.popFifoReady(&_.immediate, raw_ctx)) return t;
+
+        // Purge stale generations in timed queue and find earliest due task.
+        let i: usize = 0;
+        let best_idx: usize = 0;
+        let found = false;
+        while (i < _.timed.items.len) {
+            if (_.timed.items[i].generation != _.generation) {
+                let stale = _.timed.orderedRemove(i);
+                stale.deinitValues(raw_ctx);
+                continue;
+            }
+            const item = _.timed.items[i];
+            if (item.due_ms <= now_ms) {
+                if (!found) {
+                    best_idx = i;
+                    found = true;
+                } else {
+                    const best = _.timed.items[best_idx];
+                    if (item.due_ms < best.due_ms || (item.due_ms == best.due_ms && item.seq < best.seq)) {
+                        best_idx = i;
+                    }
+                }
+            }
+            i += 1;
+        }
+        if (found) {
+            return _.timed.orderedRemove(best_idx);
+        }
+        return null;
+    }
+
+    fn stepScheduler(*_, raw_ctx: *JSContext, now_ms: i64): bool {
+        const task_opt = _.popNextReady(raw_ctx, now_ms);
+        if (task := task_opt) {
+            const prev_nesting = _.current_nesting;
+            const prev_running_id = _.running_task_id;
+            const prev_cancelled = _.running_task_cancelled;
+
+            _.current_nesting = task.nesting_level;
+            _.running_task_id = task.id;
+            _.running_task_cancelled = false;
+
+            let dummy_args: [1]JSValue = [jsUndefined()];
+            const res = JS_Call(raw_ctx, task.cb, jsUndefined(), 0, unsafe { @ptrCast(&dummy_args) });
+            if (jsIsException(res)) {
+                const exc = JS_GetException(raw_ctx);
+                JS_FreeValue(raw_ctx, exc);
+            }
+            JS_FreeValue(raw_ctx, res);
+
+            const was_cancelled = _.running_task_cancelled;
+            _.current_nesting = prev_nesting;
+            _.running_task_id = prev_running_id;
+            _.running_task_cancelled = prev_cancelled;
+
+            if (task.is_interval && !was_cancelled && task.generation == _.generation) {
+                const seq = _.next_seq;
+                _.next_seq += 1;
+                const next_task = ScheduledTask {
+                    id: task.id,
+                    generation: task.generation,
+                    due_ms: now_ms + task.interval_ms,
+                    seq: seq,
+                    interval_ms: task.interval_ms,
+                    is_interval: true,
+                    nesting_level: task.nesting_level,
+                    blocks_done: task.blocks_done,
+                    cb: task.cb,
+                };
+                _.timed.append(std.heap.c_allocator, next_task) catch {
+                    JS_FreeValue(raw_ctx, task.cb);
+                };
+            } else {
+                JS_FreeValue(raw_ctx, task.cb);
+            }
+
+            // 1 Macrotask -> drainJobs() Microtask Checkpoint
+            drainPendingJobs(JS_GetRuntime(raw_ctx));
+            return true;
+        }
+        return false;
+    }
+}
+
 pub struct JsRuntime {
     raw_rt: *JSRuntime,
     state: *ReductionState,
@@ -327,12 +585,31 @@ pub struct JsContext {
             buf[code.len] = 0;
             return JS_Eval(_.raw_ctx, buf[0..code.len].ptr, code.len, filename, 0);
         }
-        return JS_Eval(_.raw_ctx, code.ptr, code.len, filename, 0);
+        let zbuf = std.heap.page_allocator.alloc(u8, code.len + 1) catch return JS_Eval(_.raw_ctx, code.ptr, code.len, filename, 0);
+        defer std.heap.page_allocator.free(zbuf);
+        @memcpy(zbuf[0..code.len], code);
+        zbuf[code.len] = 0;
+        return JS_Eval(_.raw_ctx, zbuf[0..code.len].ptr, code.len, filename, 0);
     }
 
     fn compileModule(*_, code: []const u8, module_name: [*c]const u8): (*JSModuleDef)? {
         _.runtime.resetReductions();
-        const val = JS_Eval(_.raw_ctx, code.ptr, code.len, module_name, 33);
+        let stack_buf: [4096]u8 = [0; 4096];
+        let heap_buf: ([]u8)? = null;
+        defer if (heap_buf != null) std.heap.page_allocator.free(heap_buf.?);
+        let code_ptr = code.ptr;
+        if (code.len + 1 <= stack_buf.len) {
+            @memcpy(stack_buf[0..code.len], code);
+            stack_buf[code.len] = 0;
+            code_ptr = stack_buf[0..code.len].ptr;
+        } else {
+            let zbuf = std.heap.page_allocator.alloc(u8, code.len + 1) catch return null;
+            @memcpy(zbuf[0..code.len], code);
+            zbuf[code.len] = 0;
+            heap_buf = zbuf;
+            code_ptr = zbuf[0..code.len].ptr;
+        }
+        const val = JS_Eval(_.raw_ctx, code_ptr, code.len, module_name, 33);
         if (jsIsException(val)) {
             return null;
         }
@@ -384,9 +661,7 @@ pub struct JsContext {
     }
 
     fn drainJobs(*_) {
-        let pctx: (*JSContext)? = null;
-        let limit: u32 = 100000;
-        while (limit > 0 && JS_ExecutePendingJob(_.runtime.raw_rt, &pctx) > 0) : (limit -= 1) {}
+        drainPendingJobs(_.runtime.raw_rt);
     }
 
     fn isPromise(val: JSValue): bool {

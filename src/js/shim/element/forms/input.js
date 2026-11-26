@@ -384,6 +384,12 @@ function installInputElement(global) {
     configurable: true,
   });
 
+  Object.defineProperty(HTMLInputElement.prototype, "webkitdirectory", {
+    get: function () { return this.hasAttribute("webkitdirectory"); },
+    set: function (v) { if (v) this.setAttribute("webkitdirectory", ""); else this.removeAttribute("webkitdirectory"); },
+    configurable: true,
+  });
+
   Object.defineProperty(HTMLInputElement.prototype, "autofocus", {
     get: function () { return this.hasAttribute("autofocus"); },
     set: function (v) { if (v) this.setAttribute("autofocus", ""); else this.removeAttribute("autofocus"); },

@@ -3,19 +3,28 @@
 // Lightweight, native HTTP & RFC 6455 WebSocket server compliant with Puppeteer, Playwright & AI Agents.
 // Uses direct POSIX C-FFI sockets for maximum concurrency, zero-GC, and zero Zig version fragility.
 
-import { CdpBoxModel, CdpTarget, CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt, extractJsonFloat, unescapeJsonString, MAX_CDP_EVENTS } from "./types.cp";
-import { CdpPageSession } from "./session.cp";
+import { CdpBoxModel, CdpTarget, CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt, extractJsonFloat, extractJsonBool, unescapeJsonString, MAX_CDP_EVENTS } from "./types.cp";
+import { CdpPageSession, escapeJsonString, DEFAULT_HTTP_USER_AGENT } from "./session.cp";
 import { CdpDispatcher } from "./dispatch.cp";
 import { drainDomMutationEvents, ByteSlice } from "./dom.cp";
-import { performPendingNavigation } from "./page.cp";
+import { performPendingNavigation, markFetchNavPreAnnounced, emitNewChildFrameEvents } from "./page.cp";
+import { FetchHandler, InterceptVerdict } from "./fetch.cp";
 import { MockFixtures } from "../net/mock_fixtures.cp";
-import { NodeId, NULL_NODE } from "../dom/dom.cp";
+import { NodeId, NULL_NODE, NodeType } from "../dom/dom.cp";
 import { getMilliTimestamp } from "../js/dom_binding.cp";
 import { Base64 } from "cap:encoding";
 import { ScreencastHandler, formatScreencastFrameParams } from "./screencast.cp";
 import { SceneStreamManager, MSG_SCENE, MSG_PARTIAL, SCENE_ENVELOPE_HEADER_BYTES, SCENE_PARTIAL_HEADER_BYTES } from "./scene_stream.cp";
 import { SceneHostManifest, formatManifestJson } from "./scene_host.cp";
 import { encodeRgbaRectToPng } from "../render/painter.cp";
+import { registerDialogHook, registerWorkerContextHook } from "./session_hooks.cp";
+import { DedicatedWorkerPool } from "./workers.cp";
+import { TargetRegistry } from "./target.cp";
+import * as HttpScheduler from "../net/http_scheduler.cp";
+const NetScheduler = HttpScheduler.NetScheduler;
+const NetworkIdleTracker = HttpScheduler.NetworkIdleTracker;
+const NetPollFd = HttpScheduler.PollFd;
+const MAX_SCHEDULER_SLOTS = HttpScheduler.MAX_SCHEDULER_SLOTS;
 
 pub @c {
     struct SockAddrIn {
@@ -54,9 +63,28 @@ pub const AF_INET: i32 = 2;
 pub const SOCK_STREAM: i32 = 1;
 pub const SOL_SOCKET: i32 = 1;
 pub const SO_REUSEADDR: i32 = 2;
+pub const IPPROTO_TCP: i32 = 6;
+pub const TCP_NODELAY: i32 = 1;
+
+fn setTcpNoDelay(fd: i32) {
+    const one: i32 = 1;
+    * = setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, @sizeOf(i32));
+}
 
 fn serverNowMs(): i64 {
     return getMilliTimestamp();
+}
+
+pub struct PendingPromise {
+    active: bool = false,
+    req_id: i64 = 0,
+    raw_id_buf: [64]u8 = [0; 64],
+    raw_id_len: usize = 0,
+    session_id_buf: [128]u8 = [0; 128],
+    session_id_len: usize = 0,
+    target_sess: (*CdpPageSession)? = null,
+    slot: i32 = -1,
+    return_by_value: bool = false,
 }
 
 pub struct PendingSlowEval {
@@ -66,6 +94,24 @@ pub struct PendingSlowEval {
     payload_len: usize = 0,
     session_id_buf: [64]u8 = [0; 64],
     session_id_len: usize = 0,
+}
+
+pub struct PendingNavState {
+    pending_nav_active: bool = false,
+    pending_nav_deadline_ms: i64 = 0,
+    pending_nav_payload_buf: [4096]u8 = [0; 4096],
+    pending_nav_payload_len: usize = 0,
+    pending_nav_sid_buf: [64]u8 = [0; 64],
+    pending_nav_sid_len: usize = 0,
+    pending_nav_tid_buf: [64]u8 = [0; 64],
+    pending_nav_tid_len: usize = 0,
+    pending_fetch_nav_active: bool = false,
+    pending_fetch_nav_payload_buf: [4096]u8 = [0; 4096],
+    pending_fetch_nav_payload_len: usize = 0,
+    pending_fetch_nav_req_id_buf: [64]u8 = [0; 64],
+    pending_fetch_nav_req_id_len: usize = 0,
+    pending_evals: [8]PendingSlowEval = [PendingSlowEval{}; 8],
+    pending_eval_count: usize = 0,
 }
 
 pub struct PendingWheelReply {
@@ -274,7 +320,7 @@ fn wakeServer(port: u16) {
     * = std.c.close(sock_fd);
 }
 
-const MAX_TAB_SESSIONS: usize = 16;
+const MAX_TAB_SESSIONS: usize = 64;
 
 struct TabSessionSlot {
     active: bool = false,
@@ -294,6 +340,422 @@ struct TabSessionSlot {
     }
 }
 
+fn appendDialogJsonField(key: []const u8, val: []const u8, out_buf: []u8, pos: *usize) {
+    const k_prefix = "\"";
+    let i: usize = 0;
+    while (i < k_prefix.len && pos.* < out_buf.len) : (i += 1) {
+        out_buf[pos.*] = k_prefix[i];
+        pos.* += 1;
+    }
+    i = 0;
+    while (i < key.len && pos.* < out_buf.len) : (i += 1) {
+        out_buf[pos.*] = key[i];
+        pos.* += 1;
+    }
+    const mid = "\":\"";
+    i = 0;
+    while (i < mid.len && pos.* < out_buf.len) : (i += 1) {
+        out_buf[pos.*] = mid[i];
+        pos.* += 1;
+    }
+    CdpServer.appendEscapedJsonStr(val, out_buf, pos);
+    if (pos.* < out_buf.len) {
+        out_buf[pos.*] = '"';
+        pos.* += 1;
+    }
+}
+
+fn serverWorkerContextHook(
+    server_ptr: *void,
+    dom_ctx_ptr: (*void)?,
+    out_pool: *(*DedicatedWorkerPool)?,
+    out_registry: *(*TargetRegistry)?,
+): bool {
+    const srv: *CdpServer = unsafe { @ptrCast(@alignCast(server_ptr)) };
+    if (dptr := dom_ctx_ptr) {
+        if (dc := srv.session.dom_ctx) {
+            const dc_ptr: *void = unsafe { @ptrCast(dc) };
+            if (dc_ptr == dptr) {
+                out_pool.* = &srv.session.dedicated_workers;
+                out_registry.* = &srv.session.target_registry;
+                return true;
+            }
+        }
+        let ti: usize = 0;
+        while (ti < MAX_TAB_SESSIONS) : (ti += 1) {
+            if (srv.tab_sessions[ti].active) {
+                if (ts := srv.tab_sessions[ti].page_session) {
+                    if (dc := ts.dom_ctx) {
+                        const dc_ptr: *void = unsafe { @ptrCast(dc) };
+                        if (dc_ptr == dptr) {
+                            out_pool.* = &ts.dedicated_workers;
+                            out_registry.* = &ts.target_registry;
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    out_pool.* = &srv.session.dedicated_workers;
+    out_registry.* = &srv.session.target_registry;
+    return true;
+}
+
+fn serverDialogHook(
+    server_ptr: *void,
+    dlg_type: []const u8,
+    message: []const u8,
+    default_prompt: []const u8,
+    accepted_out: *bool,
+    prompt_buf: []u8,
+    prompt_len_out: *usize,
+): bool {
+    const srv: *CdpServer = unsafe { @ptrCast(@alignCast(server_ptr)) };
+    const client_fd = srv.active_client_fd;
+    if (client_fd < 0) return false;
+
+    const sid = srv.activeDialogSessionId();
+    if (srv.hasDeferredAbortForDialog(sid)) return false;
+    let page_url: []const u8 = srv.session.url;
+    if (sid.len > 0) {
+        let ti: usize = 0;
+        while (ti < MAX_TAB_SESSIONS) : (ti += 1) {
+            if (srv.tab_sessions[ti].active && srv.tab_sessions[ti].page_session != null) {
+                if (std.mem.eql(u8, srv.tab_sessions[ti].sessionId(), sid)) {
+                    page_url = srv.tab_sessions[ti].page_session.?.url;
+                    break;
+                }
+            }
+        }
+    }
+
+    let open_params_buf = std.heap.c_allocator.alloc(u8, 8192) catch return false;
+    defer std.heap.c_allocator.free(open_params_buf);
+    let pos: usize = 0;
+    open_params_buf[pos] = '{';
+    pos += 1;
+    appendDialogJsonField("url", page_url, open_params_buf, &pos);
+    if (pos < open_params_buf.len) {
+        open_params_buf[pos] = ',';
+        pos += 1;
+    }
+    appendDialogJsonField("message", message, open_params_buf, &pos);
+    if (pos < open_params_buf.len) {
+        open_params_buf[pos] = ',';
+        pos += 1;
+    }
+    appendDialogJsonField("type", dlg_type, open_params_buf, &pos);
+    if (pos < open_params_buf.len) {
+        open_params_buf[pos] = ',';
+        pos += 1;
+    }
+    appendDialogJsonField("defaultPrompt", default_prompt, open_params_buf, &pos);
+    const tail = ",\"hasBrowserHandler\":true}";
+    let ti_s: usize = 0;
+    while (ti_s < tail.len && pos < open_params_buf.len) : (ti_s += 1) {
+        open_params_buf[pos] = tail[ti_s];
+        pos += 1;
+    }
+
+    let open_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+    open_evts[0] = CdpEvent{
+        method: "Page.javascriptDialogOpening",
+        params_json: open_params_buf[0..pos],
+        session_id: sid,
+    };
+    CdpServer.emitCdpEventsToFd(client_fd, &open_evts, 1) catch return false;
+
+    const frame_payload = std.heap.c_allocator.alloc(u8, 65536) catch return false;
+    defer std.heap.c_allocator.free(frame_payload);
+
+    while (srv.running) {
+        let pfd = PollFd{ fd: client_fd, events: POLLIN, revents: 0 };
+        const pr = poll(&pfd, 1, 15);
+        if (pr < 0) return false;
+        if (pr == 0) continue;
+        if ((pfd.revents & (POLLERR | POLLNVAL)) != 0) return false;
+
+        const frame_opt = readWsTextFrame(client_fd, frame_payload) catch return false;
+        const payload = frame_opt orelse return false;
+        if (payload.len == 0) continue;
+
+        const req = CdpRequest.parse(payload);
+        if (std.mem.eql(u8, req.method, "Page.handleJavaScriptDialog")) {
+            const dlg_accept = extractJsonBool(req.params_raw, "accept") ?? false;
+            let ptext_buf: [4096]u8 = [0; 4096];
+            let final_len: usize = 0;
+            if (raw_pt := extractJsonString(req.params_raw, "promptText")) {
+                const pt = unescapeJsonString(raw_pt, &ptext_buf);
+                const n = @min(pt.len, prompt_buf.len);
+                if (n > 0) @memcpy(prompt_buf[0..n], pt[0..n]);
+                final_len = n;
+            } else if (std.mem.eql(u8, dlg_type, "prompt") && dlg_accept) {
+                const n = @min(default_prompt.len, prompt_buf.len);
+                if (n > 0) @memcpy(prompt_buf[0..n], default_prompt[0..n]);
+                final_len = n;
+            }
+            accepted_out.* = dlg_accept;
+            prompt_len_out.* = final_len;
+
+            let close_params_buf = std.heap.c_allocator.alloc(u8, 8192) catch return true;
+            defer std.heap.c_allocator.free(close_params_buf);
+            let cpos: usize = 0;
+            const c_prefix = if (dlg_accept) "{\"result\":true,\"" else "{\"result\":false,\"";
+            let ci: usize = 0;
+            while (ci < c_prefix.len && cpos < close_params_buf.len) : (ci += 1) {
+                close_params_buf[cpos] = c_prefix[ci];
+                cpos += 1;
+            }
+            const u_key = "userInput\":\"";
+            ci = 0;
+            while (ci < u_key.len && cpos < close_params_buf.len) : (ci += 1) {
+                close_params_buf[cpos] = u_key[ci];
+                cpos += 1;
+            }
+            CdpServer.appendEscapedJsonStr(prompt_buf[0..final_len], close_params_buf, &cpos);
+            if (cpos + 2 <= close_params_buf.len) {
+                close_params_buf[cpos] = '"';
+                cpos += 1;
+                close_params_buf[cpos] = '}';
+                cpos += 1;
+            }
+
+            let close_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+            close_evts[0] = CdpEvent{
+                method: "Page.javascriptDialogClosed",
+                params_json: close_params_buf[0..cpos],
+                session_id: sid,
+            };
+            CdpServer.emitCdpEventsToFd(client_fd, &close_evts, 1) catch {};
+
+            let reply_buf: [512]u8 = [0; 512];
+            const has_sid = req.session_id.len > 0;
+            const reply_msg = if (req.raw_id.len > 0)
+                (if (has_sid)
+                    (std.fmt.bufPrint(&reply_buf, "{{\"id\":\"{s}\",\"result\":{{}},\"sessionId\":\"{s}\"}}", .{ req.raw_id, req.session_id }) catch "")
+                else
+                    (std.fmt.bufPrint(&reply_buf, "{{\"id\":\"{s}\",\"result\":{{}}}}", .{req.raw_id}) catch ""))
+            else
+                (if (has_sid)
+                    (std.fmt.bufPrint(&reply_buf, "{{\"id\":{d},\"result\":{{}},\"sessionId\":\"{s}\"}}", .{ req.id, req.session_id }) catch "")
+                else
+                    (std.fmt.bufPrint(&reply_buf, "{{\"id\":{d},\"result\":{{}}}}", .{req.id}) catch ""));
+            if (reply_msg.len > 0) {
+                writeWsTextFrame(client_fd, reply_msg) catch {};
+            }
+            return true;
+        }
+
+        if (std.mem.eql(u8, req.method, "Browser.close") ||
+            std.mem.eql(u8, req.method, "Target.closeTarget") ||
+            std.mem.eql(u8, req.method, "Target.disposeBrowserContext"))
+        {
+            accepted_out.* = false;
+            prompt_len_out.* = 0;
+            srv.enqueueDeferredReq(payload);
+            return false;
+        }
+
+        srv.enqueueDeferredReq(payload);
+    }
+    return false;
+}
+
+pub fn serverSyncFetchHook(
+    server_ptr: *void,
+    sess_ptr: *void,
+    url: []const u8,
+    method: []const u8,
+    headers_json: []const u8,
+    rtype: []const u8,
+    net_id: []const u8,
+    redirect_response_json: []const u8,
+): bool {
+    const srv: *CdpServer = unsafe { @ptrCast(@alignCast(server_ptr)) };
+    const sess: *CdpPageSession = unsafe { @ptrCast(@alignCast(sess_ptr)) };
+    const client_fd = srv.active_client_fd;
+    if (client_fd < 0) return false;
+    if (srv.hasDeferredAbortForSession(sess)) return false;
+    const is_redirect = redirect_response_json.len > 0;
+    const should_intercept = (sess.fetch_enabled || sess.fetch_state.enabled) && sess.fetch_state.shouldIntercept(url, rtype);
+    if (!should_intercept && !(is_redirect && sess.network_enabled)) {
+        return false;
+    }
+
+    let sid: []const u8 = "";
+    if (sess != srv.session) {
+        let ti: usize = 0;
+        while (ti < MAX_TAB_SESSIONS) : (ti += 1) {
+            if (srv.tab_sessions[ti].active && srv.tab_sessions[ti].page_session != null) {
+                if (srv.tab_sessions[ti].page_session.? == sess) {
+                    const cand = srv.tab_sessions[ti].sessionId();
+                    if (cand.len > 0 && !std.mem.startsWith(u8, cand, "capsurf-cdp-session-")) {
+                        sid = cand;
+                    }
+                    break;
+                }
+            }
+        }
+    } else if (sess.target_registry.targets[0].session_id_len > 0) {
+        const cand = sess.target_registry.targets[0].sessionId();
+        if (cand.len > 0 && !std.mem.startsWith(u8, cand, "capsurf-cdp-session-")) {
+            sid = cand;
+        }
+    }
+
+    let esc_url_buf: [2048]u8 = [0; 2048];
+    const esc_url = escapeJsonString(url, &esc_url_buf);
+    const hdr_obj = if (headers_json.len >= 2 && headers_json[0] == '{') headers_json else "{}";
+
+    let evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+    let evt_count: usize = 0;
+    let nev_buf: [16384]u8 = [0; 16384];
+    let redir_kv_buf: [8192]u8 = [0; 8192];
+    let redir_kv: []const u8 = "";
+    if (is_redirect) {
+        redir_kv = std.fmt.bufPrint(&redir_kv_buf, ",\"redirectResponse\":{s}", .{redirect_response_json}) catch "";
+    }
+    if (sess.network_enabled) {
+        let esc_doc_buf: [2048]u8 = [0; 2048];
+        const esc_doc = escapeJsonString(sess.url, &esc_doc_buf);
+        const req_json = std.fmt.bufPrint(
+            &nev_buf,
+            "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"{s}\",\"headers\":{s},\"initialPriority\":\"High\",\"referrerPolicy\":\"no-referrer\"}}{s},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"parser\"}},\"type\":\"{s}\",\"frameId\":\"{s}\"}}",
+            .{ net_id, sess.loader_id, esc_doc, esc_url, method, hdr_obj, redir_kv, rtype, sess.frame_id },
+        ) catch "";
+        if (req_json.len > 0) {
+            evts[evt_count] = CdpEvent.create("Network.requestWillBeSent", req_json);
+            if (sid.len > 0) evts[evt_count].session_id = sid;
+            evt_count += 1;
+        }
+    }
+
+    if (!should_intercept) {
+        if (evt_count > 0) {
+            CdpServer.emitCdpEventsToFd(client_fd, &evts, evt_count) catch return false;
+        }
+        return false;
+    }
+
+    let req_id_buf: [64]u8 = [0; 64];
+    const req_id = if (is_redirect)
+        (std.fmt.bufPrint(&req_id_buf, "fetch-redir-{d}", .{sess.fetch_state.next_id}) catch "fetch-redir-1")
+    else
+        (std.fmt.bufPrint(&req_id_buf, "fetch-sub-{d}", .{sess.fetch_state.next_id}) catch "fetch-sub-1");
+    sess.fetch_state.next_id += 1;
+
+    const parked_opt = sess.fetch_state.parkRequest(req_id, url, method);
+    let parked = parked_opt orelse return false;
+    const rt_n = @min(rtype.len, parked.resource_type_buf.len);
+    if (rt_n > 0) @memcpy(parked.resource_type_buf[0..rt_n], rtype[0..rt_n]);
+    parked.resource_type_len = rt_n;
+    const nid_n = @min(net_id.len, parked.network_id_buf.len);
+    if (nid_n > 0) @memcpy(parked.network_id_buf[0..nid_n], net_id[0..nid_n]);
+    parked.network_id_len = nid_n;
+
+    let fev_buf: [8192]u8 = [0; 8192];
+    if (fev := FetchHandler.buildRequestPausedEventWithHeaders(req_id, esc_url, method, rtype, sess.frame_id, net_id, hdr_obj, &fev_buf)) {
+        evts[evt_count] = fev;
+        if (sid.len > 0) evts[evt_count].session_id = sid;
+        evt_count += 1;
+    }
+    if (evt_count > 0) {
+        CdpServer.emitCdpEventsToFd(client_fd, &evts, evt_count) catch return false;
+    }
+
+    const frame_payload = std.heap.c_allocator.alloc(u8, 1024 * 1024) catch return false;
+    defer std.heap.c_allocator.free(frame_payload);
+
+    while (srv.running) {
+        let pfd = PollFd{ fd: client_fd, events: POLLIN, revents: 0 };
+        const pr = poll(&pfd, 1, 15);
+        if (pr < 0) return false;
+        if (pr == 0) continue;
+        if ((pfd.revents & (POLLERR | POLLNVAL)) != 0) return false;
+
+        const frame_opt = readWsTextFrame(client_fd, frame_payload) catch return false;
+        const payload = frame_opt orelse return false;
+        if (payload.len == 0) continue;
+
+        const req = CdpRequest.parse(payload);
+        if (std.mem.eql(u8, req.method, "Fetch.continueRequest") ||
+            std.mem.eql(u8, req.method, "Fetch.fulfillRequest") ||
+            std.mem.eql(u8, req.method, "Fetch.failRequest") ||
+            std.mem.eql(u8, req.method, "Fetch.disable"))
+        {
+            const target_sess = srv.resolveSessionForRequest(req);
+            let res_buf: [4096]u8 = [0; 4096];
+            let disp_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+            let disp_evt_count: usize = 0;
+            const resp = CdpDispatcher.dispatch(target_sess, req, &res_buf, &disp_evts, &disp_evt_count);
+
+            let ei: usize = 0;
+            while (ei < disp_evt_count) : (ei += 1) {
+                if (disp_evts[ei].session_id.len == 0 && req.session_id.len > 0 &&
+                    !std.mem.startsWith(u8, req.session_id, "capsurf-cdp-session-"))
+                {
+                    disp_evts[ei].session_id = req.session_id;
+                }
+            }
+            if (disp_evt_count > 0) {
+                CdpServer.emitCdpEventsToFd(client_fd, &disp_evts, disp_evt_count) catch {};
+            }
+
+            let reply_buf: [2048]u8 = [0; 2048];
+            const has_sid = req.session_id.len > 0;
+            let msg: []const u8 = "";
+            if (resp.isOk()) {
+                if (resp.raw_id.len > 0) {
+                    if (has_sid) {
+                        msg = std.fmt.bufPrint(&reply_buf, "{{\"id\":\"{s}\",\"result\":{s},\"sessionId\":\"{s}\"}}", .{ resp.raw_id, resp.result_json, req.session_id }) catch "";
+                    } else {
+                        msg = std.fmt.bufPrint(&reply_buf, "{{\"id\":\"{s}\",\"result\":{s}}}", .{ resp.raw_id, resp.result_json }) catch "";
+                    }
+                } else {
+                    if (has_sid) {
+                        msg = std.fmt.bufPrint(&reply_buf, "{{\"id\":{d},\"result\":{s},\"sessionId\":\"{s}\"}}", .{ resp.id, resp.result_json, req.session_id }) catch "";
+                    } else {
+                        msg = std.fmt.bufPrint(&reply_buf, "{{\"id\":{d},\"result\":{s}}}", .{ resp.id, resp.result_json }) catch "";
+                    }
+                }
+            } else {
+                if (resp.raw_id.len > 0) {
+                    if (has_sid) {
+                        msg = std.fmt.bufPrint(&reply_buf, "{{\"id\":\"{s}\",\"error\":{{\"code\":{d},\"message\":\"{s}\"}},\"sessionId\":\"{s}\"}}", .{ resp.raw_id, resp.error_code, resp.error_message, req.session_id }) catch "";
+                    } else {
+                        msg = std.fmt.bufPrint(&reply_buf, "{{\"id\":\"{s}\",\"error\":{{\"code\":{d},\"message\":\"{s}\"}}}}", .{ resp.raw_id, resp.error_code, resp.error_message }) catch "";
+                    }
+                } else {
+                    if (has_sid) {
+                        msg = std.fmt.bufPrint(&reply_buf, "{{\"id\":{d},\"error\":{{\"code\":{d},\"message\":\"{s}\"}},\"sessionId\":\"{s}\"}}", .{ resp.id, resp.error_code, resp.error_message, req.session_id }) catch "";
+                    } else {
+                        msg = std.fmt.bufPrint(&reply_buf, "{{\"id\":{d},\"error\":{{\"code\":{d},\"message\":\"{s}\"}}}}", .{ resp.id, resp.error_code, resp.error_message }) catch "";
+                    }
+                }
+            }
+            if (msg.len > 0) {
+                writeWsTextFrame(client_fd, msg) catch {};
+            }
+            if (std.mem.eql(u8, req.method, "Fetch.disable") || parked.verdict != InterceptVerdict.None) {
+                return true;
+            }
+            continue;
+        }
+
+        if (std.mem.eql(u8, req.method, "Browser.close") ||
+            std.mem.eql(u8, req.method, "Target.closeTarget") ||
+            std.mem.eql(u8, req.method, "Target.disposeBrowserContext"))
+        {
+            srv.enqueueDeferredReq(payload);
+            return false;
+        }
+
+        srv.enqueueDeferredReq(payload);
+    }
+    return false;
+}
+
 pub struct CdpServer {
     allocator: std.mem.Allocator,
     port: u16,
@@ -301,6 +763,33 @@ pub struct CdpServer {
     session: *CdpPageSession,
     tab_sessions: [MAX_TAB_SESSIONS]TabSessionSlot = [TabSessionSlot{}; MAX_TAB_SESSIONS],
     running: bool = false,
+    active_client_fd: i32 = -1,
+    active_dialog_session_id_buf: [128]u8 = [0; 128],
+    active_dialog_session_id_len: usize = 0,
+    deferred_reqs: [32][4096]u8 = [[0; 4096]; 32],
+    deferred_req_lens: [32]usize = [0; 32],
+    deferred_req_count: usize = 0,
+    net_scheduler: NetScheduler = NetScheduler.init(),
+    net_idle_tracker: NetworkIdleTracker = NetworkIdleTracker.init(),
+
+    fn setActiveDialogSessionId(*_, sid: []const u8) {
+        const n = @min(sid.len, _.active_dialog_session_id_buf.len);
+        if (n > 0) @memcpy(_.active_dialog_session_id_buf[0..n], sid[0..n]);
+        _.active_dialog_session_id_len = n;
+    }
+
+    fn activeDialogSessionId(): []const u8 {
+        return _.active_dialog_session_id_buf[0.._.active_dialog_session_id_len];
+    }
+
+    fn enqueueDeferredReq(*_, payload: []const u8) {
+        if (_.deferred_req_count >= _.deferred_reqs.len) return;
+        const idx = _.deferred_req_count;
+        const n = @min(payload.len, _.deferred_reqs[idx].len);
+        if (n > 0) @memcpy(_.deferred_reqs[idx][0..n], payload[0..n]);
+        _.deferred_req_lens[idx] = n;
+        _.deferred_req_count += 1;
+    }
 
     pub static fn init(allocator: std.mem.Allocator, port: u16): (*CdpServer)! {
         const page_session = CdpPageSession.init(allocator) catch return error.SessionInitFailed;
@@ -313,11 +802,14 @@ pub struct CdpServer {
             tab_sessions: [TabSessionSlot{}; MAX_TAB_SESSIONS],
             running: false,
         };
+        ptr.session.setSyncFetchHook(unsafe { @ptrCast(ptr) }, &serverSyncFetchHook);
         return ptr;
     }
 
     pub fn deinit(*_) {
         _.stop();
+        _.net_scheduler.abortAll();
+        _.net_idle_tracker.resetForNavigation();
         _.deinitTabSessions();
         _.session.deinit();
         std.heap.c_allocator.destroy(_);
@@ -348,11 +840,154 @@ pub struct CdpServer {
         }
     }
 
+    fn deinitTabSessionMatch(*_, tid: []const u8, sid: []const u8, sess_ptr: (*CdpPageSession)?) {
+        let i: usize = 0;
+        while (i < MAX_TAB_SESSIONS) : (i += 1) {
+            if (!_.tab_sessions[i].active) continue;
+            let matched = false;
+            if (sid.len > 0 && _.tab_sessions[i].key_len > 0 && std.mem.eql(u8, _.tab_sessions[i].key_buf[0.._.tab_sessions[i].key_len], sid)) {
+                matched = true;
+            }
+            if (!matched) {
+                if (sp := sess_ptr) {
+                    if (ps := _.tab_sessions[i].page_session) {
+                        if (ps == sp) {
+                            matched = true;
+                        }
+                    }
+                }
+            }
+            if (!matched && tid.len > 0) {
+                if (ps := _.tab_sessions[i].page_session) {
+                    if ((ps.target_id.len > 0 && std.mem.eql(u8, ps.target_id, tid)) ||
+                        (ps.frame_id.len > 0 && std.mem.eql(u8, ps.frame_id, tid))) {
+                        matched = true;
+                    }
+                }
+            }
+            if (matched) {
+                if (_.tab_sessions[i].page_session != null) {
+                    _.tab_sessions[i].page_session.?.deinit();
+                }
+                _.tab_sessions[i] = TabSessionSlot{};
+            }
+        }
+    }
+
+    fn sessionBelongsToContext(*_, sid: []const u8, bctx: []const u8): bool {
+        if (sid.len == 0 || bctx.len == 0) return false;
+        if (tid := _.session.target_registry.findTargetIdBySessionId(sid)) {
+            if (t_idx := _.session.target_registry.findTargetIndex(tid)) {
+                if (std.mem.eql(u8, _.session.target_registry.targets[t_idx].browserContextId(), bctx)) {
+                    return true;
+                }
+            }
+        }
+        let i: usize = 0;
+        while (i < MAX_TAB_SESSIONS) : (i += 1) {
+            if (_.tab_sessions[i].active &&
+                std.mem.eql(u8, _.tab_sessions[i].sessionId(), sid) &&
+                std.mem.eql(u8, _.tab_sessions[i].browserContextId(), bctx))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    fn targetBelongsToContext(*_, tid: []const u8, bctx: []const u8): bool {
+        if (tid.len == 0 || bctx.len == 0) return false;
+        if (t_idx := _.session.target_registry.findTargetIndex(tid)) {
+            return std.mem.eql(u8, _.session.target_registry.targets[t_idx].browserContextId(), bctx);
+        }
+        return false;
+    }
+
+    fn hasActiveTabSessions(*_): bool {
+        let i: usize = 0;
+        while (i < MAX_TAB_SESSIONS) : (i += 1) {
+            if (_.tab_sessions[i].active) return true;
+        }
+        return false;
+    }
+
+    fn hasDeferredAbortForSession(*_, sess: *CdpPageSession): bool {
+        if (_.deferred_req_count == 0) return false;
+        const sess_bctx = sess.current_browser_context_id_buf[0..sess.current_browser_context_id_len];
+        let i: usize = 0;
+        while (i < _.deferred_req_count) : (i += 1) {
+            const dlen = _.deferred_req_lens[i];
+            if (dlen == 0) continue;
+            const dreq = CdpRequest.parse(_.deferred_reqs[i][0..dlen]);
+            if (std.mem.eql(u8, dreq.method, "Browser.close")) return true;
+            if (std.mem.eql(u8, dreq.method, "Target.disposeBrowserContext")) {
+                const dc_id = extractJsonString(dreq.params_raw, "browserContextId") ?? "";
+                if (dc_id.len > 0 && sess_bctx.len > 0 && std.mem.eql(u8, dc_id, sess_bctx)) {
+                    return true;
+                }
+            }
+            if (std.mem.eql(u8, dreq.method, "Target.closeTarget")) {
+                const ct_id = extractJsonString(dreq.params_raw, "targetId") ?? "";
+                if (ct_id.len > 0 && sess.target_id.len > 0 && std.mem.eql(u8, ct_id, sess.target_id)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    fn hasDeferredAbortForDialog(*_, sid: []const u8): bool {
+        if (_.deferred_req_count == 0) return false;
+        let i: usize = 0;
+        while (i < _.deferred_req_count) : (i += 1) {
+            const dlen = _.deferred_req_lens[i];
+            if (dlen == 0) continue;
+            const dreq = CdpRequest.parse(_.deferred_reqs[i][0..dlen]);
+            if (std.mem.eql(u8, dreq.method, "Browser.close")) return true;
+            if (std.mem.eql(u8, dreq.method, "Target.disposeBrowserContext")) {
+                const dc_id = extractJsonString(dreq.params_raw, "browserContextId") ?? "";
+                if (dc_id.len > 0 && _.sessionBelongsToContext(sid, dc_id)) {
+                    return true;
+                }
+            }
+            if (std.mem.eql(u8, dreq.method, "Target.closeTarget")) {
+                const ct_id = extractJsonString(dreq.params_raw, "targetId") ?? "";
+                if (ct_id.len > 0 && sid.len > 0) {
+                    if (tid := _.session.target_registry.findTargetIdBySessionId(sid)) {
+                        if (std.mem.eql(u8, tid, ct_id)) return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    static fn sendCdpErrorById(client_fd: i32, req_id: i64, raw_id: []const u8, session_id: []const u8, code: i32, message: []const u8) {
+        let err_buf: [512]u8 = [0; 512];
+        const has_sid = session_id.len > 0;
+        const msg = if (raw_id.len > 0)
+            (if (has_sid)
+                (std.fmt.bufPrint(&err_buf, "{{\"id\":\"{s}\",\"error\":{{\"code\":{d},\"message\":\"{s}\"}},\"sessionId\":\"{s}\"}}", .{ raw_id, code, message, session_id }) catch "")
+            else
+                (std.fmt.bufPrint(&err_buf, "{{\"id\":\"{s}\",\"error\":{{\"code\":{d},\"message\":\"{s}\"}}}}", .{ raw_id, code, message }) catch ""))
+        else
+            (if (has_sid)
+                (std.fmt.bufPrint(&err_buf, "{{\"id\":{d},\"error\":{{\"code\":{d},\"message\":\"{s}\"}},\"sessionId\":\"{s}\"}}", .{ req_id, code, message, session_id }) catch "")
+            else
+                (std.fmt.bufPrint(&err_buf, "{{\"id\":{d},\"error\":{{\"code\":{d},\"message\":\"{s}\"}}}}", .{ req_id, code, message }) catch ""));
+        if (msg.len > 0) {
+            writeWsTextFrame(client_fd, msg) catch {};
+        }
+    }
+
     fn deinitTabSessionByContext(*_, bctx: []const u8) {
         if (bctx.len == 0) return;
         let i: usize = 0;
         while (i < MAX_TAB_SESSIONS) : (i += 1) {
-            if (_.tab_sessions[i].active && _.tab_sessions[i].bctx_len > 0 && std.mem.eql(u8, _.tab_sessions[i].bctx_buf[0.._.tab_sessions[i].bctx_len], bctx)) {
+            if (!_.tab_sessions[i].active) continue;
+            const match_bctx = _.tab_sessions[i].bctx_len > 0 && std.mem.eql(u8, _.tab_sessions[i].browserContextId(), bctx);
+            const match_sid = !match_bctx && _.sessionBelongsToContext(_.tab_sessions[i].sessionId(), bctx);
+            if (match_bctx || match_sid) {
                 if (_.tab_sessions[i].page_session != null) {
                     _.tab_sessions[i].page_session.?.deinit();
                 }
@@ -402,6 +1037,7 @@ pub struct CdpServer {
         if (!found_slot) return _.session;
 
         const new_sess = CdpPageSession.init(_.allocator) catch return _.session;
+        new_sess.setSyncFetchHook(unsafe { @ptrCast(_) }, &serverSyncFetchHook);
         new_sess.skip_raster = _.session.skip_raster;
         new_sess.viewport_width = _.session.viewport_width;
         new_sess.viewport_height = _.session.viewport_height;
@@ -438,7 +1074,11 @@ pub struct CdpServer {
                 new_sess.frame_id = _.tab_sessions[slot_idx].frame_id_buf[0..flen];
                 new_sess.target_id = new_sess.frame_id;
                 if (t_idx := _.session.target_registry.findTargetIndex(tid)) {
-                    if (_.session.target_registry.targets[t_idx].opener_id_len > 0 && !_.session.target_registry.targets[t_idx].popup_noopener) {
+                    const tgt = &_.session.target_registry.targets[t_idx];
+                    if (tgt.opener_id_len > 0 && std.mem.eql(u8, tgt.url(), "about:blank")) {
+                        new_sess.is_about_blank_popup = true;
+                    }
+                    if (tgt.opener_id_len > 0 && !tgt.popup_noopener) {
                         new_sess.has_opener = true;
                         const op_v = new_sess.ctx.eval("window.opener = window.opener || { closed: false };");
                         new_sess.ctx.freeValue(op_v);
@@ -501,6 +1141,21 @@ pub struct CdpServer {
             }
             if (_.session.target_registry.findFrameIdBySessionId(req.session_id) != null) {
                 return _.session;
+            }
+            if (_.session.dedicated_workers.findWorkerBySessionId(req.session_id) != null) {
+                return _.session;
+            }
+            {
+                let wi: usize = 0;
+                while (wi < MAX_TAB_SESSIONS) : (wi += 1) {
+                    if (_.tab_sessions[wi].active) {
+                        if (ts := _.tab_sessions[wi].page_session) {
+                            if (ts.dedicated_workers.findWorkerBySessionId(req.session_id) != null) {
+                                return ts;
+                            }
+                        }
+                    }
+                }
             }
             let resolved_bctx: []const u8 = bctx;
             if (resolved_bctx.len == 0) {
@@ -596,6 +1251,7 @@ pub struct CdpServer {
                 * = std.c.close(client_fd);
                 break;
             }
+            setTcpNoDelay(client_fd);
             _.handleClient(client_fd) catch {};
         }
     }
@@ -1013,6 +1669,20 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
         flushReopenLoadEventsForSession(client_fd, _.session, "")?;
     }
 
+    static fn shouldSyncChildFrames(sess: *CdpPageSession): bool {
+        if (sess.known_child_frame_count > 0) return true;
+        let nid: usize = 1;
+        while (nid < sess.doc.nodes.items.len) : (nid += 1) {
+            const node = &sess.doc.nodes.items[nid];
+            if (node.node_type == NodeType.Element &&
+                (std.ascii.eqlIgnoreCase(node.tag_name, "iframe") || std.ascii.eqlIgnoreCase(node.tag_name, "frame")))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     static fn flushDomEventsForSession(client_fd: i32, sess: *CdpPageSession)! {
         if (!sess.dom_document_sent) return;
         let msgs = std.ArrayListUnmanaged(ByteSlice).empty;
@@ -1078,7 +1748,9 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
             if (sid.len > 0) {
                 let ei: usize = 0;
                 while (ei < nav_event_count) : (ei += 1) {
-                    if (nav_events[ei].session_id.len == 0) {
+                    if (nav_events[ei].session_id.len == 0 &&
+                        !std.mem.startsWith(u8, nav_events[ei].method, "Browser."))
+                    {
                         nav_events[ei].session_id = sid;
                     }
                 }
@@ -1381,37 +2053,82 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
         defer _.deinitTabSessions();
         _.session.resetSession();
         defer _.session.resetSession();
+        _.net_scheduler.abortAll();
+        _.net_idle_tracker.resetForNavigation();
+        defer {
+            _.net_scheduler.abortAll();
+            _.net_idle_tracker.resetForNavigation();
+        }
+        _.active_client_fd = client_fd;
+        defer _.active_client_fd = -1;
+        _.deferred_req_count = 0;
+        _.setActiveDialogSessionId("");
+        registerDialogHook(unsafe { @ptrCast(_) }, &serverDialogHook);
+        registerWorkerContextHook(unsafe { @ptrCast(_) }, &serverWorkerContextHook);
         let pending_initial_url = initial_url;
-        let frame_payload = std.heap.c_allocator.alloc(u8, 2 * 1024 * 1024) catch return;
+        let frame_payload = std.heap.c_allocator.alloc(u8, 8 * 1024 * 1024) catch return;
         defer std.heap.c_allocator.free(frame_payload);
         @memset(frame_payload, 0);
 
         const session_start_ms = serverNowMs();
         let last_client_activity_ms = session_start_ms;
+        let last_idle_tick_ms: i64 = serverNowMs();
 
         // Pending slow-navigation state for non-blocking navigate window
-        let pending_nav_active = false;
-        let pending_nav_deadline_ms: i64 = 0;
-        let pending_nav_payload_buf = std.heap.c_allocator.alloc(u8, 4096) catch return;
-        defer std.heap.c_allocator.free(pending_nav_payload_buf);
-        @memset(pending_nav_payload_buf, 0);
-        let pending_nav_payload_len: usize = 0;
-        let pending_nav_sid_buf: [64]u8 = [0; 64];
-        let pending_nav_sid_len: usize = 0;
-        let pending_nav_tid_buf: [64]u8 = [0; 64];
-        let pending_nav_tid_len: usize = 0;
-        let pending_evals = std.heap.c_allocator.alloc(PendingSlowEval, 8) catch return;
-        defer std.heap.c_allocator.free(pending_evals);
-        let pei: usize = 0;
-        while (pei < pending_evals.len) : (pei += 1) {
-            pending_evals[pei] = PendingSlowEval{};
+        let nav_state = std.heap.c_allocator.create(PendingNavState) catch return;
+        defer std.heap.c_allocator.destroy(nav_state);
+        nav_state.* = PendingNavState{};
+        defer markFetchNavPreAnnounced("");
+        let pending_promises = std.heap.c_allocator.alloc(PendingPromise, 16) catch return;
+        defer {
+            let ppi_d: usize = 0;
+            while (ppi_d < pending_promises.len) : (ppi_d += 1) {
+                if (pending_promises[ppi_d].active) {
+                    if (ts_d := pending_promises[ppi_d].target_sess) {
+                        ts_d.freeParkedPromiseSlot(pending_promises[ppi_d].slot);
+                    }
+                }
+            }
+            std.heap.c_allocator.free(pending_promises);
         }
-        let pending_eval_count: usize = 0;
+        let ppi_i: usize = 0;
+        while (ppi_i < pending_promises.len) : (ppi_i += 1) {
+            pending_promises[ppi_i] = PendingPromise{};
+        }
         let pending_wheel = std.heap.c_allocator.create(PendingWheelBatch) catch return;
         defer std.heap.c_allocator.destroy(pending_wheel);
         pending_wheel.* = PendingWheelBatch{};
 
         while (_.running) {
+            if (_.deferred_req_count > 0) {
+                let close_after_drain = false;
+                while (_.deferred_req_count > 0 && _.running) {
+                    let def_buf: [4096]u8 = [0; 4096];
+                    const def_len = _.deferred_req_lens[0];
+                    if (def_len > 0) @memcpy(def_buf[0..def_len], _.deferred_reqs[0][0..def_len]);
+                    let di: usize = 1;
+                    while (di < _.deferred_req_count) : (di += 1) {
+                        const l = _.deferred_req_lens[di];
+                        if (l > 0) @memcpy(_.deferred_reqs[di - 1][0..l], _.deferred_reqs[di][0..l]);
+                        _.deferred_req_lens[di - 1] = l;
+                    }
+                    _.deferred_req_count -= 1;
+                    _.deferred_req_lens[_.deferred_req_count] = 0;
+                    if (def_len == 0) continue;
+                    const def_req = CdpRequest.parse(def_buf[0..def_len]);
+                    const is_def_close = std.mem.eql(u8, def_req.method, "Browser.close");
+                    _.dispatchCdpCommand(client_fd, def_req, pending_promises, nav_state) catch {
+                        close_after_drain = true;
+                        break;
+                    };
+                    if (is_def_close) {
+                        writeWsCloseFrame(client_fd, 1000, "Browser.close") catch {};
+                        close_after_drain = true;
+                        break;
+                    }
+                }
+                if (close_after_drain) break;
+            }
             const loop_now_ms = serverNowMs();
             if (max_session_ms > 0 && (loop_now_ms - session_start_ms) >= max_session_ms) {
                 writeWsCloseFrame(client_fd, 1001, "Max session exceeded") catch {};
@@ -1421,19 +2138,19 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                 writeWsCloseFrame(client_fd, 1001, "Session idle timeout") catch {};
                 break;
             }
-            if (pending_nav_active && loop_now_ms >= pending_nav_deadline_ms) {
-                pending_nav_active = false;
-                const nav_req = CdpRequest.parse(pending_nav_payload_buf[0..pending_nav_payload_len]);
-                _.dispatchCdpCommand(client_fd, nav_req) catch break;
+            if (nav_state.pending_nav_active && loop_now_ms >= nav_state.pending_nav_deadline_ms) {
+                nav_state.pending_nav_active = false;
+                const nav_req = CdpRequest.parse(nav_state.pending_nav_payload_buf[0..nav_state.pending_nav_payload_len]);
+                _.dispatchCdpCommand(client_fd, nav_req, pending_promises, nav_state) catch break;
                 let ei: usize = 0;
-                while (ei < pending_eval_count) : (ei += 1) {
-                    if (pending_evals[ei].active) {
-                        pending_evals[ei].active = false;
-                        const ev_req = CdpRequest.parse(pending_evals[ei].payload_buf[0..pending_evals[ei].payload_len]);
-                        _.dispatchCdpCommand(client_fd, ev_req) catch break;
+                while (ei < nav_state.pending_eval_count) : (ei += 1) {
+                    if (nav_state.pending_evals[ei].active) {
+                        nav_state.pending_evals[ei].active = false;
+                        const ev_req = CdpRequest.parse(nav_state.pending_evals[ei].payload_buf[0..nav_state.pending_evals[ei].payload_len]);
+                        _.dispatchCdpCommand(client_fd, ev_req, pending_promises, nav_state) catch break;
                     }
                 }
-                pending_eval_count = 0;
+                nav_state.pending_eval_count = 0;
             }
 
             if (pending_initial_url.len > 0) {
@@ -1457,10 +2174,9 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                 }
             }
 
-            let pfds: [2]PollFd = [
-                PollFd{ fd: client_fd, events: POLLIN, revents: 0 },
-                PollFd{ fd: _.listen_fd, events: POLLIN, revents: 0 },
-            ];
+            let pfds: [2 + MAX_SCHEDULER_SLOTS]PollFd = [PollFd{ fd: -1, events: 0, revents: 0 }; 2 + MAX_SCHEDULER_SLOTS];
+            pfds[0] = PollFd{ fd: client_fd, events: POLLIN, revents: 0 };
+            pfds[1] = PollFd{ fd: _.listen_fd, events: POLLIN, revents: 0 };
             let fast_poll = _.session.screencast_handler.isActive() && _.session.screencast_handler.state.min_frame_interval_ms <= 16;
             if (!fast_poll) {
                 if (st := _.session.facade.stream_mgr.getPrimaryStream()) {
@@ -1481,16 +2197,79 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                     }
                 }
             }
+            let has_active_promise = false;
+            let ppi_chk: usize = 0;
+            while (ppi_chk < pending_promises.len) : (ppi_chk += 1) {
+                if (pending_promises[ppi_chk].active) {
+                    has_active_promise = true;
+                    break;
+                }
+            }
             const base_poll_ms: i32 = if (fast_poll) 5 else 15;
-            const poll_ms: i32 = if (pending_wheel.active) 1 else base_poll_ms;
-            const nfds: u64 = if (_.listen_fd >= 0) 2 else 1;
+            const poll_ms: i32 = if (pending_wheel.active || has_active_promise) 1 else base_poll_ms;
+            const base_nfds: usize = if (_.listen_fd >= 0) 2 else 1;
+            let net_pfds: [MAX_SCHEDULER_SLOTS]NetPollFd = [NetPollFd{ fd: -1, events: 0, revents: 0 }; MAX_SCHEDULER_SLOTS];
+            let slot_indices: [MAX_SCHEDULER_SLOTS]usize = [0; MAX_SCHEDULER_SLOTS];
+            const net_nfds = _.net_scheduler.fillPollFds(&net_pfds, &slot_indices);
+            let nfi: usize = 0;
+            while (nfi < net_nfds) : (nfi += 1) {
+                pfds[base_nfds + nfi] = PollFd{
+                    fd: net_pfds[nfi].fd,
+                    events: net_pfds[nfi].events,
+                    revents: 0,
+                };
+            }
+            const nfds: u64 = @as(u64, @intCast(base_nfds + net_nfds));
             const pr = poll(&pfds[0], nfds, poll_ms);
             if (pr < 0) {
                 break;
             }
+            const tick_now_ms = serverNowMs();
+            if (net_nfds > 0) {
+                let rfi: usize = 0;
+                while (rfi < net_nfds) : (rfi += 1) {
+                    net_pfds[rfi].revents = pfds[base_nfds + rfi].revents;
+                }
+                * = _.net_scheduler.stepSockets(&net_pfds, &slot_indices, net_nfds, tick_now_ms);
+            }
+            * = _.net_scheduler.startPending(tick_now_ms);
+            const net_active: u32 = @as(u32, @intCast(_.net_scheduler.inflightCount()));
+            const net_queued: u32 = @as(u32, @intCast(_.net_scheduler.queuedCount()));
+            const net_dispatch_pending = _.net_scheduler.hasPendingDispatch();
+            _.net_idle_tracker.sampleIdle(net_active, net_queued, net_dispatch_pending, tick_now_ms);
+            const idle_status = _.net_idle_tracker.checkIdleReady(tick_now_ms, 500);
+            if (_.session.has_document && (idle_status.almost_idle || idle_status.network_idle)) {
+                let lc_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+                let lc_cnt: usize = 0;
+                let lc_buf_almost: [256]u8 = [0; 256];
+                let lc_buf_idle: [256]u8 = [0; 256];
+                const ts_sec: f64 = @as(f64, @floatFromInt(tick_now_ms)) / 1000.0;
+                if (idle_status.almost_idle) {
+                    const lc_json = std.fmt.bufPrint(
+                        &lc_buf_almost,
+                        "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"name\":\"networkalmostidle\",\"timestamp\":{d:.3}}}",
+                        .{ _.session.frame_id, _.session.loader_id, ts_sec },
+                    ) catch "{}";
+                    lc_evts[lc_cnt] = CdpEvent.create("Page.lifecycleEvent", lc_json);
+                    lc_cnt += 1;
+                }
+                if (idle_status.network_idle) {
+                    const lc_json = std.fmt.bufPrint(
+                        &lc_buf_idle,
+                        "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"name\":\"networkIdle\",\"timestamp\":{d:.3}}}",
+                        .{ _.session.frame_id, _.session.loader_id, ts_sec },
+                    ) catch "{}";
+                    lc_evts[lc_cnt] = CdpEvent.create("Page.lifecycleEvent", lc_json);
+                    lc_cnt += 1;
+                }
+                if (lc_cnt > 0) {
+                    emitCdpEventsToFd(client_fd, &lc_evts, lc_cnt) catch break;
+                }
+            }
             if (_.listen_fd >= 0 && (pfds[1].revents & POLLIN) != 0) {
                 const extra_fd = accept(_.listen_fd, null, null);
                 if (extra_fd >= 0) {
+                    setTcpNoDelay(extra_fd);
                     let extra_buf: [4096]u8 = [0; 4096];
                     const en = recv(extra_fd, &extra_buf, extra_buf.len, 0);
                     if (en > 0) {
@@ -1499,21 +2278,74 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                     }
                     * = std.c.close(extra_fd);
                 }
-                if ((pfds[0].revents & (POLLIN | POLLERR | POLLNVAL)) == 0) {
-                    continue;
-                }
             }
-            if (pr == 0) {
+            const should_run_idle_tick = (pr == 0) || ((tick_now_ms - last_idle_tick_ms) >= @as(i64, base_poll_ms));
+            if (should_run_idle_tick) {
+                last_idle_tick_ms = tick_now_ms;
                 if (pending_wheel.active) {
                     _.flushPendingWheelBatch(client_fd, pending_wheel) catch break;
                 }
-                const tick_now_ms = serverNowMs();
+                pumpPendingPromises(client_fd, pending_promises) catch break;
                 if (_.session.has_document) {
+                    _.setActiveDialogSessionId("");
                     _.session.pumpTimers();
                     _.flushReopenLoadEvents(client_fd) catch break;
+                    if (shouldSyncChildFrames(_.session)) {
+                        let cf_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+                        let cf_cnt: usize = 0;
+                        emitNewChildFrameEvents(_.session, &cf_evts, &cf_cnt);
+                        if (cf_cnt > 0) emitCdpEventsToFd(client_fd, &cf_evts, cf_cnt) catch break;
+                    }
                     _.flushPendingNavigation(client_fd) catch break;
+                    if (_.session.binding_count > 0) {
+                        let b_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+                        const b_cnt = _.session.pollBindingEvents(&b_evts);
+                        if (b_cnt > 0) emitCdpEventsToFd(client_fd, &b_evts, b_cnt) catch break;
+                    }
+                    if (_.session.intercept_file_chooser) {
+                        let fc_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+                        const fc_cnt = _.session.pollFileChooserEvents(&fc_evts);
+                        if (fc_cnt > 0) emitCdpEventsToFd(client_fd, &fc_evts, fc_cnt) catch break;
+                    }
+                    if (_.session.network_enabled) {
+                        let net_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+                        const net_cnt = _.session.pollNetworkEvents(&net_evts);
+                        if (net_cnt > 0) emitCdpEventsToFd(client_fd, &net_evts, net_cnt) catch break;
+                    }
+                    {
+                        let f_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+                        let f_emit_ok = true;
+                        while (true) {
+                            const f_cnt = _.session.pollFetchEvents(&f_evts);
+                            if (f_cnt == 0) break;
+                            emitCdpEventsToFd(client_fd, &f_evts, f_cnt) catch {
+                                f_emit_ok = false;
+                                break;
+                            };
+                        }
+                        if (!f_emit_ok) break;
+                    }
                     if (_.session.dom_document_sent) {
                         _.flushDomEvents(client_fd) catch break;
+                    }
+                }
+                if (_.session.dedicated_workers.cdp_event_count > 0) {
+                    let w_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+                    const w_cnt = _.session.dedicated_workers.pollCdpEvents(&w_evts);
+                    if (w_cnt > 0) {
+                        const main_sid = if (_.session.target_registry.targets[0].session_id_len > 0)
+                            _.session.target_registry.targets[0].sessionId()
+                        else
+                            "";
+                        if (main_sid.len > 0) {
+                            let wi: usize = 0;
+                            while (wi < w_cnt) : (wi += 1) {
+                                if (w_evts[wi].session_id.len == 0) {
+                                    w_evts[wi].session_id = main_sid;
+                                }
+                            }
+                        }
+                        emitCdpEventsToFd(client_fd, &w_evts, w_cnt) catch break;
                     }
                 }
                 let ti: usize = 0;
@@ -1522,11 +2354,85 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                         const tab_sess = _.tab_sessions[ti].page_session.?;
                         const tab_sid = _.tab_sessions[ti].key_buf[0.._.tab_sessions[ti].key_len];
                         if (tab_sess.has_document) {
+                            _.setActiveDialogSessionId(tab_sid);
                             tab_sess.pumpTimers();
                             flushReopenLoadEventsForSession(client_fd, tab_sess, tab_sid) catch break;
+                            if (shouldSyncChildFrames(tab_sess)) {
+                                let tcf_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+                                let tcf_cnt: usize = 0;
+                                emitNewChildFrameEvents(tab_sess, &tcf_evts, &tcf_cnt);
+                                if (tcf_cnt > 0) {
+                                    let tcfi: usize = 0;
+                                    while (tcfi < tcf_cnt) : (tcfi += 1) {
+                                        if (tcf_evts[tcfi].session_id.len == 0 && tab_sid.len > 0) tcf_evts[tcfi].session_id = tab_sid;
+                                    }
+                                    emitCdpEventsToFd(client_fd, &tcf_evts, tcf_cnt) catch break;
+                                }
+                            }
                             flushPendingNavigationForSession(client_fd, tab_sess, tab_sid) catch break;
+                            if (tab_sess.binding_count > 0) {
+                                let tb_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+                                const tb_cnt = tab_sess.pollBindingEvents(&tb_evts);
+                                if (tb_cnt > 0) {
+                                    let tbi: usize = 0;
+                                    while (tbi < tb_cnt) : (tbi += 1) {
+                                        if (tb_evts[tbi].session_id.len == 0 && tab_sid.len > 0) tb_evts[tbi].session_id = tab_sid;
+                                    }
+                                    emitCdpEventsToFd(client_fd, &tb_evts, tb_cnt) catch break;
+                                }
+                            }
+                            if (tab_sess.intercept_file_chooser) {
+                                let tfc_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+                                const tfc_cnt = tab_sess.pollFileChooserEvents(&tfc_evts);
+                                if (tfc_cnt > 0) {
+                                    let tfci: usize = 0;
+                                    while (tfci < tfc_cnt) : (tfci += 1) {
+                                        if (tfc_evts[tfci].session_id.len == 0 && tab_sid.len > 0) tfc_evts[tfci].session_id = tab_sid;
+                                    }
+                                    emitCdpEventsToFd(client_fd, &tfc_evts, tfc_cnt) catch break;
+                                }
+                            }
+                            if (tab_sess.network_enabled) {
+                                let tnet_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+                                const tnet_cnt = tab_sess.pollNetworkEvents(&tnet_evts);
+                                if (tnet_cnt > 0) {
+                                    let tneti: usize = 0;
+                                    while (tneti < tnet_cnt) : (tneti += 1) {
+                                        if (tnet_evts[tneti].session_id.len == 0 && tab_sid.len > 0) tnet_evts[tneti].session_id = tab_sid;
+                                    }
+                                    emitCdpEventsToFd(client_fd, &tnet_evts, tnet_cnt) catch break;
+                                }
+                            }
+                            {
+                                let tf_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+                                let tf_emit_ok = true;
+                                while (true) {
+                                    const tf_cnt = tab_sess.pollFetchEvents(&tf_evts);
+                                    if (tf_cnt == 0) break;
+                                    let tfi: usize = 0;
+                                    while (tfi < tf_cnt) : (tfi += 1) {
+                                        if (tf_evts[tfi].session_id.len == 0 && tab_sid.len > 0) tf_evts[tfi].session_id = tab_sid;
+                                    }
+                                    emitCdpEventsToFd(client_fd, &tf_evts, tf_cnt) catch {
+                                        tf_emit_ok = false;
+                                        break;
+                                    };
+                                }
+                                if (!tf_emit_ok) break;
+                            }
                             if (tab_sess.dom_document_sent) {
                                 flushDomEventsForSession(client_fd, tab_sess) catch break;
+                            }
+                        }
+                        if (tab_sess.dedicated_workers.cdp_event_count > 0) {
+                            let tw_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+                            const tw_cnt = tab_sess.dedicated_workers.pollCdpEvents(&tw_evts);
+                            if (tw_cnt > 0) {
+                                let twi: usize = 0;
+                                while (twi < tw_cnt) : (twi += 1) {
+                                    if (tw_evts[twi].session_id.len == 0 && tab_sid.len > 0) tw_evts[twi].session_id = tab_sid;
+                                }
+                                emitCdpEventsToFd(client_fd, &tw_evts, tw_cnt) catch break;
                             }
                         }
                     }
@@ -1536,10 +2442,13 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                     did_pump_main_sc = _.pumpScreencastFrame(client_fd, tick_now_ms) catch false;
                 }
                 _.pumpAllSceneStreams(client_fd, tick_now_ms, did_pump_main_sc) catch break;
-                continue;
+                if (pr == 0) continue;
             }
             if ((pfds[0].revents & (POLLERR | POLLNVAL)) != 0) {
                 break;
+            }
+            if ((pfds[0].revents & (POLLIN | POLLERR | POLLNVAL)) == 0) {
+                continue;
             }
             const frame_opt = readWsTextFrame(client_fd, frame_payload) catch break;
             if (payload := frame_opt) {
@@ -1609,65 +2518,196 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                     _.flushPendingWheelBatch(client_fd, pending_wheel) catch break;
                 }
 
+                // Intercept Page.navigate / Page.reload / Page.navigateToHistoryEntry when Fetch interception is enabled and emit Fetch.requestPaused
+                if (!nav_state.pending_fetch_nav_active && (std.mem.eql(u8, cdp_req.method, "Page.navigate") || std.mem.eql(u8, cdp_req.method, "Page.reload") || std.mem.eql(u8, cdp_req.method, "Page.navigateToHistoryEntry")) && payload.len <= nav_state.pending_fetch_nav_payload_buf.len) {
+                    const nav_sess = _.resolveSessionForRequest(cdp_req);
+                    let nav_url: []const u8 = "";
+                    let nav_ref: []const u8 = "";
+                    let has_nav_url = false;
+                    if (std.mem.eql(u8, cdp_req.method, "Page.navigate")) {
+                        nav_url = extractJsonString(cdp_req.params_raw, "url") ?? "";
+                        nav_ref = extractJsonString(cdp_req.params_raw, "referrer") ?? "";
+                        has_nav_url = true;
+                    } else if (std.mem.eql(u8, cdp_req.method, "Page.reload")) {
+                        nav_url = if (nav_sess.url.len > 0) nav_sess.url else "about:blank";
+                        has_nav_url = true;
+                    } else {
+                        const entry_id = extractJsonInt(cdp_req.params_raw, "entryId") ?? -1;
+                        if (entry_id >= 0) {
+                            let ei: usize = 0;
+                            while (ei < nav_sess.nav_entry_count) : (ei += 1) {
+                                if (nav_sess.nav_entries[ei].id == @as(i32, @intCast(entry_id))) {
+                                    nav_url = nav_sess.nav_entries[ei].url;
+                                    has_nav_url = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if (has_nav_url && (nav_sess.fetch_enabled || nav_sess.fetch_state.enabled) && nav_sess.fetch_state.shouldIntercept(nav_url, "Document")) {
+                        let already_decided = false;
+                        if (existing_p := nav_sess.fetch_state.findParkedByUrl(nav_url)) {
+                            if (existing_p.verdict != InterceptVerdict.None) already_decided = true;
+                        }
+                        if (!already_decided) {
+                            let req_id_buf: [64]u8 = [0; 64];
+                            const req_id = std.fmt.bufPrint(&req_id_buf, "fetch-nav-{d}", .{nav_sess.fetch_state.next_id}) catch "fetch-nav-1";
+                            nav_sess.fetch_state.next_id += 1;
+                            * = nav_sess.fetch_state.parkRequest(req_id, nav_url, "GET");
+                            let net_id_buf: [64]u8 = [0; 64];
+                            const next_net_id = std.fmt.bufPrint(&net_id_buf, "capsurf-loader-{d:0>3}", .{nav_sess.loader_seq + 1}) catch req_id;
+                            let fevts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+                            let fevt_count: usize = 0;
+                            let esc_nav_buf: [2048]u8 = [0; 2048];
+                            const esc_nav_url = escapeJsonString(nav_url, &esc_nav_buf);
+                            let ua_esc_buf: [1024]u8 = [0; 1024];
+                            const ua_val = if (nav_sess.user_agent.len > 0) nav_sess.user_agent else DEFAULT_HTTP_USER_AGENT;
+                            const esc_ua = escapeJsonString(ua_val, &ua_esc_buf);
+                            let ref_kv_buf: [2048]u8 = [0; 2048];
+                            let ref_kv: []const u8 = "";
+                            if (nav_ref.len > 0) {
+                                let ref_esc_buf: [2048]u8 = [0; 2048];
+                                const esc_ref = escapeJsonString(nav_ref, &ref_esc_buf);
+                                ref_kv = std.fmt.bufPrint(&ref_kv_buf, ",\"Referer\":\"{s}\"", .{esc_ref}) catch "";
+                            }
+                            let has_accept_hdr = false;
+                            let has_cookie_hdr = false;
+                            let extra_kv_buf: [2048]u8 = [0; 2048];
+                            let extra_kv: []const u8 = "";
+                            const trimmed_eh = std.mem.trim(u8, nav_sess.extra_headers, " \t\r\n");
+                            if (trimmed_eh.len > 2 && trimmed_eh[0] == '{' && trimmed_eh[trimmed_eh.len - 1] == '}') {
+                                const inner_eh = std.mem.trim(u8, trimmed_eh[1 .. trimmed_eh.len - 1], " \t\r\n");
+                                if (inner_eh.len > 0) {
+                                    extra_kv = std.fmt.bufPrint(&extra_kv_buf, ",{s}", .{inner_eh}) catch "";
+                                    let ai: usize = 0;
+                                    while (ai + 8 <= inner_eh.len) : (ai += 1) {
+                                        if (std.ascii.eqlIgnoreCase(inner_eh[ai .. ai + 8], "\"accept\"")) {
+                                            has_accept_hdr = true;
+                                        } else if (std.ascii.eqlIgnoreCase(inner_eh[ai .. ai + 8], "\"cookie\"")) {
+                                            has_cookie_hdr = true;
+                                        }
+                                        if (has_accept_hdr && has_cookie_hdr) break;
+                                    }
+                                }
+                            }
+                            const accept_kv: []const u8 = if (has_accept_hdr) "" else ",\"Accept\":\"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\"";
+                            let cookie_kv_buf: [2048]u8 = [0; 2048];
+                            let cookie_kv: []const u8 = "";
+                            if (!has_cookie_hdr) {
+                                const cookie_hdr = nav_sess.getActiveCookieJar().cookieHeaderForUrl(nav_url, null, nav_sess.allocator);
+                                if (cookie_hdr != null) {
+                                    defer nav_sess.allocator.free(cookie_hdr.?);
+                                    if (cookie_hdr.?.len > 0) {
+                                        let cookie_esc_buf: [2048]u8 = [0; 2048];
+                                        const esc_cookie = escapeJsonString(cookie_hdr.?, &cookie_esc_buf);
+                                        cookie_kv = std.fmt.bufPrint(&cookie_kv_buf, ",\"Cookie\":\"{s}\"", .{esc_cookie}) catch "";
+                                    }
+                                }
+                            }
+                            let hdrs_buf: [4096]u8 = [0; 4096];
+                            const headers_json = std.fmt.bufPrint(
+                                &hdrs_buf,
+                                "{{\"User-Agent\":\"{s}\"{s}{s}{s}{s}}}",
+                                .{ esc_ua, accept_kv, ref_kv, cookie_kv, extra_kv },
+                            ) catch "{}";
+                            let nev_buf: [8192]u8 = [0; 8192];
+                            if (nav_sess.network_enabled) {
+                                const req_json = std.fmt.bufPrint(
+                                    &nev_buf,
+                                    "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{s}}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"other\"}},\"type\":\"Document\",\"frameId\":\"{s}\"}}",
+                                    .{ next_net_id, next_net_id, esc_nav_url, esc_nav_url, headers_json, nav_sess.frame_id },
+                                ) catch "";
+                                if (req_json.len > 0) {
+                                    fevts[fevt_count] = CdpEvent.create("Network.requestWillBeSent", req_json);
+                                    if (cdp_req.session_id.len > 0 && !std.mem.startsWith(u8, cdp_req.session_id, "capsurf-cdp-session-")) {
+                                        fevts[fevt_count].session_id = cdp_req.session_id;
+                                    }
+                                    fevt_count += 1;
+                                    markFetchNavPreAnnounced(next_net_id);
+                                }
+                            }
+                            let fev_buf: [8192]u8 = [0; 8192];
+                            const paused_json = std.fmt.bufPrint(
+                                &fev_buf,
+                                "{{\"requestId\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{s},\"initialPriority\":\"High\",\"referrerPolicy\":\"no-referrer\"}},\"frameId\":\"{s}\",\"resourceType\":\"Document\",\"networkId\":\"{s}\"}}",
+                                .{ req_id, esc_nav_url, headers_json, nav_sess.frame_id, next_net_id },
+                            ) catch "";
+                            if (paused_json.len > 0) {
+                                fevts[fevt_count] = CdpEvent{
+                                    method: "Fetch.requestPaused",
+                                    params_json: paused_json,
+                                };
+                                if (cdp_req.session_id.len > 0 && !std.mem.startsWith(u8, cdp_req.session_id, "capsurf-cdp-session-")) {
+                                    fevts[fevt_count].session_id = cdp_req.session_id;
+                                }
+                                fevt_count += 1;
+                            }
+                            if (fevt_count > 0) {
+                                emitCdpEventsToFd(client_fd, &fevts, fevt_count) catch break;
+                            }
+                            @memcpy(nav_state.pending_fetch_nav_payload_buf[0..payload.len], payload);
+                            nav_state.pending_fetch_nav_payload_len = payload.len;
+                            const rlen = @min(req_id.len, nav_state.pending_fetch_nav_req_id_buf.len);
+                            @memcpy(nav_state.pending_fetch_nav_req_id_buf[0..rlen], req_id[0..rlen]);
+                            nav_state.pending_fetch_nav_req_id_len = rlen;
+                            nav_state.pending_fetch_nav_active = true;
+                            continue;
+                        }
+                    }
+                }
+
                 // Intercept slow Page.navigate to keep navigate window non-blocking
-                if (std.mem.eql(u8, cdp_req.method, "Page.navigate") && cdp_req.session_id.len > 0 && payload.len <= pending_nav_payload_buf.len) {
+                if (std.mem.eql(u8, cdp_req.method, "Page.navigate") && cdp_req.session_id.len > 0 && payload.len <= nav_state.pending_nav_payload_buf.len) {
                     const nav_url = extractJsonString(cdp_req.params_raw, "url") ?? "";
                     const delay_ms = extractSlowScriptDelayMs(nav_url);
                     if (delay_ms > 0) {
-                        @memcpy(pending_nav_payload_buf[0..payload.len], payload);
-                        pending_nav_payload_len = payload.len;
-                        const slen = @min(cdp_req.session_id.len, pending_nav_sid_buf.len);
-                        @memcpy(pending_nav_sid_buf[0..slen], cdp_req.session_id[0..slen]);
-                        pending_nav_sid_len = slen;
-                        pending_nav_tid_len = 0;
+                        @memcpy(nav_state.pending_nav_payload_buf[0..payload.len], payload);
+                        nav_state.pending_nav_payload_len = payload.len;
+                        const slen = @min(cdp_req.session_id.len, nav_state.pending_nav_sid_buf.len);
+                        @memcpy(nav_state.pending_nav_sid_buf[0..slen], cdp_req.session_id[0..slen]);
+                        nav_state.pending_nav_sid_len = slen;
+                        nav_state.pending_nav_tid_len = 0;
                         if (tid := _.session.target_registry.findTargetIdBySessionId(cdp_req.session_id)) {
-                            const tlen = @min(tid.len, pending_nav_tid_buf.len);
-                            @memcpy(pending_nav_tid_buf[0..tlen], tid[0..tlen]);
-                            pending_nav_tid_len = tlen;
+                            const tlen = @min(tid.len, nav_state.pending_nav_tid_buf.len);
+                            @memcpy(nav_state.pending_nav_tid_buf[0..tlen], tid[0..tlen]);
+                            nav_state.pending_nav_tid_len = tlen;
                         }
-                        pending_nav_deadline_ms = serverNowMs() + delay_ms;
-                        pending_nav_active = true;
-                        pending_eval_count = 0;
+                        nav_state.pending_nav_deadline_ms = serverNowMs() + delay_ms;
+                        nav_state.pending_nav_active = true;
+                        nav_state.pending_eval_count = 0;
                         continue;
                     }
                 }
 
                 // Queue Runtime.evaluate arriving during the navigate window for the same session
-                if (pending_nav_active && std.mem.eql(u8, cdp_req.method, "Runtime.evaluate") && cdp_req.session_id.len > 0 && std.mem.eql(u8, cdp_req.session_id, pending_nav_sid_buf[0..pending_nav_sid_len])) {
-                    if (pending_eval_count < pending_evals.len && payload.len <= pending_evals[pending_eval_count].payload_buf.len) {
-                        pending_evals[pending_eval_count].active = true;
-                        pending_evals[pending_eval_count].req_id = cdp_req.id;
-                        @memcpy(pending_evals[pending_eval_count].payload_buf[0..payload.len], payload);
-                        pending_evals[pending_eval_count].payload_len = payload.len;
-                        const slen = @min(cdp_req.session_id.len, pending_evals[pending_eval_count].session_id_buf.len);
-                        @memcpy(pending_evals[pending_eval_count].session_id_buf[0..slen], cdp_req.session_id[0..slen]);
-                        pending_evals[pending_eval_count].session_id_len = slen;
-                        pending_eval_count += 1;
+                if (nav_state.pending_nav_active && std.mem.eql(u8, cdp_req.method, "Runtime.evaluate") && cdp_req.session_id.len > 0 && std.mem.eql(u8, cdp_req.session_id, nav_state.pending_nav_sid_buf[0..nav_state.pending_nav_sid_len])) {
+                    if (nav_state.pending_eval_count < nav_state.pending_evals.len && payload.len <= nav_state.pending_evals[nav_state.pending_eval_count].payload_buf.len) {
+                        nav_state.pending_evals[nav_state.pending_eval_count].active = true;
+                        nav_state.pending_evals[nav_state.pending_eval_count].req_id = cdp_req.id;
+                        @memcpy(nav_state.pending_evals[nav_state.pending_eval_count].payload_buf[0..payload.len], payload);
+                        nav_state.pending_evals[nav_state.pending_eval_count].payload_len = payload.len;
+                        const slen = @min(cdp_req.session_id.len, nav_state.pending_evals[nav_state.pending_eval_count].session_id_buf.len);
+                        @memcpy(nav_state.pending_evals[nav_state.pending_eval_count].session_id_buf[0..slen], cdp_req.session_id[0..slen]);
+                        nav_state.pending_evals[nav_state.pending_eval_count].session_id_len = slen;
+                        nav_state.pending_eval_count += 1;
                     }
                     continue;
                 }
 
-                // Cancel pending navigate and reject queued evals if Target.closeTarget closes the navigating target
-                if (pending_nav_active && std.mem.eql(u8, cdp_req.method, "Target.closeTarget")) {
-                    const close_tid = extractJsonString(cdp_req.params_raw, "targetId") ?? "";
-                    if (close_tid.len > 0 && pending_nav_tid_len > 0 && std.mem.eql(u8, close_tid, pending_nav_tid_buf[0..pending_nav_tid_len])) {
-                        pending_nav_active = false;
-                        let ei: usize = 0;
-                        while (ei < pending_eval_count) : (ei += 1) {
-                            if (pending_evals[ei].active) {
-                                pending_evals[ei].active = false;
-                                let err_buf: [256]u8 = [0; 256];
-                                if (err_msg := std.fmt.bufPrint(&err_buf, "{{\"id\":{d},\"error\":{{\"code\":-32000,\"message\":\"Target closed\"}}}}", .{pending_evals[ei].req_id}) catch null) {
-                                    writeWsTextFrame(client_fd, err_msg) catch {};
-                                }
-                            }
-                        }
-                        pending_eval_count = 0;
+                const is_browser_close = std.mem.eql(u8, cdp_req.method, "Browser.close");
+                _.dispatchCdpCommand(client_fd, cdp_req, pending_promises, nav_state) catch break;
+                if (nav_state.pending_fetch_nav_active) {
+                    const is_fetch_verdict = std.mem.eql(u8, cdp_req.method, "Fetch.continueRequest") ||
+                        std.mem.eql(u8, cdp_req.method, "Fetch.fulfillRequest") ||
+                        std.mem.eql(u8, cdp_req.method, "Fetch.failRequest");
+                    const is_fetch_disable = std.mem.eql(u8, cdp_req.method, "Fetch.disable");
+                    if (is_fetch_disable || (is_fetch_verdict && std.mem.eql(u8, extractJsonString(cdp_req.params_raw, "requestId") ?? "", nav_state.pending_fetch_nav_req_id_buf[0..nav_state.pending_fetch_nav_req_id_len]))) {
+                        nav_state.pending_fetch_nav_active = false;
+                        const fnav_req = CdpRequest.parse(nav_state.pending_fetch_nav_payload_buf[0..nav_state.pending_fetch_nav_payload_len]);
+                        _.dispatchCdpCommand(client_fd, fnav_req, pending_promises, nav_state) catch break;
                     }
                 }
-
-                const is_browser_close = std.mem.eql(u8, cdp_req.method, "Browser.close");
-                _.dispatchCdpCommand(client_fd, cdp_req) catch break;
+                pumpPendingPromises(client_fd, pending_promises) catch break;
                 if (is_browser_close) {
                     writeWsCloseFrame(client_fd, 1000, "Browser.close") catch {};
                     break;
@@ -1676,6 +2716,7 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                 let did_post_sc = false;
                 if (_.session.has_document && _.session.screencast_handler.canSendFrame()) {
                     if (!std.mem.eql(u8, cdp_req.method, "Page.startScreencast")) {
+                        _.setActiveDialogSessionId("");
                         _.session.pumpTimers();
                     }
                     did_post_sc = _.pumpScreencastFrame(client_fd, post_now_ms) catch false;
@@ -1740,7 +2781,71 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
         batch.reset();
     }
 
-    fn dispatchCdpCommand(*_, client_fd: i32, req: CdpRequest)! {
+    static fn pumpPendingPromises(client_fd: i32, pending_promises: *[]PendingPromise)! {
+        const res_buf = std.heap.c_allocator.alloc(u8, 262144) catch return;
+        defer std.heap.c_allocator.free(res_buf);
+        let ppi: usize = 0;
+        while (ppi < pending_promises.len) : (ppi += 1) {
+            if (!pending_promises[ppi].active) continue;
+            let pp = &pending_promises[ppi];
+            const sess = pp.target_sess orelse {
+                pp.active = false;
+                continue;
+            };
+            let res_len: usize = 0;
+            const st = sess.tryResolveParkedPromiseSlot(pp.slot, pp.return_by_value, res_buf, &res_len);
+            const sid = pp.session_id_buf[0..pp.session_id_len];
+            // Flush binding & console events from this session
+            let b_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+            const b_cnt = sess.pollBindingEvents(&b_evts);
+            if (b_cnt > 0) {
+                let bi: usize = 0;
+                while (bi < b_cnt) : (bi += 1) {
+                    if (b_evts[bi].session_id.len == 0 && sid.len > 0) b_evts[bi].session_id = sid;
+                }
+                emitCdpEventsToFd(client_fd, &b_evts, b_cnt)?;
+            }
+            let c_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+            const c_cnt = sess.pollConsoleEvents(&c_evts);
+            if (c_cnt > 0) {
+                let ci: usize = 0;
+                while (ci < c_cnt) : (ci += 1) {
+                    if (c_evts[ci].session_id.len == 0 && sid.len > 0) c_evts[ci].session_id = sid;
+                }
+                emitCdpEventsToFd(client_fd, &c_evts, c_cnt)?;
+            }
+            let f_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+            while (true) {
+                const f_cnt = sess.pollFetchEvents(&f_evts);
+                if (f_cnt == 0) break;
+                let fi: usize = 0;
+                while (fi < f_cnt) : (fi += 1) {
+                    if (f_evts[fi].session_id.len == 0 && sid.len > 0) f_evts[fi].session_id = sid;
+                }
+                emitCdpEventsToFd(client_fd, &f_evts, f_cnt)?;
+            }
+            if (st == 0) continue;
+
+            sess.freeParkedPromiseSlot(pp.slot);
+            pp.active = false;
+
+            const has_sid = sid.len > 0;
+            const rid = pp.raw_id_buf[0..pp.raw_id_len];
+            if (st == 3) {
+                let err_buf: [512]u8 = [0; 512];
+                const err_slice = if (rid.len > 0) (if (has_sid) std.fmt.bufPrint(&err_buf, "{{\"id\":\"{s}\",\"error\":{{\"code\":-32000,\"message\":\"Cannot find context with specified id\"}},\"sessionId\":\"{s}\"}}", .{ rid, sid }) catch "" else std.fmt.bufPrint(&err_buf, "{{\"id\":\"{s}\",\"error\":{{\"code\":-32000,\"message\":\"Cannot find context with specified id\"}}}}", .{rid}) catch "") else (if (has_sid) std.fmt.bufPrint(&err_buf, "{{\"id\":{d},\"error\":{{\"code\":-32000,\"message\":\"Cannot find context with specified id\"}},\"sessionId\":\"{s}\"}}", .{ pp.req_id, sid }) catch "" else std.fmt.bufPrint(&err_buf, "{{\"id\":{d},\"error\":{{\"code\":-32000,\"message\":\"Cannot find context with specified id\"}}}}", .{pp.req_id}) catch "");
+                if (err_slice.len > 0) writeWsTextFrame(client_fd, err_slice)?;
+                continue;
+            }
+            const res_json = res_buf[0..res_len];
+            const dyn_buf = std.heap.c_allocator.alloc(u8, res_json.len + rid.len + sid.len + 64) catch continue;
+            defer std.heap.c_allocator.free(dyn_buf);
+            const msg_slice = if (rid.len > 0) (if (has_sid) std.fmt.bufPrint(dyn_buf, "{{\"id\":\"{s}\",\"result\":{s},\"sessionId\":\"{s}\"}}", .{ rid, res_json, sid }) catch "" else std.fmt.bufPrint(dyn_buf, "{{\"id\":\"{s}\",\"result\":{s}}}", .{ rid, res_json }) catch "") else (if (has_sid) std.fmt.bufPrint(dyn_buf, "{{\"id\":{d},\"result\":{s},\"sessionId\":\"{s}\"}}", .{ pp.req_id, res_json, sid }) catch "" else std.fmt.bufPrint(dyn_buf, "{{\"id\":{d},\"result\":{s}}}", .{ pp.req_id, res_json }) catch "");
+            if (msg_slice.len > 0) writeWsTextFrame(client_fd, msg_slice)?;
+        }
+    }
+
+    fn dispatchCdpCommand(*_, client_fd: i32, req: CdpRequest, pending_promises: *[]PendingPromise, nav_state: *PendingNavState)! {
         const res_buf = std.heap.c_allocator.alloc(u8, 262144) catch return;
         defer std.heap.c_allocator.free(res_buf);
         let events: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
@@ -1749,20 +2854,130 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
         if (std.mem.eql(u8, req.method, "Target.disposeBrowserContext")) {
             const dc_id = extractJsonString(req.params_raw, "browserContextId") ?? "";
             if (dc_id.len > 0) {
+                if (nav_state.pending_nav_active) {
+                    const nav_tid = nav_state.pending_nav_tid_buf[0..nav_state.pending_nav_tid_len];
+                    const nav_sid = nav_state.pending_nav_sid_buf[0..nav_state.pending_nav_sid_len];
+                    if (_.targetBelongsToContext(nav_tid, dc_id) || _.sessionBelongsToContext(nav_sid, dc_id)) {
+                        nav_state.pending_nav_active = false;
+                        if (nav_state.pending_nav_payload_len > 0) {
+                            const nav_req = CdpRequest.parse(nav_state.pending_nav_payload_buf[0..nav_state.pending_nav_payload_len]);
+                            CdpServer.sendCdpErrorById(client_fd, nav_req.id, nav_req.raw_id, nav_req.session_id, -32000, "Target closed");
+                        }
+                        let ei: usize = 0;
+                        while (ei < nav_state.pending_eval_count) : (ei += 1) {
+                            if (nav_state.pending_evals[ei].active) {
+                                nav_state.pending_evals[ei].active = false;
+                                const esid = nav_state.pending_evals[ei].session_id_buf[0..nav_state.pending_evals[ei].session_id_len];
+                                CdpServer.sendCdpErrorById(client_fd, nav_state.pending_evals[ei].req_id, "", esid, -32000, "Target closed");
+                            }
+                        }
+                        nav_state.pending_eval_count = 0;
+                    }
+                }
+                if (nav_state.pending_fetch_nav_active && nav_state.pending_fetch_nav_payload_len > 0) {
+                    const fnav_req = CdpRequest.parse(nav_state.pending_fetch_nav_payload_buf[0..nav_state.pending_fetch_nav_payload_len]);
+                    const fnav_bctx = extractJsonString(fnav_req.params_raw, "browserContextId") ?? "";
+                    if (std.mem.eql(u8, fnav_bctx, dc_id) || _.sessionBelongsToContext(fnav_req.session_id, dc_id)) {
+                        nav_state.pending_fetch_nav_active = false;
+                        markFetchNavPreAnnounced("");
+                        CdpServer.sendCdpErrorById(client_fd, fnav_req.id, fnav_req.raw_id, fnav_req.session_id, -32000, "Target closed");
+                    }
+                }
+                let ppi_c: usize = 0;
+                while (ppi_c < pending_promises.len) : (ppi_c += 1) {
+                    if (pending_promises[ppi_c].active) {
+                        const psid = pending_promises[ppi_c].session_id_buf[0..pending_promises[ppi_c].session_id_len];
+                        let match_ctx = _.sessionBelongsToContext(psid, dc_id);
+                        if (!match_ctx) {
+                            if (ts_c := pending_promises[ppi_c].target_sess) {
+                                const ts_bctx = ts_c.current_browser_context_id_buf[0..ts_c.current_browser_context_id_len];
+                                if (ts_bctx.len > 0 && std.mem.eql(u8, ts_bctx, dc_id)) {
+                                    match_ctx = true;
+                                }
+                            }
+                        }
+                        if (match_ctx) {
+                            const prid = pending_promises[ppi_c].raw_id_buf[0..pending_promises[ppi_c].raw_id_len];
+                            CdpServer.sendCdpErrorById(client_fd, pending_promises[ppi_c].req_id, prid, psid, -32000, "Target closed");
+                            if (ts_c := pending_promises[ppi_c].target_sess) {
+                                ts_c.freeParkedPromiseSlot(pending_promises[ppi_c].slot);
+                            }
+                            pending_promises[ppi_c].active = false;
+                        }
+                    }
+                }
                 _.deinitTabSessionByContext(dc_id);
+                if (!_.hasActiveTabSessions()) {
+                    _.net_scheduler.abortAll();
+                    _.net_idle_tracker.resetForNavigation();
+                }
             }
         } else if (std.mem.eql(u8, req.method, "Target.closeTarget")) {
             const ct_id = extractJsonString(req.params_raw, "targetId") ?? "";
+            if (nav_state.pending_nav_active && ct_id.len > 0 && nav_state.pending_nav_tid_len > 0 && std.mem.eql(u8, ct_id, nav_state.pending_nav_tid_buf[0..nav_state.pending_nav_tid_len])) {
+                nav_state.pending_nav_active = false;
+                if (nav_state.pending_nav_payload_len > 0) {
+                    const nav_req = CdpRequest.parse(nav_state.pending_nav_payload_buf[0..nav_state.pending_nav_payload_len]);
+                    CdpServer.sendCdpErrorById(client_fd, nav_req.id, nav_req.raw_id, nav_req.session_id, -32000, "Target closed");
+                }
+                let ei: usize = 0;
+                while (ei < nav_state.pending_eval_count) : (ei += 1) {
+                    if (nav_state.pending_evals[ei].active) {
+                        nav_state.pending_evals[ei].active = false;
+                        const esid = nav_state.pending_evals[ei].session_id_buf[0..nav_state.pending_evals[ei].session_id_len];
+                        CdpServer.sendCdpErrorById(client_fd, nav_state.pending_evals[ei].req_id, "", esid, -32000, "Target closed");
+                    }
+                }
+                nav_state.pending_eval_count = 0;
+            }
             if (t_idx := _.session.target_registry.findTargetIndex(ct_id)) {
                 const c_sid = _.session.target_registry.targets[t_idx].sessionId();
                 if (c_sid.len > 0) {
+                    if (nav_state.pending_fetch_nav_active && nav_state.pending_fetch_nav_payload_len > 0) {
+                        const fnav_req = CdpRequest.parse(nav_state.pending_fetch_nav_payload_buf[0..nav_state.pending_fetch_nav_payload_len]);
+                        if (std.mem.eql(u8, fnav_req.session_id, c_sid)) {
+                            nav_state.pending_fetch_nav_active = false;
+                            markFetchNavPreAnnounced("");
+                            CdpServer.sendCdpErrorById(client_fd, fnav_req.id, fnav_req.raw_id, fnav_req.session_id, -32000, "Target closed");
+                        }
+                    }
+                    let ppi_c: usize = 0;
+                    while (ppi_c < pending_promises.len) : (ppi_c += 1) {
+                        if (pending_promises[ppi_c].active) {
+                            const psid = pending_promises[ppi_c].session_id_buf[0..pending_promises[ppi_c].session_id_len];
+                            if (std.mem.eql(u8, psid, c_sid)) {
+                                const prid = pending_promises[ppi_c].raw_id_buf[0..pending_promises[ppi_c].raw_id_len];
+                                CdpServer.sendCdpErrorById(client_fd, pending_promises[ppi_c].req_id, prid, psid, -32000, "Target closed");
+                                if (ts_c := pending_promises[ppi_c].target_sess) {
+                                    ts_c.freeParkedPromiseSlot(pending_promises[ppi_c].slot);
+                                }
+                                pending_promises[ppi_c].active = false;
+                            }
+                        }
+                    }
                     _.deinitTabSessionByKey(c_sid);
                 }
+            }
+            if (ct_id.len > 0) {
+                _.deinitTabSessionMatch(ct_id, "", null);
             }
         }
 
         const target_sess = _.resolveSessionForRequest(req);
+        if (target_sess == _.session) {
+            _.setActiveDialogSessionId("");
+        } else {
+            _.setActiveDialogSessionId(req.session_id);
+        }
         const resp = CdpDispatcher.dispatch(target_sess, req, res_buf, &events, &event_count);
+
+        if (std.mem.eql(u8, req.method, "Fetch.continueRequest") ||
+            std.mem.eql(u8, req.method, "Fetch.fulfillRequest") ||
+            std.mem.eql(u8, req.method, "Fetch.failRequest") ||
+            std.mem.eql(u8, req.method, "Fetch.disable"))
+        {
+            target_sess.pumpFetchVerdicts();
+        }
 
         if (target_sess == _.session &&
             (std.mem.eql(u8, req.method, "Runtime.addBinding") || std.mem.eql(u8, req.method, "Runtime.removeBinding")))
@@ -1791,11 +3006,53 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
         while (i < event_count) : (i += 1) {
             if (events[i].session_id.len == 0 && req.session_id.len > 0 &&
                 !std.mem.startsWith(u8, req.session_id, "capsurf-cdp-session-") &&
-                !std.mem.startsWith(u8, events[i].method, "Target.")) {
+                !std.mem.startsWith(u8, events[i].method, "Target.") &&
+                !std.mem.startsWith(u8, events[i].method, "Browser.")) {
                 events[i].session_id = req.session_id;
             }
         }
         emitCdpEventsToFd(client_fd, &events, event_count)? ;
+
+        {
+            let f_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+            while (true) {
+                const f_cnt = target_sess.pollFetchEvents(&f_evts);
+                if (f_cnt == 0) break;
+                let fi: usize = 0;
+                while (fi < f_cnt) : (fi += 1) {
+                    if (f_evts[fi].session_id.len == 0 && req.session_id.len > 0 &&
+                        !std.mem.startsWith(u8, req.session_id, "capsurf-cdp-session-")) {
+                        f_evts[fi].session_id = req.session_id;
+                    }
+                }
+                emitCdpEventsToFd(client_fd, &f_evts, f_cnt)?;
+            }
+        }
+
+        if (resp.isOk() && std.mem.eql(u8, resp.result_json, "{\"__capsurf_promise_pending\":true}")) {
+            if (slot := target_sess.takeLastParkedPromiseSlot()) {
+                let parked = false;
+                let ppi_s: usize = 0;
+                while (ppi_s < pending_promises.len) : (ppi_s += 1) {
+                    if (!pending_promises[ppi_s].active) {
+                        let pp = &pending_promises[ppi_s];
+                        pp.active = true;
+                        pp.req_id = req.id;
+                        pp.raw_id_len = @min(req.raw_id.len, pp.raw_id_buf.len);
+                        if (pp.raw_id_len > 0) @memcpy(pp.raw_id_buf[0..pp.raw_id_len], req.raw_id[0..pp.raw_id_len]);
+                        pp.session_id_len = @min(req.session_id.len, pp.session_id_buf.len);
+                        if (pp.session_id_len > 0) @memcpy(pp.session_id_buf[0..pp.session_id_len], req.session_id[0..pp.session_id_len]);
+                        pp.target_sess = target_sess;
+                        pp.slot = slot;
+                        pp.return_by_value = extractJsonBool(req.params_raw, "returnByValue") ?? false;
+                        parked = true;
+                        break;
+                    }
+                }
+                if (parked) return;
+                target_sess.freeParkedPromiseSlot(slot);
+            }
+        }
 
         if (resp.isOk()) {
             const has_sid = req.session_id.len > 0;
@@ -1909,6 +3166,14 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
         // Check if JS evaluation triggered a location.href navigation
         const nav_sid = if (req.session_id.len > 0 && !std.mem.startsWith(u8, req.session_id, "capsurf-cdp-session-")) req.session_id else "";
         flushPendingNavigationForSession(client_fd, target_sess, nav_sid)?;
+
+        if (std.mem.eql(u8, req.method, "Page.close")) {
+            if (target_sess != _.session) {
+                _.deinitTabSessionMatch("", req.session_id, target_sess);
+            } else if (req.session_id.len > 0) {
+                _.deinitTabSessionByKey(req.session_id);
+            }
+        }
     }
 }
 

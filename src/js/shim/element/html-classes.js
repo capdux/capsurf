@@ -500,6 +500,29 @@ function installHtmlClasses(global) {
     configurable: true,
   });
 
+  Object.defineProperty(HTMLElementProto, "draggable", {
+    get: function () {
+      const attr = this.getAttribute ? this.getAttribute("draggable") : null;
+      if (typeof attr === "string") {
+        const lower = attr.toLowerCase();
+        if (lower === "true") return true;
+        if (lower === "false") return false;
+      }
+      const tag = (this.localName || this.tagName || "").toLowerCase();
+      if (tag === "img") return true;
+      if (tag === "a" && (this.hasAttribute ? this.hasAttribute("href") : (this.getAttribute && this.getAttribute("href") !== null))) {
+        return true;
+      }
+      return false;
+    },
+    set: function (val) {
+      if (this.setAttribute) {
+        this.setAttribute("draggable", val ? "true" : "false");
+      }
+    },
+    configurable: true,
+  });
+
   Object.defineProperty(HTMLElementProto, "outerText", {
     get: function () {
       return this.innerText;
@@ -2164,13 +2187,14 @@ function installHtmlClasses(global) {
     "Event", "MessageEvent", "CustomEvent", "NodeList", "HTMLCollection",
     "DOMParser", "Range", "StaticRange", "URL", "URLSearchParams",
     "Blob", "FormData", "Headers", "Request", "Response",
-    "AbortController", "AbortSignal", "HTMLElement", "HTMLIFrameElement",
+    "AbortController", "AbortSignal", "HTMLElement", "HTMLIFrameElement", "HTMLFrameElement", "HTMLFrameSetElement",
     "setTimeout", "clearTimeout", "setInterval", "clearInterval",
     "requestAnimationFrame", "cancelAnimationFrame", "console", "fetch",
     "History", "WebSocket", "CloseEvent", "XMLHttpRequest", "XMLHttpRequestEventTarget", "XMLHttpRequestUpload",
     "performance", "Performance", "PerformanceEntry", "PerformanceMark", "PerformanceMeasure",
     "PerformanceResourceTiming", "PerformanceNavigationTiming", "PerformanceTiming", "PerformanceNavigation",
-    "Worker", "SharedWorker", "ErrorEvent"
+    "Worker", "SharedWorker", "ErrorEvent",
+    "getComputedStyle", "CSS", "matchMedia"
   ];
 
   function decorateIframeWindow(win) {
@@ -2202,6 +2226,72 @@ function installHtmlClasses(global) {
     if (pageGlobal.fetch) {
       win.fetch = function (resource, init) {
         return pageGlobal.fetch.call(win, resource, init);
+      };
+    }
+    if (win.eval === undefined) {
+      win.eval = function (code) {
+        if (typeof code !== "string") return code;
+        const stack = global.__capsurf_active_window_stack;
+        if (Array.isArray(stack)) stack.push(win);
+        try {
+          const compileFn = function (body) {
+            return new Function(
+              "window", "document", "location", "fetch", "self", "globalThis",
+              "addEventListener", "removeEventListener", "postMessage",
+              "innerWidth", "innerHeight", "outerWidth", "outerHeight",
+              "parent", "top", "frames", "frameElement",
+              body
+            );
+          };
+          const trimmed = code.replace(/[\s;]+$/, "");
+          let fn = null;
+          if (trimmed) {
+            try {
+              fn = compileFn("return (" + code + ");");
+            } catch (e0) {
+              try {
+                fn = compileFn("return (" + trimmed + ");");
+              } catch (e1) {}
+              if (!fn) {
+                const semi = trimmed.lastIndexOf(";");
+                if (semi !== -1) {
+                  const prefix = trimmed.slice(0, semi + 1);
+                  const last = trimmed.slice(semi + 1).trim();
+                  if (last) {
+                    try {
+                      fn = compileFn(prefix + "\nreturn (" + last + ");");
+                    } catch (e2) {}
+                  }
+                }
+              }
+            }
+          }
+          if (!fn) {
+            fn = compileFn(code);
+          }
+          const args = [
+            win,
+            win.document,
+            win.location,
+            win.fetch,
+            win,
+            win,
+            win.addEventListener ? win.addEventListener.bind(win) : undefined,
+            win.removeEventListener ? win.removeEventListener.bind(win) : undefined,
+            win.postMessage ? win.postMessage.bind(win) : undefined,
+            win.innerWidth,
+            win.innerHeight,
+            win.outerWidth,
+            win.outerHeight,
+            win.parent,
+            win.top,
+            win.frames,
+            win.frameElement,
+          ];
+          return fn.apply(win, args);
+        } finally {
+          if (Array.isArray(stack)) stack.pop();
+        }
       };
     }
   }
@@ -2661,6 +2751,9 @@ function installHtmlClasses(global) {
     } catch (e) {}
 
     if (newDoc) {
+      if (!iframeEl._contentWindow) {
+        getOrCreateIframeWindow(iframeEl, { skipInitialNavigation: true });
+      }
       if (iframeEl._contentWindow) {
         iframeEl._contentWindow._opaqueSandbox = iframeEl._opaqueSandbox;
         iframeEl._contentWindow.document = newDoc;
@@ -2717,8 +2810,9 @@ function installHtmlClasses(global) {
     }
     const seq = (iframeEl._navSeq = (iframeEl._navSeq || 0) + 1);
 
-    if (!resolvedUrl || resolvedUrl === "about:blank" || resolvedUrl.startsWith("about:blank?") || resolvedUrl.startsWith("about:blank#")) {
-      const blankUrl = resolvedUrl || "about:blank";
+    const isJavascriptUrl = typeof resolvedUrl === "string" && resolvedUrl.trim().toLowerCase().startsWith("javascript:");
+    if (!resolvedUrl || isJavascriptUrl || resolvedUrl === "about:blank" || resolvedUrl.startsWith("about:blank?") || resolvedUrl.startsWith("about:blank#")) {
+      const blankUrl = isJavascriptUrl ? "about:blank" : (resolvedUrl || "about:blank");
       Promise.resolve().then(function () {
         if (iframeEl._navSeq !== seq) return;
         const doc = createIframePlaceholderDoc(blankUrl, iframeEl, false);
@@ -2871,7 +2965,7 @@ function installHtmlClasses(global) {
     try {
       initialUrl = (iframeEl.getAttribute && iframeEl.getAttribute("src")) || "";
     } catch (e) {}
-    if (!initialUrl || initialUrl === "about:blank") {
+    if (!initialUrl || initialUrl === "about:blank" || String(initialUrl).trim().toLowerCase().startsWith("javascript:")) {
       initialUrl = "about:blank";
     } else {
       try {
@@ -3000,6 +3094,21 @@ function installHtmlClasses(global) {
 
     contentWindow.self = contentWindow;
     contentWindow.window = contentWindow;
+    try {
+      Object.defineProperty(contentWindow, "__capsurf_frame_id", {
+        configurable: true,
+        enumerable: false,
+        get: function () {
+          return iframeEl._capsurf_frame_id || contentWindow._capsurf_frame_id_val || undefined;
+        },
+        set: function (v) {
+          contentWindow._capsurf_frame_id_val = v;
+          if (v && !iframeEl._capsurf_frame_id) {
+            iframeEl._capsurf_frame_id = v;
+          }
+        },
+      });
+    } catch (e) {}
 
     function getIframeViewportDim(el, axis) {
       try {
@@ -3100,6 +3209,11 @@ function installHtmlClasses(global) {
     }
     const rawSrc = (iframeEl.getAttribute && iframeEl.getAttribute("src")) || "";
     if (rawSrc && rawSrc !== "about:blank") {
+      if (String(rawSrc).trim().toLowerCase().startsWith("javascript:")) {
+        getOrCreateIframeWindow(iframeEl, { skipInitialNavigation: true });
+        handleIframeNavigation(iframeEl, "about:blank");
+        return;
+      }
       getOrCreateIframeWindow(iframeEl, { skipInitialNavigation: true });
       let resolved = rawSrc;
       try {
@@ -3231,6 +3345,106 @@ function installHtmlClasses(global) {
 
   markNative(HTMLIFrameElement, "HTMLIFrameElement");
   global.HTMLIFrameElement = HTMLIFrameElement;
+
+  function HTMLFrameElement() {}
+  HTMLFrameElement.prototype = Object.create(HTMLElementProto);
+  HTMLFrameElement.prototype.constructor = HTMLFrameElement;
+  Object.defineProperty(HTMLFrameElement.prototype, Symbol.toStringTag, {
+    value: "HTMLFrameElement",
+    configurable: true,
+  });
+
+  Object.defineProperty(HTMLFrameElement.prototype, "src", {
+    get: function () {
+      const raw = nativeGetAttribute.call(this, "src");
+      if (raw == null) return "";
+      try {
+        const base = (typeof document !== "undefined" && document.baseURI) ? document.baseURI : (global.location ? global.location.href : "http://localhost/");
+        return new URL(raw, base).href;
+      } catch (e) {
+        return raw;
+      }
+    },
+    set: function (v) {
+      const strVal = String(v);
+      this._suppressSetAttrNav = true;
+      try {
+        nativeSetAttribute.call(this, "src", strVal);
+      } finally {
+        this._suppressSetAttrNav = false;
+      }
+      if (this.isConnected) {
+        const base = (typeof document !== "undefined" && document.baseURI) ? document.baseURI : (global.location ? global.location.href : "about:blank");
+        let resolved = "about:blank";
+        try {
+          resolved = new URL(strVal, base).href;
+        } catch (e) {
+          resolved = strVal;
+        }
+        handleIframeNavigation(this, resolved);
+      }
+    },
+    configurable: true,
+    enumerable: true,
+  });
+
+  Object.defineProperty(HTMLFrameElement.prototype, "contentWindow", {
+    get: function () {
+      return getOrCreateIframeWindow(this);
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(HTMLFrameElement.prototype, "contentDocument", {
+    get: function () {
+      if (this._opaqueSandbox) return null;
+      if (isCrossOriginIframe(this)) return null;
+      const win = getOrCreateIframeWindow(this);
+      if (this._opaqueSandbox) return null;
+      if (isCrossOriginIframe(this)) return null;
+      return (win && win.document) || this._contentDocument || null;
+    },
+    configurable: true,
+  });
+
+  for (const [propName, attrName] of [
+    ["name", "name"],
+    ["scrolling", "scrolling"],
+    ["frameBorder", "frameborder"],
+    ["marginHeight", "marginheight"],
+    ["marginWidth", "marginwidth"],
+    ["longDesc", "longdesc"],
+  ]) {
+    Object.defineProperty(HTMLFrameElement.prototype, propName, {
+      get: function () {
+        const raw = nativeGetAttribute.call(this, attrName);
+        return raw == null ? "" : String(raw);
+      },
+      set: function (v) {
+        nativeSetAttribute.call(this, attrName, v == null ? "" : String(v));
+      },
+      enumerable: true,
+      configurable: true,
+    });
+  }
+
+  Object.defineProperty(HTMLFrameElement.prototype, "noResize", {
+    get: function () {
+      return nativeHasAttribute.call(this, "noresize");
+    },
+    set: function (v) {
+      if (v) {
+        nativeSetAttribute.call(this, "noresize", "");
+      } else {
+        nativeRemoveAttribute.call(this, "noresize");
+      }
+    },
+    enumerable: true,
+    configurable: true,
+  });
+
+  markNative(HTMLFrameElement, "HTMLFrameElement");
+  global.HTMLFrameElement = HTMLFrameElement;
 
   // 6. HTMLDataListElement & standard HTMLElement subclasses
   function HTMLDataListElement() {}
@@ -3960,6 +4174,22 @@ function installHtmlClasses(global) {
     });
   })();
 
+  if (typeof global.HTMLFrameSetElement === "function") {
+    for (const attr of ["rows", "cols"]) {
+      Object.defineProperty(global.HTMLFrameSetElement.prototype, attr, {
+        get: function () {
+          const raw = nativeGetAttribute.call(this, attr);
+          return raw == null ? "" : String(raw);
+        },
+        set: function (v) {
+          nativeSetAttribute.call(this, attr, v == null ? "" : String(v));
+        },
+        enumerable: true,
+        configurable: true,
+      });
+    }
+  }
+
   // Window-reflecting event handlers on HTMLBodyElement.prototype & HTMLFrameSetElement.prototype
   const _winHandlerTargets = [
     global.HTMLBodyElement && global.HTMLBodyElement.prototype,
@@ -4190,6 +4420,18 @@ function installHtmlClasses(global) {
       if (typeof val === "string") {
         this.setAttribute("class", val);
       }
+    },
+    configurable: true,
+    enumerable: true,
+  });
+  Object.defineProperty(SVGElement.prototype, "ownerSVGElement", {
+    get: function () {
+      let cur = this.parentNode || this.parentElement;
+      while (cur) {
+        if (String(cur.localName || cur.tagName || "").toLowerCase() === "svg") return cur;
+        cur = cur.parentNode || cur.parentElement;
+      }
+      return null;
     },
     configurable: true,
     enumerable: true,
