@@ -42,6 +42,17 @@ function installHtmlClasses(global) {
     if (upgradeTargets.length > 0) {
       return upgradeTargets.pop();
     }
+    if (targetCtor && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_getCustomElementByCtor === "function") {
+      const def = globalThis.__capsurf_getCustomElementByCtor(targetCtor);
+      if (def && !def.extendsTag && typeof global.__capsurf_createRawElement === "function") {
+        const el = global.__capsurf_createRawElement(typeof document !== "undefined" ? document : global.document, def.name);
+        if (el) {
+          Object.setPrototypeOf(el, targetCtor.prototype);
+          el._customElementState = "custom";
+          return el;
+        }
+      }
+    }
   }
   HTMLElement.prototype = Object.create(ElementProto);
   HTMLElement.prototype.constructor = HTMLElement;
@@ -925,10 +936,19 @@ function installHtmlClasses(global) {
       set: function (v) { this.setAttribute("rel", String(v)); },
       configurable: true,
     });
+
+    proto.toString = function () { return this.href; };
   }
 
   // 1. HTMLAnchorElement
-  function HTMLAnchorElement() {}
+  function HTMLAnchorElement() {
+    if (HTMLElement._upgradeTarget) {
+      const target = HTMLElement._upgradeTarget;
+      HTMLElement._upgradeTarget = null;
+      return target;
+    }
+    throw new TypeError("Illegal constructor");
+  }
   HTMLAnchorElement.prototype = Object.create(HTMLElementProto);
   HTMLAnchorElement.prototype.constructor = HTMLAnchorElement;
   Object.defineProperty(HTMLAnchorElement.prototype, Symbol.toStringTag, {
@@ -2361,6 +2381,44 @@ function installHtmlClasses(global) {
     }
   }
 
+  function ensureParsedElementLayoutProps(doc) {
+    try {
+      const rootEl = doc && (doc.documentElement || doc.body);
+      const peProto = rootEl ? Object.getPrototypeOf(rootEl) : null;
+      if (!peProto || typeof Element === "undefined" || !Element.prototype || peProto === Element.prototype) return;
+      if (typeof Symbol !== "undefined" && Symbol.hasInstance && !Element._capsurfParsedHasInstance) {
+        Element._capsurfParsedHasInstance = true;
+        const origHasInst = Element[Symbol.hasInstance];
+        Object.defineProperty(Element, Symbol.hasInstance, {
+          value: function (inst) {
+            if (origHasInst && origHasInst.call(this, inst)) return true;
+            return Boolean(inst && typeof inst === "object" && inst.nodeType === 1 && inst.constructor && inst.constructor.name === "ParsedElement");
+          },
+          configurable: true,
+        });
+        if (typeof EventTarget === "function" && !EventTarget._capsurfParsedHasInstance) {
+          EventTarget._capsurfParsedHasInstance = true;
+          const origEtHasInst = EventTarget[Symbol.hasInstance];
+          Object.defineProperty(EventTarget, Symbol.hasInstance, {
+            value: function (inst) {
+              if (origEtHasInst && origEtHasInst.call(this, inst)) return true;
+              return Boolean(inst && typeof inst === "object" && inst.nodeType === 1 && inst.constructor && inst.constructor.name === "ParsedElement");
+            },
+            configurable: true,
+          });
+        }
+      }
+      const cwDesc = Object.getOwnPropertyDescriptor(Element.prototype, "clientWidth");
+      const chDesc = Object.getOwnPropertyDescriptor(Element.prototype, "clientHeight");
+      if (cwDesc && cwDesc.get && !Object.getOwnPropertyDescriptor(peProto, "clientWidth")) {
+        Object.defineProperty(peProto, "clientWidth", { get: cwDesc.get, configurable: true });
+      }
+      if (chDesc && chDesc.get && !Object.getOwnPropertyDescriptor(peProto, "clientHeight")) {
+        Object.defineProperty(peProto, "clientHeight", { get: chDesc.get, configurable: true });
+      }
+    } catch (e) {}
+  }
+
   function createIframePlaceholderDoc(docUrl, iframeEl, isInitialAboutBlank) {
     let doc = null;
     try {
@@ -2369,6 +2427,7 @@ function installHtmlClasses(global) {
         const parser = new Ctor();
         doc = parser.parseFromString("<html><head></head><body></body></html>", "text/html");
         if (doc) {
+          ensureParsedElementLayoutProps(doc);
           doc._mutable = true;
           doc.compatMode = "BackCompat";
           doc._doctypeInfo = null;
@@ -2551,12 +2610,23 @@ function installHtmlClasses(global) {
             });
             const lsVal = win._opaqueSandbox ? opaqueStorage : win.localStorage;
             const ssVal = win._opaqueSandbox ? opaqueStorage : win.sessionStorage;
+            const fnNames = [];
+            try {
+              code.replace(/(?:^|[;\n\r{}])\s*(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/g, function (_, n) {
+                fnNames.push(n);
+                return _;
+              });
+            } catch (e) {}
+            const exportTail = fnNames.length > 0
+              ? "\n" + fnNames.map(function (n) { return "try{if(typeof " + n + "==='function')window." + n + "=" + n + ";}catch(_){}"; }).join("")
+              : "";
+            const wrappedCode = "with(window){\n" + code + exportTail + "\n}";
             const fn = new Function(
               "window", "document", "location", "fetch", "self", "globalThis",
               "addEventListener", "removeEventListener", "postMessage",
               "parent", "top", "frames", "frameElement",
               "origin", "localStorage", "sessionStorage",
-              code
+              wrappedCode
             );
             fn.call(
               win,
@@ -2686,6 +2756,7 @@ function installHtmlClasses(global) {
         const parser = new Ctor();
         newDoc = parser.parseFromString(html, "text/html");
         if (newDoc) {
+          ensureParsedElementLayoutProps(newDoc);
           newDoc._mutable = true;
           const embedderBase = (typeof document !== "undefined" && document.baseURI)
             ? document.baseURI
@@ -2775,9 +2846,42 @@ function installHtmlClasses(global) {
           });
         } catch (e) {}
       }
+      newDoc._iframeElement = iframeEl;
       iframeEl._contentDocument = newDoc;
       iframeEl._hasLoadedDocument = true;
+      if (typeof newDoc.querySelectorAll === "function") {
+        try {
+          const nestedFrames = newDoc.querySelectorAll("iframe, frame");
+          for (let nfi = 0; nfi < nestedFrames.length; nfi++) {
+            const nf = nestedFrames[nfi];
+            if (nf && !nf._navSeq && !nf._contentWindow) {
+              onIframeConnected(nf);
+            }
+          }
+        } catch (e) {}
+      }
       if (iframeEl._contentWindow && allowScripts) {
+        try {
+          const allEls = newDoc.querySelectorAll ? newDoc.querySelectorAll("*") : [];
+          const iWin = iframeEl._contentWindow;
+          for (let ei = 0; ei < allEls.length; ei++) {
+            const el = allEls[ei];
+            if (!el || typeof el.getAttributeNames !== "function") continue;
+            const attrs = el.getAttributeNames();
+            for (let ai = 0; ai < attrs.length; ai++) {
+              const an = String(attrs[ai] || "").toLowerCase();
+              if (an.length > 2 && an.startsWith("on") && el[an] == null) {
+                const av = el.getAttribute(an);
+                if (typeof av === "string" && av) {
+                  try {
+                    const hFn = new Function("window", "document", "event", "with(window){\n" + av + "\n}");
+                    el[an] = function (ev) { return hFn.call(this, iWin, newDoc, ev); };
+                  } catch (e) {}
+                }
+              }
+            }
+          }
+        } catch (e) {}
         return executeIframeInlineScripts(iframeEl._contentWindow, newDoc, opts);
       }
     }
@@ -2907,6 +3011,17 @@ function installHtmlClasses(global) {
         return res.text().then(function (txt) {
           return { html: txt, charset: headerCharset };
         });
+      }).catch(function (err) {
+        // Iframe document navigation is not subject to fetch() PNA/CORS restrictions.
+        if (typeof globalThis !== "undefined") {
+          const body = typeof globalThis.__capsurf_http_request === "function"
+            ? globalThis.__capsurf_http_request(resolvedUrl, "GET", "", "", "{}")
+            : (typeof globalThis.__capsurf_http_get === "function" ? globalThis.__capsurf_http_get(resolvedUrl) : null);
+          if (body !== null && body !== undefined) {
+            return { html: String(body), charset: null };
+          }
+        }
+        throw err;
       });
     } else {
       loadPromise = Promise.resolve({ html: "<!doctype html><html><head></head><body></body></html>", charset: null });
@@ -3217,9 +3332,10 @@ function installHtmlClasses(global) {
       getOrCreateIframeWindow(iframeEl, { skipInitialNavigation: true });
       let resolved = rawSrc;
       try {
-        const base = (typeof document !== "undefined" && document.baseURI)
+        const docBase = iframeEl.ownerDocument && iframeEl.ownerDocument.baseURI;
+        const base = docBase || ((typeof document !== "undefined" && document.baseURI)
           ? document.baseURI
-          : (global.location ? global.location.href : "about:blank");
+          : (global.location ? global.location.href : "about:blank"));
         resolved = new URL(rawSrc, base).href;
       } catch (e) {}
       handleIframeNavigation(iframeEl, resolved);
@@ -3234,6 +3350,32 @@ function installHtmlClasses(global) {
   if (typeof globalThis !== "undefined") globalThis.__capsurf_on_iframe_connected = onIframeConnected;
   global.__capsurf_getOrCreateIframeWindow = getOrCreateIframeWindow;
   if (typeof globalThis !== "undefined") globalThis.__capsurf_getOrCreateIframeWindow = getOrCreateIframeWindow;
+
+  if (typeof Element !== "undefined" && Element.prototype) {
+    const innerDesc = Object.getOwnPropertyDescriptor(Element.prototype, "innerHTML");
+    if (innerDesc && typeof innerDesc.set === "function") {
+      const prevInnerSet = innerDesc.set;
+      Object.defineProperty(Element.prototype, "innerHTML", {
+        get: innerDesc.get,
+        set: function (v) {
+          prevInnerSet.call(this, v);
+          if (this.isConnected && typeof this.querySelectorAll === "function") {
+            try {
+              const frames = this.querySelectorAll("iframe, frame");
+              for (let i = 0; i < frames.length; i++) {
+                const f = frames[i];
+                if (f && !f._navSeq && !f._contentWindow) {
+                  onIframeConnected(f);
+                }
+              }
+            } catch (e) {}
+          }
+        },
+        configurable: true,
+        enumerable: innerDesc.enumerable !== false,
+      });
+    }
+  }
 
   function HTMLIFrameElement() {}
   HTMLIFrameElement.prototype = Object.create(HTMLElementProto);
@@ -3752,6 +3894,10 @@ function installHtmlClasses(global) {
     "HTMLOutputElement",
     "HTMLProgressElement",
     "HTMLMeterElement",
+    "HTMLMarqueeElement",
+    "HTMLTimeElement",
+    "HTMLQuoteElement",
+    "HTMLParamElement",
   ];
   for (let i = 0; i < SIMPLE_HTML_CLASSES.length; i++) {
     const clsName = SIMPLE_HTML_CLASSES[i];
@@ -3790,6 +3936,65 @@ function installHtmlClasses(global) {
       configurable: true,
     });
   }
+
+  const defStrAttr = function (ctorName, prop, attr) {
+    const C = global[ctorName];
+    if (typeof C !== "function") return;
+    Object.defineProperty(C.prototype, prop, {
+      get: function () { const v = this.getAttribute(attr); return v === null ? "" : String(v); },
+      set: function (v) { this.setAttribute(attr, String(v)); },
+      enumerable: true,
+      configurable: true,
+    });
+  };
+  const defBoolAttr = function (ctorName, prop, attr) {
+    const C = global[ctorName];
+    if (typeof C !== "function") return;
+    Object.defineProperty(C.prototype, prop, {
+      get: function () { return this.hasAttribute(attr); },
+      set: function (v) { if (v) this.setAttribute(attr, ""); else this.removeAttribute(attr); },
+      enumerable: true,
+      configurable: true,
+    });
+  };
+  const defIntAttr = function (ctorName, prop, attr, defVal) {
+    const C = global[ctorName];
+    if (typeof C !== "function") return;
+    Object.defineProperty(C.prototype, prop, {
+      get: function () {
+        const v = this.getAttribute(attr);
+        if (v === null) return defVal;
+        const n = parseInt(String(v).trim(), 10);
+        return Number.isNaN(n) ? defVal : n;
+      },
+      set: function (v) {
+        const n = Number(v) | 0;
+        this.setAttribute(attr, String(n));
+      },
+      enumerable: true,
+      configurable: true,
+    });
+  };
+
+  defIntAttr("HTMLOListElement", "start", "start", 1);
+  defBoolAttr("HTMLOListElement", "reversed", "reversed");
+  defStrAttr("HTMLOListElement", "type", "type");
+  defIntAttr("HTMLLIElement", "value", "value", 0);
+  defStrAttr("HTMLTimeElement", "dateTime", "datetime");
+  defStrAttr("HTMLQuoteElement", "cite", "cite");
+  defStrAttr("HTMLParamElement", "name", "name");
+  defStrAttr("HTMLParamElement", "value", "value");
+  defStrAttr("HTMLMarqueeElement", "behavior", "behavior");
+  defStrAttr("HTMLMarqueeElement", "bgColor", "bgcolor");
+  defStrAttr("HTMLMarqueeElement", "direction", "direction");
+  defStrAttr("HTMLMarqueeElement", "height", "height");
+  defStrAttr("HTMLMarqueeElement", "width", "width");
+  defBoolAttr("HTMLMarqueeElement", "trueSpeed", "truespeed");
+  defIntAttr("HTMLMarqueeElement", "hspace", "hspace", 0);
+  defIntAttr("HTMLMarqueeElement", "vspace", "vspace", 0);
+  defIntAttr("HTMLMarqueeElement", "loop", "loop", -1);
+  defIntAttr("HTMLMarqueeElement", "scrollAmount", "scrollamount", 6);
+  defIntAttr("HTMLMarqueeElement", "scrollDelay", "scrolldelay", 85);
 
   // HTMLProgressElement & HTMLMeterElement shared float parser
   const parseValidHtmlFloat = function (s) {

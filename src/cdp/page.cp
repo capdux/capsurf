@@ -169,15 +169,6 @@ fn emitMainFrameLifecycleEvents(session: *CdpPageSession, out_events: *[]CdpEven
         event_count.* += 1;
     }
     if (event_count.* < out_events.len) {
-        const lc_idle = std.fmt.allocPrint(
-            session.allocator,
-            "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"name\":\"networkIdle\",\"timestamp\":1700000000.15}}",
-            .{ session.frame_id, session.loader_id },
-        ) catch "{}";
-        out_events[event_count.*] = CdpEvent.create("Page.lifecycleEvent", lc_idle);
-        event_count.* += 1;
-    }
-    if (event_count.* < out_events.len) {
         const main_stop_json = std.fmt.allocPrint(
             session.allocator,
             "{{\"frameId\":\"{s}\"}}",
@@ -326,7 +317,12 @@ fn addIframeState(
     let child_url: []const u8 = "about:blank";
     if (effective_src.len >= 11 && std.ascii.eqlIgnoreCase(effective_src[0..11], "javascript:")) {
         child_url = "";
-    } else if (std.mem.eql(u8, effective_src, "about:blank") || std.mem.startsWith(u8, effective_src, "about:blank?") || std.mem.startsWith(u8, effective_src, "about:blank#")) {
+    } else if (std.mem.eql(u8, effective_src, "about:blank") ||
+        std.mem.startsWith(u8, effective_src, "about:blank?") ||
+        std.mem.startsWith(u8, effective_src, "about:blank#") ||
+        std.mem.startsWith(u8, effective_src, "about:srcdoc") ||
+        (effective_src.len >= 5 && std.ascii.eqlIgnoreCase(effective_src[0..5], "data:")) ||
+        (effective_src.len >= 5 && std.ascii.eqlIgnoreCase(effective_src[0..5], "blob:"))) {
         const u_dst = url_storage[child_idx * 512 .. (child_idx + 1) * 512];
         const copy_len = @min(effective_src.len, u_dst.len);
         @memcpy(u_dst[0..copy_len], effective_src[0..copy_len]);
@@ -500,7 +496,7 @@ fn collectFrameStates(
                 );
                 if (!valid_existing && child_slot < count) {
                     const assigned_id = out_frames[child_slot].frame_id;
-                    let set_js_buf: [768]u8 = undefined;
+                    let set_js_buf: [1536]u8 = undefined;
                     const set_js = std.fmt.bufPrint(
                         &set_js_buf,
                         "(function(){{try{{if(!document||!document.documentElement)return;var idx=0;var seen=new Set();function walk(r,d){{if(!r)return;var cs=r.childNodes||r.children||[];for(var i=0;i<cs.length;i++){{var el=cs[i];if(!el||el.nodeType!==1)continue;var t=String(el.localName||el.tagName||'').toLowerCase();if(t==='template')continue;if((t==='iframe'||t==='frame')&&!seen.has(el)){{seen.add(el);if(idx==={d}){{el._capsurf_frame_id='{s}';return true;}}idx++;if(d<4){{const cdoc=el.contentDocument||(el.contentWindow&&el.contentWindow.document)||el._contentDocument||null;if(cdoc&&cdoc.documentElement&&walk(cdoc.documentElement,d+1))return true;}}}}if(el._shadowRoot&&walk(el._shadowRoot,d))return true;if(walk(el,d))return true;}}return false;}}walk(document.documentElement,1);}}catch(e){{}}}})()",
@@ -581,6 +577,7 @@ fn recordAttachedChildFrames(session: *CdpPageSession, frames: []const FrameStat
     let fi: usize = 1;
     while (fi < frames.len) : (fi += 1) {
         const cf = &frames[fi];
+        if (isKnownChildFrameDetached(session, cf.frame_id)) continue;
         let found = false;
         let ki: usize = 0;
         while (ki < session.known_child_frame_count) : (ki += 1) {
@@ -792,40 +789,32 @@ pub fn emitNewChildFrameEvents(
 
     // Detect detached child frames (known attached frames whose owner element is no longer in DOM)
     {
-        const dom_urls_js = "(function(){try{if(typeof document==='undefined'||!document.querySelectorAll)return '';var fs=document.querySelectorAll('iframe, frame');var out=[];for(var i=0;i<fs.length;i++){var f=fs[i];var id=(f.getAttribute&&f.getAttribute('id'))||'';out.push(id);}return out.join('|');}catch(e){return '';}})()";
+        const dom_urls_js = "(function(){try{if(typeof document==='undefined'||!document.documentElement)return '';var out=[];var seen=new Set();function walk(r,d){if(!r)return;var cs=r.childNodes||r.children||[];for(var i=0;i<cs.length;i++){var el=cs[i];if(!el||el.nodeType!==1)continue;var t=String(el.localName||el.tagName||'').toLowerCase();if(t==='template')continue;if((t==='iframe'||t==='frame')&&!seen.has(el)){seen.add(el);var fid=el._capsurf_frame_id||'';var id=(el.getAttribute&&el.getAttribute('id'))||'';out.push(fid+'\\x1f'+id);if(d<4){const cdoc=el.contentDocument||(el.contentWindow&&el.contentWindow.document)||el._contentDocument||null;if(cdoc&&cdoc.documentElement)walk(cdoc.documentElement,d+1);}}if(el._shadowRoot)walk(el._shadowRoot,d);walk(el,d);}}walk(document.documentElement,1);return out.join('\\x1e');}catch(e){return '';}})()";
         const dv = session.ctx.eval(dom_urls_js);
         defer session.ctx.freeValue(dv);
         const dcstr = session.ctx.toCString(dv);
-        let dom_count: usize = 0;
-        if (dcstr.len > 0) {
-            dom_count = 1;
-            let ci: usize = 0;
-            while (ci < dcstr.len) : (ci += 1) {
-                if (dcstr[ci] == '|') dom_count += 1;
-            }
-        } else {
-            const cnt_v = session.ctx.eval("(function(){try{return document.querySelectorAll('iframe, frame').length;}catch(e){return 0;}})()");
-            const cnt_i = session.ctx.toInt64(cnt_v) catch 0;
-            session.ctx.freeValue(cnt_v);
-            if (cnt_i > 0) dom_count = @as(usize, @intCast(cnt_i));
-        }
         let ki: usize = 0;
         while (ki < session.known_child_frame_count && event_count.* < out_events.len) : (ki += 1) {
             let kf = &session.known_child_frames[ki];
             if (!kf.active || kf.detached) continue;
             let still_present = false;
-            if (dom_count > 0) {
+            if (dcstr.len > 0) {
+                const k_fid = kf.frame_id_buf[0..kf.frame_id_len];
                 const k_oid = kf.owner_id_buf[0..kf.owner_id_len];
-                if (k_oid.len > 0 && dcstr.len > 0) {
-                    let drows2 = std.mem.splitScalar(u8, dcstr, '|');
-                    while (drow := drows2.next()) {
-                        if (std.mem.eql(u8, drow, k_oid)) {
+                let drows = std.mem.splitScalar(u8, dcstr, 0x1e);
+                while (drow := drows.next()) {
+                    let dcols = std.mem.splitScalar(u8, drow, 0x1f);
+                    const row_fid = dcols.next() ?? "";
+                    const row_oid = dcols.next() ?? "";
+                    if (k_fid.len > 0 && row_fid.len > 0) {
+                        if (std.mem.eql(u8, row_fid, k_fid)) {
                             still_present = true;
                             break;
                         }
+                    } else if (k_oid.len > 0 && row_oid.len > 0 && std.mem.eql(u8, row_oid, k_oid)) {
+                        still_present = true;
+                        break;
                     }
-                } else if (ki < dom_count) {
-                    still_present = true;
                 }
             }
             if (!still_present) {
@@ -946,13 +935,20 @@ pub fn emitNewChildFrameEvents(
         }
     }
 
-    const total_children: usize = if (nav_frame_count > 1) nav_frame_count - 1 else 0;
-    if (total_children <= session.emitted_child_frame_count) return;
+    let active_total_children: usize = 0;
+    let aci: usize = 1;
+    while (aci < nav_frame_count) : (aci += 1) {
+        if (!isKnownChildFrameDetached(session, nav_frames[aci].frame_id)) {
+            active_total_children += 1;
+        }
+    }
+    if (active_total_children <= session.emitted_child_frame_count) return;
 
     let frame_info_buf: [2048]u8 = [0; 2048];
     let fi: usize = @as(usize, 1) + session.emitted_child_frame_count;
     while (fi < nav_frame_count && event_count.* < out_events.len) : (fi += 1) {
         let cf = &nav_frames[fi];
+        if (isKnownChildFrameDetached(session, cf.frame_id)) continue;
         const parent_fid = cf.parent_frame_id ?? session.frame_id;
         if (event_count.* < out_events.len) {
             const att_json = std.fmt.allocPrint(
@@ -1038,7 +1034,7 @@ pub fn emitNewChildFrameEvents(
             event_count.* += 1;
         }
     }
-    session.emitted_child_frame_count = total_children;
+    session.emitted_child_frame_count = active_total_children;
     recordAttachedChildFrames(session, nav_frames[0..nav_frame_count]);
     syncIframeTargets(session, true);
 }
@@ -1253,6 +1249,10 @@ pub struct PageHandler {
         }
 
         if (std.mem.eql(u8, req.method, "Page.setDocumentContent")) {
+            const req_frame_id = extractJsonString(req.params_raw, "frameId") ?? session.frame_id;
+            if (req_frame_id.len > 0 && !std.mem.eql(u8, req_frame_id, session.frame_id)) {
+                return setChildFrameDocumentContent(session, req, req_frame_id, out_events, event_count);
+            }
             session.tty_ua_css = 0;
             session.tty_cell_w = 0;
             session.tty_cell_h = 0;
@@ -1300,7 +1300,7 @@ pub struct PageHandler {
                         if (!is_http) continue;
                         if (MockFixtures.isFixtureUrl(img_u)) continue;
                         if (std.mem.indexOf(u8, img_u, "dripping-") != null || std.mem.indexOf(u8, img_u, "ms=45000") != null) continue;
-                        * = HttpLoader.fetchDocumentWithReferrer(session, img_u, img_buf.?, 0, session.url) catch continue;
+                        * = HttpLoader.fetchDocumentWithReferrerType(session, img_u, img_buf.?, 0, session.url, "Image") catch continue;
                     }
                 }
             }
@@ -1939,7 +1939,10 @@ pub struct PageHandler {
             }
 
             emitDetachAllChildFrames(session, out_events, event_count);
+            session.known_child_frame_count = 0;
+            session.emitted_child_frame_count = 0;
             session.pending_http_csp = fetch_res.content_security_policy;
+            session.pending_http_referrer_policy = fetch_res.referrer_policy;
             session.navigate(nav_html, fetch_res.final_url, effective_referrer) catch return CdpResponse.err(req.id, -32000, "HTML parsing failed");
             if (isXmlOrXhtml(fetch_res.content_type, fetch_res.final_url)) {
                 session.doc.in_quirks_mode = false;
@@ -2216,6 +2219,14 @@ pub struct PageHandler {
                 }
             }
 
+            if (session.navigation_aborted || session.checkWindowStopped()) {
+                const err_res = std.fmt.bufPrint(
+                    out_buf,
+                    "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"errorText\":\"net::ERR_ABORTED\",\"isDownload\":false}}",
+                    .{ session.frame_id, session.loader_id },
+                ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+                return CdpResponse.ok(req.id, err_res);
+            }
             const res = std.fmt.bufPrint(
                 out_buf,
                 "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"isDownload\":false}}",
@@ -2551,6 +2562,136 @@ fn mapNavigationErrorText(err_name: []const u8, default_text: []const u8): []con
     if (std.mem.eql(u8, err_name, "RequestAborted")) return "net::ERR_ABORTED";
     if (std.mem.eql(u8, err_name, "BlockedByClient")) return "net::ERR_BLOCKED_BY_CLIENT";
     return default_text;
+}
+
+fn setChildFrameDocumentContent(
+    session: *CdpPageSession,
+    req: CdpRequest,
+    req_frame_id: []const u8,
+    out_events: *[MAX_CDP_EVENTS]CdpEvent,
+    event_count: *usize,
+): CdpResponse {
+    let kf_idx_opt = findKnownChildFrameIndex(session, req_frame_id);
+    if (kf_idx_opt == null) {
+        if (f_arr := session.allocator.alloc(FrameState, 48) catch null) {
+            defer session.allocator.free(f_arr);
+            if (url_st := session.allocator.alloc(u8, 48 * 512) catch null) {
+                defer session.allocator.free(url_st);
+                if (id_st := session.allocator.alloc(u8, 48 * 32) catch null) {
+                    defer session.allocator.free(id_st);
+                    const f_cnt = collectFrameStates(session, f_arr, url_st, id_st);
+                    recordAttachedChildFrames(session, f_arr[0..f_cnt]);
+                    kf_idx_opt = findKnownChildFrameIndex(session, req_frame_id);
+                }
+            }
+        }
+    }
+    if (kf_idx_opt == null) {
+        return CdpResponse.err(req.id, -32000, "No frame with given id found");
+    }
+    const kf = &session.known_child_frames[kf_idx_opt.?];
+    const owner_id = kf.ownerId();
+    const cur_url = if (kf.url_len > 0) kf.url_buf[0..kf.url_len] else "about:blank";
+
+    let unesc_buf: ([]u8)? = null;
+    defer if (unesc_buf != null) session.allocator.free(unesc_buf.?);
+    let html: []const u8 = "";
+    const raw_html_opt = extractJsonString(req.params_raw, "html");
+    if (raw_html_opt != null && raw_html_opt.?.len > 0) {
+        unesc_buf = session.allocator.alloc(u8, raw_html_opt.?.len) catch return CdpResponse.err(req.id, -32000, "Out of memory");
+        html = unescapeJsonString(raw_html_opt.?, unesc_buf.?);
+    }
+
+    {
+        const global_obj = session.ctx.getGlobal();
+        defer session.ctx.freeValue(global_obj);
+        * = JS_SetPropertyStr(session.ctx.raw_ctx, global_obj, "__capsurf_nav_owner_id", session.ctx.newString(owner_id));
+        * = JS_SetPropertyStr(session.ctx.raw_ctx, global_obj, "__capsurf_nav_frame_id", session.ctx.newString(req_frame_id));
+        * = JS_SetPropertyStr(session.ctx.raw_ctx, global_obj, "__capsurf_nav_url", session.ctx.newString(cur_url));
+        * = JS_SetPropertyStr(session.ctx.raw_ctx, global_obj, "__capsurf_nav_html", session.ctx.newString(html));
+
+        const js_apply =
+            "(function(){try{" ++
+            "var oid=globalThis.__capsurf_nav_owner_id||'';" ++
+            "var fid=globalThis.__capsurf_nav_frame_id||'';" ++
+            "var url=globalThis.__capsurf_nav_url||'about:blank';" ++
+            "var html=globalThis.__capsurf_nav_html||'';" ++
+            "var el=null;" ++
+            "if(oid&&typeof document!=='undefined'&&document.getElementById){" ++
+            "var byId=document.getElementById(oid);" ++
+            "if(byId){var tn=String(byId.localName||byId.tagName||'').toLowerCase();if(tn==='iframe'||tn==='frame')el=byId;}" ++
+            "}" ++
+            "if(!el&&fid.indexOf('capsurf-child-')===0&&typeof document!=='undefined'&&document.querySelectorAll){" ++
+            "var idx=parseInt(fid.slice(14),10);" ++
+            "if(idx>=1){var list=document.querySelectorAll('iframe, frame');if(list&&idx-1<list.length)el=list[idx-1];}" ++
+            "}" ++
+            "if(!el)return false;" ++
+            "if(typeof globalThis.__capsurf_getOrCreateIframeWindow==='function'){" ++
+            "globalThis.__capsurf_getOrCreateIframeWindow(el,{skipInitialNavigation:true});" ++
+            "}" ++
+            "if(typeof globalThis.__capsurf_apply_iframe_html==='function'){" ++
+            "globalThis.__capsurf_apply_iframe_html(el,url,html);" ++
+            "}" ++
+            "if(typeof globalThis.__capsurf_fire_iframe_load==='function'){" ++
+            "globalThis.__capsurf_fire_iframe_load(el);" ++
+            "}" ++
+            "return true;" ++
+            "}catch(e){return false;}finally{" ++
+            "delete globalThis.__capsurf_nav_owner_id;" ++
+            "delete globalThis.__capsurf_nav_frame_id;" ++
+            "delete globalThis.__capsurf_nav_url;" ++
+            "delete globalThis.__capsurf_nav_html;" ++
+            "}})()";
+        const apply_val = session.ctx.eval(js_apply);
+        session.ctx.freeValue(apply_val);
+        session.ctx.drainJobs();
+    }
+
+    session.loader_seq += 1;
+    let child_loader_buf: [32]u8 = [0; 32];
+    const child_loader_id = std.fmt.bufPrint(&child_loader_buf, "capsurf-loader-{d:0>3}", .{ session.loader_seq }) catch "capsurf-loader-child";
+
+    syncIframeTargets(session, true);
+    emitNewChildFrameEvents(session, out_events, event_count);
+
+    if (event_count.* < out_events.len) {
+        const lc_init = std.fmt.allocPrint(
+            session.allocator,
+            "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"name\":\"init\",\"timestamp\":1700000000.0}}",
+            .{ req_frame_id, child_loader_id },
+        ) catch "{}";
+        out_events[event_count.*] = CdpEvent.create("Page.lifecycleEvent", lc_init);
+        event_count.* += 1;
+    }
+    if (event_count.* < out_events.len) {
+        const dcl_json = std.fmt.allocPrint(
+            session.allocator,
+            "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"name\":\"DOMContentLoaded\",\"timestamp\":1700000000.05}}",
+            .{ req_frame_id, child_loader_id },
+        ) catch "{}";
+        out_events[event_count.*] = CdpEvent.create("Page.lifecycleEvent", dcl_json);
+        event_count.* += 1;
+    }
+    if (event_count.* < out_events.len) {
+        const load_json = std.fmt.allocPrint(
+            session.allocator,
+            "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"name\":\"load\",\"timestamp\":1700000000.1}}",
+            .{ req_frame_id, child_loader_id },
+        ) catch "{}";
+        out_events[event_count.*] = CdpEvent.create("Page.lifecycleEvent", load_json);
+        event_count.* += 1;
+    }
+    if (event_count.* < out_events.len) {
+        const stop_json = std.fmt.allocPrint(
+            session.allocator,
+            "{{\"frameId\":\"{s}\"}}",
+            .{ req_frame_id },
+        ) catch "{}";
+        out_events[event_count.*] = CdpEvent.create("Page.frameStoppedLoading", stop_json);
+        event_count.* += 1;
+    }
+
+    return CdpResponse.ok(req.id, "{}");
 }
 
 fn navigateChildFrame(

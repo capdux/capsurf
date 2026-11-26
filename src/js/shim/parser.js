@@ -10,7 +10,7 @@ const SUPPORTED_MIME_TYPES = new Set([
 ]);
 
 const HTML_VOID_TAGS = new Set([
-  "area", "base", "br", "col", "embed", "hr", "img", "input",
+  "area", "base", "br", "col", "embed", "frame", "hr", "img", "input",
   "link", "meta", "param", "source", "track", "wbr",
 ]);
 
@@ -768,6 +768,142 @@ ParsedElement.prototype.dispatchEvent = function (event) {
   return true;
 };
 
+Object.defineProperty(ParsedElement.prototype, "isConnected", {
+  get: function () {
+    let curr = this;
+    while (curr) {
+      if (curr.nodeType === DOCUMENT_NODE) return true;
+      if (curr.nodeType === DOCUMENT_FRAGMENT_NODE && curr.host) {
+        curr = curr.host;
+        continue;
+      }
+      curr = curr.parentNode || curr.parentElement;
+    }
+    return false;
+  },
+  configurable: true,
+});
+
+ParsedElement.prototype.getBoundingClientRect = function () {
+  if (typeof Element !== "undefined" && Element.prototype && typeof Element.prototype.getBoundingClientRect === "function") {
+    return Element.prototype.getBoundingClientRect.call(this);
+  }
+  return { x: 0, y: 0, left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
+};
+
+ParsedElement.prototype.getClientRects = function () {
+  if (typeof Element !== "undefined" && Element.prototype && typeof Element.prototype.getClientRects === "function") {
+    return Element.prototype.getClientRects.call(this);
+  }
+  return [this.getBoundingClientRect()];
+};
+
+ParsedElement.prototype.checkVisibility = function (options) {
+  if (typeof Element !== "undefined" && Element.prototype && typeof Element.prototype.checkVisibility === "function") {
+    return Element.prototype.checkVisibility.call(this, options);
+  }
+  return Boolean(this.isConnected);
+};
+
+ParsedElement.prototype.matches = function (sel) {
+  return matchesSelector(this, sel);
+};
+
+ParsedElement.prototype.closest = function (sel) {
+  let curr = this;
+  while (curr && curr.nodeType === ELEMENT_NODE) {
+    if (matchesSelector(curr, sel)) return curr;
+    curr = curr.parentElement || curr.parentNode;
+  }
+  return null;
+};
+
+Object.defineProperty(ParsedElement.prototype, "type", {
+  get: function () {
+    if (this.localName === "input") {
+      if (typeof HTMLInputElement !== "undefined" && HTMLInputElement.prototype) {
+        const d = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "type");
+        if (d && d.get) return d.get.call(this);
+      }
+      return String(this.getAttribute("type") || "text").toLowerCase();
+    }
+    if (this.localName === "button") return String(this.getAttribute("type") || "submit").toLowerCase();
+    if (this.localName === "select") return this.hasAttribute("multiple") ? "select-multiple" : "select-one";
+    if (this.localName === "textarea") return "textarea";
+    return this.getAttribute("type");
+  },
+  set: function (v) {
+    this.setAttribute("type", String(v));
+  },
+  configurable: true,
+});
+
+Object.defineProperty(ParsedElement.prototype, "disabled", {
+  get: function () { return this.hasAttribute("disabled"); },
+  set: function (v) { if (v) this.setAttribute("disabled", ""); else this.removeAttribute("disabled"); },
+  configurable: true,
+});
+
+Object.defineProperty(ParsedElement.prototype, "multiple", {
+  get: function () { return this.hasAttribute("multiple"); },
+  set: function (v) { if (v) this.setAttribute("multiple", ""); else this.removeAttribute("multiple"); },
+  configurable: true,
+});
+
+Object.defineProperty(ParsedElement.prototype, "checked", {
+  get: function () { return this._checked !== undefined ? Boolean(this._checked) : this.hasAttribute("checked"); },
+  set: function (v) { this._checked = Boolean(v); },
+  configurable: true,
+});
+
+Object.defineProperty(ParsedElement.prototype, "value", {
+  get: function () { return this._value !== undefined ? this._value : (this.getAttribute("value") || ""); },
+  set: function (v) { this._value = String(v); },
+  configurable: true,
+});
+
+Object.defineProperty(ParsedElement.prototype, "files", {
+  get: function () { return this.localName === "input" ? (this._files || []) : undefined; },
+  set: function (v) { this._files = v; },
+  configurable: true,
+});
+
+ParsedElement.prototype.click = function () {
+  if (typeof HTMLElement !== "undefined" && HTMLElement.prototype && typeof HTMLElement.prototype.click === "function") {
+    return HTMLElement.prototype.click.call(this);
+  }
+};
+
+ParsedElement.prototype.focus = function () {
+  if (typeof HTMLElement !== "undefined" && HTMLElement.prototype && typeof HTMLElement.prototype.focus === "function") {
+    return HTMLElement.prototype.focus.call(this);
+  }
+};
+
+ParsedElement.prototype.blur = function () {
+  if (typeof HTMLElement !== "undefined" && HTMLElement.prototype && typeof HTMLElement.prototype.blur === "function") {
+    return HTMLElement.prototype.blur.call(this);
+  }
+};
+
+ParsedElement.prototype.getRootNode = function () {
+  let cur = this;
+  while (cur && cur.parentNode) cur = cur.parentNode;
+  return cur;
+};
+
+ParsedElement.prototype.contains = function (other) {
+  let cur = other;
+  while (cur) {
+    if (cur === this) return true;
+    cur = cur.parentNode;
+  }
+  return false;
+};
+
+ParsedElement.prototype.scrollIntoView = function () {};
+ParsedElement.prototype.scrollIntoViewIfNeeded = function () {};
+
 function ParsedDocument(contentType, compatMode) {
   this.nodeType = DOCUMENT_NODE;
   this.nodeName = "#document";
@@ -794,6 +930,13 @@ function ParsedDocument(contentType, compatMode) {
   this._doctypeNode = null;
   registerParsedNode(this);
 }
+
+Object.defineProperty(ParsedDocument.prototype, "isConnected", {
+  get: function () {
+    return true;
+  },
+  configurable: true,
+});
 
 Object.defineProperty(ParsedDocument.prototype, "title", {
   get: function () {
@@ -870,9 +1013,27 @@ Object.defineProperty(ParsedDocument.prototype, "lastChild", {
   configurable: true,
 });
 
+ParsedDocument.prototype.elementFromPoint = function (x, y) {
+  if (typeof ShadowRoot !== "undefined" && ShadowRoot.prototype && typeof ShadowRoot.prototype.elementFromPoint === "function") {
+    return ShadowRoot.prototype.elementFromPoint.call(this, x, y);
+  }
+  return this.body || this.documentElement || null;
+};
+
+ParsedDocument.prototype.elementsFromPoint = function (x, y) {
+  const out = [];
+  let cur = this.elementFromPoint(x, y);
+  while (cur && cur.nodeType === 1) {
+    out.push(cur);
+    cur = cur.parentElement || cur.parentNode;
+  }
+  return out;
+};
+
 ParsedDocument.prototype.createElement = function (tagName) {
   const el = new ParsedElement(tagName, this);
-  if (String(tagName).toLowerCase() === "iframe") {
+  const lowerTag = String(tagName).toLowerCase();
+  if (lowerTag === "iframe" || lowerTag === "frame") {
     Object.defineProperty(el, "contentWindow", {
       get: function () {
         if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_getOrCreateIframeWindow === "function") {
@@ -1123,13 +1284,22 @@ function parseDocument(str, mime) {
         } else if (lowerTag === "body") {
           applyAttributes(body, attrStr);
           stack = [body];
+        } else if (lowerTag === "frameset" && stack.length === 1 && stack[0] === body && body._children.length === 0) {
+          const el = doc.createElement(tagName);
+          applyAttributes(el, attrStr);
+          root.removeChild(body);
+          root.appendChild(el);
+          doc.body = el;
+          if (!isSelfClosing) {
+            stack = [el];
+          }
         } else {
           const el = doc.createElement(tagName);
           applyAttributes(el, attrStr);
 
           if (lowerTag === "title" || lowerTag === "meta" || lowerTag === "link" || lowerTag === "style") {
             head.appendChild(el);
-            if (lowerTag === "title" && !isSelfClosing) {
+            if ((lowerTag === "title" || lowerTag === "style") && !isSelfClosing) {
               stack.push(el);
             }
           } else {

@@ -119,36 +119,36 @@ fn testKitesurfFacade() {
     let out_buf: [1024]u8 = [0; 1024];
 
     // getSceneHostManifest
-    const res_man = facade.dispatchCommand("Kitesurf.getSceneHostManifest", "{}", "sess-1", &session, out_buf[0..]);
+    const res_man = facade.dispatchCommand("Kitesurf.getSceneHostManifest", "{}", "sess-1", session, out_buf[0..]);
     assertCheck("manifest dispatch succeeded", res_man != null);
     if (m := res_man) {
         assertCheck("contains wasm name", std.mem.indexOf(u8, m, "scene_host.wasm") != null);
     }
 
     // readSceneHost
-    const res_read = facade.dispatchCommand("Kitesurf.readSceneHost", "{}", "sess-1", &session, out_buf[0..]);
+    const res_read = facade.dispatchCommand("Kitesurf.readSceneHost", "{}", "sess-1", session, out_buf[0..]);
     assertCheck("readSceneHost succeeded", res_read != null);
 
     // startSceneStream
-    const res_start = facade.dispatchCommand("Kitesurf.startSceneStream", "{}", "sess-1", &session, out_buf[0..]);
+    const res_start = facade.dispatchCommand("Kitesurf.startSceneStream", "{}", "sess-1", session, out_buf[0..]);
     assertCheck("startSceneStream succeeded", res_start != null);
     assertCheck("stream active in mgr", facade.stream_mgr.active_count == 1);
 
     // sceneFrameAck
-    const res_ack = facade.dispatchCommand("Kitesurf.sceneFrameAck", "{}", "sess-1", &session, out_buf[0..]);
+    const res_ack = facade.dispatchCommand("Kitesurf.sceneFrameAck", "{}", "sess-1", session, out_buf[0..]);
     assertCheck("sceneFrameAck succeeded", res_ack != null);
 
     // getSceneResources
-    const res_res = facade.dispatchCommand("Kitesurf.getSceneResources", "{}", "sess-1", &session, out_buf[0..]);
+    const res_res = facade.dispatchCommand("Kitesurf.getSceneResources", "{}", "sess-1", session, out_buf[0..]);
     assertCheck("getSceneResources succeeded", res_res != null);
 
     // stopSceneStream
-    const res_stop = facade.dispatchCommand("Kitesurf.stopSceneStream", "{}", "sess-1", &session, out_buf[0..]);
+    const res_stop = facade.dispatchCommand("Kitesurf.stopSceneStream", "{}", "sess-1", session, out_buf[0..]);
     assertCheck("stopSceneStream succeeded", res_stop != null);
     assertCheck("stream inactive in mgr", facade.stream_mgr.active_count == 0);
 
     // Passthrough to protocol extensions (getSessionInfo)
-    const res_info = facade.dispatchCommand("CapSurf.getSessionInfo", "{}", "sess-1", &session, out_buf[0..]);
+    const res_info = facade.dispatchCommand("CapSurf.getSessionInfo", "{}", "sess-1", session, out_buf[0..]);
     assertCheck("getSessionInfo passthrough succeeded", res_info != null);
 }
 

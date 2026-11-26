@@ -753,6 +753,25 @@ fn resolveNodeIdArg(ctx: *JSContext, val: JSValue): NodeId {
     const host_nid = resolveNodeIdArg(ctx, unsafe { argv[0] });
     if (host_nid == NULL_NODE || @as(usize, host_nid) >= dom_ctx.doc.nodes.items.len) return jsInt(-1);
     const shadow_nid = dom_ctx.doc.attachShadowRoot(host_nid) catch return jsInt(-1);
+    if (argc >= 2 && jsIsObject(unsafe { argv[1] })) {
+        let key_buf: [64]u8 = undefined;
+        const key = std.fmt.bufPrint(&key_buf, "w{d}:{d}", .{ unsafe { @intFromPtr(dom_ctx) }, shadow_nid }) catch "";
+        if (key.len > 0) {
+            let key_z: [65]u8 = undefined;
+            @memcpy(key_z[0..key.len], key);
+            key_z[key.len] = 0;
+            const global_obj = JS_GetGlobalObject(ctx);
+            defer JS_FreeValue(ctx, global_obj);
+            let cache = JS_GetPropertyStr(ctx, global_obj, "__capsurf_wrappers");
+            if (!jsIsObject(cache)) {
+                JS_FreeValue(ctx, cache);
+                cache = JS_NewObject(ctx);
+                * = JS_DefinePropertyValueStr(ctx, global_obj, "__capsurf_wrappers", JS_DupValue(ctx, cache), 1);
+            }
+            defer JS_FreeValue(ctx, cache);
+            * = JS_SetPropertyStr(ctx, cache, unsafe { @ptrCast(&key_z) }, JS_DupValue(ctx, unsafe { argv[1] }));
+        }
+    }
     dom_ctx.layout_dirty = true;
     return jsInt(@intCast(shadow_nid));
 }
@@ -2489,7 +2508,56 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
     if (ptr == null) return jsNewString(ctx, "");
     const el: *JsElement = unsafe { @ptrCast(@alignCast(ptr.?)) };
     if (@as(usize, el.node_id) >= el.dom_ctx.doc.nodes.items.len) return jsNewString(ctx, "");
-    const node = &el.dom_ctx.doc.nodes.items[@as(usize, el.node_id)];
+    const doc = el.dom_ctx.doc;
+    const node = &doc.nodes.items[@as(usize, el.node_id)];
+    let is_html_ns = true;
+    let explicit_ns = false;
+    const ns_prop = JS_GetPropertyStr(ctx, this_val, "_namespaceURI");
+    if (ns_prop.tag == -7) {
+        explicit_ns = true;
+        let ns_len: usize = 0;
+        const ns_cstr = JS_ToCStringLen2(ctx, &ns_len, ns_prop, 0);
+        if (ns_cstr != null) {
+            const ns_slice = unsafe { ns_cstr.?[0..ns_len] };
+            if (!std.mem.eql(u8, ns_slice, "http://www.w3.org/1999/xhtml")) {
+                is_html_ns = false;
+            }
+            JS_FreeCString(ctx, ns_cstr.?);
+        }
+    } else if (ns_prop.tag == JS_TAG_NULL) {
+        explicit_ns = true;
+        is_html_ns = false;
+    }
+    JS_FreeValue(ctx, ns_prop);
+    if (is_html_ns) {
+        let cur_id = el.node_id;
+        let depth: usize = 0;
+        while (cur_id != NULL_NODE && @as(usize, cur_id) < doc.nodes.items.len && depth < 64) : (depth += 1) {
+            const cn = &doc.nodes.items[@as(usize, cur_id)];
+            if (cn.node_type == NodeType.Element) {
+                if (std.ascii.eqlIgnoreCase(cn.tag_name, "svg") || std.ascii.eqlIgnoreCase(cn.tag_name, "math")) {
+                    is_html_ns = false;
+                    break;
+                }
+                if (std.ascii.eqlIgnoreCase(cn.tag_name, "foreignobject")) {
+                    break;
+                }
+            }
+            cur_id = cn.parent;
+        }
+    }
+    if (!is_html_ns) {
+        if (explicit_ns) {
+            return jsNewString(ctx, node.tag_name);
+        }
+        let lbuf: [64]u8 = [0; 64];
+        const llen = @min(node.tag_name.len, lbuf.len);
+        let li: usize = 0;
+        while (li < llen) : (li += 1) {
+            lbuf[li] = std.ascii.toLower(node.tag_name[li]);
+        }
+        return jsNewString(ctx, lbuf[0..llen]);
+    }
     let buf: [64]u8 = [0; 64];
     const len = @min(node.tag_name.len, buf.len);
     let i: usize = 0;
@@ -2754,6 +2822,9 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
     }
     const parent_node = &doc.nodes.items[@as(usize, parent_id)];
     if (parent_node.node_type == NodeType.Document) {
+        if (std.mem.eql(u8, parent_node.tag_name, "#shadow-root")) {
+            return createJsElement(ctx, el.dom_ctx, parent_id);
+        }
         const global_obj = JS_GetGlobalObject(ctx);
         defer JS_FreeValue(ctx, global_obj);
         return JS_GetPropertyStr(ctx, global_obj, "document");
@@ -2914,6 +2985,13 @@ fn computeViewportRect(ctx: *JSContext, dom_ctx: *JsDomContext, lt: *LayoutTree,
     while (i < dom_ctx.doc.nodes.items.len) : (i += 1) {
         const node = &dom_ctx.doc.nodes.items[i];
         if (node.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(node.tag_name, "body")) {
+            return createJsElement(ctx, dom_ctx, @intCast(i));
+        }
+    }
+    i = 1;
+    while (i < dom_ctx.doc.nodes.items.len) : (i += 1) {
+        const node = &dom_ctx.doc.nodes.items[i];
+        if (node.node_type == NodeType.Element && std.ascii.eqlIgnoreCase(node.tag_name, "frameset")) {
             return createJsElement(ctx, dom_ctx, @intCast(i));
         }
     }
@@ -4217,10 +4295,12 @@ pub fn mountDom(
         "      else if (typeof DataView === 'function' && val instanceof DataView) obj.subtype = 'dataview';" +
         "      else if (typeof ArrayBuffer === 'function' && ArrayBuffer.isView && ArrayBuffer.isView(val)) obj.subtype = 'typedarray';" +
         "      if (returnByValue && !isDeep) {" +
+        "        if (isWin) return { type: 'undefined' };" +
         "        const _seen = typeof WeakSet !== 'undefined' ? new WeakSet() : null;" +
+        "        let _hasCycle = false;" +
         "        const _chkDepth = function(x, d) {" +
         "          if (!x || typeof x !== 'object') return;" +
-        "          if (_seen) { if (_seen.has(x)) throw new Error('Object reference chain is too long'); _seen.add(x); }" +
+        "          if (_seen) { if (_seen.has(x)) { _hasCycle = true; return; } _seen.add(x); }" +
         "          if (d > 100) throw new Error('Object reference chain is too long');" +
         "          if (Array.isArray(x)) { for (let i = 0; i < x.length; i++) _chkDepth(x[i], d + 1); }" +
         "          else { const ks = Object.keys(x); for (let i = 0; i < ks.length; i++) _chkDepth(x[ks[i]], d + 1); }" +
@@ -4228,7 +4308,24 @@ pub fn mountDom(
         "        };" +
         "        _chkDepth(val, 0);" +
         "        if (obj.subtype === 'regexp' || obj.subtype === 'date') { obj.description = String(val); }" +
-        "        if (obj.subtype !== 'regexp') { obj.value = val; }" +
+        "        if (obj.subtype !== 'regexp') {" +
+        "          if (_hasCycle) {" +
+        "            const _cseen = new WeakSet();" +
+        "            const _clone = function(x) {" +
+        "              if (!x || typeof x !== 'object') return x;" +
+        "              if (_cseen.has(x)) return undefined;" +
+        "              _cseen.add(x);" +
+        "              let out;" +
+        "              if (Array.isArray(x)) { out = []; for (let i = 0; i < x.length; i++) out.push(_clone(x[i])); }" +
+        "              else { out = {}; const ks = Object.keys(x); for (let i = 0; i < ks.length; i++) out[ks[i]] = _clone(x[ks[i]]); }" +
+        "              _cseen.delete(x);" +
+        "              return out;" +
+        "            };" +
+        "            obj.value = _clone(val);" +
+        "          } else {" +
+        "            obj.value = val;" +
+        "          }" +
+        "        }" +
         "      } else {" +
         "        if (!returnByValue) {" +
         "          obj.objectId = globalThis.__capsurf_store_object(val);" +

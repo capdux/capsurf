@@ -631,6 +631,9 @@ function installShim(global) {
     if (el.nodeType !== undefined && el.nodeType !== 1) {
       return el;
     }
+    if (typeof isParsedNode === "function" && isParsedNode(el)) {
+      return el;
+    }
     const nidForCe = typeof el._nid === "number" ? el._nid : (typeof el._id === "number" ? el._id : -1);
     if (nidForCe > 0 && global.__capsurf_upgradedCustomNodeIds && global.__capsurf_upgradedCustomNodeIds.has(nidForCe)) {
       const CeCtor = global.__capsurf_upgradedCustomNodeIds.get(nidForCe);
@@ -723,6 +726,11 @@ function installShim(global) {
       case "output": Object.setPrototypeOf(el, (global.HTMLOutputElement || global.HTMLElement).prototype); break;
       case "progress": Object.setPrototypeOf(el, (global.HTMLProgressElement || global.HTMLElement).prototype); break;
       case "meter": Object.setPrototypeOf(el, (global.HTMLMeterElement || global.HTMLElement).prototype); break;
+      case "marquee": Object.setPrototypeOf(el, (global.HTMLMarqueeElement || global.HTMLElement).prototype); break;
+      case "time": Object.setPrototypeOf(el, (global.HTMLTimeElement || global.HTMLElement).prototype); break;
+      case "blockquote":
+      case "q": Object.setPrototypeOf(el, (global.HTMLQuoteElement || global.HTMLElement).prototype); break;
+      case "param": Object.setPrototypeOf(el, (global.HTMLParamElement || global.HTMLElement).prototype); break;
       default: Object.setPrototypeOf(el, global.HTMLElement.prototype); break;
     }
     return el;
@@ -824,16 +832,91 @@ function installShim(global) {
 
     if (docProto.createElement) {
       const origCreateElement = docProto.createElement;
+      global.__capsurf_createRawElement = function (doc, tagName) {
+        const d = doc || global.document;
+        if (!d) return null;
+        let el = origCreateElement.call(d, tagName);
+        if (el) {
+          const docContentType = d && d.contentType;
+          const isHtmlDoc = !docContentType || docContentType === "text/html";
+          if (isHtmlDoc) {
+            el._namespaceURI = "http://www.w3.org/1999/xhtml";
+            try {
+              Object.defineProperty(el, "namespaceURI", {
+                value: "http://www.w3.org/1999/xhtml",
+                writable: true,
+                configurable: true,
+                enumerable: true,
+              });
+            } catch (_) {}
+            const upperTag = String(tagName).replace(/[a-z]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 32));
+            if (el.tagName !== upperTag) {
+              el._tagNameOverride = upperTag;
+              try {
+                Object.defineProperty(el, "tagName", {
+                  value: upperTag,
+                  writable: false,
+                  configurable: true,
+                  enumerable: true,
+                });
+              } catch (_) {}
+            }
+          }
+          el = upgradeElement(el);
+        }
+        return el;
+      };
       docProto.createElement = function (tagName) {
+        const options = arguments.length > 1 ? arguments[1] : undefined;
         let el = origCreateElement.call(this, tagName);
         if (el) {
+          const docContentType = this && this.contentType;
+          const isHtmlDoc = !docContentType || docContentType === "text/html";
+          if (isHtmlDoc) {
+            el._namespaceURI = "http://www.w3.org/1999/xhtml";
+            try {
+              Object.defineProperty(el, "namespaceURI", {
+                value: "http://www.w3.org/1999/xhtml",
+                writable: true,
+                configurable: true,
+                enumerable: true,
+              });
+            } catch (_) {}
+            const upperTag = String(tagName).replace(/[a-z]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 32));
+            if (el.tagName !== upperTag) {
+              el._tagNameOverride = upperTag;
+              try {
+                Object.defineProperty(el, "tagName", {
+                  value: upperTag,
+                  writable: false,
+                  configurable: true,
+                  enumerable: true,
+                });
+              } catch (_) {}
+            }
+          }
+          const isOpt = (options && typeof options === "object" && options.is !== undefined && options.is !== null) ? String(options.is) : null;
+          el._isValue = isOpt;
+          if (isOpt !== null && typeof el.setAttribute === "function") {
+            try { el.setAttribute("is", isOpt); } catch (_) {}
+          }
           const tag = String(tagName).toLowerCase();
-          const registry = global.customElements || (typeof customElements !== "undefined" ? customElements : null);
-          const Ctor = (registry && registry.get) ? registry.get(tag) : null;
+          const getDef = typeof globalThis !== "undefined" ? globalThis.__capsurf_getCustomElementDefinition : null;
+          let def = null;
+          if (typeof getDef === "function") {
+            if (isOpt !== null) {
+              const extDef = getDef(isOpt);
+              if (extDef && extDef.extendsTag === tag) def = extDef;
+            } else {
+              const autoDef = getDef(tag);
+              if (autoDef && !autoDef.extendsTag) def = autoDef;
+            }
+          }
+          const Ctor = def ? def.constructor : null;
           if (Ctor && typeof Ctor === "function" && !Ctor.prototype.isPrototypeOf(el)) {
             upgradedElementsSet.add(el);
             if (typeof globalThis.upgradeCustomElement === "function") {
-              globalThis.upgradeCustomElement(el, Ctor, { tagName: tag });
+              globalThis.upgradeCustomElement(el, Ctor, { tagName: def.name });
             } else {
               Object.setPrototypeOf(el, Ctor.prototype);
               const HEl = global.HTMLElement || (typeof HTMLElement !== "undefined" ? HTMLElement : null);
@@ -990,6 +1073,18 @@ function installShim(global) {
         } catch (e) {
           try { el.namespaceURI = nsVal; } catch (e2) {}
         }
+        const qName = String(tagName);
+        if (el.tagName !== qName) {
+          el._tagNameOverride = qName;
+          try {
+            Object.defineProperty(el, "tagName", {
+              value: qName,
+              writable: false,
+              configurable: true,
+              enumerable: true,
+            });
+          } catch (_) {}
+        }
         if (nsVal !== "http://www.w3.org/1999/xhtml") {
           upgradedElementsSet.delete(el);
           const nonHtmlNid = typeof el._nid === "number" ? el._nid : (typeof el._id === "number" ? el._id : -1);
@@ -1034,14 +1129,29 @@ function installShim(global) {
     if (typeof docProto.adoptNode !== "function") {
       docProto.adoptNode = markNative(function (node) {
         if (!node || typeof node !== "object") return node;
+        const oldDoc = node.ownerDocument || null;
+        const newDoc = this;
         if (node.parentNode && typeof node.parentNode.removeChild === "function") {
           try { node.parentNode.removeChild(node); } catch (e) {}
         }
-        try {
-          Object.defineProperty(node, "ownerDocument", { value: this, writable: true, configurable: true });
-        } catch (e) {
-          try { node.ownerDocument = this; } catch (e2) {}
+        function adoptSubtree(n) {
+          if (!n || typeof n !== "object") return;
+          try {
+            Object.defineProperty(n, "ownerDocument", { value: newDoc, writable: true, configurable: true });
+          } catch (e) {
+            try { n.ownerDocument = newDoc; } catch (e2) {}
+          }
+          if (n.nodeType === 1 && oldDoc !== newDoc && typeof n.adoptedCallback === "function") {
+            try { n.adoptedCallback(oldDoc, newDoc); } catch (e) {}
+          }
+          const kids = n.childNodes || n._children;
+          if (kids && kids.length) {
+            for (let i = 0; i < kids.length; i++) {
+              adoptSubtree(kids[i]);
+            }
+          }
         }
+        adoptSubtree(node);
         return node;
       }, "adoptNode");
       if (global.document && !global.document.adoptNode) {
@@ -1049,10 +1159,37 @@ function installShim(global) {
       }
     }
 
+    const isInShadowTree = (node) => {
+      let cur = node;
+      while (cur) {
+        if (cur.nodeType === 11 && cur.host) return true;
+        cur = cur.parentNode;
+      }
+      return false;
+    };
+    const findLightElementById = (root, targetId) => {
+      if (!root) return null;
+      const kids = root.childNodes || root._children;
+      if (!kids) return null;
+      for (let i = 0; i < kids.length; i++) {
+        const k = kids[i];
+        if (!k || k.nodeType !== 1) continue;
+        const kid = k.id || (typeof k.getAttribute === "function" ? k.getAttribute("id") : "");
+        if (kid === targetId) return k;
+        const found = findLightElementById(k, targetId);
+        if (found) return found;
+      }
+      return null;
+    };
+
     if (docProto.getElementById) {
       const origGetElementById = docProto.getElementById;
       docProto.getElementById = function (id) {
-        const el = upgradeElement(origGetElementById.call(this, id));
+        let raw = origGetElementById.call(this, id);
+        if (raw && isInShadowTree(raw)) {
+          raw = findLightElementById(this.documentElement || this, String(id));
+        }
+        const el = upgradeElement(raw);
         if (el && typeof global.__capsurf_setLastQueriedNode === "function") {
           global.__capsurf_setLastQueriedNode(el);
         }
@@ -1071,11 +1208,23 @@ function installShim(global) {
         }
       }
     };
+    try {
+      Object.defineProperty(docProto, "tagName", {
+        get: function () { return undefined; },
+        configurable: true,
+      });
+    } catch (_) {}
+
     if (docProto.querySelector) {
       const origQuerySelector = docProto.querySelector;
       docProto.querySelector = function (sel) {
         checkDirSelector(sel);
-        const el = upgradeElement(origQuerySelector.call(this, sel));
+        let raw = origQuerySelector.call(this, sel);
+        if (raw && isInShadowTree(raw) && docProto.querySelectorAll) {
+          const all = docProto.querySelectorAll.call(this, sel);
+          raw = all && all.length ? all[0] : null;
+        }
+        const el = upgradeElement(raw);
         if (el && typeof global.__capsurf_setLastQueriedNode === "function") {
           global.__capsurf_setLastQueriedNode(el);
         }
@@ -1090,6 +1239,19 @@ function installShim(global) {
         checkDirSelector(sel);
         const nodes = origQuerySelectorAll.call(this, sel);
         if (nodes && nodes.length) {
+          let hasShadow = false;
+          for (let i = 0; i < nodes.length; i++) {
+            if (isInShadowTree(nodes[i])) { hasShadow = true; break; }
+          }
+          if (hasShadow) {
+            const filtered = [];
+            for (let i = 0; i < nodes.length; i++) {
+              if (!isInShadowTree(nodes[i])) {
+                filtered.push(upgradeElement(nodes[i]));
+              }
+            }
+            return typeof NodeList === "function" ? new NodeList(filtered) : filtered;
+          }
           for (let i = 0; i < nodes.length; i++) upgradeElement(nodes[i]);
         }
         return nodes;
@@ -1275,13 +1437,33 @@ function installShim(global) {
     if (typeof ParsedDocument !== "undefined" && ParsedDocument.prototype) {
       if (!ParsedDocument.prototype.open) {
         ParsedDocument.prototype.open = markNative(function () {
+          this._reopenActive = true;
           if (this.head && this.head._children) this.head._children.length = 0;
           if (this.body && this.body._children) this.body._children.length = 0;
           return docProto.open.apply(this, arguments);
         }, "open");
       }
       if (!ParsedDocument.prototype.close) {
-        ParsedDocument.prototype.close = docProto.close;
+        ParsedDocument.prototype.close = markNative(function () {
+          if (this._reopenActive) {
+            this._reopenActive = false;
+            const dv = this.defaultView;
+            const fe = dv && dv.frameElement;
+            if (fe) {
+              if (typeof globalThis.__capsurf_fire_iframe_load === "function") {
+                try { globalThis.__capsurf_fire_iframe_load(fe); } catch (e) {}
+              }
+              const fid = (dv && dv.__capsurf_frame_id) || fe._capsurf_frame_id || "";
+              if (fid) {
+                if (!Array.isArray(globalThis.__capsurf_reopen_child_frames)) {
+                  globalThis.__capsurf_reopen_child_frames = [];
+                }
+                globalThis.__capsurf_reopen_child_frames.push(String(fid));
+              }
+            }
+          }
+          return docProto.close.apply(this, arguments);
+        }, "close");
       }
       if (!ParsedDocument.prototype.write) {
         ParsedDocument.prototype.write = docProto.write;
@@ -1327,6 +1509,15 @@ function installShim(global) {
     docProto.getAnimations = markNative(function () {
       return animationsFor(this);
     }, "getAnimations");
+
+    if (typeof ParsedDocument !== "undefined" && ParsedDocument.prototype) {
+      if (!ParsedDocument.prototype.createAttribute) ParsedDocument.prototype.createAttribute = docProto.createAttribute;
+      if (!ParsedDocument.prototype.createAttributeNS) ParsedDocument.prototype.createAttributeNS = docProto.createAttributeNS;
+      if (!ParsedDocument.prototype.createTreeWalker) ParsedDocument.prototype.createTreeWalker = docProto.createTreeWalker;
+      if (!ParsedDocument.prototype.createNodeIterator) ParsedDocument.prototype.createNodeIterator = docProto.createNodeIterator;
+      if (!ParsedDocument.prototype.getSelection) ParsedDocument.prototype.getSelection = docProto.getSelection;
+      if (!ParsedDocument.prototype.getAnimations) ParsedDocument.prototype.getAnimations = docProto.getAnimations;
+    }
 
     docProto.hasFocus = markNative(function () {
       return true;

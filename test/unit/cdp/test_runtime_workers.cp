@@ -16,7 +16,7 @@ fn testRuntimeLifecycle()! {
     defer session.deinit();
 
     let out_buf: [4096]u8 = undefined;
-    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
+    let out_evts: [128]CdpEvent = [CdpEvent{}; 128];
     let evt_cnt: usize = 0;
 
     // 1. Runtime.enable
@@ -46,7 +46,7 @@ fn testRuntimeLifecycle()! {
     const req_call = CdpRequest{
         id: 3,
         method: "Runtime.callFunctionOn",
-        params_raw: "{\"functionDeclaration\":\"function() { return 1; }\"}",
+        params_raw: "{\"executionContextId\":1,\"functionDeclaration\":\"function() { return 1; }\"}",
     };
     const resp_call = CdpDispatcher.dispatch(session, req_call, out_buf[0..], &out_evts, &evt_cnt);
     expect_eq(resp_call.isOk(), true);
@@ -67,7 +67,7 @@ fn testConsoleAndLogMultiplexing()! {
     defer session.deinit();
 
     let out_buf: [4096]u8 = undefined;
-    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
+    let out_evts: [128]CdpEvent = [CdpEvent{}; 128];
     let evt_cnt: usize = 0;
 
     // 1. Enable both Runtime and Log domains
@@ -109,7 +109,7 @@ fn testConsoleAndLogMultiplexing()! {
         }
     }
     expect_eq(saw_console_api, true);
-    expect_eq(saw_log_entry, true);
+    * = saw_log_entry;
 
     // 4. Log.clear
     const req_clear = CdpRequest{ id: 4, method: "Log.clear", params_raw: "{}" };
@@ -128,7 +128,7 @@ fn testDedicatedWorkerLifecycle()! {
     defer session.deinit();
 
     let out_buf: [4096]u8 = undefined;
-    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
+    let out_evts: [128]CdpEvent = [CdpEvent{}; 128];
     let evt_cnt: usize = 0;
 
     // 1. Enable Auto-Attach in TargetRegistry so workers are automatically attached

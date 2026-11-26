@@ -16,7 +16,7 @@ const PART_DISALLOWED_PSEUDOS = new Set([
   ":empty", ":first-child", ":first-of-type", ":last-child", ":last-of-type",
   ":nth-child", ":nth-last-child", ":nth-last-of-type", ":nth-of-type",
   ":only-child", ":only-of-type", ":host", ":host-context", ":has", ":scope",
-  ":left", ":right", ":first", "::part"
+  ":left", ":right", ":first", "::part", ":not"
 ]);
 const KNOWN_PSEUDO_CLASSES = new Set([
   ":hover", ":active", ":focus", ":focus-visible", ":focus-within", ":target",
@@ -210,6 +210,9 @@ function canonicalizeComplexSelector(raw, inHas, inFunc, inPart) {
       }
       if (j < s.length && s[j] === "(") {
         if (pName === "::view-transition" || pName === ":current") return null;
+        if (!REQUIRED_FUNC_PSEUDOS.has(pName) && pName !== ":host" && pName !== ":host-context" && pName !== "::highlight" && pName !== "::cue") {
+          return null;
+        }
         let k = j + 1, dp = 1, q = "";
         while (k < s.length && dp > 0) {
           if (s[k] === "\\" && k + 1 < s.length) { k += 2; continue; }
@@ -350,6 +353,11 @@ function canonicalizeComplexSelector(raw, inHas, inFunc, inPart) {
           out += pName + "(" + inner + ")";
           seenTerminalPseudoEl = true;
           lastPseudoEl = pName;
+        } else if (pName === "::picker") {
+          if (inner.toLowerCase() !== "select") return null;
+          out += "::picker(" + inner + ")";
+          seenTerminalPseudoEl = true;
+          lastPseudoEl = "::picker";
         } else {
           out += pName + "(" + inner + ")";
           if (isDouble && pName !== "::part") { seenTerminalPseudoEl = true; lastPseudoEl = pName; }
@@ -686,6 +694,15 @@ function matchesCompoundSelector(el, compound, scopeRoot) {
       else if (pseudo === ":last-of-type") { if (!matchesNthChild(el, "1", true, true)) return false; }
       else if (pseudo === ":only-of-type") { if (!matchesNthChild(el, "1", false, true) || !matchesNthChild(el, "1", true, true)) return false; }
       else if (pseudo === ":empty") { if (el.firstChild) return false; }
+      else if (pseudo === ":defined") {
+        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_isElementDefined === "function") {
+          if (!globalThis.__capsurf_isElementDefined(el)) return false;
+        }
+      }
+      else if (pseudo.startsWith(":state(") && pseudo.endsWith(")")) {
+        const stName = pseudo.slice(7, -1).trim();
+        if (!el._customStates || !el._customStates.has(stName)) return false;
+      }
       else if (pseudo.startsWith(":nth-child(") && pseudo.endsWith(")")) {
         if (!matchesNthChild(el, pseudo.slice(11, -1), false, false)) return false;
       }

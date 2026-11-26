@@ -1,6 +1,6 @@
 # CP 迁移踩坑速查与权威契约手册 (CP_PITFALLS.md)
 
-> **子智能体唯一必读速查指南（约 4KB）**。参照 `/data/dev/cp/cp_agent_ref.md` 最新权威契约与 Bun 重构实战经验提炼。**子智能体严禁全文读取 68KB 的 `cp_agent_ref.md`！**
+> **子智能体唯一必读速查指南（2026-11-27 同步 `cp_agent_ref.md`）**。参照 `/data/dev/cp/cp_agent_ref.md` 最新权威契约与实战经验提炼。**子智能体严禁全文读取 68KB 的 `cp_agent_ref.md` 或 370KB 的 `cp_lib_ref.md`！** 查内置标准库与 `@cap/*` 生态包请直接读 42KB 的 `/data/dev/cp/cp_agent_lib_ref.md`。
 
 ---
 
@@ -34,7 +34,7 @@
      - **零误伤**：裸指针 `*T!` / `*const T!` / `**T!`、安全借用 `*T` / `&T`、字段读取 `const h = _.handlers;` 永不触发自动析构。
 4. **返回类型、纯后缀类型、四层转换法则与字符串**：
    - 有返回值**必须加冒号** `): ReturnType`（`E0116`）；`void` 返回值全场景一律**省略 `: void`**（含 `@c` 声明，`E0122`；`*void` 指针保留）；
-   - 纯后缀体系：可选 `T?`（严禁 `?T`，`E0115`）；错误联合 `T!` / `T ! Err`（严禁 `!T`）；三态 `T? ! Err`；废除 `any`（`E0119`），泛型单态化用 `auto`；
+   - 纯后缀体系：可选 `T?`（严禁 `?T`，`E0115`）；**可选切片必须加括号写 `([]T)?` / `([]const u8)?`**（`[]T?` 解析为元素可选切片，触发 `E0132`）；错误联合 `T!` / `T ! Err`（严禁 `!T`）；三态 `T? ! Err`；废除 `any`（`E0119`），泛型单态化用 `auto`；
    - **四层转换**：无损隐式拓宽；有损/数值强转用 `u32(x)`；同宽/指针强转用 `as`（如 `p as *T!`、`p as usize`，严禁 `"123" as i32`，字符串解析用 `i32.parse(s)?`）；物理位重解释用 `@bitCast`；
    - **字符串与字面量**：`string`（`[]const u8`）、`cstring`（`[:0]const u8`）、`cstr`（`[*:0]const u8`）；模板插值必须反引号 `` `hi ${x}` ``；空切片写 `[]`（严禁 `&.{}`），匿名对象写 `{ a: 1 }`，元组写 `[1, 2]`。
 5. **控制流解包、守卫三剑客、循环与运算符**：
@@ -68,8 +68,8 @@
    - 踩坑：写 `const string = []const u8;` 会误声明局部数组变量遮蔽原生类型 `u8`；写 `return &[_]u8{};` 无法推导数组长度。
    - 规范：类型别名写 `type string = []const u8;`；返回空切片写 `return "";`（自动推导为 `[]const u8`）或 `let empty: [0]T = []; return empty[0..0];`。
 6. **CP 内置关键字命名冲突**：
-   - 踩坑：`codepoint`、`err`、`in`、`as`、`let`、`type`、`import`、`arena`、`from` 等为 CP 内置关键字。若用作变量名或字段名会导致词法断裂。
-   - 规范：错误捕获命名为 `e`；Unicode 码点命名为 `cp`；结构体字段或标识符必须转义为 `@"in"`, `@"arena"`, `@"type"`。
+   - 踩坑：`dec`（装饰器保留字，`E0131`）、`codepoint`、`err`、`in`、`as`、`let`、`type`、`import`、`arena`、`from`、`align` 等为 CP 内置关键字。若用作变量名或字段名会导致词法断裂。
+   - 规范：错误捕获命名为 `e`；Unicode 码点命名为 `cp`；装饰器相关避免 `dec` 变量名（`cpc fix` 可自动重命名 `E0131`）；结构体字段或标识符必须转义为 `@"in"`, `@"arena"`, `@"type"`。
 7. **`@root struct` 与辅助结构体组织铁律**：
    - 规范：原 Zig 文件若为根结构体，文件级辅助结构体/枚举必须提升到模块顶层（位于 `@root struct Name { ... }` 外部），`@root struct` 内仅放置根字段与自身方法，确保内部 `_`/`*_` 正常绑定且辅助类型被完整 CP lowering。
 8. **结构体嵌套提升与分号结尾**：
@@ -90,12 +90,12 @@
    ```bash
    /data/dev/cp/cap/bin/cpc fix <file.cp>
    ```
-   自动就地修复 `E0101`..`E0104`, `E0115`..`E0123`, `E0126`（如自动修正 `?T` 为 `T?`，修正 `_ =` 为 `* =` 等）。
+   自动就地修复 `E0101`..`E0104`, `E0115`(`?T`→`T?`), `E0116`(补`:`), `E0118`(`|v|`→`:=`/`of`), `E0119`..`E0123`, `E0126`(`if (let v = e)`→`if (v := e)`), `E0131`(`dec`保留字重命名), `E0132`(`[]T?`→`([]T)?`), `E0133`(值位`if`缺`else`), `W0134`(`'0'..'9'`→`'0'..='9'`), `E0204`(就近`const`→`let`)。
 3. **Step 3 聚合去重诊断验收（严禁查看原始报错）**：
    ```bash
    /data/dev/cp/cap/bin/cpc brief -n 8 <file.cp>
    ```
-   **严禁**直接运行不带过滤的 `cpc` 打印 40~70KB 原始报错！`cpc brief` 内置合并级联错误并完成 4 项硬门禁检查。
+   **严禁**直接运行不带过滤的 `cpc` 打印 40~70KB 原始报错！`cpc brief` 自动探测 Zig、合并级联错误并完成 4 项硬门禁检查；另支持 `cpc emit-types` / `cpc demangle` / `cpc lsp` / `cpc mcp`（4 个 AI-First stdio 工具）、`cap test --filter`/`-k`、`cap run -w`（50ms `inotify` 热重载）与 `cap from <-ts|-rs> --verify`。
 4. **Step 4 精确修补与熔断**：
    - 用 `edit_file` 精准修补。同一类错误在整文件一次性修完再复编，严禁逐行微调试错；
    - 单文件修改步数 $\le 50$ 步，超限判定为 `BLOCKED` 并汇报，不可死磕消耗 Token。
@@ -107,7 +107,17 @@
 - ③ **静态零违例**：0 `zig {}` 逃逸、0 `var`、0 `.@"0"`/`.@"1"`、0 `*anyopaque`/`?*anyopaque`；
 - ④ **代码膨胀率**：`<stem>.cp` 总行数 $\le 1.20\times$ `<stem>_.zig` 原始行数。
 
-- **多参 `.exec(...)` 被截断**：`cpc` 会将任意 `Obj.exec(a, b, ...)` 误按 `RegExp.exec(str)` 截断为单参；改用 `const fn_exec = Obj.exec; fn_exec(a, b, ...)`。
+- **[2026-11-27 `cp_agent_ref.md` & CP 1-Pass Codegen 实战补强]**：
+  - **结构体方法禁名 `.startsWith` / `.endsWith`**：会被 `cpc` 拦截为 `std.mem.startsWith(u8, ...)`，结构体方法改用 `hasPrefix` / `hasSuffix`；结构体方法名/字段名不可与导入的顶层函数重名。
+  - **静态工厂链式调用防类型退化**：`Type.staticFn(...).method(...)` 易导致接收者推断退化为 `*anyopaque`，先绑定 `let x = Type.staticFn(...);` 再调用实例方法。
+  - **定长数组返回 & 不可变字段切片 & 出参**：返回 `[N]T` 先绑定局部类型变量再 `return`；只读方法中切分 `[N]u8` 字段前先拷贝到本地 `let local: [N]u8 = _.field;`；避免 `*usize` 出参指针赋值（改用小结果结构体返回）。
+  - **大字面量与无符号减法**：高位 `u64`（`>= 0x8000_0000_0000_0000`）用 `((hi as u64) << 32) | (lo as u64)` 构造；无符号防下溢严禁 `0 - x`（改用 XOR 掩码）。
+  - **模块展平防重名**：私有辅助函数统一加 3~4 字符模块前缀；`cap:test` 单测统一包在 `fn main() { test("...", () => { expect_eq(...); }); }` 内。
+- **多参 `.exec(...)` / 自定义 `.slice(...)` / `std.mem.sort(..., {}, ...)`（2026-11-26 已修复）**：`cpc` 现已正确保留多参 `Command.exec(a, b, c)`、自定义结构体 `.slice(arg)`（不再误转数组切片），并规范化 `std.mem.sort` / `std.sort.*` 空上下文 `{}`。
+- **值接收者返回 `&_.field` 静态拦截（`E0228`）**：省略 `*_` 的只读值接收者方法若返回 `&_.field`（悬垂栈指针），`cpc` 现会静态报 `E0228` 并提示改为 `*_`。
+- **`cpc fix` 新增 `E0133` 与 `W0134` 自动修复**：值位置 `if (cond) .{...}` 缺失 `else` 自动补全 `else @as(void, undefined)`（`E0133`）；`switch` 字符半开区间 `'0'..'9'` 自动告警并修复为闭区间 `'0'..='9'`（`W0134`）。
+- **零开销 ABI 尺寸守护内置宏**：`@assertLayout(Type, size[, align])` 与 `@cAbiCheck(LocalType, CType)`，在编译期生成 `comptime @sizeOf/@alignOf @compileError` 断言防静默 ABI 错位。
+- **`~errinit()` 与 `pub enum` 只读方法（已上线 Release `cpc`）**：原生支持 `~errinit()`（仅 error 路径触发 `__cp_errdeinit()`）；`pub enum` 未写 `*_` 的只读方法生成值接收者 `self: Enum`，`*const Enum` 可直接调用；顶层与容器内 `const` 类型别名 `(T)?`/`T?` 已正确生成 `?T`。
 - **`struct` 命名空间级静态可变变量**：写 `static let x: T = ...;`（无 `static` 会成为实例字段）。
 
 - **带显式类型标注的 `@intFromFloat`/`@bitCast` 被丢弃**：`const x: T = @intFromFloat(...)` / `@bitCast(...)` 会被 `cpc` 静默丢弃；改写为 `const x = @as(T, @intFromFloat(...))`。

@@ -1,7 +1,7 @@
 // src/cdp/session_hooks.cp
 // Page-level JS runtime hooks, native fixture/bake bridge, and inserted-script engine for CdpPageSession.
 
-import { JSRuntime, JSContext, JSModuleDef, JSValue, JS_Eval, JS_EvalFunction, JS_GetRuntime, JS_ExecutePendingJob, JS_GetException, JS_ToCStringLen2, JS_FreeCString, JS_GetUint8Array, JS_NewStringLen, JS_GetGlobalObject, JS_FreeValue, JS_DupValue, JS_GetContextOpaque, JS_SetPropertyStr, JS_GetPropertyStr, JS_GetImportMeta, JS_IsPromise, JS_PromiseState, JS_PromiseResult, JS_NewContext, JS_FreeContext, JS_Call, JS_ToInt32, JS_ToFloat64, JS_IsFunction, JS_TAG_OBJECT, jsNull, jsUndefined, jsTrue, jsFalse, jsInt, jsFloat, jsNewString, jsIsException, defineMethod } from "../js/qjs_engine.cp";
+import { JSRuntime, JSContext, JSModuleDef, JSValue, JS_Eval, JS_EvalFunction, JS_GetRuntime, JS_ExecutePendingJob, JS_GetException, JS_ToCStringLen2, JS_FreeCString, JS_GetUint8Array, JS_NewStringLen, JS_GetGlobalObject, JS_FreeValue, JS_DupValue, JS_GetContextOpaque, JS_SetPropertyStr, JS_GetPropertyStr, JS_GetImportMeta, JS_IsPromise, JS_PromiseState, JS_PromiseResult, JS_NewContext, JS_FreeContext, JS_Call, JS_ToInt32, JS_ToFloat64, JS_IsFunction, JS_TAG_OBJECT, jsNull, jsUndefined, jsTrue, jsFalse, jsInt, jsFloat, jsNewString, jsIsException, jsIsNull, jsIsUndefined, defineMethod } from "../js/qjs_engine.cp";
 import { JsDomContext } from "../js/dom_binding.cp";
 import { CookieJar, RequestContext } from "../net/cookies.cp";
 import { MockFixtures } from "../net/mock_fixtures.cp";
@@ -296,7 +296,7 @@ pub fn registerFetchPauseHook(session_ptr: *void, hook: FetchPauseHookFn) {
                 JS_FreeValue(ctx, exc);
             }
         }
-        if (!got_u8) {
+        if (!got_u8 && !jsIsNull(arg3) && !jsIsUndefined(arg3)) {
             let post_len: usize = 0;
             post_ptr = JS_ToCStringLen2(ctx, &post_len, arg3, 0);
             if (post_ptr != null && post_len > 0) {

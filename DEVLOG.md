@@ -3726,3 +3726,8 @@
 - **JS `scrollWidth`/`scrollHeight` 原生通道（5.28s -> <5ms）**：`collectRootScrollExtents` 原在 JS 层对每个内联样式节点调用 `getComputedStyle` 导致 `fullPage` 截图超时；接入 `dom_binding.cp` `__capsurf_get_root_scroll_size` 原生盒扫描与同帧缓存后，耗时降至 <5ms。
 - **`evalInIframe` 与 `FRAME_WINDOW_GLOBALS`**：修复带尾分号 IIFE 在 `evalInIframe` 中返回 `undefined` 导致 21 个子 frame 超时的问题，并在 `html-classes.js` 补齐 `getComputedStyle`/`eval`/`CSS`/`matchMedia` 及 `parser.js` `ParsedElement.attributes`。
 - **Worker UAF 与 WS UTF-8 校验**：使用 GDB 定位并修复 `WorkerCdpEventItem.asCdpEvent` 值拷贝悬垂切片与 `terminateWorkersForRuntime` 生命周期倒挂；在 `escapeJsonString` 补齐 RFC 3629 UTF-8 校验与 `\ufffd` 转义，消除二进制 `postData` 引发的 WS 断连。
+
+## Phase 966 — 协议/帧生命周期批量清零与 Lightpanda 洁净室并发跑批
+- **顶层 JSON 键遮蔽与 `Fetch` 请求 ID 复用**：`CdpRequest.parse` 此前虽定位了顶层 `"id"`，却调用全串扁平搜索导致 `touchPoints[0].id` 遮蔽顶层 `id`；`Fetch.continueRequest` 续行后未保存原 `net_id` 导致 `pollNetworkEvents` 重发 `req-2`。两处共性修复直接打通 `elementhandle.test` 全部 5 项 `touch*` 及 `page-route` (51/51)。
+- **子帧全链路闭环（`ParsedDocument` + `Runtime` + `Input` + `Page`）**：打通了 `innerHTML` `iframe` 连接、`document.open/write/close` 生命周期、非 DOM `objectId` 路由至创建时 `executionContextId`、`Input.dispatchMouseEvent` 穿透 `<iframe>` 坐标扣减、`collectDocIframeEntries` 断连过滤与 `emitNewChildFrameEvents` 递归防误卸载，一次拿下 `click.test` (26/26)、`elementhandle.test` (48/48)、`selectors-frame` (15/15)、`frame-hierarchy` (12/12)、`page-filechooser` (6/6)、`page-add-locator-handler` (13/13)。
+- **`test/panda/` 4 路并发轻量化基线与高扇出收割**：通过 `scripts/panda_run.mjs`（本地 HTTP + 原生 CDP `testing.assertOk()` 轮询，4 进程并发 1500ms 超时），在 2 分 40 秒内完成 572 项 Lightpanda 洁净室黑盒页面扫描，经 3 轮共性修复由 `113/517` 跃升至 `136/517`；`page-click` 同步由 `85/102` 升至 `90/102`。

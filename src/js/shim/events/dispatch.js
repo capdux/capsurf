@@ -274,10 +274,11 @@ function internalDispatch(target, event, trusted) {
     if (typeof window !== "undefined") {
       try { window.event = event; } catch (e) {}
     }
+    const eventTarget = (event && event._overrideTarget) ? event._overrideTarget : target;
     if (eventState) {
-      eventState.target = target;
+      eventState.target = eventTarget;
     } else {
-      event.target = target;
+      event.target = eventTarget;
     }
     const targetRoot = getNodeRoot(target);
 

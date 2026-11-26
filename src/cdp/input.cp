@@ -149,38 +149,96 @@ pub fn hitTest(session: *CdpPageSession, x: f32, y: f32): NodeId {
     let best_node: NodeId = NULL_NODE;
     let best_z: i32 = -2147483648;
     let best_pos: i32 = -1;
-    let i: usize = 0;
-    const count = session.layout.boxes.items.len;
-    while (i < count) : (i += 1) {
-        const box = session.layout.boxes.items[i];
-        if (box.rect.visible && !box.pointer_events_none && box.rect.width > 0.0 && box.rect.height > 0.0) {
-            let anc_sx: f32 = 0.0;
-            let anc_sy: f32 = 0.0;
-            if (box.position != .Fixed && scroll_offset_count > 0 && box.node_id != NULL_NODE && @as(usize, box.node_id) < session.doc.nodes.items.len) {
-                let cur: NodeId = session.doc.nodes.items[box.node_id].parent;
-                let depth: usize = 0;
-                while (cur != NULL_NODE && @as(usize, cur) < session.doc.nodes.items.len && depth < 128) : (depth += 1) {
-                    let si: usize = 0;
-                    while (si < scroll_offset_count) : (si += 1) {
-                        if (scroll_offsets[si].node_id == cur) {
-                            anc_sx += scroll_offsets[si].scroll_left;
-                            anc_sy += scroll_offsets[si].scroll_top;
-                            break;
+    const box_count = session.layout.boxes.items.len;
+    const node_count = session.doc.nodes.items.len;
+    if (session.doc.root_element != NULL_NODE && @as(usize, session.doc.root_element) < node_count) {
+        let stack: [512]NodeId = [NULL_NODE; 512];
+        let sp: usize = 0;
+        stack[sp] = session.doc.root_element;
+        sp += 1;
+        let steps: usize = 0;
+        while (sp > 0 && steps < 65536) : (steps += 1) {
+            sp -= 1;
+            const nid = stack[sp];
+            const nidx = @as(usize, nid);
+            if (nid == NULL_NODE || nidx >= node_count) continue;
+            const nd = session.doc.nodes.items[nidx];
+            if (nd.next_sibling != NULL_NODE && sp < 512) {
+                stack[sp] = nd.next_sibling;
+                sp += 1;
+            }
+            if (nd.first_child != NULL_NODE && sp < 512) {
+                stack[sp] = nd.first_child;
+                sp += 1;
+            }
+            if (nidx < box_count) {
+                const box = session.layout.boxes.items[nidx];
+                if (box.rect.visible && !box.pointer_events_none && box.rect.width > 0.0 && box.rect.height > 0.0) {
+                    let anc_sx: f32 = 0.0;
+                    let anc_sy: f32 = 0.0;
+                    if (box.position != .Fixed && scroll_offset_count > 0 && box.node_id != NULL_NODE && @as(usize, box.node_id) < node_count) {
+                        let cur: NodeId = session.doc.nodes.items[box.node_id].parent;
+                        let depth: usize = 0;
+                        while (cur != NULL_NODE && @as(usize, cur) < node_count && depth < 128) : (depth += 1) {
+                            let si: usize = 0;
+                            while (si < scroll_offset_count) : (si += 1) {
+                                if (scroll_offsets[si].node_id == cur) {
+                                    anc_sx += scroll_offsets[si].scroll_left;
+                                    anc_sy += scroll_offsets[si].scroll_top;
+                                    break;
+                                }
+                            }
+                            cur = session.doc.nodes.items[cur].parent;
                         }
                     }
-                    cur = session.doc.nodes.items[cur].parent;
+                    const tx = if (box.position == .Fixed) x else x + sx + anc_sx;
+                    const ty = if (box.position == .Fixed) y else y + sy + anc_sy;
+                    if (tx >= box.rect.x && tx <= (box.rect.x + box.rect.width) &&
+                        ty >= box.rect.y && ty <= (box.rect.y + box.rect.height)) {
+                        const bz: i32 = if (box.has_z_index) box.z_index else 0;
+                        const bpos: i32 = if (box.position != .Static) 1 else 0;
+                        if (best_node == NULL_NODE || bz > best_z || (bz == best_z && bpos >= best_pos)) {
+                            best_node = box.node_id;
+                            best_z = bz;
+                            best_pos = bpos;
+                        }
+                    }
                 }
             }
-            const tx = if (box.position == .Fixed) x else x + sx + anc_sx;
-            const ty = if (box.position == .Fixed) y else y + sy + anc_sy;
-            if (tx >= box.rect.x && tx <= (box.rect.x + box.rect.width) &&
-                ty >= box.rect.y && ty <= (box.rect.y + box.rect.height)) {
-                const bz: i32 = if (box.has_z_index) box.z_index else 0;
-                const bpos: i32 = if (box.position != .Static) 1 else 0;
-                if (best_node == NULL_NODE || bz > best_z || (bz == best_z && bpos >= best_pos)) {
-                    best_node = box.node_id;
-                    best_z = bz;
-                    best_pos = bpos;
+        }
+    } else {
+        let i: usize = 0;
+        while (i < box_count) : (i += 1) {
+            const box = session.layout.boxes.items[i];
+            if (box.rect.visible && !box.pointer_events_none && box.rect.width > 0.0 && box.rect.height > 0.0) {
+                let anc_sx: f32 = 0.0;
+                let anc_sy: f32 = 0.0;
+                if (box.position != .Fixed && scroll_offset_count > 0 && box.node_id != NULL_NODE && @as(usize, box.node_id) < node_count) {
+                    let cur: NodeId = session.doc.nodes.items[box.node_id].parent;
+                    let depth: usize = 0;
+                    while (cur != NULL_NODE && @as(usize, cur) < node_count && depth < 128) : (depth += 1) {
+                        let si: usize = 0;
+                        while (si < scroll_offset_count) : (si += 1) {
+                            if (scroll_offsets[si].node_id == cur) {
+                                anc_sx += scroll_offsets[si].scroll_left;
+                                anc_sy += scroll_offsets[si].scroll_top;
+                                break;
+                            }
+                        }
+                        cur = session.doc.nodes.items[cur].parent;
+                    }
+                }
+                const tx = if (box.position == .Fixed) x else x + sx + anc_sx;
+                const ty = if (box.position == .Fixed) y else y + sy + anc_sy;
+                if (tx >= box.rect.x && tx <= (box.rect.x + box.rect.width) &&
+                    ty >= box.rect.y && ty <= (box.rect.y + box.rect.height)) {
+                    const bz: i32 = if (box.has_z_index) box.z_index else 0;
+                    const bpos: i32 = if (box.position != .Static) 1 else 0;
+                    if (best_node == NULL_NODE || bz > best_z || (bz == best_z && bpos >= best_pos)) {
+                        best_node = box.node_id;
+                        best_z = bz;
+                        best_pos = bpos;
+                    }
                 }
             }
         }
@@ -321,8 +379,6 @@ pub fn applyInputText(session: *CdpPageSession, text: []const u8, key: []const u
 fn dispatchMouseDomEvent(session: *CdpPageSession, target_node: NodeId, ev_name: []const u8, x: f32, y: f32, detail: i64, btn_num: i32, buttons_mask: i64, modifiers: i64, has_force: bool, force_val: f32): bool {
     if (!session.has_document) return true;
     const eff_detail = if (detail > 0) detail else 1;
-    const fx = @floor(x);
-    const fy = @floor(y);
     const use_force_i: i32 = if (has_force) 1 else 0;
     const p_name: []const u8 = if (std.mem.eql(u8, ev_name, "mousedown"))
         "pointerdown"
@@ -344,11 +400,11 @@ fn dispatchMouseDomEvent(session: *CdpPageSession, target_node: NodeId, ev_name:
     const is_leave = std.mem.eql(u8, ev_name, "mouseout") || std.mem.eql(u8, ev_name, "mouseleave") || std.mem.eql(u8, ev_name, "pointerout") || std.mem.eql(u8, ev_name, "pointerleave");
     const prefer_nid_i: i32 = if (is_leave && target_node > 0) 1 else 0;
     const bubbles_js: []const u8 = if (ev_bubbles) "true" else "false";
-    let js_buf: [3584]u8 = [0; 3584];
+    let js_buf: [8192]u8 = [0; 8192];
     const js_expr = std.fmt.bufPrint(
         &js_buf,
-        "(() => {{ function f(r, nid) {{ if (!r || nid <= 0) return null; if (r._nid === nid) return r; const all = r.querySelectorAll ? r.querySelectorAll('*') : []; for (let i = 0; i < all.length; i++) {{ if (all[i]._nid === nid) return all[i]; }} return null; }} const byNid = f(document, {d}); let el = null; if ({d} !== 0 && byNid) {{ el = byNid; }} else {{ const byPt = (typeof document.elementFromPoint === 'function') ? document.elementFromPoint({d:.2}, {d:.2}) : null; el = (byPt && byPt !== document.body && byPt !== document.documentElement) ? ((byNid && byNid !== byPt && typeof byPt.contains === 'function' && byPt.contains(byNid)) ? byNid : byPt) : (byNid || byPt || document.body || document.documentElement); while (el && el._shadowRoot && typeof el._shadowRoot.elementFromPoint === 'function') {{ const inner = el._shadowRoot.elementFromPoint({d:.2}, {d:.2}); if (!inner || inner === el) break; el = inner; }} }} if (!el || typeof el.dispatchEvent !== 'function') return 1; const m = {d}; const altK = (m & 1) !== 0; const ctrlK = (m & 2) !== 0; const metaK = (m & 4) !== 0; const shiftK = (m & 8) !== 0; const disp = (e) => (typeof globalThis.__capsurf_dispatchTrustedEvent === 'function') ? globalThis.__capsurf_dispatchTrustedEvent(el, e) : el.dispatchEvent(e); const pName = '{s}'; if (pName) {{ const pPress = (pName === 'pointerup') ? 0 : ({d} !== 0 ? {d:.4} : (({d} !== 0 || pName === 'pointerdown') ? 0.5 : 0)); const pBubbles = (pName !== 'pointerenter' && pName !== 'pointerleave'); const PCtor = (typeof PointerEvent === 'function') ? PointerEvent : ((typeof MouseEvent === 'function') ? MouseEvent : Event); disp(new PCtor(pName, {{ bubbles: pBubbles, cancelable: true, composed: true, clientX: {d:.0}, clientY: {d:.0}, button: {d}, buttons: {d}, pressure: pPress, altKey: altK, ctrlKey: ctrlK, metaKey: metaK, shiftKey: shiftK, pointerId: 1, pointerType: 'mouse', isPrimary: true }})); }} const Ctor = (typeof MouseEvent === 'function') ? MouseEvent : Event; const ev = new Ctor('{s}', {{ bubbles: {s}, cancelable: true, composed: true, clientX: {d:.0}, clientY: {d:.0}, button: {d}, buttons: {d}, altKey: altK, ctrlKey: ctrlK, metaKey: metaK, shiftKey: shiftK, detail: {d} }}); const ok = disp(ev); if ('{s}' === 'mousedown' && ok && !ev.defaultPrevented) {{ let cur = el; while (cur && cur.nodeType === 1) {{ if (typeof cur.focus === 'function') {{ const prev = document.activeElement; cur.focus(); if (document.activeElement !== prev || cur === prev) break; }} cur = cur.parentNode; }} }} if ('{s}' === 'click' && ok && !ev.defaultPrevented && typeof globalThis.__capsurf_activate_clicked_element === 'function') {{ globalThis.__capsurf_activate_clicked_element(el, true, {d:.0}, {d:.0}, {d}); }} return (ok && !ev.defaultPrevented) ? 1 : 0; }})()",
-        .{ target_node, prefer_nid_i, x, y, x, y, modifiers, p_name, use_force_i, force_val, buttons_mask, fx, fy, btn_num, buttons_mask, ev_name, bubbles_js, fx, fy, btn_num, buttons_mask, eff_detail, ev_name, ev_name, fx, fy, eff_detail },
+        "(() => {{ function f(r, nid) {{ if (!r || nid <= 0) return null; if (r._nid === nid) return r; const all = r.querySelectorAll ? r.querySelectorAll('*') : []; for (let i = 0; i < all.length; i++) {{ if (all[i]._nid === nid) return all[i]; }} return null; }} const byNid = f(document, {d}); let el = null; if ({d} !== 0 && byNid) {{ el = byNid; }} else {{ const byPt = (typeof document.elementFromPoint === 'function') ? document.elementFromPoint({d:.2}, {d:.2}) : null; el = (byPt && byPt !== document.body && byPt !== document.documentElement) ? ((byNid && byNid !== byPt && typeof byPt.contains === 'function' && byPt.contains(byNid)) ? byNid : byPt) : (byNid || byPt || document.body || document.documentElement); while (el && el._shadowRoot && typeof el._shadowRoot.elementFromPoint === 'function') {{ const inner = el._shadowRoot.elementFromPoint({d:.2}, {d:.2}); if (!inner || inner === el) break; el = inner; }} }} let cx = {d:.2}; let cy = {d:.2}; let doc = document; let win = window; let depth = 0; while (el && el.nodeType === 1 && depth < 16) {{ const tag = String(el.localName || el.tagName || '').toLowerCase(); if (tag !== 'iframe' && tag !== 'frame') break; let cdoc = null; try {{ cdoc = el.contentDocument || (el.contentWindow && el.contentWindow.document) || null; }} catch (e) {{}} if (!cdoc || typeof el.getBoundingClientRect !== 'function') break; const r = el.getBoundingClientRect(); if (!r) break; let ox = r.left || 0; let oy = r.top || 0; if (typeof win.getComputedStyle === 'function') {{ try {{ const cs = win.getComputedStyle(el); if (cs) {{ ox += (parseFloat(cs.borderLeftWidth) || 0) + (parseFloat(cs.paddingLeft) || 0); oy += (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.paddingTop) || 0); }} }} catch (e) {{}} }} cx -= ox; cy -= oy; doc = cdoc; win = cdoc.defaultView || el.contentWindow || win; let inner = (typeof cdoc.elementFromPoint === 'function') ? cdoc.elementFromPoint(cx, cy) : null; if (!inner) {{ const all = cdoc.querySelectorAll ? cdoc.querySelectorAll('*') : []; for (let i = all.length - 1; i >= 0; i--) {{ const it = all[i]; if (!it || typeof it.getBoundingClientRect !== 'function') continue; const ir = it.getBoundingClientRect(); if (ir && ir.width > 0 && ir.height > 0 && cx >= ir.left && cx <= ir.left + ir.width && cy >= ir.top && cy <= ir.top + ir.height) {{ inner = it; break; }} }} }} if (!inner) inner = cdoc.body || cdoc.documentElement; if (!inner) break; el = inner; while (el && el._shadowRoot && typeof el._shadowRoot.elementFromPoint === 'function') {{ const sh = el._shadowRoot.elementFromPoint(cx, cy); if (!sh || sh === el) break; el = sh; }} depth++; }} if (!el || typeof el.dispatchEvent !== 'function') return 1; const fx = Math.floor(cx); const fy = Math.floor(cy); const m = {d}; const altK = (m & 1) !== 0; const ctrlK = (m & 2) !== 0; const metaK = (m & 4) !== 0; const shiftK = (m & 8) !== 0; const disp = (e) => (typeof globalThis.__capsurf_dispatchTrustedEvent === 'function') ? globalThis.__capsurf_dispatchTrustedEvent(el, e) : el.dispatchEvent(e); const pName = '{s}'; if (pName) {{ const pPress = (pName === 'pointerup') ? 0 : ({d} !== 0 ? {d:.4} : (({d} !== 0 || pName === 'pointerdown') ? 0.5 : 0)); const pBubbles = (pName !== 'pointerenter' && pName !== 'pointerleave'); const PCtor = (win && typeof win.PointerEvent === 'function') ? win.PointerEvent : ((typeof PointerEvent === 'function') ? PointerEvent : ((typeof MouseEvent === 'function') ? MouseEvent : Event)); disp(new PCtor(pName, {{ bubbles: pBubbles, cancelable: true, composed: true, clientX: fx, clientY: fy, button: {d}, buttons: {d}, pressure: pPress, altKey: altK, ctrlKey: ctrlK, metaKey: metaK, shiftKey: shiftK, pointerId: 1, pointerType: 'mouse', isPrimary: true }})); }} const Ctor = (win && typeof win.MouseEvent === 'function') ? win.MouseEvent : ((typeof MouseEvent === 'function') ? MouseEvent : Event); const ev = new Ctor('{s}', {{ bubbles: {s}, cancelable: true, composed: true, clientX: fx, clientY: fy, button: {d}, buttons: {d}, altKey: altK, ctrlKey: ctrlK, metaKey: metaK, shiftKey: shiftK, detail: {d} }}); const ok = disp(ev); if ('{s}' === 'mousedown' && ok && !ev.defaultPrevented) {{ let cur = el; while (cur && cur.nodeType === 1) {{ if (typeof cur.focus === 'function') {{ const prev = doc.activeElement; cur.focus({{ preventScroll: true }}); if (doc.activeElement !== prev || cur === prev) break; }} cur = cur.parentNode; }} }} if ('{s}' === 'click' && ok && !ev.defaultPrevented && typeof globalThis.__capsurf_activate_clicked_element === 'function') {{ globalThis.__capsurf_activate_clicked_element(el, true, fx, fy, {d}); }} return (ok && !ev.defaultPrevented) ? 1 : 0; }})()",
+        .{ target_node, prefer_nid_i, x, y, x, y, x, y, modifiers, p_name, use_force_i, force_val, buttons_mask, btn_num, buttons_mask, ev_name, bubbles_js, btn_num, buttons_mask, eff_detail, ev_name, ev_name, eff_detail },
     ) catch return true;
     const val = session.ctx.eval(js_expr);
     let not_prevented = true;

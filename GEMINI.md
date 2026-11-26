@@ -369,3 +369,20 @@
   - 遇到大面积 TIMEOUT 或 `TypeError` 时，优先用单点 `DEBUG=pw:protocol` 抓包或 `gdb` 定位共性基础设施断链（如 `TCP_NODELAY` 消除 40ms/包延迟、`evalInIframe` 尾分号 IIFE、`FRAME_WINDOW_GLOBALS` 补齐 `getComputedStyle`/`eval`、`escapeJsonString` 非法 UTF-8 `\ufffd` 转义），避免逐用例打补丁。
 - **第三方参考源码许可隔离**：
   - `vendor/browser`（Lightpanda，**AGPL-3.0-only**）仅允许只读架构与测试场景参考，**严禁复制或 `zig2cp` 其任何代码**；`vendor/kitesurf`（Apache-2.0）可定期 `git pull --ff-only` 同步并直接借鉴/迁移修复与 E2E 用例。
+
+### 11.15 3小时自进化固化：禁重试污染、写权限分区与轻量 CDP 批跑 (2026-11-27 自进化固化)
+
+- **PW/PPTR 单跑与验收强制 `--no-gate --no-retry`**：不加 `--no-retry` 时，重试阶段新起引擎偶发 `Browser was not set-up in time!` 会覆盖首轮已通过条目并空耗 100s+；所有调试与验收一律加 `--no-gate --no-retry`。
+- **多智能体严格文件写权限分区 + 独立 `bin_<port>`**：派发双路子智能体时，在 Prompt 中显式锁定可改文件与禁改文件集合（如一路 `input.cp`/`runtime.cp`，另一路 `page.cp`/`session.cp` 或 `net/`），配合独立 `-o bin_<port>` 与 `--port <port>`，消除编译覆盖与互踩返工。
+- **`test/stats.md` 即时锁定防重测**：任意 spec 达成 100% PASS 后立即写入 `test/stats.md` 标注 `已全过不再重测`，严禁后续批次重复执行。
+- **轻量 CDP 批跑 `test/panda/`（`scripts/panda_run.mjs`）**：对纯 HTML 自校验测试页（`testing.assertOk()`），直接用本地 HTTP + 原生 CDP WebSocket 批跑，免去 Mocha/Playwright 启动开销。
+
+### 11.16 借鉴 Lightpanda 架构的测试加速与 `test/panda/` 并行策略 (2026-11-27 固化)
+
+1. **共性协议基础设施一刀切（10x 杠杆原则）**：
+   - 优先修复高扇出共性断链（如 `CdpRequest.parse` 顶层键遮蔽、`Fetch.continueRequest` 复用原 `requestId`、`Input.dispatchMouseEvent` 子帧穿透、`Runtime.callFunctionOn` 非 DOM `objectId` 上下文路由、`ParsedDocument` 接口补全、`set_js_buf` 扩容），单点修复同时打通整个测试专题，严禁逐用例打补丁。
+2. **确定性异步/空闲状态机收敛**：
+   - 借鉴 Lightpanda `runner/`（`settled.html`, `iframe_idle.html`, `iframe_nav_cancel.html`）与 `testing.js`（`async_pending`）的显式挂起计数思路，收敛 `networkIdle`、导航中止（`window.stop()`）与子帧生命周期状态，消除 15s/30s 超时黑洞。
+3. **测试调度分层与 WPT 暂缓策略**：
+   - **WPT 暂缓**：大型 WPT 跑批暂时挂起，集中全部算力与子智能体并发攻坚 **Playwright (`test/pw/`)** 与 **Lightpanda 洁净室黑盒集 (`test/panda/`)**（已加入 `.gitignore`，仅本地内部验证不入开源库）。
+   - **双轨并进提速**：`test/panda/` 与 Playwright 并行推进；`scripts/panda_run.mjs` 采用 **并发 Tab/多实例 + 短超时 (`1.5s`) + 实时进度落盘**，将 572 项全扫压缩至 1~2 分钟内，优先收割大批量共性 DOM/Web API 缺失项。

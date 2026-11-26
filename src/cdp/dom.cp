@@ -210,7 +210,7 @@ fn collectDocIframeEntries(session: *CdpPageSession, out_entries: *[32]IframeFra
     let ni: usize = 1;
     while (ni < session.doc.nodes.items.len && count < out_entries.len) : (ni += 1) {
         const n = &session.doc.nodes.items[ni];
-        if (n.node_type == NodeType.Element && (std.ascii.eqlIgnoreCase(n.tag_name, "iframe") || std.ascii.eqlIgnoreCase(n.tag_name, "frame"))) {
+        if (n.node_type == NodeType.Element && (std.ascii.eqlIgnoreCase(n.tag_name, "iframe") || std.ascii.eqlIgnoreCase(n.tag_name, "frame")) && session.doc.isConnectedNode(@as(NodeId, @intCast(ni)))) {
             let matched_fid: []const u8 = "";
             if (n.id_attr.len > 0) {
                 let ak: usize = 0;
@@ -1368,14 +1368,14 @@ pub struct DomHandler {
                     }
                 }
 
-                let js_buf: [2048]u8 = [0; 2048];
+                let js_buf: [4096]u8 = [0; 4096];
                 const js_expr = if (has_rect) (std.fmt.bufPrint(
                     &js_buf,
-                    "(() => {{ let el = null; if ('{s}'.length > 0 && globalThis.__capsurf_get_object) {{ el = globalThis.__capsurf_get_object('{s}'); }} if (!el && {d} > 0) {{ function f(r, nid) {{ if (!r) return null; if (r._nid === nid) return r; const all = r.querySelectorAll ? r.querySelectorAll('*') : []; for (let i = 0; i < all.length; i++) {{ if (all[i]._nid === nid) return all[i]; }} return null; }} el = f(document, {d}); }} if (!el) return; const er = el.getBoundingClientRect(); let tx = er.left + ({d}); let ty = er.top + ({d}); const tw = {d}; const th = {d}; let cur = el.parentElement; let safety = 0; while (cur && cur !== document.body && cur !== document.documentElement && safety < 50) {{ safety++; const st = window.getComputedStyle ? window.getComputedStyle(cur) : cur.style; const ox = (st && (st.overflowX || st.overflow)) || ''; const oy = (st && (st.overflowY || st.overflow)) || ''; const sxOk = (ox === 'auto' || ox === 'scroll' || ox === 'hidden') && cur.clientWidth > 0 && cur.scrollWidth > cur.clientWidth; const syOk = (oy === 'auto' || oy === 'scroll' || oy === 'hidden') && cur.clientHeight > 0 && cur.scrollHeight > cur.clientHeight; if (sxOk || syOk) {{ const cr = cur.getBoundingClientRect(); if (syOk && (ty < cr.top || ty + th > cr.top + cur.clientHeight)) {{ const curT = cur.scrollTop || 0; const inY = (ty - cr.top) + curT; const nextT = Math.max(0, Math.min(inY + th / 2 - cur.clientHeight / 2, cur.scrollHeight - cur.clientHeight)); cur.scrollTop = nextT; ty -= (nextT - curT); }} if (sxOk && (tx < cr.left || tx + tw > cr.left + cur.clientWidth)) {{ const curL = cur.scrollLeft || 0; const inX = (tx - cr.left) + curL; const nextL = Math.max(0, Math.min(inX + tw / 2 - cur.clientWidth / 2, cur.scrollWidth - cur.clientWidth)); cur.scrollLeft = nextL; tx -= (nextL - curL); }} }} cur = cur.parentElement; }} const vw = window.innerWidth || 1280; const vh = window.innerHeight || 720; if (ty < 0 || ty + th > vh || tx < 0 || tx + tw > vw) {{ const wx = window.scrollX || 0; const wy = window.scrollY || 0; const nwx = (tx < 0 || tx + tw > vw) ? Math.max(0, tx + wx + tw / 2 - vw / 2) : wx; const nwy = (ty < 0 || ty + th > vh) ? Math.max(0, ty + wy + th / 2 - vh / 2) : wy; if (window.scrollTo) window.scrollTo(Math.round(nwx), Math.round(nwy)); }} }})()",
+                    "(() => {{ let el = null; if ('{s}'.length > 0 && globalThis.__capsurf_get_object) {{ el = globalThis.__capsurf_get_object('{s}'); }} if (!el && {d} > 0) {{ function f(r, nid) {{ if (!r) return null; if (r._nid === nid) return r; const all = r.querySelectorAll ? r.querySelectorAll('*') : []; for (let i = 0; i < all.length; i++) {{ if (all[i]._nid === nid) return all[i]; }} return null; }} el = f(document, {d}); }} if (!el) return; const doc = el.ownerDocument || document; const win = (doc && doc.defaultView) || window; const er = el.getBoundingClientRect(); let tx = er.left + ({d}); let ty = er.top + ({d}); const tw = {d}; const th = {d}; let cur = el.parentElement; let safety = 0; while (cur && cur !== doc.body && cur !== doc.documentElement && safety < 50) {{ safety++; const st = win.getComputedStyle ? win.getComputedStyle(cur) : cur.style; const ox = (st && (st.overflowX || st.overflow)) || ''; const oy = (st && (st.overflowY || st.overflow)) || ''; const sxOk = (ox === 'auto' || ox === 'scroll' || ox === 'hidden') && cur.clientWidth > 0 && cur.scrollWidth > cur.clientWidth; const syOk = (oy === 'auto' || oy === 'scroll' || oy === 'hidden') && cur.clientHeight > 0 && cur.scrollHeight > cur.clientHeight; if (sxOk || syOk) {{ const cr = cur.getBoundingClientRect(); if (syOk && (ty < cr.top || ty + th > cr.top + cur.clientHeight)) {{ const curT = cur.scrollTop || 0; const inY = (ty - cr.top) + curT; const nextT = Math.max(0, Math.min(inY + th / 2 - cur.clientHeight / 2, cur.scrollHeight - cur.clientHeight)); cur.scrollTop = nextT; ty -= (nextT - curT); }} if (sxOk && (tx < cr.left || tx + tw > cr.left + cur.clientWidth)) {{ const curL = cur.scrollLeft || 0; const inX = (tx - cr.left) + curL; const nextL = Math.max(0, Math.min(inX + tw / 2 - cur.clientWidth / 2, cur.scrollWidth - cur.clientWidth)); cur.scrollLeft = nextL; tx -= (nextL - curL); }} }} cur = cur.parentElement; }} const vw = win.innerWidth || 1280; const vh = win.innerHeight || 720; if (ty < 0 || ty + th > vh || tx < 0 || tx + tw > vw) {{ const wx = win.scrollX || 0; const wy = win.scrollY || 0; const nwx = (tx < 0 || tx + tw > vw) ? Math.max(0, tx + wx + tw / 2 - vw / 2) : wx; const nwy = (ty < 0 || ty + th > vh) ? Math.max(0, ty + wy + th / 2 - vh / 2) : wy; if (win.scrollTo) win.scrollTo(Math.round(nwx), Math.round(nwy)); }} let cw = win; let fs = 0; while (cw && cw.frameElement && fs < 16) {{ fs++; const fe = cw.frameElement; if (typeof fe.scrollIntoViewIfNeeded === 'function') fe.scrollIntoViewIfNeeded(true); else if (typeof fe.scrollIntoView === 'function') fe.scrollIntoView({{ block: 'center', inline: 'center' }}); cw = (cw.parent && cw.parent !== cw) ? cw.parent : null; }} }})()",
                     .{ obj_id_val, obj_id_val, node_id, node_id, rect_x, rect_y, rect_w, rect_h },
                 ) catch null) else (std.fmt.bufPrint(
                     &js_buf,
-                    "(() => {{ let el = null; if ('{s}'.length > 0 && globalThis.__capsurf_get_object) {{ el = globalThis.__capsurf_get_object('{s}'); }} if (!el && {d} > 0) {{ function f(r, nid) {{ if (!r) return null; if (r._nid === nid) return r; const all = r.querySelectorAll ? r.querySelectorAll('*') : []; for (let i = 0; i < all.length; i++) {{ if (all[i]._nid === nid) return all[i]; }} return null; }} el = f(document, {d}); }} if (el) {{ if (typeof el.scrollIntoViewIfNeeded === 'function') {{ el.scrollIntoViewIfNeeded(true); }} else if (typeof el.scrollIntoView === 'function') {{ el.scrollIntoView({{ block: 'center', inline: 'center' }}); }} }} }})()",
+                    "(() => {{ let el = null; if ('{s}'.length > 0 && globalThis.__capsurf_get_object) {{ el = globalThis.__capsurf_get_object('{s}'); }} if (!el && {d} > 0) {{ function f(r, nid) {{ if (!r) return null; if (r._nid === nid) return r; const all = r.querySelectorAll ? r.querySelectorAll('*') : []; for (let i = 0; i < all.length; i++) {{ if (all[i]._nid === nid) return all[i]; }} return null; }} el = f(document, {d}); }} if (el) {{ if (typeof el.scrollIntoViewIfNeeded === 'function') {{ el.scrollIntoViewIfNeeded(true); }} else if (typeof el.scrollIntoView === 'function') {{ el.scrollIntoView({{ block: 'center', inline: 'center' }}); }} let cw = (el.ownerDocument && el.ownerDocument.defaultView) || null; let fs = 0; while (cw && cw.frameElement && fs < 16) {{ fs++; const fe = cw.frameElement; if (typeof fe.scrollIntoViewIfNeeded === 'function') fe.scrollIntoViewIfNeeded(true); else if (typeof fe.scrollIntoView === 'function') fe.scrollIntoView({{ block: 'center', inline: 'center' }}); cw = (cw.parent && cw.parent !== cw) ? cw.parent : null; }} }} }})()",
                     .{ obj_id_val, obj_id_val, node_id, node_id },
                 ) catch null);
                 if (e := js_expr) {
@@ -1794,7 +1794,36 @@ pub struct DomHandler {
                 defer list.deinit(session.allocator);
                 list.appendSlice(session.allocator, "{\"node\":") catch return CdpResponse.err(req.id, -32000, "Alloc failed");
                 let iframe_entries: [32]IframeFrameEntry = [IframeFrameEntry{}; 32];
-                const iframe_count = collectDocIframeEntries(session, &iframe_entries);
+                let iframe_count = collectDocIframeEntries(session, &iframe_entries);
+                const nd_ref = &session.doc.nodes.items[node_id];
+                if (nd_ref.node_type == NodeType.Element && (std.ascii.eqlIgnoreCase(nd_ref.tag_name, "iframe") || std.ascii.eqlIgnoreCase(nd_ref.tag_name, "frame"))) {
+                    if (obj_id := extractJsonString(req.params_raw, "objectId")) {
+                        const oid_val = session.ctx.newString(obj_id);
+                        defer session.ctx.freeValue(oid_val);
+                        session.ctx.setPropertyStr("__capsurf_resolve_oid", oid_val);
+                        const fid_val = session.ctx.eval("(() => { const o = globalThis.__capsurf_get_object ? globalThis.__capsurf_get_object(globalThis.__capsurf_resolve_oid) : null; return (o && o._capsurf_frame_id) ? String(o._capsurf_frame_id) : ''; })()");
+                        defer session.ctx.freeValue(fid_val);
+                        const fid_cstr = session.ctx.toCString(fid_val);
+                        if (fid_cstr.len > 0) {
+                            let matched_slot = false;
+                            let fi: usize = 0;
+                            while (fi < iframe_count) : (fi += 1) {
+                                if (iframe_entries[fi].nid == node_id) {
+                                    iframe_entries[fi].frame_id = session.allocator.dupe(u8, fid_cstr) catch fid_cstr;
+                                    matched_slot = true;
+                                    break;
+                                }
+                            }
+                            if (!matched_slot && iframe_count < iframe_entries.len) {
+                                iframe_entries[iframe_count] = IframeFrameEntry{
+                                    nid: node_id,
+                                    frame_id: session.allocator.dupe(u8, fid_cstr) catch fid_cstr,
+                                };
+                                iframe_count += 1;
+                            }
+                        }
+                    }
+                }
                 const empty_sr: []const ShadowRootEntry = [];
                 serializeCdpNodeWithOptions(session.allocator, &session.doc, node_id, depth, isNodeInSvg(&session.doc, node_id), empty_sr, iframe_entries[0..iframe_count], &list) catch return CdpResponse.err(req.id, -32000, "Alloc failed");
                 if (session.frame_id.len > 0 && list.items.len > 1 && list.items[list.items.len - 1] == '}' && std.mem.indexOf(u8, list.items, "\"frameId\"") == null) {
@@ -1812,7 +1841,7 @@ pub struct DomHandler {
                     let sr_buf: [1536]u8 = [0; 1536];
                     const sr_js = std.fmt.bufPrint(
                         &sr_buf,
-                        "(() => {{ const o = globalThis.__capsurf_get_object ? globalThis.__capsurf_get_object('{s}') : null; if (!o) return ''; if (o.nodeType === 9 && o === document) return 'DOC'; if (o.nodeType !== 1 && o.nodeType !== 3 && o.nodeType !== 8 && o.nodeType !== 9 && (o.nodeType !== 11 || !o.host)) return ''; const m = globalThis.__capsurf_sr_bmap || (globalThis.__capsurf_sr_bmap = new Map()); const rm = globalThis.__capsurf_sr_rmap || (globalThis.__capsurf_sr_rmap = new Map()); let bid = rm.get(o); if (!bid) {{ bid = 1000000 + (globalThis.__capsurf_sr_seq = (globalThis.__capsurf_sr_seq || 0) + 1); rm.set(o, bid); m.set(bid, '{s}'); }} if (o.nodeType === 1) return 'ELEM,' + String(bid) + ',' + String(o.tagName || 'DIV'); if (o.nodeType === 3 || o.nodeType === 8 || o.nodeType === 9) return 'NODE,' + String(bid) + ',' + String(o.nodeType); return String(bid) + ',' + (o.mode || 'open'); }})()",
+                        "(() => {{ const o = globalThis.__capsurf_get_object ? globalThis.__capsurf_get_object('{s}') : null; if (!o) return ''; if (o.nodeType === 9 && o === document) return 'DOC'; if (o.nodeType !== 1 && o.nodeType !== 3 && o.nodeType !== 8 && o.nodeType !== 9 && (o.nodeType !== 11 || !o.host)) return ''; const m = globalThis.__capsurf_sr_bmap || (globalThis.__capsurf_sr_bmap = new Map()); const rm = globalThis.__capsurf_sr_rmap || (globalThis.__capsurf_sr_rmap = new Map()); let bid = rm.get(o); if (!bid) {{ bid = 1000000 + (globalThis.__capsurf_sr_seq = (globalThis.__capsurf_sr_seq || 0) + 1); rm.set(o, bid); m.set(bid, '{s}'); }} if (o.nodeType === 1) return 'ELEM,' + String(bid) + ',' + String(o.tagName || 'DIV') + ',' + String(o._capsurf_frame_id || ''); if (o.nodeType === 3 || o.nodeType === 8 || o.nodeType === 9) return 'NODE,' + String(bid) + ',' + String(o.nodeType); return String(bid) + ',' + (o.mode || 'open'); }})()",
                         .{ obj_id, obj_id },
                     ) catch "";
                     if (sr_js.len > 0) {
@@ -1834,6 +1863,8 @@ pub struct DomHandler {
                             let eit = std.mem.splitScalar(u8, sr_str[5..], ',');
                             const ebid = std.fmt.parseInt(i64, eit.next() ?? "0", 10) catch 0;
                             const etag = eit.next() ?? "DIV";
+                            const elem_fid = eit.next() ?? "";
+                            const eff_fid: []const u8 = if (elem_fid.len > 0) elem_fid else node_fid;
                             let ltag_buf: [64]u8 = [0; 64];
                             const ltag_len = @min(etag.len, ltag_buf.len);
                             let li: usize = 0;
@@ -1841,11 +1872,19 @@ pub struct DomHandler {
                                 ltag_buf[li] = std.ascii.toLower(etag[li]);
                             }
                             if (ebid >= 1000000) {
-                                const res = std.fmt.bufPrint(
-                                    out_buf,
-                                    "{{\"node\":{{\"nodeId\":{d},\"backendNodeId\":{d},\"nodeType\":1,\"nodeName\":\"{s}\",\"localName\":\"{s}\",\"nodeValue\":\"\",\"frameId\":\"{s}\"}}}}",
-                                    .{ ebid, ebid, etag, ltag_buf[0..ltag_len], node_fid },
-                                ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
+                                const is_frame_el = std.ascii.eqlIgnoreCase(etag, "iframe") || std.ascii.eqlIgnoreCase(etag, "frame");
+                                const res = if (is_frame_el && elem_fid.len == 0)
+                                    std.fmt.bufPrint(
+                                        out_buf,
+                                        "{{\"node\":{{\"nodeId\":{d},\"backendNodeId\":{d},\"nodeType\":1,\"nodeName\":\"{s}\",\"localName\":\"{s}\",\"nodeValue\":\"\"}}}}",
+                                        .{ ebid, ebid, etag, ltag_buf[0..ltag_len] },
+                                    ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow")
+                                else
+                                    std.fmt.bufPrint(
+                                        out_buf,
+                                        "{{\"node\":{{\"nodeId\":{d},\"backendNodeId\":{d},\"nodeType\":1,\"nodeName\":\"{s}\",\"localName\":\"{s}\",\"nodeValue\":\"\",\"frameId\":\"{s}\"}}}}",
+                                        .{ ebid, ebid, etag, ltag_buf[0..ltag_len], eff_fid },
+                                    ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
                                 return CdpResponse.ok(req.id, res);
                             }
                         }

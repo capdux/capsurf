@@ -13,6 +13,7 @@
 | **WPT Web 平台测试** | `test/wpt/` | **11,795** 用例（已登记 **9,725**） | 旧基线 `PASS: 7,224`；全量刷新 `task-38759` 已跑 **60/133 批 (4,789 条)**：`PASS: 2,708`, `FAIL: 1,388`, `TIMEOUT: 691`, `ERROR: 2` | `wpt-batched.mjs -j 8 --update-expectations` |
 | **Playwright 兼容测试** | `test/pw/` | **123** 个 spec（**619** 条基线预期） | 分片实测中：`page-wait-for-selector` **47/47 (100%)**，`page-check` **16/16 (100%)**，`page-fill` **36/40 (90%)**，`page-keyboard` **37/44 (84.1%)**，`page-click` **77/102 (75.5%)**，`page-mouse` **11/15 (73.3%)**，`page-goto` **43/61 (70.5%)** | `pw-run.mjs --no-gate --no-retry` |
 | **Puppeteer 兼容测试** | `test/pptr/` | **10** 个 spec（221 条实测 + `locator.test`） | **实测完成**：`PASS: 82`, `FAIL: 70`, `TIMEOUT: 58`, `SKIP: 11`（`locator.test` 600s SIGKILL） | `pptr-run.mjs --port 9780 --no-gate` |
+| **Panda 黑盒测试集** | `test/panda/`（`.gitignore` 本地） | **517** 项有效页面自测（全量 671 项） | **Phase 966**：`PASS: 136`, `FAIL: 298`, `TIMEOUT: 83` (`tmp/panda_pass5.json`, 由 `113→117→128→134→136`) | `scripts/panda_run.mjs -j 4` |
 
 ---
 
@@ -111,14 +112,14 @@
 
 - **全量基线参考（10 个 spec，首轮 600s 上限）**：9 个落盘 spec 共 **221** 条：**PASS 82 / FAIL 70 / TIMEOUT 58 / SKIP 11**（`locator.test` 600s SIGKILL）。
 - **Phase 937–939 修复后最新实测（`--no-retry`, `CAPSURF_BIN=./bin_dev/main`, 产物 `tmp/pptr*_*.json`）**：
-  - `evaluation.test` (**Phase 941**): **42 PASS** / 5 FAIL / 0 TIMEOUT / 5 SKIP（由 `16→37→42`，+26，`tmp/pptr_941_eval.json`）
-  - `jshandle.test` (**Phase 943**, 2 项 FAIL 为上游 CDP 预期 FAIL): **23 PASS** / 2 FAIL / 0 TIMEOUT / 0 SKIP（`tmp/pptr943_js.json`）
-  - `click.test` (**Phase 965**, 0 TIMEOUT): **25 PASS** / 1 FAIL / 0 TIMEOUT / 4 SKIP (`tmp/pptr965_click.test.json`, `offscreen buttons` 已过, 仅余 `deviceScaleFactor set`)
+  - `evaluation.test` (**Phase 966**): **42 PASS** / 5 FAIL / 0 TIMEOUT / 5 SKIP（`tmp/pptr966_evaluation.json`, 14 项 `FAIL→PASS`, 余 `RegEx` x2 / `symbols` / `circular` / `createImageBitmap`）
+  - `jshandle.test` (**Phase 966**): **24 PASS** / 1 FAIL / 0 TIMEOUT / 0 SKIP（`tmp/pptr966_jshandle2.json`, 5 项 `FAIL→PASS`, `circular objects` 已过, 仅余 `dates`）
+  - `click.test` (**Phase 966 已全过不再重测**): **26 PASS** / 0 FAIL / 0 TIMEOUT / 4 SKIP (`tmp/pptr966_click2.json`, `deviceScaleFactor set` 已过)
   - `navigation.test` (**Phase 964**, 0 TIMEOUT): **48 PASS** / 5 FAIL / 0 TIMEOUT / 8 SKIP (`tmp/pptr964_navigation.test.json`, `disposeBrowserContext` 超时已清零)
   - `waittask.test` (**Phase 948**, 0 TIMEOUT): **57 PASS** / 1 FAIL / 0 TIMEOUT / 4 SKIP（由 `15→30→52→55→56→57`, `adoptedStyleSheets` 全过, `tmp/pptr948_wt.json`）
   - `injected.test` (**已全过不再重测**): **8 PASS** / 0 FAIL (`tmp/pptr_injected.json`)
   - `queryselector.test` (**Phase 963 已全过不再重测**): **35 PASS** / 0 FAIL / 0 TIMEOUT (`tmp/pptr963_queryselector.test.json`, 由 `1→32→34→35`)
-  - `elementhandle.test` (**Phase 965**): **41 PASS** / 6 FAIL / 1 TIMEOUT / 2 SKIP (`tmp/pptr965_elementhandle.test.json`, 5 项 `touch*` 报 `dispatchTouchEvent timed out` + 2 项 iframe `clickablePoint`)
+  - `elementhandle.test` (**Phase 966 已全过不再重测**): **48 PASS** / 0 FAIL / 0 TIMEOUT / 2 SKIP (`tmp/pptr966_eh2.json`, 5 项 `touch*` + 2 项 iframe `clickablePoint` 全过)
   - `elementhandle.test` (**Phase 944**): **41 PASS** / 0 FAIL / 7 TIMEOUT / 2 SKIP（由 `13→29→38→41`, `grid.html` 与 `clickablePoint` 通过, `tmp/pptr944_eh.json`）
   - `locator.test` (**Phase 963 已全过不再重测**): **60 PASS** / 0 FAIL / 0 TIMEOUT / 1 SKIP (`tmp/pptr963_locator.test.json`, 由 `0/SIGKILL→57→58→60/61`, `readonly color/range` 560ms 全过)
   - `queryhandler.test` (**已全过不再重测**, Phase 947): **36 PASS** / 0 FAIL / 0 TIMEOUT / 2 SKIP（由 `2→23→33→34→36`，两个 ARIA 超时全过，`tmp/pptr947_qh.json`）
@@ -186,10 +187,10 @@
   - `selectors-css` (**已全过不再重测**): **25 PASS** / 0 FAIL / 1 SKIP (`tmp/pw944_selcss.json`, 由 `24→25`)
   - `retarget` (**已全过不再重测**): **15 PASS** / 0 FAIL (`tmp/pw945_retarget.json`, 由 `14→15`)
   - `page-strict` (**已全过不再重测**): **10 PASS** / 0 FAIL (`tmp/pw944_strict.json`, 由 `8→10`)
-  - `elementhandle-*` (10 specs, 其中 8 项**已全过不再重测**: `convenience` 14/14, `click` 8/8, `bounding-box` 7/7, `query-selector` 6/6, `press` 5/5, `select-text` 5/5, `type` 5/5, `scroll-into-view` **8/8+1 SKIP** (`tmp/pw959_elementhandle-scroll-into-view.json`); 另 `wait-for-element-state` **11/12** (`tmp/pw959_elementhandle-wait-for-element-state.json`), `misc` **6/10**): 合计 **75 PASS** / 3 FAIL / 3 TIMEOUT / 1 SKIP (`tmp/pw943_eh*.json`, `tmp/pw944_ehbbox.json`, `tmp/pw945_ehclick.json`, `tmp/pw959_elementhandle-*.json`)
+  - `elementhandle-*` (10 specs, 其中 9 项**已全过不再重测**: `convenience` 14/14, `click` 8/8, `bounding-box` 7/7, `query-selector` 6/6, `press` 5/5, `select-text` 5/5, `type` 5/5, `scroll-into-view` **8/8+1 SKIP**, `wait-for-element-state` **12/12** (`tmp/pw966_eh_wait.json`); 另 `misc` **6/10**): 合计 **76 PASS** / 2 FAIL / 3 TIMEOUT / 1 SKIP (`tmp/pw943_eh*.json`, `tmp/pw944_ehbbox.json`, `tmp/pw945_ehclick.json`, `tmp/pw959_elementhandle-*.json`, `tmp/pw966_eh_wait.json`)
   - `expect-to-have-text` (**已全过不再重测**): **28 PASS** / 0 FAIL (`tmp/pw944_exptxt.json`)
   - `expect-to-have-value` (**已全过不再重测**): **11 PASS** / 0 FAIL (`tmp/pw944_expval.json`)
-  - `expect-boolean`: **83 PASS** / 1 FAIL (`tmp/pw950_expect-boolean.json`, 仅 `with frameLocator 2`)
+  - `expect-boolean`: **83 PASS** / 1 FAIL (`tmp/pw966_expect_bool.json`, `with frameLocator 2` 已过, 仅余既有 `toBeFocused with shadow elements`)
   - `expect-builtins` (**已全过不再重测**): **278 PASS** / 0 FAIL (`tmp/pw944_expbi.json`)
   - `expect-matcher-result` (**已全过不再重测**): **4 PASS** / 0 FAIL (`tmp/pw944_expmr.json`)
   - `expect-timeout` (**已全过不再重测**): **15 PASS** / 0 FAIL (`tmp/pw944_expto.json`)
@@ -198,15 +199,15 @@
   - `page-autowaiting-basic` (**已全过不再重测**): **12 PASS** / 0 FAIL (`tmp/pw948_page-autowaiting-basic.json`, 由 `9→12`)
   - `page-autowaiting-no-hang` (**已全过不再重测**): **9 PASS** / 0 FAIL (`tmp/pw948_page-autowaiting-no-hang.json`, 由 `7→9`)
   - `page-event-console` (**已全过不再重测**): **19 PASS** / 0 FAIL / 0 TIMEOUT (`tmp/pw950_page-event-console.json`, 由 `16→18→19`)
-  - `page-event-pageerror`: **6 PASS** / 1 FAIL (`tmp/pw945_pageerr.json`)
+  - `page-event-pageerror` (**已全过不再重测**): **7 PASS** / 0 FAIL (`tmp/pw966_pageerror.json`, 由 `6→7`, `should fire` 已过)
   - `page-expose-function` (**已全过不再重测**): **18 PASS** / 0 FAIL / 0 TIMEOUT (`tmp/pw952_page-expose-function.json`, 由 `9→16→17→18`)
   - `page-add-init-script-callback` (**已全过不再重测**): **11 PASS** / 0 FAIL (`tmp/pw948_page-add-init-script-callback.json`, 由 `7→9→11`)
   - `expect-to-have-accessible` (**已全过不再重测**): **14 PASS** / 0 FAIL (`tmp/pw945_expacc.json`)
   - `frame-frame-element` (**已全过不再重测**): **6 PASS** / 0 FAIL (`tmp/pw945_ffel.json`)
   - `frame-evaluate`: **5 PASS** / 3 FAIL / 0 TIMEOUT (`tmp/pw961_frame-evaluate.json`, 由 `3→5`)
-  - `frame-hierarchy`: **11 PASS** / 1 FAIL (`tmp/pw950_frame-hierarchy.json`, 由 `8→9→11`)
+  - `frame-hierarchy` (**已全过不再重测**): **12 PASS** / 0 FAIL (`tmp/pw966_frame_hier.json`, 由 `8→9→11→12`)
   - `locator-frame` (**已全过不再重测**): **9 PASS** / 0 FAIL / 0 TIMEOUT (`tmp/pw965_locator-frame.json`, 由 `6→8→9`)
-  - `selectors-frame`: **13 PASS** / 2 FAIL / 0 TIMEOUT (`tmp/pw962_selectors-frame.json`, 由 `5→9→13`, 10 TIMEOUT 清零)
+  - `selectors-frame` (**已全过不再重测**): **15 PASS** / 0 FAIL / 0 TIMEOUT (`tmp/pw966_sel_frame.json`, 由 `5→9→13→15`)
   - `page-navigation` (**已全过不再重测**): **3 PASS** / 0 FAIL (`tmp/pw945_pnav.json`)
   - `page-wait-for-load-state`: **7 PASS** / 1 FAIL / 2 TIMEOUT (`tmp/pw950_page-wait-for-load-state.json`, 由 `6→7`)
   - `page-wait-for-navigation`: **11 PASS** / 0 FAIL / 1 TIMEOUT (`tmp/pw950_page-wait-for-navigation.json`, 由 `7→10→11`)
@@ -217,7 +218,7 @@
   - `wheel.spec` (**已全过不再重测**): **6 PASS** / 0 FAIL (`tmp/pw945_wheel.json`)
   - `selectors-role` (**已全过不再重测**): **15 PASS** / 0 FAIL / 0 TIMEOUT (`tmp/pw950_selectors-role.json`, 由 `13→15`)
   - `page-add-init-script` (**已全过不再重测**): **11 PASS** / 0 FAIL (`tmp/pw959_page-add-init-script.json`, 由 `10→11`)
-  - `page-add-locator-handler`: **12 PASS** / 1 FAIL / 0 TIMEOUT (`tmp/pw961_page-add-locator-handler.json`, 由 `1→12`)
+  - `page-add-locator-handler` (**已全过不再重测**): **13 PASS** / 0 FAIL / 0 TIMEOUT (`tmp/pw966_locator_handler.json`, 由 `1→12→13`)
   - `page-dialog` (**已全过不再重测**): **9 PASS** / 0 FAIL (`tmp/pw950_page-dialog.json`, 由 `7→9`)
   - `page-history` (**已全过不再重测**): **13 PASS** / 0 FAIL / 0 TIMEOUT (`tmp/pw955_page-history.json`, 由 `10→13`)
   - `page-basic`: **12 PASS** / 4 FAIL (`tmp/pw_basic.json`, `frame({name,url})`/`Chrome/`/`webdriver`)
@@ -232,33 +233,33 @@
   - `page-emulate-media`: **12 PASS** / 0 FAIL (**已全过不再重测**, `tmp/pw943_media.json`)
   - `page-keyboard` (**已全过不再重测**): **44 PASS** / 0 FAIL / 0 TIMEOUT (`tmp/pw944_kb.json`, 由 `41→43→44`)
   - `page-network-sizes` (**已全过不再重测**): **13 PASS** / 0 FAIL / 0 TIMEOUT (`tmp/pw952_page-network-sizes.json`, 由 `5→11→12→13`)
-  - `page-click` (8 specs): **85 PASS** / 10 FAIL / 5 TIMEOUT / 2 SKIP (`tmp/pw942_click.json`, 由 `77→84→85`, 其中 `during-navigation` 1/1 & `timeout-1/2/3` 全过)
+  - `page-click` (8 specs): **90 PASS** / 5 FAIL / 5 TIMEOUT / 2 SKIP (`tmp/pw966_page_click.json`, 由 `77→84→85→90`)
   - `page-evaluate` (4 specs): **120 PASS** / 8 FAIL / 3 TIMEOUT (`tmp/pw943_eval.json`, 其中 `page-evaluate.spec.ts` **95/95 全过**, `page-evaluate-handle.spec.ts` **11/11 全过**)
   - `page-screenshot`: **26 PASS** / 17 FAIL / 1 TIMEOUT (`tmp/pw961_page-screenshot.json`, 由 `17→19→24→26`)
-  - `page-goto`: **57 PASS** / 4 FAIL / 0 TIMEOUT (`tmp/pw964_page-goto.json`, 由 `43→46→57`, 10 TIMEOUT 清零)
+  - `page-goto`: **59 PASS** / 2 FAIL / 0 TIMEOUT (`tmp/pw966_page_goto2.json`, 由 `43→46→57→59`, `referrer-policy` & `window.stop()` 已过)
   - `page-mouse` (**已全过不再重测**): **15 PASS** / 0 FAIL / 0 TIMEOUT (`tmp/pw959_page-mouse.json`, 由 `11→14→15`)
   - `page-goto`: **43 PASS** / 8 FAIL / 10 TIMEOUT (`tmp/pw_goto.json`, `referer`/COOP/`window.stop()`/异步导航)
   - `page-screenshot`: **17 PASS** / 20 FAIL / 7 TIMEOUT (`tmp/pw_screenshot.json`, `mask [uninitialized]`/WebP&JPEG/animations/`fullPage`)
   - `page-evaluate` (4 specs): **82 PASS** / 11 FAIL / 38 TIMEOUT (`tmp/pw_eval.json`, `callBinding` undefined/过深引用链/导航后报错超时级联)
   - `page-event-load` (**已全过不再重测**): **1 PASS** / 0 FAIL (`tmp/pw_event.json`)
-  - `page-event-network`: **5 PASS** / 1 FAIL (`tmp/pw959_page-event-network.json`, 仅余 `Page.Events.RequestFailed @smoke`)
+  - `page-event-network` (**已全过不再重测**): **6 PASS** / 0 FAIL (`tmp/pw966_event_network.json`, 由 `5→6`, `RequestFailed @smoke` 已过)
   - `page-event-request`: **5 PASS** / 7 FAIL / 1 TIMEOUT (`tmp/pw_event.json`)
-  - `page-network-idle`: **2 PASS** / 8 TIMEOUT (`tmp/pw_network.json`)
+  - `page-network-idle`: **3 PASS** / 5 FAIL / 2 TIMEOUT (`tmp/pw966_network_idle.json`, 由 `2→3`, 6 项超时已消)
   - `page-network-request`: **7 PASS** / 16 FAIL / 3 TIMEOUT / 1 SKIP (`tmp/pw_network.json`)
   - `page-network-response`: **17 PASS** / 2 FAIL / 2 TIMEOUT (`tmp/pw_network.json`)
-  - `page-request-continue`: **31 PASS** / 5 FAIL / 0 TIMEOUT (`tmp/pw962_page-request-continue.json`, 由 `0→11→18→28→31`)
+  - `page-request-continue` (**已全过不再重测**): **36 PASS** / 0 FAIL / 0 TIMEOUT (`tmp/pw966_req_continue2.json`, 由 `0→11→18→28→31→32→36`)
   - `page-request-fallback` (**已全过不再重测**): **14 PASS** / 0 FAIL / 0 TIMEOUT (`tmp/pw965_page-request-fallback.json`, 由 `1→13→14`)
   - `page-request-fulfill` (**已全过不再重测**): **20 PASS** / 0 FAIL / 0 TIMEOUT (`tmp/pw963_page-request-fulfill.json`, 由 `0→11→18→20`)
-  - `page-request-intercept`: **11 PASS** / 1 FAIL / 1 TIMEOUT / 1 SKIP (`tmp/pw959_page-request-intercept.json`, 由 `0→11`)
+  - `page-request-intercept`: **12 PASS** / 0 FAIL / 1 TIMEOUT / 1 SKIP (`tmp/pw966_req_intercept.json`, 由 `0→11→12`)
   - `page-drop` (**已全过不再重测**): **7 PASS** / 0 FAIL (`tmp/pw951_page-drop.json`)
   - `to-match-aria-snapshot` (**已全过不再重测**): **36 PASS** / 0 FAIL (`tmp/pw951_to-match-aria-snapshot.json`)
   - `expect-with-snapshot` (**已全过不再重测**): **14 PASS** / 0 FAIL (`tmp/pw951_expect-with-snapshot.json`)
   - `page-drag` (**预期全跳过不再重测**): 0 PASS / **15 SKIP** (`tmp/pw951_page-drag.json`)
   - `page-select-option` (**已全过不再重测**): **33 PASS** / 0 FAIL (`tmp/pw953_page-select-option.json`, 由 `32→33`)
   - `page-aria-snapshot` (**已全过不再重测**): **38 PASS** / 0 FAIL / 0 TIMEOUT (`tmp/pw959_page-aria-snapshot.json`, 由 `37→38`)
-  - `page-aria-snapshot-ai`: **29 PASS** / 7 FAIL / 0 TIMEOUT (`tmp/pw961_page-aria-snapshot-ai.json`, 由 `27→28→29`, 7 TIMEOUT 清零)
+  - `page-aria-snapshot-ai`: **30 PASS** / 5 FAIL / 1 TIMEOUT (`tmp/pw966_aria_ai.json`, 由 `27→28→29→30`, `<frameset>` `[active]` 已过)
   - `elementhandle-screenshot`: **9 PASS** / 2 FAIL (`tmp/pw951_elementhandle-screenshot.json`)
-  - `page-filechooser`: **5 PASS** / 0 FAIL / 1 TIMEOUT (`tmp/pw953_page-filechooser.json`, 由 `4→5`, `FormData` 边界已过)
-  - `page-route`: **49 PASS** / 1 FAIL / 1 TIMEOUT (`tmp/pw965_page-route.json`, 由 `17→18→38→42→47→49`)
+  - `page-filechooser` (**已全过不再重测**): **6 PASS** / 0 FAIL / 0 TIMEOUT (`tmp/pw966_filechooser.json`, 由 `4→5→6`)
+  - `page-route` (**已全过不再重测**): **51 PASS** / 0 FAIL / 0 TIMEOUT (`tmp/pw966_page-route.json`, 由 `17→18→38→42→47→49→51`)
   - `interception` (**可执行项 7/7 全过不再重测**): **7 PASS** / 1 FAIL (`tmp/pw957_interception.json`, 由 `3→5→6→7`, 仅余 1 项 SW 预期 FAIL)
   - `workers` (**已全过不再重测**): **3 PASS** / 0 FAIL / 0 TIMEOUT (`tmp/pw962_workers.json`, 由 `0→1→3`)

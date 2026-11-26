@@ -1549,20 +1549,39 @@ if (typeof globalThis !== "undefined") {
 
     // 1. Handle CSS Transitions
     const trSpecs = parseTransitionSpecs(staticSnapshot);
-    if (st.lastStyle !== null && trSpecs.length > 0) {
-      // Build property -> spec map (later spec wins; "all" acts as wildcard)
-      let allSpec = null;
-      const specByProp = new Map();
-      for (let i = 0; i < trSpecs.length; i++) {
-        if (trSpecs[i].prop === "all") allSpec = trSpecs[i];
-        else {
-          const expanded = expandTransitionProp(trSpecs[i].prop);
-          for (let j = 0; j < expanded.length; j++) {
-            specByProp.set(expanded[j], trSpecs[i]);
-          }
+    let allSpec = null;
+    const specByProp = new Map();
+    for (let i = 0; i < trSpecs.length; i++) {
+      if (trSpecs[i].prop === "all") allSpec = trSpecs[i];
+      else {
+        const expanded = expandTransitionProp(trSpecs[i].prop);
+        for (let j = 0; j < expanded.length; j++) {
+          specByProp.set(expanded[j], trSpecs[i]);
         }
       }
-
+    }
+    if (st.transitions.size > 0) {
+      st.transitions.forEach(function (existingTr, prop) {
+        const spec = specByProp.get(prop) || allSpec;
+        if (!spec || spec.durationMs <= 0) {
+          if (existingTr.startTimer !== null) {
+            try { clearTimeout(existingTr.startTimer); } catch (e) {}
+            existingTr.startTimer = null;
+          }
+          st.transitions.delete(prop);
+          if (existingTr.anim) {
+            existingTr.anim.cancel();
+          } else {
+            const cancelElapsed = Math.max(0, Math.min(existingTr.durationMs, (now - existingTr.startTime) - existingTr.delayMs)) / 1000;
+            fireTransitionEvent(element, "transitioncancel", prop, cancelElapsed);
+          }
+        }
+      });
+      if (st.transitions.size === 0 && st.animations.size === 0) {
+        _activeCssAnimElements.delete(element);
+      }
+    }
+    if (st.lastStyle !== null && trSpecs.length > 0) {
       const candidateProps = new Set();
       if (allSpec) {
         staticSnapshot.forEach(function (_v, k) { if (!isNonAnimatableMetaProp(k)) candidateProps.add(k); });
@@ -1856,11 +1875,15 @@ if (typeof globalThis !== "undefined") {
     if (!_snapshotsInitialized || !el || el.nodeType !== 1) return;
     const st = _cssAnimStateMap.get(el);
     if (st && st.lastStyle !== null) return;
+    const prevFlag = globalThis.__capsurf_capturingBeforeChange;
+    globalThis.__capsurf_capturingBeforeChange = true;
     try {
       if (typeof getComputedStyle === "function") {
         getComputedStyle(el);
       }
-    } catch (e) {}
+    } catch (e) {} finally {
+      globalThis.__capsurf_capturingBeforeChange = prevFlag;
+    }
   }
 
   function notifyCssStyleChange(el) {
@@ -1993,6 +2016,7 @@ if (typeof globalThis !== "undefined") {
     globalThis.__capsurf_syncCssTransitionsAndAnimations = syncCssTransitionsAndAnimations;
     globalThis.__capsurf_notifyCssStyleChange = notifyCssStyleChange;
     globalThis.__capsurf_ensureBeforeChangeSnapshot = ensureBeforeChangeSnapshot;
+    globalThis.__capsurf_hasCssAnimState = function (el) { return _cssAnimStateMap.has(el); };
     globalThis.__capsurf_initCssTransitionSnapshots = initCssTransitionSnapshots;
     globalThis.__capsurf_sample_active_animations = sampleActiveAnimations;
   }

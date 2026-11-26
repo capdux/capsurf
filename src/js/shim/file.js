@@ -324,6 +324,7 @@ function extractMimeFromHeaders(headers) {
 // Request & Response support for .blob() Content-Type passthrough
 function Headers(init) {
   this._map = new Map();
+  this._setCookies = [];
   this._guard = "none";
   if (init === undefined) {
     return;
@@ -338,6 +339,9 @@ function Headers(init) {
     init._map.forEach(function (v, k) {
       this._map.set(k, v);
     }, this);
+    if (init._setCookies && init._setCookies.length > 0) {
+      this._setCookies = init._setCookies.slice();
+    }
     return;
   }
 
@@ -395,58 +399,139 @@ function Headers(init) {
   }
 }
 
+function validateHeaderName(k) {
+  const s = String(k);
+  if (!/^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/.test(s)) {
+    throw new TypeError("Failed to execute on 'Headers': Invalid name '" + s + "'");
+  }
+  return s.toLowerCase();
+}
+
+function normalizeHeaderValue(v) {
+  const s = String(v).replace(/^[ \t\r\n]+|[ \t\r\n]+$/g, "");
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c === 0 || c === 10 || c === 13 || c > 255) {
+      throw new TypeError("Failed to execute on 'Headers': Invalid value");
+    }
+  }
+  return s;
+}
+
+function getSortedHeaderEntries(headers) {
+  const keys = Array.from(headers._map.keys()).sort();
+  const out = [];
+  for (let i = 0; i < keys.length; i++) {
+    const k = keys[i];
+    if (k === "set-cookie" && headers._setCookies && headers._setCookies.length > 0) {
+      for (let j = 0; j < headers._setCookies.length; j++) {
+        out.push(["set-cookie", headers._setCookies[j]]);
+      }
+    } else {
+      out.push([k, headers._map.get(k)]);
+    }
+  }
+  return out;
+}
+
+function isNoCorsSafelistedHeader(key, val) {
+  if (key === "accept" || key === "accept-language" || key === "content-language") return true;
+  if (key === "content-type") {
+    const mime = val.split(";")[0].trim().toLowerCase();
+    return mime === "application/x-www-form-urlencoded" || mime === "multipart/form-data" || mime === "text/plain";
+  }
+  return false;
+}
+
 Headers.prototype.append = function (k, v) {
   if (this._guard === "immutable") {
     throw new TypeError("Failed to execute 'append' on 'Headers': Headers are immutable");
   }
-  const key = String(k).toLowerCase();
-  const val = String(v);
+  const key = validateHeaderName(k);
+  const val = normalizeHeaderValue(v);
+  if (this._guard === "request-no-cors" && !isNoCorsSafelistedHeader(key, val)) {
+    return;
+  }
+  if (this._guard === "response" && (key === "set-cookie" || key === "set-cookie2")) {
+    return;
+  }
+  if (key === "set-cookie") {
+    this._setCookies.push(val);
+    this._map.set(key, this._setCookies.join(", "));
+    return;
+  }
   const existing = this._map.get(key);
-  this._map.set(key, existing ? existing + ", " + val : val);
+  this._map.set(key, existing !== undefined ? existing + ", " + val : val);
 };
 
 Headers.prototype.set = function (k, v) {
   if (this._guard === "immutable") {
     throw new TypeError("Failed to execute 'set' on 'Headers': Headers are immutable");
   }
-  this._map.set(String(k).toLowerCase(), String(v));
+  const key = validateHeaderName(k);
+  const val = normalizeHeaderValue(v);
+  if (this._guard === "request-no-cors" && !isNoCorsSafelistedHeader(key, val)) {
+    return;
+  }
+  if (this._guard === "response" && (key === "set-cookie" || key === "set-cookie2")) {
+    return;
+  }
+  if (key === "set-cookie") {
+    this._setCookies = [val];
+  }
+  this._map.set(key, val);
 };
 
 Headers.prototype.get = function (k) {
-  const key = String(k).toLowerCase();
+  const key = validateHeaderName(k);
   return this._map.has(key) ? this._map.get(key) : null;
 };
 
+Headers.prototype.getSetCookie = function () {
+  return this._setCookies ? this._setCookies.slice() : [];
+};
+
 Headers.prototype.has = function (k) {
-  return this._map.has(String(k).toLowerCase());
+  return this._map.has(validateHeaderName(k));
 };
 
 Headers.prototype.delete = function (k) {
   if (this._guard === "immutable") {
     throw new TypeError("Failed to execute 'delete' on 'Headers': Headers are immutable");
   }
-  this._map.delete(String(k).toLowerCase());
+  const key = validateHeaderName(k);
+  if (this._guard === "request-no-cors" && !isNoCorsSafelistedHeader(key, "")) {
+    return;
+  }
+  if (this._guard === "response" && (key === "set-cookie" || key === "set-cookie2")) {
+    return;
+  }
+  if (key === "set-cookie") {
+    this._setCookies = [];
+  }
+  this._map.delete(key);
 };
 
 Headers.prototype.forEach = function (cb, thisArg) {
-  this._map.forEach(cb, thisArg);
+  const sorted = getSortedHeaderEntries(this);
+  for (let i = 0; i < sorted.length; i++) {
+    cb.call(thisArg, sorted[i][1], sorted[i][0], this);
+  }
 };
 
 Headers.prototype.entries = function () {
-  return this._map.entries();
+  return getSortedHeaderEntries(this)[Symbol.iterator]();
 };
 
 Headers.prototype.keys = function () {
-  return this._map.keys();
+  return getSortedHeaderEntries(this).map(function (e) { return e[0]; })[Symbol.iterator]();
 };
 
 Headers.prototype.values = function () {
-  return this._map.values();
+  return getSortedHeaderEntries(this).map(function (e) { return e[1]; })[Symbol.iterator]();
 };
 
-Headers.prototype[Symbol.iterator] = function () {
-  return this._map.entries();
-};
+Headers.prototype[Symbol.iterator] = Headers.prototype.entries;
 
 markNative(Headers, "Headers");
 markNative(Headers.prototype.append, "append");
@@ -502,13 +587,37 @@ function Request(input, init) {
     resolvedUrl = rawUrl;
   }
   this._url = resolvedUrl;
-  this._method = (init.method || (isReq ? input.method : "GET")).toUpperCase();
+  const rawMethod = String(init.method !== undefined ? init.method : (isReq ? input.method : "GET"));
+  const upperMethod = rawMethod.toUpperCase();
+  this._method = (upperMethod === "DELETE" || upperMethod === "GET" || upperMethod === "HEAD" || upperMethod === "OPTIONS" || upperMethod === "POST" || upperMethod === "PUT") ? upperMethod : rawMethod;
+  const modeVal = init.mode !== undefined ? String(init.mode) : (isReq ? input.mode : "cors");
+  if (modeVal === "navigate") {
+    throw new TypeError("Failed to construct 'Request': Cannot construct a Request with a RequestMode of 'navigate'");
+  }
+  this._mode = modeVal;
   this._headers = new Headers(init.headers !== undefined ? init.headers : (isReq ? input.headers : undefined));
+  if (this._mode === "no-cors") {
+    this._headers._guard = "request-no-cors";
+  }
+  this._body = init.body !== undefined ? init.body : (isReq ? input._body : null);
+  if (init.body !== undefined && init.body !== null && !this._headers.has("content-type")) {
+    if (typeof init.body === "string") {
+      this._headers.set("content-type", "text/plain;charset=UTF-8");
+    } else if (typeof URLSearchParams === "function" && init.body instanceof URLSearchParams) {
+      this._headers.set("content-type", "application/x-www-form-urlencoded;charset=UTF-8");
+    } else if (typeof Blob === "function" && init.body instanceof Blob && init.body.type) {
+      this._headers.set("content-type", init.body.type);
+    } else if (typeof FormData === "function" && init.body instanceof FormData) {
+      const ser = serializeFormDataBody(init.body);
+      this._body = ser.body;
+      this._headers.set("content-type", ser.contentType);
+    }
+  }
   this._rawMimeType = extractMimeFromHeaders(this._headers);
-  this._body = init.body !== undefined ? init.body : (isReq ? input._body : "");
-  this._mode = init.mode !== undefined ? String(init.mode) : (isReq ? input.mode : "cors");
+  this._bodyUsed = false;
   this._credentials = init.credentials !== undefined ? String(init.credentials) : (isReq ? input.credentials : "same-origin");
   this._cache = init.cache !== undefined ? String(init.cache) : (isReq ? input.cache : "default");
+  this._redirect = init.redirect !== undefined ? String(init.redirect) : (isReq ? input.redirect : "follow");
 
   const rp = init.referrerPolicy !== undefined ? String(init.referrerPolicy) : (isReq ? input.referrerPolicy : "");
   if (!VALID_REFERRER_POLICIES.has(rp)) {
@@ -555,6 +664,11 @@ Object.defineProperty(Request.prototype, "cache", {
   configurable: true,
   enumerable: true,
 });
+Object.defineProperty(Request.prototype, "redirect", {
+  get: function () { return this._redirect; },
+  configurable: true,
+  enumerable: true,
+});
 Object.defineProperty(Request.prototype, "referrerPolicy", {
   get: function () { return this._referrerPolicy; },
   configurable: true,
@@ -562,6 +676,11 @@ Object.defineProperty(Request.prototype, "referrerPolicy", {
 });
 Object.defineProperty(Request.prototype, "referrer", {
   get: function () { return this._referrer; },
+  configurable: true,
+  enumerable: true,
+});
+Object.defineProperty(Request.prototype, "bodyUsed", {
+  get: function () { return Boolean(this._bodyUsed); },
   configurable: true,
   enumerable: true,
 });
@@ -602,21 +721,220 @@ markNative(Request.prototype.text, "text");
 markNative(Request.prototype.json, "json");
 markNative(Request.prototype.arrayBuffer, "arrayBuffer");
 
+function validateResponseStatusText(st) {
+  const s = String(st);
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c === 0 || c === 10 || c === 13 || c > 255) {
+      throw new TypeError("Failed to construct 'Response': Invalid statusText");
+    }
+  }
+  return s;
+}
+
+function serializeFormDataBody(fd) {
+  const boundary = "----CapSurfFormBoundary" + Math.random().toString(36).slice(2);
+  let out = "";
+  fd.forEach(function (val, key) {
+    out += "--" + boundary + "\r\n";
+    if (typeof File === "function" && val instanceof File) {
+      out += 'Content-Disposition: form-data; name="' + String(key) + '"; filename="' + String(val.name || "blob") + '"\r\n';
+      out += "Content-Type: " + (val.type || "application/octet-stream") + "\r\n\r\n";
+      out += String(val._parts ? val._parts.join("") : "") + "\r\n";
+    } else if (typeof Blob === "function" && val instanceof Blob) {
+      out += 'Content-Disposition: form-data; name="' + String(key) + '"; filename="blob"\r\n';
+      out += "Content-Type: " + (val.type || "application/octet-stream") + "\r\n\r\n";
+      out += String(val._parts ? val._parts.join("") : "") + "\r\n";
+    } else {
+      out += 'Content-Disposition: form-data; name="' + String(key) + '"\r\n\r\n';
+      out += String(val) + "\r\n";
+    }
+  });
+  out += "--" + boundary + "--\r\n";
+  return { body: out, contentType: "multipart/form-data; boundary=" + boundary };
+}
+
+function readBodyAsUint8Array(body) {
+  if (body === null || body === undefined) {
+    return Promise.resolve(new Uint8Array(0));
+  }
+  if (typeof ReadableStream === "function" && body instanceof ReadableStream) {
+    const reader = body.getReader();
+    const chunks = [];
+    let totalLen = 0;
+    function pump() {
+      return reader.read().then(function (step) {
+        if (step.done) {
+          const out = new Uint8Array(totalLen);
+          let off = 0;
+          for (let i = 0; i < chunks.length; i++) {
+            out.set(chunks[i], off);
+            off += chunks[i].byteLength;
+          }
+          return out;
+        }
+        const v = step.value;
+        let u8;
+        if (v instanceof Uint8Array) {
+          u8 = v;
+        } else if (v instanceof ArrayBuffer) {
+          u8 = new Uint8Array(v);
+        } else if (ArrayBuffer.isView(v)) {
+          u8 = new Uint8Array(v.buffer, v.byteOffset, v.byteLength);
+        } else {
+          u8 = stringToUtf8(String(v));
+        }
+        chunks.push(u8);
+        totalLen += u8.byteLength;
+        return pump();
+      });
+    }
+    return pump();
+  }
+  if (typeof Blob === "function" && body instanceof Blob) {
+    if (typeof body.arrayBuffer === "function") {
+      return body.arrayBuffer().then(function (ab) { return new Uint8Array(ab); });
+    }
+  }
+  if (body instanceof ArrayBuffer) {
+    return Promise.resolve(new Uint8Array(body.slice(0)));
+  }
+  if (ArrayBuffer.isView(body)) {
+    const view = new Uint8Array(body.buffer, body.byteOffset, body.byteLength);
+    const copy = new Uint8Array(view.byteLength);
+    copy.set(view);
+    return Promise.resolve(copy);
+  }
+  return Promise.resolve(stringToUtf8(String(body)));
+}
+
+function decodeUtf8Bytes(u8) {
+  if (typeof TextDecoder === "function") {
+    return new TextDecoder("utf-8").decode(u8);
+  }
+  let s = "";
+  for (let i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]);
+  return s;
+}
+
 function Response(body, init) {
   init = init || {};
-  this._status = init.status !== undefined ? Number(init.status) : 200;
-  this._statusText = init.statusText !== undefined ? String(init.statusText) : "OK";
+  const status = init.status !== undefined ? Number(init.status) : 200;
+  if (!init._allowAnyStatus && (!Number.isFinite(status) || status < 200 || status > 599)) {
+    throw new RangeError("Failed to construct 'Response': The status provided (" + status + ") is outside the range [200, 599].");
+  }
+  const statusText = init.statusText !== undefined ? validateResponseStatusText(init.statusText) : "";
+  if ((status === 204 || status === 205 || status === 304) && body !== undefined && body !== null) {
+    throw new TypeError("Failed to construct 'Response': Response with null body status cannot have body");
+  }
+  this._status = status;
+  this._statusText = statusText;
   this._ok = this._status >= 200 && this._status < 300;
   this._type = init.type !== undefined ? String(init.type) : "default";
   this._url = init.url !== undefined ? String(init.url) : "";
   this._redirected = Boolean(init.redirected);
-  this._headers = new Headers(init.headers);
+  this._headers = new Headers();
+  this._headers._guard = "response";
+  if (init.headers !== undefined) {
+    const tmpHeaders = new Headers(init.headers);
+    const selfHeaders = this._headers;
+    tmpHeaders.forEach(function (v, k) {
+      selfHeaders.append(k, v);
+    });
+  }
   if (init._immutableHeaders) {
     this._headers._guard = "immutable";
   }
+  this._bodyUsed = false;
+  this._bodyStream = null;
+
+  if (body === undefined || body === null) {
+    this._body = null;
+  } else if (typeof URLSearchParams === "function" && body instanceof URLSearchParams) {
+    this._body = body.toString();
+    if (!this._headers.has("content-type")) {
+      this._headers.set("content-type", "application/x-www-form-urlencoded;charset=UTF-8");
+    }
+  } else if (typeof FormData === "function" && body instanceof FormData) {
+    const serialized = serializeFormDataBody(body);
+    this._body = serialized.body;
+    if (!this._headers.has("content-type")) {
+      this._headers.set("content-type", serialized.contentType);
+    }
+  } else if (typeof Blob === "function" && body instanceof Blob) {
+    this._body = body;
+    if (!this._headers.has("content-type") && body.type) {
+      this._headers.set("content-type", body.type);
+    }
+  } else if (typeof body === "string") {
+    this._body = body;
+    if (!this._headers.has("content-type")) {
+      this._headers.set("content-type", "text/plain;charset=UTF-8");
+    }
+  } else if (body instanceof ArrayBuffer || ArrayBuffer.isView(body)) {
+    if (body instanceof ArrayBuffer) {
+      this._body = new Uint8Array(body.slice(0));
+    } else {
+      const view = new Uint8Array(body.buffer, body.byteOffset, body.byteLength);
+      const copy = new Uint8Array(view.byteLength);
+      copy.set(view);
+      this._body = copy;
+    }
+  } else if (typeof ReadableStream === "function" && body instanceof ReadableStream) {
+    this._body = body;
+    this._bodyStream = body;
+  } else {
+    this._body = String(body);
+    if (!this._headers.has("content-type")) {
+      this._headers.set("content-type", "text/plain;charset=UTF-8");
+    }
+  }
   this._rawMimeType = extractMimeFromHeaders(this._headers);
-  this._body = body !== undefined ? body : "";
 }
+
+Response.error = function () {
+  return new Response(null, {
+    status: 0,
+    statusText: "",
+    type: "error",
+    _allowAnyStatus: true,
+    _immutableHeaders: true,
+  });
+};
+
+Response.redirect = function (url, status) {
+  const st = status === undefined ? 302 : Number(status);
+  if (st !== 301 && st !== 302 && st !== 303 && st !== 307 && st !== 308) {
+    throw new RangeError("Failed to execute 'redirect' on 'Response': Invalid status code");
+  }
+  let resolved = String(url);
+  try {
+    const loc = (typeof location !== "undefined" && location) || (typeof globalThis !== "undefined" && globalThis.location);
+    const base = (loc && loc.href && loc.href !== "about:blank") ? loc.href : "http://localhost/";
+    resolved = new URL(resolved, base).href;
+  } catch (e) {
+    throw new TypeError("Failed to execute 'redirect' on 'Response': Invalid URL");
+  }
+  return new Response(null, {
+    status: st,
+    headers: { location: resolved },
+    _immutableHeaders: true,
+  });
+};
+
+Response.json = function (data, init) {
+  const jsonStr = JSON.stringify(data);
+  if (jsonStr === undefined) {
+    throw new TypeError("Failed to execute 'json' on 'Response': The data is not JSON-serializable");
+  }
+  const opts = init ? Object.assign({}, init) : {};
+  const headers = new Headers(opts.headers);
+  if (!headers.has("content-type")) {
+    headers.set("content-type", "application/json");
+  }
+  opts.headers = headers;
+  return new Response(jsonStr, opts);
+};
 
 Object.defineProperty(Response.prototype, "status", {
   get: function () { return this._status; },
@@ -653,98 +971,206 @@ Object.defineProperty(Response.prototype, "headers", {
   configurable: true,
   enumerable: true,
 });
+Object.defineProperty(Response.prototype, "bodyUsed", {
+  get: function () { return Boolean(this._bodyUsed); },
+  configurable: true,
+  enumerable: true,
+});
+Object.defineProperty(Response.prototype, "body", {
+  get: function () {
+    if (this._body === null) return null;
+    if (this._bodyStream) return this._bodyStream;
+    if (typeof ReadableStream !== "function") return null;
+    const rawBody = this._body;
+    this._bodyStream = new ReadableStream({
+      start: function (controller) {
+        readBodyAsUint8Array(rawBody).then(function (u8) {
+          if (u8.byteLength > 0) controller.enqueue(u8);
+          controller.close();
+        }, function (e) {
+          controller.error(e);
+        });
+      },
+    });
+    return this._bodyStream;
+  },
+  configurable: true,
+  enumerable: true,
+});
+
+Response.prototype._consumeBytes = function () {
+  if (this._bodyUsed) {
+    return Promise.reject(new TypeError("Failed to execute on 'Response': body stream already read"));
+  }
+  if (this._body === null) {
+    return Promise.resolve(new Uint8Array(0));
+  }
+  this._bodyUsed = true;
+  return readBodyAsUint8Array(this._body);
+};
+
+Response.prototype.clone = function () {
+  if (this._bodyUsed) {
+    throw new TypeError("Failed to execute 'clone' on 'Response': Response body is already used");
+  }
+  const clonedHeaders = new Headers(this._headers);
+  return new Response(this._body, {
+    status: this._status,
+    statusText: this._statusText,
+    type: this._type,
+    url: this._url,
+    redirected: this._redirected,
+    headers: clonedHeaders,
+    _allowAnyStatus: this._type === "error",
+    _immutableHeaders: this._headers._guard === "immutable",
+  });
+};
 
 Response.prototype.blob = function () {
-  const mime = this._rawMimeType || "";
-  const parts = this._body != null ? [this._body] : [];
-  const blob = new Blob(parts, { _rawType: mime, type: mime });
-  const promise = Promise.resolve(blob);
-  promise._blob = blob;
-  Object.defineProperty(promise, "type", {
-    get: function () { return blob.type; },
-    configurable: true,
+  const self = this;
+  return this._consumeBytes().then(function (u8) {
+    const mime = self._rawMimeType || "";
+    const blob = new Blob([u8], { _rawType: mime, type: mime });
+    return blob;
   });
-  return promise;
+};
+
+Response.prototype.bytes = function () {
+  return this._consumeBytes();
 };
 
 Response.prototype.text = function () {
-  return Promise.resolve(String(this._body));
+  return this._consumeBytes().then(function (u8) {
+    let s = decodeUtf8Bytes(u8);
+    if (s.charCodeAt(0) === 0xFEFF) s = s.slice(1);
+    return s;
+  });
 };
 
 Response.prototype.json = function () {
-  return Promise.resolve(JSON.parse(String(this._body)));
+  return this.text().then(function (s) {
+    return JSON.parse(s);
+  });
 };
 
 Response.prototype.arrayBuffer = function () {
-  if (this._body instanceof ArrayBuffer) {
-    return Promise.resolve(this._body.slice(0));
+  return this._consumeBytes().then(function (u8) {
+    return u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
+  });
+};
+
+Response.prototype.textStream = function () {
+  if (this._bodyUsed) {
+    throw new TypeError("Failed to execute 'textStream' on 'Response': body stream already read");
   }
-  if (ArrayBuffer.isView(this._body)) {
-    const view = new Uint8Array(this._body.buffer, this._body.byteOffset, this._body.byteLength);
-    const copy = new Uint8Array(view.byteLength);
-    copy.set(view);
-    return Promise.resolve(copy.buffer);
+  if (this._bodyStream && this._bodyStream.locked) {
+    throw new TypeError("Failed to execute 'textStream' on 'Response': body stream is locked");
   }
-  return Promise.resolve(stringToUtf8(String(this._body)).buffer);
+  if (this._body === null) {
+    return new ReadableStream({
+      start: function (controller) { controller.close(); },
+    });
+  }
+  this._bodyUsed = true;
+  if (typeof ReadableStream === "function" && this._body instanceof ReadableStream) {
+    const reader = this._body.getReader();
+    return new ReadableStream({
+      pull: function (controller) {
+        return reader.read().then(function (step) {
+          if (step.done) {
+            controller.close();
+            return;
+          }
+          const v = step.value;
+          const u8 = v instanceof Uint8Array ? v : (v instanceof ArrayBuffer ? new Uint8Array(v) : (ArrayBuffer.isView(v) ? new Uint8Array(v.buffer, v.byteOffset, v.byteLength) : stringToUtf8(String(v))));
+          const txt = decodeUtf8Bytes(u8);
+          if (txt.length > 0) controller.enqueue(txt);
+        });
+      },
+    });
+  }
+  const rawBody = this._body;
+  return new ReadableStream({
+    start: function (controller) {
+      readBodyAsUint8Array(rawBody).then(function (u8) {
+        if (u8.byteLength > 0) {
+          const txt = decodeUtf8Bytes(u8);
+          if (txt.length > 0) controller.enqueue(txt);
+        }
+        controller.close();
+      }, function (e) {
+        controller.error(e);
+      });
+    },
+  });
 };
 
 Response.prototype.formData = function () {
   if (typeof FormData !== "function") {
     return Promise.reject(new TypeError("FormData is not defined"));
   }
-  const bodyStr = String(this._body != null ? this._body : "");
-  const ct = (this._headers && typeof this._headers.get === "function") ? String(this._headers.get("content-type") || "") : "";
-  const fd = new FormData();
-  if (ct.toLowerCase().indexOf("application/x-www-form-urlencoded") !== -1) {
-    const sp = new URLSearchParams(bodyStr);
-    sp.forEach(function (v, k) { fd.append(k, v); });
-    return Promise.resolve(fd);
-  }
-  let boundary = "";
-  const bm = /boundary=(?:"([^"]+)"|([^;\s]+))/i.exec(ct);
-  if (bm) {
-    boundary = bm[1] || bm[2] || "";
-  } else if (bodyStr.startsWith("--")) {
-    const eol = bodyStr.indexOf("\n");
-    if (eol > 2) boundary = bodyStr.slice(2, eol).replace(/\r$/, "");
-  }
-  if (!boundary) {
-    return Promise.reject(new TypeError("Invalid MIME type for formData()"));
-  }
-  const delim = "--" + boundary;
-  const parts = bodyStr.split(delim);
-  for (let i = 1; i < parts.length; i++) {
-    let part = parts[i];
-    if (!part || part.startsWith("--")) continue;
-    if (part.startsWith("\r\n")) part = part.slice(2);
-    else if (part.startsWith("\n")) part = part.slice(1);
-    let sepIdx = part.indexOf("\r\n\r\n");
-    let sepLen = 4;
-    if (sepIdx === -1) { sepIdx = part.indexOf("\n\n"); sepLen = 2; }
-    if (sepIdx === -1) continue;
-    const hdrRaw = part.slice(0, sepIdx);
-    let val = part.slice(sepIdx + sepLen);
-    if (val.endsWith("\r\n")) val = val.slice(0, -2);
-    else if (val.endsWith("\n")) val = val.slice(0, -1);
-    const nm = /name="([^"]*)"/i.exec(hdrRaw);
-    if (!nm) continue;
-    const fieldName = nm[1];
-    const fnm = /filename="([^"]*)"/i.exec(hdrRaw);
-    if (fnm && typeof File === "function") {
-      const ctm = /content-type:\s*([^\r\n]+)/i.exec(hdrRaw);
-      fd.append(fieldName, new File([val], fnm[1], { type: ctm ? ctm[1].trim() : "application/octet-stream" }));
-    } else {
-      fd.append(fieldName, val);
+  const self = this;
+  return this._consumeBytes().then(function (u8) {
+    const bodyStr = decodeUtf8Bytes(u8);
+    const ct = (self._headers && typeof self._headers.get === "function") ? String(self._headers.get("content-type") || "") : "";
+    const fd = new FormData();
+    if (ct.toLowerCase().indexOf("application/x-www-form-urlencoded") !== -1) {
+      const sp = new URLSearchParams(bodyStr);
+      sp.forEach(function (v, k) { fd.append(k, v); });
+      return fd;
     }
-  }
-  return Promise.resolve(fd);
+    let boundary = "";
+    const bm = /boundary=(?:"([^"]+)"|([^;\s]+))/i.exec(ct);
+    if (bm) {
+      boundary = bm[1] || bm[2] || "";
+    } else if (bodyStr.startsWith("--") && ct.toLowerCase().indexOf("multipart/form-data") !== -1) {
+      const eol = bodyStr.indexOf("\n");
+      if (eol > 2) boundary = bodyStr.slice(2, eol).replace(/\r$/, "");
+    }
+    if (!boundary || ct.toLowerCase().indexOf("multipart/form-data") === -1) {
+      throw new TypeError("Invalid MIME type for formData()");
+    }
+    const delim = "--" + boundary;
+    const parts = bodyStr.split(delim);
+    for (let i = 1; i < parts.length; i++) {
+      let part = parts[i];
+      if (!part || part.startsWith("--")) continue;
+      if (part.startsWith("\r\n")) part = part.slice(2);
+      else if (part.startsWith("\n")) part = part.slice(1);
+      let sepIdx = part.indexOf("\r\n\r\n");
+      let sepLen = 4;
+      if (sepIdx === -1) { sepIdx = part.indexOf("\n\n"); sepLen = 2; }
+      if (sepIdx === -1) continue;
+      const hdrRaw = part.slice(0, sepIdx);
+      let val = part.slice(sepIdx + sepLen);
+      if (val.endsWith("\r\n")) val = val.slice(0, -2);
+      else if (val.endsWith("\n")) val = val.slice(0, -1);
+      const nm = /(?:^|;\s*)name="([^"]*)"/i.exec(hdrRaw);
+      if (!nm) continue;
+      const fieldName = nm[1];
+      const fnm = /(?:^|;\s*)filename="([^"]*)"/i.exec(hdrRaw);
+      if (fnm && typeof File === "function") {
+        const ctm = /content-type:\s*([^\r\n]+)/i.exec(hdrRaw);
+        fd.append(fieldName, new File([val], fnm[1], { type: ctm ? ctm[1].trim() : "application/octet-stream" }));
+      } else {
+        fd.append(fieldName, val);
+      }
+    }
+    return fd;
+  });
 };
 
 markNative(Response, "Response");
+markNative(Response.error, "error");
+markNative(Response.redirect, "redirect");
+markNative(Response.json, "json");
+markNative(Response.prototype.clone, "clone");
 markNative(Response.prototype.blob, "blob");
+markNative(Response.prototype.bytes, "bytes");
 markNative(Response.prototype.text, "text");
 markNative(Response.prototype.json, "json");
 markNative(Response.prototype.arrayBuffer, "arrayBuffer");
+markNative(Response.prototype.textStream, "textStream");
 markNative(Response.prototype.formData, "formData");
 
 // If Request or Response were already defined by environment, enhance their .blob()

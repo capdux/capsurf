@@ -876,6 +876,18 @@ function installElementExtensions(proto) {
     });
   }
 
+  const origTagNameDesc = Object.getOwnPropertyDescriptor(proto, "tagName");
+  const origTagNameGet = origTagNameDesc && origTagNameDesc.get;
+  if (origTagNameGet) {
+    Object.defineProperty(proto, "tagName", {
+      get: function () {
+        if (this._tagNameOverride !== undefined) return this._tagNameOverride;
+        return origTagNameGet.call(this);
+      },
+      configurable: true,
+    });
+  }
+
   Object.defineProperty(proto, "nodeName", {
     get: function () {
       return this.tagName || "";
@@ -885,7 +897,10 @@ function installElementExtensions(proto) {
 
   Object.defineProperty(proto, "localName", {
     get: function () {
-      return (this.tagName || "").replace(/[A-Z]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 32));
+      const tag = this.tagName || "";
+      const ns = this._namespaceURI !== undefined ? this._namespaceURI : this.namespaceURI;
+      if (ns && ns !== "http://www.w3.org/1999/xhtml") return tag;
+      return tag.replace(/[A-Z]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 32));
     },
     configurable: true,
   });
@@ -911,7 +926,7 @@ function installElementExtensions(proto) {
       }
       let curr = this;
       while (curr) {
-        const tag = String(curr.localName || curr.tagName || "").toLowerCase();
+        const tag = String(curr.tagName || "").toLowerCase();
         if (tag === "svg") return "http://www.w3.org/2000/svg";
         if (tag === "math") return "http://www.w3.org/1998/Math/MathML";
         curr = curr.parentElement || curr.parentNode;
@@ -1543,7 +1558,7 @@ function installElementExtensions(proto) {
       for (let i = 0; i < this._attrList.length; i++) {
         const match = isHtml
           ? this._attrList[i].name.toLowerCase() === key
-          : this._attrList[i].name === key;
+          : (this._attrList[i].name === key || (key === "xmlns" && this._attrList[i].name.toLowerCase() === "xmlns"));
         if (match) {
           return this._attrList[i].value;
         }
@@ -2257,7 +2272,7 @@ function installElementExtensions(proto) {
         if (origProtoMatches.call(this, selector)) return true;
         const rootNode = typeof this.getRootNode === "function" ? this.getRootNode() : null;
         if (!(rootNode && rootNode.host) &&
-            !/:(?:is|where|has|not|scope|first-child|last-child|only-child|first-of-type|last-of-type|only-of-type|nth-)/i.test(s)) {
+            !/:(?:is|where|has|not|scope|defined|state|first-child|last-child|only-child|first-of-type|last-of-type|only-of-type|nth-)/i.test(s)) {
           return false;
         }
       } catch (e) {
@@ -2306,6 +2321,10 @@ function installElementExtensions(proto) {
     return false;
   };
   markNative(proto.matches, "matches");
+  proto.webkitMatchesSelector = function (selector) {
+    return this.matches(selector);
+  };
+  markNative(proto.webkitMatchesSelector, "webkitMatchesSelector");
 
   if (!proto.closest) {
     proto.closest = function (selector) {
@@ -2323,6 +2342,22 @@ function installElementExtensions(proto) {
       return null;
     };
     markNative(proto.closest, "closest");
+  }
+
+  if (!("role" in proto)) {
+    Object.defineProperty(proto, "role", {
+      get: function () {
+        return typeof this.getAttribute === "function" ? this.getAttribute("role") : null;
+      },
+      set: function (v) {
+        if (v === null || v === undefined) {
+          if (typeof this.removeAttribute === "function") this.removeAttribute("role");
+        } else {
+          if (typeof this.setAttribute === "function") this.setAttribute("role", String(v));
+        }
+      },
+      configurable: true,
+    });
   }
 
   // getClientRects
@@ -2616,7 +2651,10 @@ function installElementExtensions(proto) {
     if (fastCheck) {
       return makeDomRect(0, 0, 0, 0);
     }
-    const r = origGetBoundingClientRect ? origGetBoundingClientRect.call(this) : { x: 0, y: 0, width: 0, height: 0, left: 0, top: 0, right: 0, bottom: 0 };
+    const rawR = (origGetBoundingClientRect && typeof this._nid === "number" && this._nid > 0)
+      ? origGetBoundingClientRect.call(this)
+      : null;
+    const r = rawR || { x: 0, y: 0, width: 0, height: 0, left: 0, top: 0, right: 0, bottom: 0 };
     if (this._shadowRoot) {
       if (this._inShadowRect) {
         const hw = r.width || 800;
@@ -2671,23 +2709,54 @@ function installElementExtensions(proto) {
         }
       }
       let childW = 0, childH = 0;
+      let selfCs = null;
       if (this.style) {
         if (this.style.width) childW = parseFloat(this.style.width) || 0;
         if (this.style.height) childH = parseFloat(this.style.height) || 0;
       }
-      if ((!childW || !childH) && (docHasCssSheets() || (this.getAttribute && this.getAttribute("style"))) && typeof window !== "undefined" && typeof window.getComputedStyle === "function") {
+      if ((docHasCssSheets() || (this.getAttribute && this.getAttribute("style"))) && typeof window !== "undefined" && typeof window.getComputedStyle === "function") {
         try {
-          const cs = window.getComputedStyle(this);
-          if (cs) {
-            if (!childW && cs.width && cs.width !== "auto") childW = parseFloat(cs.width) || 0;
-            if (!childH && cs.height && cs.height !== "auto") childH = parseFloat(cs.height) || 0;
+          selfCs = window.getComputedStyle(this);
+          if (selfCs) {
+            if (!childW && selfCs.width && selfCs.width !== "auto") childW = parseFloat(selfCs.width) || 0;
+            if (!childH && selfCs.height && selfCs.height !== "auto") childH = parseFloat(selfCs.height) || 0;
           }
         } catch (e) {}
+      }
+      if (selfCs && selfCs.boxSizing !== "border-box") {
+        const padL = parseFloat(selfCs.paddingLeft) || 0;
+        const padR = parseFloat(selfCs.paddingRight) || 0;
+        const padT = parseFloat(selfCs.paddingTop) || 0;
+        const padB = parseFloat(selfCs.paddingBottom) || 0;
+        const bdrL = getBorderWidthPx(this, "left");
+        const bdrR = getBorderWidthPx(this, "right");
+        const bdrT = getBorderWidthPx(this, "top");
+        const bdrB = getBorderWidthPx(this, "bottom");
+        if (childW > 0) childW += padL + padR + bdrL + bdrR;
+        if (childH > 0) childH += padT + padB + bdrT + bdrB;
       }
       const parent = getScrollParent(this);
       if (childW === 0 && childH === 0 && parent && parent.nodeType === 1) {
         const rn = typeof this.getRootNode === "function" ? this.getRootNode() : null;
         if (rn && rn.host) {
+          const txt = getShadowEffectiveText(this);
+          if (txt.length > 0 || tag === "BUTTON" || tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") {
+            childW = Math.max(20, txt.length * 8 + 16);
+            childH = 24;
+          }
+        }
+      }
+      if (childW === 0 && childH === 0 && typeof this._nid !== "number" && this.ownerDocument && (this.ownerDocument._iframeElement || (this.ownerDocument.defaultView && this.ownerDocument.defaultView.frameElement) || (typeof document !== "undefined" && this.ownerDocument !== document))) {
+        const ownerIframe = this.ownerDocument._iframeElement || (this.ownerDocument.defaultView && this.ownerDocument.defaultView.frameElement) || null;
+        if (tag === "HTML" || tag === "BODY" || tag === "FRAMESET") {
+          const fr = ownerIframe && typeof ownerIframe.getBoundingClientRect === "function" ? ownerIframe.getBoundingClientRect() : null;
+          childW = (fr && fr.width > 0) ? fr.width : 300;
+          childH = (fr && fr.height > 0) ? fr.height : 150;
+          return makeDomRect(0, 0, childW, childH);
+        } else if (tag === "IFRAME" || tag === "FRAME") {
+          childW = 300;
+          childH = 150;
+        } else {
           const txt = getShadowEffectiveText(this);
           if (txt.length > 0 || tag === "BUTTON" || tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") {
             childW = Math.max(20, txt.length * 8 + 16);
@@ -2749,8 +2818,22 @@ function installElementExtensions(proto) {
             inSiblingOffsetCalc = false;
           }
         }
-        const relX = pr.left;
-        const relY = pr.top + offsetTop - (parent._scrollTop || 0);
+        const marginL = (selfCs && parseFloat(selfCs.marginLeft)) || 0;
+        const marginT = (selfCs && parseFloat(selfCs.marginTop)) || 0;
+        let pPadL = 0, pPadT = 0;
+        if (typeof window !== "undefined" && typeof window.getComputedStyle === "function") {
+          try {
+            const pcs = window.getComputedStyle(parent);
+            if (pcs) {
+              pPadL = parseFloat(pcs.paddingLeft) || 0;
+              pPadT = parseFloat(pcs.paddingTop) || 0;
+            }
+          } catch (e) {}
+        }
+        const pBdrL = getBorderWidthPx(parent, "left");
+        const pBdrT = getBorderWidthPx(parent, "top");
+        const relX = pr.left + pPadL + pBdrL + marginL;
+        const relY = pr.top + pPadT + pBdrT + marginT + offsetTop - (parent._scrollTop || 0);
         return makeDomRect(relX, relY, childW, childH);
       }
       return makeDomRect(0, 0, 0, 0);
@@ -3487,9 +3570,12 @@ function installElementExtensions(proto) {
     const ShadowRootCtor = typeof ShadowRoot !== "undefined" ? ShadowRoot : (global.ShadowRoot || null);
     const shadow = ShadowRootCtor ? new ShadowRootCtor(this, mode) : new DocumentFragment();
     shadow.slotAssignment = init.slotAssignment === "manual" ? "manual" : "named";
+    if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_isElementDefined === "function" && !globalThis.__capsurf_isElementDefined(this)) {
+      shadow._preDefinition = true;
+    }
     if (typeof global.__capsurf_attach_shadow_native === "function" && typeof this._nid === "number" && this._nid > 0) {
       try {
-        const snid = global.__capsurf_attach_shadow_native(this);
+        const snid = global.__capsurf_attach_shadow_native(this, shadow);
         if (typeof snid === "number" && snid > 0) {
           Object.defineProperty(shadow, "_nid", {
             value: snid,

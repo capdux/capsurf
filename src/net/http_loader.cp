@@ -11,6 +11,7 @@ import { RequestContext } from "./cookies.cp";
 import { InterceptVerdict, httpStatusText } from "../cdp/fetch.cp";
 import { formatHttpHeadersJson } from "../cdp/network.cp";
 import { MockFixtures } from "./mock_fixtures.cp";
+import { ReferrerPolicy, determineReferrer } from "./referrer_policy.cp";
 import {
     SockAddrIn,
     AF_INET,
@@ -57,6 +58,7 @@ pub struct HttpLoaderResult {
     content_type: []const u8 = "",
     content_disposition: ([]const u8)? = null,
     content_security_policy: []const u8 = "",
+    referrer_policy: []const u8 = "",
     raw_headers: []const u8 = "",
     req_headers_text: []const u8 = "",
     resp_headers_text: []const u8 = "",
@@ -608,7 +610,7 @@ pub struct HttpLoader {
                 }
                 const val = trimmed_eh[v_start..p];
                 if (p < trimmed_eh.len && trimmed_eh[p] == '"') p += 1;
-                if (key.len == 0 || std.ascii.eqlIgnoreCase(key, "cookie")) continue;
+                if (key.len == 0 || std.ascii.eqlIgnoreCase(key, "cookie") || std.ascii.eqlIgnoreCase(key, "__capsurf_keep_auth")) continue;
                 if (!HttpLoader.hasHeaderIgnoreCase(base_headers, key) && pos + key.len + val.len + 4 <= buf.len) {
                     const h_line = std.fmt.bufPrint(buf[pos..], "{s}: {s}\r\n", .{ key, val }) catch break;
                     pos += h_line.len;
@@ -621,7 +623,7 @@ pub struct HttpLoader {
                 if (line.len == 0) continue;
                 if (colon := std.mem.indexOfScalar(u8, line, ':')) {
                     const key = std.mem.trim(u8, line[0..colon], " \t");
-                    if (key.len == 0 || std.ascii.eqlIgnoreCase(key, "cookie")) continue;
+                    if (key.len == 0 || std.ascii.eqlIgnoreCase(key, "cookie") || std.ascii.eqlIgnoreCase(key, "__capsurf_keep_auth")) continue;
                     if (!HttpLoader.hasHeaderIgnoreCase(base_headers, key) && pos + line.len + 2 <= buf.len) {
                         @memcpy(buf[pos .. pos + line.len], line);
                         pos += line.len;
@@ -646,6 +648,16 @@ pub struct HttpLoader {
         method_changed_to_get: bool,
         is_cross_origin: bool,
     ): []const u8 {
+        return HttpLoader.filterRedirectHeadersWithAuth(allocator, raw_headers, method_changed_to_get, is_cross_origin, false);
+    }
+
+    static fn filterRedirectHeadersWithAuth(
+        allocator: std.mem.Allocator,
+        raw_headers: []const u8,
+        method_changed_to_get: bool,
+        is_cross_origin: bool,
+        keep_intercepted_auth: bool,
+    ): []const u8 {
         if (raw_headers.len == 0) return "";
         let buf = allocator.alloc(u8, raw_headers.len + 2) catch return "";
         let pos: usize = 0;
@@ -657,7 +669,8 @@ pub struct HttpLoader {
                 const name = std.mem.trim(u8, line[0..colon], " \t");
                 if (std.ascii.eqlIgnoreCase(name, "cookie") ||
                     std.ascii.eqlIgnoreCase(name, "host") ||
-                    std.ascii.eqlIgnoreCase(name, "content-length"))
+                    std.ascii.eqlIgnoreCase(name, "content-length") ||
+                    std.ascii.eqlIgnoreCase(name, "__capsurf_keep_auth"))
                 {
                     continue;
                 }
@@ -668,7 +681,7 @@ pub struct HttpLoader {
                 {
                     continue;
                 }
-                if (is_cross_origin &&
+                if (is_cross_origin && !keep_intercepted_auth &&
                     (std.ascii.eqlIgnoreCase(name, "authorization") ||
                         std.ascii.eqlIgnoreCase(name, "proxy-authorization")))
                 {
@@ -737,7 +750,11 @@ pub struct HttpLoader {
                 strip_creds = true;
             }
         }
-        return HttpLoader.fetchDocumentWithContextExType(session, url, out_buf, redirect_depth, init_origin, strip_creds, referrer, resource_type);
+        let eff_ref: []const u8 = referrer;
+        if (!std.mem.eql(u8, resource_type, "Document") && referrer.len > 0) {
+            eff_ref = determineReferrer(referrer, url, session.document_referrer_policy);
+        }
+        return HttpLoader.fetchDocumentWithContextExType(session, url, out_buf, redirect_depth, init_origin, strip_creds, eff_ref, resource_type);
     }
 
     static fn fetchDocumentWithContext(
@@ -809,7 +826,7 @@ pub struct HttpLoader {
         referrer_url: []const u8,
         resource_type: []const u8,
     ): (HttpLoaderResult)! {
-        return HttpLoader.fetchDocumentFullWithHeaders(session, url, method, post_data, out_buf, redirect_depth, initiator_url, strip_credentials, referrer_url, resource_type, "");
+        return HttpLoader.fetchDocumentFullWithHeadersEx(session, url, method, post_data, out_buf, redirect_depth, initiator_url, strip_credentials, referrer_url, resource_type, "", false);
     }
 
     static fn fetchDocumentFullWithHeaders(
@@ -824,6 +841,23 @@ pub struct HttpLoader {
         referrer_url: []const u8,
         resource_type: []const u8,
         inherited_headers: []const u8,
+    ): (HttpLoaderResult)! {
+        return HttpLoader.fetchDocumentFullWithHeadersEx(session, url, method, post_data, out_buf, redirect_depth, initiator_url, strip_credentials, referrer_url, resource_type, inherited_headers, false);
+    }
+
+    static fn fetchDocumentFullWithHeadersEx(
+        session: *CdpPageSession,
+        url: []const u8,
+        method: []const u8,
+        post_data: []const u8,
+        out_buf: []u8,
+        redirect_depth: usize,
+        initiator_url: []const u8,
+        strip_credentials: bool,
+        referrer_url: []const u8,
+        resource_type: []const u8,
+        inherited_headers: []const u8,
+        inherited_intercepted_headers: bool,
     ): (HttpLoaderResult)! {
         const effective_type = if (resource_type.len > 0) resource_type else "Document";
         if (redirect_depth > 20) {
@@ -954,8 +988,8 @@ pub struct HttpLoader {
                 const hop_url = session.allocator.dupe(u8, url) catch url;
                 const hop_method = session.allocator.dupe(u8, cur_method) catch cur_method;
                 const merged_headers = HttpLoader.mergeRedirectExtraHeaders(session.allocator, inherited_headers, if (redirect_depth == 0) session.extra_headers else "");
-                const next_headers = HttpLoader.filterRedirectHeaders(session.allocator, merged_headers, method_changed_to_get, cross_origin);
-                let res = HttpLoader.fetchDocumentFullWithHeaders(session, next_url, next_method, next_post_data, out_buf, redirect_depth + 1, url, next_strip, next_ref, effective_type, next_headers)?;
+                const next_headers = HttpLoader.filterRedirectHeadersWithAuth(session.allocator, merged_headers, method_changed_to_get, cross_origin, inherited_intercepted_headers);
+                let res = HttpLoader.fetchDocumentFullWithHeadersEx(session, next_url, next_method, next_post_data, out_buf, redirect_depth + 1, url, next_strip, next_ref, effective_type, next_headers, inherited_intercepted_headers)?;
                 if (redirect_depth < 6) {
                     res.redirect_urls[redirect_depth] = hop_url;
                     res.redirect_hops[redirect_depth] = RedirectHop{
@@ -1014,6 +1048,7 @@ pub struct HttpLoader {
         let fetch_url: []const u8 = url;
         let fetch_method: []const u8 = if (method.len > 0) method else "GET";
         let fetch_headers: []const u8 = inherited_headers;
+        let has_intercepted_headers: bool = inherited_intercepted_headers || (redirect_depth == 0 && HttpLoader.containsIgnoreCase(session.extra_headers, "__capsurf_keep_auth"));
         let fetch_post_data: []const u8 = post_data;
         let fetch_method_buf: [16]u8 = undefined;
         let fetch_headers_buf: [1024]u8 = undefined;
@@ -1136,10 +1171,10 @@ pub struct HttpLoader {
                                     const hop_url = session.allocator.dupe(u8, url) catch url;
                                     const hop_method = session.allocator.dupe(u8, fetch_method) catch fetch_method;
                                     const merged_headers = HttpLoader.mergeRedirectExtraHeaders(session.allocator, fetch_headers, if (redirect_depth == 0) session.extra_headers else "");
-                                    const next_headers = HttpLoader.filterRedirectHeaders(session.allocator, merged_headers, method_changed_to_get, cross_origin);
+                                    const next_headers = HttpLoader.filterRedirectHeadersWithAuth(session.allocator, merged_headers, method_changed_to_get, cross_origin, has_intercepted_headers);
                                     * = parked.reset();
                                     emitRedirectLiveHook(session, url, @as(u16, @intCast(@min(status_c, 65535))), mock_status_text, duped_headers, mock_content_type, next_url, next_method, next_headers, effective_type);
-                                    let res = HttpLoader.fetchDocumentFullWithHeaders(session, next_url, next_method, next_post_data, out_buf, redirect_depth + 1, url, next_strip, next_ref, effective_type, next_headers)?;
+                                    let res = HttpLoader.fetchDocumentFullWithHeadersEx(session, next_url, next_method, next_post_data, out_buf, redirect_depth + 1, url, next_strip, next_ref, effective_type, next_headers, has_intercepted_headers)?;
                                     if (redirect_depth < 6) {
                                         res.redirect_urls[redirect_depth] = hop_url;
                                         res.redirect_hops[redirect_depth] = RedirectHop{
@@ -1190,6 +1225,7 @@ pub struct HttpLoader {
                     }
                     const ph = parked.mockHeaders();
                     if (ph.len > 0) {
+                        has_intercepted_headers = true;
                         if (ph.len <= fetch_headers_buf.len) {
                             @memcpy(fetch_headers_buf[0..ph.len], ph);
                             fetch_headers = fetch_headers_buf[0..ph.len];
@@ -1319,7 +1355,7 @@ pub struct HttpLoader {
                     }
                     const val = trimmed_eh[v_start..p];
                     if (p < trimmed_eh.len && trimmed_eh[p] == '"') p += 1;
-                    if (std.ascii.eqlIgnoreCase(key, "cookie")) continue;
+                    if (std.ascii.eqlIgnoreCase(key, "cookie") || std.ascii.eqlIgnoreCase(key, "__capsurf_keep_auth")) continue;
                     const is_cl = std.ascii.eqlIgnoreCase(key, "content-length");
                     if (is_cl && has_content_length) continue;
                     if (key.len > 0 && !HttpLoader.hasHeaderIgnoreCase(fetch_headers, key) && req_pos + key.len + val.len + 4 < req_buf.len) {
@@ -1454,6 +1490,7 @@ pub struct HttpLoader {
         let resp_content_type: []const u8 = "";
         let resp_content_disp: ([]const u8)? = null;
         let resp_csp: []const u8 = "";
+        let resp_referrer_policy: []const u8 = "";
         let resp_content_encoding: []const u8 = "";
         let is_chunked_resp = false;
         let line_it = std.mem.splitSequence(u8, headers_part, "\r\n");
@@ -1470,6 +1507,8 @@ pub struct HttpLoader {
                 resp_content_disp = std.mem.trim(u8, line[20..], " \t");
             } else if (line.len >= 24 && std.ascii.eqlIgnoreCase(line[0..24], "Content-Security-Policy:")) {
                 resp_csp = std.mem.trim(u8, line[24..], " \t");
+            } else if (line.len >= 16 && std.ascii.eqlIgnoreCase(line[0..16], "Referrer-Policy:")) {
+                resp_referrer_policy = std.mem.trim(u8, line[16..], " \t");
             } else if (line.len >= 17 && std.ascii.eqlIgnoreCase(line[0..17], "Content-Encoding:")) {
                 resp_content_encoding = std.mem.trim(u8, line[17..], " \t");
             } else if (line.len >= 18 && std.ascii.eqlIgnoreCase(line[0..18], "Transfer-Encoding:")) {
@@ -1503,9 +1542,9 @@ pub struct HttpLoader {
                     const hop_url = session.allocator.dupe(u8, url) catch url;
                     const hop_method = session.allocator.dupe(u8, fetch_method) catch fetch_method;
                     const merged_headers = HttpLoader.mergeRedirectExtraHeaders(session.allocator, fetch_headers, if (redirect_depth == 0) session.extra_headers else "");
-                    const next_headers = HttpLoader.filterRedirectHeaders(session.allocator, merged_headers, method_changed_to_get, cross_origin);
+                    const next_headers = HttpLoader.filterRedirectHeadersWithAuth(session.allocator, merged_headers, method_changed_to_get, cross_origin, has_intercepted_headers);
                     emitRedirectLiveHook(session, url, status, status_text_val, duped_headers, resp_content_type, next_url, next_method, next_headers, effective_type);
-                    let res = HttpLoader.fetchDocumentFullWithHeaders(session, next_url, next_method, next_post_data, out_buf, redirect_depth + 1, url, next_strip, next_ref, effective_type, next_headers)?;
+                    let res = HttpLoader.fetchDocumentFullWithHeadersEx(session, next_url, next_method, next_post_data, out_buf, redirect_depth + 1, url, next_strip, next_ref, effective_type, next_headers, has_intercepted_headers)?;
                     if (redirect_depth < 6) {
                         res.redirect_urls[redirect_depth] = hop_url;
                         res.redirect_hops[redirect_depth] = RedirectHop{
@@ -1562,6 +1601,7 @@ pub struct HttpLoader {
             content_type: resp_content_type,
             content_disposition: resp_content_disp,
             content_security_policy: resp_csp,
+            referrer_policy: resp_referrer_policy,
             raw_headers: duped_headers,
             req_headers_text: req_headers_text,
             resp_headers_text: resp_headers_text,

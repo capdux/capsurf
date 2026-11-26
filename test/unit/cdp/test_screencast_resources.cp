@@ -88,7 +88,7 @@ fn testScreencastProtocol() {
     defer session.deinit();
 
     let out_buf: [4096]u8 = undefined;
-    let out_evts: [64]CdpEvent = [CdpEvent{}; 64];
+    let out_evts: [128]CdpEvent = [CdpEvent{}; 128];
     let evt_cnt: usize = 0;
 
     expect(!session.screencast_handler.isActive());

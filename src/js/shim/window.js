@@ -112,12 +112,17 @@ function installWindow(global) {
     const resolved = [];
     for (let i = 0; i < segments.length; i++) {
       const s = segments[i];
-      if (s === "." || (s === "" && i > 0 && i < segments.length - 1)) {
+      const isLast = (i === segments.length - 1);
+      if (s === ".") {
+        if (isLast) resolved.push("");
+        continue;
+      } else if (s === "" && i > 0 && !isLast) {
         continue;
       } else if (s === "..") {
         if (resolved.length > 1) {
           resolved.pop();
         }
+        if (isLast) resolved.push("");
       } else {
         resolved.push(s);
       }
@@ -241,6 +246,10 @@ function installWindow(global) {
         hostname = hp1.hostname;
         port = hp1.port;
         host = hp1.host;
+        if (/\s/.test(hostname)) {
+          throw new TypeError("Invalid URL: " + inStr);
+        }
+        pathname = resolveRelativePath(pathname || "/");
       } else if (!schemeMatch && baseObj) {
         host = baseObj.host;
         hostname = baseObj.hostname;
@@ -285,6 +294,23 @@ function installWindow(global) {
         }
       } else {
         pathname = rest;
+      }
+    }
+
+    if (isSpecial) {
+      pathname = String(pathname || "/").replace(/[\u0000-\u0020"<>`?{}\u007F-\u{10FFFF}]/gu, function (ch) {
+        return encodeURIComponent(ch);
+      });
+      if (search) {
+        search = "?" + String(search.slice(1)).replace(/[\u0000-\u0020"<>'\u007F-\u{10FFFF}]/gu, function (ch) {
+          if (ch === "'") return "%27";
+          return encodeURIComponent(ch);
+        });
+      }
+      if (hash) {
+        hash = "#" + String(hash.slice(1)).replace(/[\u0000-\u0020"<>`\u007F-\u{10FFFF}]/gu, function (ch) {
+          return encodeURIComponent(ch);
+        });
       }
     }
 
@@ -394,19 +420,37 @@ function installWindow(global) {
   URL.prototype.toJSON = function () { return this._parsed.href; };
 
   function encodeFormComponent(str) {
-    return encodeURIComponent(String(str)).replace(/%20/g, "+");
+    return encodeURIComponent(String(str)).replace(/[!'()~]|%20/g, function (c) {
+      if (c === "%20") return "+";
+      return "%" + c.charCodeAt(0).toString(16).toUpperCase();
+    });
   }
   function decodeFormComponent(str) {
-    try {
-      return decodeURIComponent(String(str).replace(/\+/g, " "));
-    } catch (e) {
-      return String(str).replace(/\+/g, " ");
-    }
+    return String(str).replace(/\+/g, " ").replace(/(?:%[0-9A-Fa-f]{2})+/g, function (seq) {
+      try {
+        return decodeURIComponent(seq);
+      } catch (e) {
+        let out = "";
+        for (let i = 0; i < seq.length; i += 3) {
+          const part = seq.slice(i, i + 3);
+          try {
+            out += decodeURIComponent(part);
+          } catch (e2) {
+            out += "\uFFFD";
+          }
+        }
+        return out;
+      }
+    });
+  }
+
+  function toUSVString(s) {
+    return String(s).replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "\uFFFD");
   }
 
   function URLSearchParams(init) {
-    this._list = [];
-    this._url = null;
+    Object.defineProperty(this, "_list", { value: [], writable: true, configurable: true, enumerable: false });
+    Object.defineProperty(this, "_url", { value: null, writable: true, configurable: true, enumerable: false });
     if (init === undefined || init === null) return;
     if (typeof init === "string") {
       const s = init.startsWith("?") ? init.slice(1) : init;
@@ -423,17 +467,13 @@ function installWindow(global) {
           }
         }
       }
-    } else if (init instanceof URLSearchParams) {
-      for (let i = 0; i < init._list.length; i++) {
-        this._list.push([init._list[i][0], init._list[i][1]]);
-      }
     } else if (Array.isArray(init)) {
       for (let i = 0; i < init.length; i++) {
         const pair = init[i];
         if (!pair || pair.length !== 2) {
           throw new TypeError("Failed to construct 'URLSearchParams': Sequence initializer must only contain pair elements");
         }
-        this._list.push([String(pair[0]), String(pair[1])]);
+        this._list.push([toUSVString(pair[0]), toUSVString(pair[1])]);
       }
     } else if (typeof init === "object") {
       if (typeof init[Symbol.iterator] === "function") {
@@ -442,12 +482,20 @@ function installWindow(global) {
           if (arr.length !== 2) {
             throw new TypeError("Failed to construct 'URLSearchParams': Sequence initializer must only contain pair elements");
           }
-          this._list.push([String(arr[0]), String(arr[1])]);
+          this._list.push([toUSVString(arr[0]), toUSVString(arr[1])]);
         }
       } else {
         const keys = Object.keys(init);
+        const seen = new Map();
         for (let i = 0; i < keys.length; i++) {
-          this._list.push([String(keys[i]), String(init[keys[i]])]);
+          const k = toUSVString(keys[i]);
+          const v = toUSVString(init[keys[i]]);
+          if (seen.has(k)) {
+            this._list[seen.get(k)][1] = v;
+          } else {
+            seen.set(k, this._list.length);
+            this._list.push([k, v]);
+          }
         }
       }
     }
@@ -524,16 +572,39 @@ function installWindow(global) {
     }
     return parts.join("&");
   };
+  function makeSearchParamsIterator(sp, kind) {
+    let idx = 0;
+    const iter = {
+      next: function () {
+        if (idx >= sp._list.length) {
+          return { value: undefined, done: true };
+        }
+        const pair = sp._list[idx++];
+        let val;
+        if (kind === "keys") val = pair[0];
+        else if (kind === "values") val = pair[1];
+        else val = [pair[0], pair[1]];
+        return { value: val, done: false };
+      },
+    };
+    iter[Symbol.iterator] = function () { return iter; };
+    return iter;
+  }
   URLSearchParams.prototype.keys = function () {
-    return this._list.map((p) => p[0])[Symbol.iterator]();
+    return makeSearchParamsIterator(this, "keys");
   };
   URLSearchParams.prototype.values = function () {
-    return this._list.map((p) => p[1])[Symbol.iterator]();
+    return makeSearchParamsIterator(this, "values");
   };
   URLSearchParams.prototype.entries = function () {
-    return this._list.map((p) => [p[0], p[1]])[Symbol.iterator]();
+    return makeSearchParamsIterator(this, "entries");
   };
-  URLSearchParams.prototype[Symbol.iterator] = URLSearchParams.prototype.entries;
+  Object.defineProperty(URLSearchParams.prototype, Symbol.iterator, {
+    value: URLSearchParams.prototype.entries,
+    writable: true,
+    configurable: true,
+    enumerable: false,
+  });
   URLSearchParams.prototype.forEach = function (cb, thisArg) {
     for (let i = 0; i < this._list.length; i++) {
       cb.call(thisArg, this._list[i][1], this._list[i][0], this);
@@ -549,9 +620,9 @@ function installWindow(global) {
     configurable: true,
   });
   markNative(URLSearchParams, "URLSearchParams");
-  global.URLSearchParams = URLSearchParams;
-  if (typeof window !== "undefined") window.URLSearchParams = URLSearchParams;
-  if (typeof globalThis !== "undefined") globalThis.URLSearchParams = URLSearchParams;
+  Object.defineProperty(global, "URLSearchParams", { value: URLSearchParams, writable: true, configurable: true, enumerable: false });
+  if (typeof window !== "undefined") Object.defineProperty(window, "URLSearchParams", { value: URLSearchParams, writable: true, configurable: true, enumerable: false });
+  if (typeof globalThis !== "undefined") Object.defineProperty(globalThis, "URLSearchParams", { value: URLSearchParams, writable: true, configurable: true, enumerable: false });
 
   Object.defineProperty(URL.prototype, "searchParams", {
     get: function () {
@@ -562,6 +633,119 @@ function installWindow(global) {
     enumerable: true,
     configurable: true,
   });
+
+  const domPointState = new WeakMap();
+
+  function DOMPointReadOnly(x = 0, y = 0, z = 0, w = 1) {
+    if (!(this instanceof DOMPointReadOnly)) {
+      throw new TypeError("Failed to construct 'DOMPointReadOnly': Please use the 'new' operator.");
+    }
+    domPointState.set(this, {
+      x: x === undefined ? 0 : Number(x),
+      y: y === undefined ? 0 : Number(y),
+      z: z === undefined ? 0 : Number(z),
+      w: w === undefined ? 1 : Number(w),
+    });
+  }
+  function getPointState(obj) {
+    const st = domPointState.get(obj);
+    if (!st) throw new TypeError("Illegal invocation");
+    return st;
+  }
+  Object.defineProperty(DOMPointReadOnly.prototype, "x", {
+    get: function () { return getPointState(this).x; },
+    enumerable: true,
+    configurable: true,
+  });
+  Object.defineProperty(DOMPointReadOnly.prototype, "y", {
+    get: function () { return getPointState(this).y; },
+    enumerable: true,
+    configurable: true,
+  });
+  Object.defineProperty(DOMPointReadOnly.prototype, "z", {
+    get: function () { return getPointState(this).z; },
+    enumerable: true,
+    configurable: true,
+  });
+  Object.defineProperty(DOMPointReadOnly.prototype, "w", {
+    get: function () { return getPointState(this).w; },
+    enumerable: true,
+    configurable: true,
+  });
+  DOMPointReadOnly.fromPoint = function (other) {
+    if (!other || typeof other !== "object") return new DOMPointReadOnly();
+    return new DOMPointReadOnly(
+      other.x !== undefined ? other.x : 0,
+      other.y !== undefined ? other.y : 0,
+      other.z !== undefined ? other.z : 0,
+      other.w !== undefined ? other.w : 1
+    );
+  };
+  DOMPointReadOnly.prototype.matrixTransform = function (matrix) {
+    const st = getPointState(this);
+    const m = matrix instanceof DOMMatrixReadOnly ? matrix : DOMMatrixReadOnly.fromMatrix(matrix);
+    const x = st.x, y = st.y, z = st.z, w = st.w;
+    if (m.is2D && z === 0 && w === 1) {
+      return new DOMPoint(
+        m.a * x + m.c * y + m.e,
+        m.b * x + m.d * y + m.f,
+        0,
+        1
+      );
+    }
+    return new DOMPoint(
+      m.m11 * x + m.m21 * y + m.m31 * z + m.m41 * w,
+      m.m12 * x + m.m22 * y + m.m32 * z + m.m42 * w,
+      m.m13 * x + m.m23 * y + m.m33 * z + m.m43 * w,
+      m.m14 * x + m.m24 * y + m.m34 * z + m.m44 * w
+    );
+  };
+  DOMPointReadOnly.prototype.toJSON = function () {
+    const st = getPointState(this);
+    return { x: st.x, y: st.y, z: st.z, w: st.w };
+  };
+
+  function DOMPoint(x = 0, y = 0, z = 0, w = 1) {
+    if (!(this instanceof DOMPoint)) {
+      throw new TypeError("Failed to construct 'DOMPoint': Please use the 'new' operator.");
+    }
+    DOMPointReadOnly.call(this, x, y, z, w);
+  }
+  DOMPoint.prototype = Object.create(DOMPointReadOnly.prototype);
+  DOMPoint.prototype.constructor = DOMPoint;
+  Object.defineProperty(DOMPoint.prototype, "x", {
+    get: function () { return getPointState(this).x; },
+    set: function (v) { getPointState(this).x = Number(v); },
+    enumerable: true,
+    configurable: true,
+  });
+  Object.defineProperty(DOMPoint.prototype, "y", {
+    get: function () { return getPointState(this).y; },
+    set: function (v) { getPointState(this).y = Number(v); },
+    enumerable: true,
+    configurable: true,
+  });
+  Object.defineProperty(DOMPoint.prototype, "z", {
+    get: function () { return getPointState(this).z; },
+    set: function (v) { getPointState(this).z = Number(v); },
+    enumerable: true,
+    configurable: true,
+  });
+  Object.defineProperty(DOMPoint.prototype, "w", {
+    get: function () { return getPointState(this).w; },
+    set: function (v) { getPointState(this).w = Number(v); },
+    enumerable: true,
+    configurable: true,
+  });
+  DOMPoint.fromPoint = function (other) {
+    if (!other || typeof other !== "object") return new DOMPoint();
+    return new DOMPoint(
+      other.x !== undefined ? other.x : 0,
+      other.y !== undefined ? other.y : 0,
+      other.z !== undefined ? other.z : 0,
+      other.w !== undefined ? other.w : 1
+    );
+  };
 
   const domRectState = new WeakMap();
   const domRectListState = new WeakMap();
@@ -749,10 +933,14 @@ function installWindow(global) {
     return new DOMRectList(DOM_RECT_LIST_TOKEN, items);
   };
 
+  global.DOMPointReadOnly = DOMPointReadOnly;
+  global.DOMPoint = DOMPoint;
   global.DOMRectReadOnly = DOMRectReadOnly;
   global.DOMRect = DOMRect;
   global.DOMRectList = DOMRectList;
   if (typeof window !== "undefined") {
+    window.DOMPointReadOnly = DOMPointReadOnly;
+    window.DOMPoint = DOMPoint;
     window.DOMRectReadOnly = DOMRectReadOnly;
     window.DOMRect = DOMRect;
     window.DOMRectList = DOMRectList;
@@ -2975,6 +3163,28 @@ function installWindow(global) {
         memo.set(v, err);
         return err;
       }
+      if (typeof DOMPointReadOnly !== "undefined" && v instanceof DOMPointReadOnly) {
+        const pt = (typeof DOMPoint !== "undefined" && v instanceof DOMPoint)
+          ? new DOMPoint(v.x, v.y, v.z, v.w)
+          : new DOMPointReadOnly(v.x, v.y, v.z, v.w);
+        memo.set(v, pt);
+        return pt;
+      }
+      if (typeof DOMRectReadOnly !== "undefined" && v instanceof DOMRectReadOnly) {
+        const rc = (typeof DOMRect !== "undefined" && v instanceof DOMRect)
+          ? new DOMRect(v.x, v.y, v.width, v.height)
+          : new DOMRectReadOnly(v.x, v.y, v.width, v.height);
+        memo.set(v, rc);
+        return rc;
+      }
+      if (typeof DOMMatrixReadOnly !== "undefined" && v instanceof DOMMatrixReadOnly) {
+        const st = matrixState(v);
+        const mx = (typeof DOMMatrix !== "undefined" && v instanceof DOMMatrix)
+          ? new DOMMatrix(st.is2D ? twoDimensionalValues(st.values) : st.values)
+          : new DOMMatrixReadOnly(st.is2D ? twoDimensionalValues(st.values) : st.values);
+        memo.set(v, mx);
+        return mx;
+      }
       const out = {};
       memo.set(v, out);
       const keys = Object.keys(v);
@@ -3618,14 +3828,31 @@ function installWindow(global) {
       }
     }
 
-    if (typeof Request !== "undefined" && resource instanceof Request && resource.headers) {
-      copyHeadersInto(reqHeaders, resource.headers);
-      recordPageHeaderNames(resource.headers);
-    }
+    if (init._intercepted) {
+      if (typeof Request !== "undefined" && resource instanceof Request && resource.headers) {
+        copyHeadersInto(reqHeaders, resource.headers);
+      }
+      if (init.headers) {
+        copyHeadersInto(reqHeaders, init.headers);
+      }
+      if (Array.isArray(init._pageHeaderNames)) {
+        for (let pi = 0; pi < init._pageHeaderNames.length; pi++) {
+          const pk = String(init._pageHeaderNames[pi]).toLowerCase();
+          if (Object.prototype.hasOwnProperty.call(reqHeaders, pk)) {
+            addPageHeaderName(pk);
+          }
+        }
+      }
+    } else {
+      if (typeof Request !== "undefined" && resource instanceof Request && resource.headers) {
+        copyHeadersInto(reqHeaders, resource.headers);
+        recordPageHeaderNames(resource.headers);
+      }
 
-    if (init.headers) {
-      copyHeadersInto(reqHeaders, init.headers);
-      recordPageHeaderNames(init.headers);
+      if (init.headers) {
+        copyHeadersInto(reqHeaders, init.headers);
+        recordPageHeaderNames(init.headers);
+      }
     }
 
     function getCorsNonSafelistHeaders() {
@@ -3730,6 +3957,39 @@ function installWindow(global) {
       reqHeaders["referer"] = reqReferrer;
     }
 
+    const effReferrerPolicy = (init && init.referrerPolicy)
+      ? String(init.referrerPolicy).trim().toLowerCase()
+      : ((typeof Request !== "undefined" && resource instanceof Request && resource.referrerPolicy)
+        ? String(resource.referrerPolicy).trim().toLowerCase()
+        : ((typeof globalThis !== "undefined" && globalThis.__capsurf_referrer_policy)
+          ? String(globalThis.__capsurf_referrer_policy).trim().toLowerCase()
+          : ""));
+    if (effReferrerPolicy === "no-referrer") {
+      delete reqHeaders["referer"];
+    } else if (effReferrerPolicy && reqHeaders["referer"]) {
+      try {
+        const refUrlObj = new URL(reqHeaders["referer"]);
+        const tgtUrlObj = new URL(urlStr, (loc && loc.href && loc.href !== "about:blank") ? loc.href : "http://localhost/");
+        const sameOrig = refUrlObj.origin === tgtUrlObj.origin;
+        const downgrade = refUrlObj.protocol === "https:" && tgtUrlObj.protocol === "http:";
+        if (effReferrerPolicy === "same-origin") {
+          if (!sameOrig) delete reqHeaders["referer"];
+        } else if (effReferrerPolicy === "origin") {
+          reqHeaders["referer"] = refUrlObj.origin + "/";
+        } else if (effReferrerPolicy === "strict-origin") {
+          if (downgrade) delete reqHeaders["referer"];
+          else reqHeaders["referer"] = refUrlObj.origin + "/";
+        } else if (effReferrerPolicy === "origin-when-cross-origin") {
+          if (!sameOrig) reqHeaders["referer"] = refUrlObj.origin + "/";
+        } else if (effReferrerPolicy === "strict-origin-when-cross-origin") {
+          if (downgrade) delete reqHeaders["referer"];
+          else if (!sameOrig) reqHeaders["referer"] = refUrlObj.origin + "/";
+        } else if (effReferrerPolicy === "no-referrer-when-downgrade") {
+          if (downgrade) delete reqHeaders["referer"];
+        }
+      } catch (e) {}
+    }
+
     let docOrigin = (loc && loc.origin && loc.origin !== "null" && loc.origin !== "about:") ? String(loc.origin) : "";
 
     let fullUrl = urlStr;
@@ -3815,9 +4075,15 @@ function installWindow(global) {
         return pausePromise.then(function (verdict) {
           if (!verdict || verdict.action === "continue") {
             const nextUrl = (verdict && verdict.url) ? String(verdict.url) : cleanFullUrl;
-            const nextInit = Object.assign({}, init, { _intercepted: true });
+            const nextInit = Object.assign({}, init, {
+              _intercepted: true,
+              _pageHeaderNames: Array.from(pageHeaderNames),
+            });
             if (verdict && verdict.method) nextInit.method = verdict.method;
-            if (verdict && verdict.headers) nextInit.headers = verdict.headers;
+            if (verdict && verdict.headers) {
+              nextInit.headers = verdict.headers;
+              nextInit._interceptedHeaders = true;
+            }
             if (verdict && verdict.body !== undefined) nextInit.body = verdict.body;
             return fetchFn.call(selfCtx, nextUrl, nextInit);
           }
@@ -4323,6 +4589,72 @@ function installWindow(global) {
             if (acrhHeaderVal) {
               preflightHeaders["access-control-request-headers"] = acrhHeaderVal;
             }
+            const finishPreflightVerdict = function (preflightRes) {
+              const pfVerdict = verifyCorsPreflightResponse(preflightRes, preflightOrigin, reqMethodNorm, isSimpleMethod, acrhList, reqCredentials);
+              if (!pfVerdict.ok) {
+                return false;
+              }
+              if (pfVerdict.ttlMs > 0) {
+                corsPreflightCache.set(preflightCacheKey, { expiresAt: nowMs + pfVerdict.ttlMs });
+              }
+              return true;
+            };
+            let preflightPausePromise = null;
+            if (fetchInterceptor) {
+              preflightPausePromise = fetchInterceptor({
+                url: cleanFullUrl,
+                method: "OPTIONS",
+                headers: preflightHeaders,
+                resourceType: "preflight",
+              });
+            } else if (
+              typeof globalThis !== "undefined" &&
+              typeof globalThis.__capsurf_should_intercept_fetch === "function" &&
+              globalThis.__capsurf_should_intercept_fetch(cleanFullUrl, "Fetch") &&
+              typeof globalThis.__capsurf_fetch_pause === "function"
+            ) {
+              preflightPausePromise = globalThis.__capsurf_fetch_pause(
+                cleanFullUrl,
+                "OPTIONS",
+                JSON.stringify(preflightHeaders),
+                "",
+                "Fetch"
+              );
+            }
+            if (preflightPausePromise && typeof preflightPausePromise.then === "function") {
+              return preflightPausePromise.then(function (verdict) {
+                if (!verdict || verdict.action === "continue") {
+                  const pfUrl = (verdict && verdict.url) ? String(verdict.url) : cleanFullUrl;
+                  const pfHdrs = (verdict && verdict.headers) ? Object.assign({}, preflightHeaders, verdict.headers) : preflightHeaders;
+                  const preflightRes = globalThis.__capsurf_http_request(
+                    pfUrl,
+                    "OPTIONS",
+                    "",
+                    "",
+                    JSON.stringify(pfHdrs)
+                  );
+                  if (!finishPreflightVerdict(preflightRes)) {
+                    return Promise.reject(new TypeError("Failed to fetch: CORS preflight failed"));
+                  }
+                } else if (verdict.action === "respond") {
+                  const synthMeta = {
+                    status: Number(verdict.status) || 204,
+                    headers: verdict.headers || {},
+                    body: verdict.body !== undefined ? String(verdict.body) : "",
+                  };
+                  if (!finishPreflightVerdict(synthMeta)) {
+                    return Promise.reject(new TypeError("Failed to fetch: CORS preflight failed"));
+                  }
+                } else {
+                  return Promise.reject(new TypeError("Failed to fetch: CORS preflight failed"));
+                }
+                const nextInit = Object.assign({}, init, {
+              _intercepted: true,
+              _pageHeaderNames: Array.from(pageHeaderNames),
+            });
+                return fetchFn.call(this, cleanFullUrl, nextInit);
+              });
+            }
             const preflightRes = globalThis.__capsurf_http_request(
               cleanFullUrl,
               "OPTIONS",
@@ -4330,12 +4662,8 @@ function installWindow(global) {
               "",
               JSON.stringify(preflightHeaders)
             );
-            const pfVerdict = verifyCorsPreflightResponse(preflightRes, preflightOrigin, reqMethodNorm, isSimpleMethod, acrhList, reqCredentials);
-            if (!pfVerdict.ok) {
+            if (!finishPreflightVerdict(preflightRes)) {
               return Promise.reject(new TypeError("Failed to fetch: CORS preflight failed"));
-            }
-            if (pfVerdict.ttlMs > 0) {
-              corsPreflightCache.set(preflightCacheKey, { expiresAt: nowMs + pfVerdict.ttlMs });
             }
           }
         }
@@ -4352,6 +4680,9 @@ function installWindow(global) {
           if (hv !== undefined && hv !== null) {
             cleanReqHeaders[hk] = String(hv);
           }
+        }
+        if (init && init._interceptedHeaders) {
+          cleanReqHeaders["__capsurf_keep_auth"] = "1";
         }
         reqHeadersJson = JSON.stringify(cleanReqHeaders);
       } catch (e) {}
@@ -4474,7 +4805,25 @@ function installWindow(global) {
       if (arguments.length === 0) {
         throw new TypeError("Failed to construct 'WebSocket': 1 argument required, but only 0 present.");
       }
-      this.url = String(url);
+      const loc = global.location || (typeof window !== "undefined" ? window.location : null);
+      const baseHref = (loc && loc.href && loc.href !== "about:blank") ? loc.href : "http://localhost/";
+      let parsed;
+      try {
+        parsed = new URL(String(url), baseHref);
+      } catch (e) {
+        throw new DOMException("Failed to construct 'WebSocket': The URL '" + String(url) + "' is invalid.", "SyntaxError");
+      }
+      if (parsed.protocol === "http:") {
+        parsed.protocol = "ws:";
+      } else if (parsed.protocol === "https:") {
+        parsed.protocol = "wss:";
+      } else if (parsed.protocol !== "ws:" && parsed.protocol !== "wss:") {
+        throw new DOMException("Failed to construct 'WebSocket': The URL's scheme must be either 'ws' or 'wss'. '" + parsed.protocol + "' is not allowed.", "SyntaxError");
+      }
+      if (!parsed.hostname || /\s/.test(parsed.hostname)) {
+        throw new DOMException("Failed to construct 'WebSocket': The URL '" + String(url) + "' is invalid.", "SyntaxError");
+      }
+      this.url = parsed.href;
       this.readyState = 0; // CONNECTING
       this.bufferedAmount = 0;
       this.extensions = "";
@@ -4486,14 +4835,8 @@ function installWindow(global) {
       this.onmessage = null;
 
       const self = this;
-      const loc = global.location || (typeof window !== "undefined" ? window.location : null);
       let blocked = false;
-      try {
-        const parsed = new URL(this.url, (loc && loc.href) || "http://localhost/");
-        if (isPublicPageLocation(loc) && isLoopbackHostname(parsed.hostname)) {
-          blocked = true;
-        }
-      } catch (e) {
+      if (isPublicPageLocation(loc) && isLoopbackHostname(parsed.hostname)) {
         blocked = true;
       }
 
@@ -8162,13 +8505,6 @@ function installWindow(global) {
 
     // Resolve var() references using the complete (inherited + own) map
     resolveVarsInMap(computedMap);
-
-    // Sync CSS Transitions and CSS @keyframes Animations (updates before-change snapshot & overlays interpolated values)
-    const mayHaveAnimOrTrans = computedMap.has("transition-property") || computedMap.has("transition-duration") ||
-      computedMap.has("transition") || computedMap.has("animation-name") || computedMap.has("animation");
-    if (mayHaveAnimOrTrans && !normalizedPseudo && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_syncCssTransitionsAndAnimations === "function") {
-      globalThis.__capsurf_syncCssTransitionsAndAnimations(element, computedMap, styleNodes);
-    }
 
     if (computedMap.has("grid-template-areas") && typeof globalThis.__capsurf_normalizeCssValue === "function") {
       const gta = computedMap.get("grid-template-areas");
@@ -12783,8 +13119,19 @@ function installWindow(global) {
     let lastActiveEl = liveDoc ? liveDoc.activeElement : null;
     let lastDomEpoch = (typeof globalThis !== "undefined" && globalThis.__capsurf_domMutationEpoch) || 0;
     let lastHoveredNid = (typeof globalThis !== "undefined" ? Number(globalThis.__capsurf_hovered_nid) : 0) | 0;
+    function syncAnimStateAfterUsed(el, cmap, nPseudo) {
+      if (nPseudo || typeof globalThis === "undefined" || typeof globalThis.__capsurf_syncCssTransitionsAndAnimations !== "function") return;
+      const hasAnimOrTrans = cmap.has("transition-property") || cmap.has("transition-duration") ||
+        cmap.has("transition") || cmap.has("animation-name") || cmap.has("animation");
+      const hasState = typeof globalThis.__capsurf_hasCssAnimState === "function" && globalThis.__capsurf_hasCssAnimState(el);
+      if (hasAnimOrTrans || hasState || globalThis.__capsurf_capturingBeforeChange) {
+        globalThis.__capsurf_syncCssTransitionsAndAnimations(el, cmap, getStyleNodesForElement(el));
+      }
+    }
+
     let computedMap = collectRawComputedMap(element, normalizedPseudo);
     applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo);
+    syncAnimStateAfterUsed(element, computedMap, normalizedPseudo);
     let _cachedPropList = null;
     function ensureLiveComputed() {
       const curStyleAttr = (element && typeof element.getAttribute === "function") ? (element.getAttribute("style") || "") : "";
@@ -12799,6 +13146,7 @@ function installWindow(global) {
         _cachedPropList = null;
         computedMap = collectRawComputedMap(element, normalizedPseudo);
         applyUsedValuesToComputedMap(element, computedMap, normalizedPseudo);
+        syncAnimStateAfterUsed(element, computedMap, normalizedPseudo);
       }
     }
 
@@ -15158,6 +15506,56 @@ class DOMMatrixReadOnly {
   constructor(values = [1, 0, 0, 1, 0, 0]) {
     matrixStates.set(this, matrixValues(values));
   }
+  static fromMatrix(other) {
+    const Ctor = (typeof this === "function") ? this : DOMMatrixReadOnly;
+    if (other === undefined || other === null) {
+      return new Ctor();
+    }
+    if (other instanceof DOMMatrixReadOnly) {
+      const st = matrixState(other);
+      const m = new Ctor(st.is2D ? twoDimensionalValues(st.values) : st.values);
+      matrixState(m).is2D = st.is2D;
+      return m;
+    }
+    if (typeof other !== "object") {
+      throw new TypeError("Failed to execute 'fromMatrix' on 'DOMMatrixReadOnly': parameter 1 is not of type 'DOMMatrixInit'.");
+    }
+    const pick2D = (primary, alias, fallback) => {
+      if (primary !== undefined && alias !== undefined && Number(primary) !== Number(alias)) {
+        throw new TypeError("Failed to execute 'fromMatrix' on 'DOMMatrixReadOnly': Conflicting 2D matrix properties.");
+      }
+      return primary !== undefined ? Number(primary) : (alias !== undefined ? Number(alias) : fallback);
+    };
+    const numOr = (v, fallback) => (v !== undefined ? Number(v) : fallback);
+    const m11 = pick2D(other.m11, other.a, 1);
+    const m12 = pick2D(other.m12, other.b, 0);
+    const m21 = pick2D(other.m21, other.c, 0);
+    const m22 = pick2D(other.m22, other.d, 1);
+    const m41 = pick2D(other.m41, other.e, 0);
+    const m42 = pick2D(other.m42, other.f, 0);
+    const m13 = numOr(other.m13, 0);
+    const m14 = numOr(other.m14, 0);
+    const m23 = numOr(other.m23, 0);
+    const m24 = numOr(other.m24, 0);
+    const m31 = numOr(other.m31, 0);
+    const m32 = numOr(other.m32, 0);
+    const m33 = numOr(other.m33, 1);
+    const m34 = numOr(other.m34, 0);
+    const m43 = numOr(other.m43, 0);
+    const m44 = numOr(other.m44, 1);
+    const has3D = m13 !== 0 || m14 !== 0 || m23 !== 0 || m24 !== 0 ||
+      m31 !== 0 || m32 !== 0 || m33 !== 1 || m34 !== 0 || m43 !== 0 || m44 !== 1;
+    if (other.is2D === true && has3D) {
+      throw new TypeError("Failed to execute 'fromMatrix' on 'DOMMatrixReadOnly': 3D matrix cannot have is2D set to true.");
+    }
+    const is2D = other.is2D !== undefined ? Boolean(other.is2D) : !has3D;
+    const values = is2D
+      ? [m11, m12, m21, m22, m41, m42]
+      : [m11, m12, m13, m14, m21, m22, m23, m24, m31, m32, m33, m34, m41, m42, m43, m44];
+    const m = new Ctor(values);
+    matrixState(m).is2D = is2D;
+    return m;
+  }
   get a() {
     return matrixState(this).values[0];
   }
@@ -16669,6 +17067,7 @@ const CSS_TYPED_OM_GLOBALS = {
     try {
       if (global.dispatchEvent) {
         const loadEv = new NativeEvent("load", { bubbles: false, cancelable: false });
+        if (global.document) loadEv._overrideTarget = global.document;
         global.dispatchEvent(loadEv);
       }
     } catch (e) {}
@@ -17788,7 +18187,13 @@ const CSS_TYPED_OM_GLOBALS = {
       const dDesc = Object.getOwnPropertyDescriptor(global, "document");
       if (!dDesc || dDesc.configurable) {
         Object.defineProperty(global, "document", {
-          get: function () { return docRef; },
+          get: function () {
+            if (typeof activeWindowStack !== "undefined" && activeWindowStack.length > 0) {
+              const aw = activeWindowStack[activeWindowStack.length - 1];
+              if (aw && aw.document) return aw.document;
+            }
+            return docRef;
+          },
           configurable: false,
           enumerable: true,
         });
@@ -20422,7 +20827,29 @@ const CSS_TYPED_OM_GLOBALS = {
           for (let j = 0; j < v.length; j++) arr[j] = enc(v[j]);
           return arr;
         }
-        const out = {};
+        if (typeof DOMPointReadOnly !== "undefined" && v instanceof DOMPointReadOnly) {
+        const pt = (typeof DOMPoint !== "undefined" && v instanceof DOMPoint)
+          ? new DOMPoint(v.x, v.y, v.z, v.w)
+          : new DOMPointReadOnly(v.x, v.y, v.z, v.w);
+        memo.set(v, pt);
+        return pt;
+      }
+      if (typeof DOMRectReadOnly !== "undefined" && v instanceof DOMRectReadOnly) {
+        const rc = (typeof DOMRect !== "undefined" && v instanceof DOMRect)
+          ? new DOMRect(v.x, v.y, v.width, v.height)
+          : new DOMRectReadOnly(v.x, v.y, v.width, v.height);
+        memo.set(v, rc);
+        return rc;
+      }
+      if (typeof DOMMatrixReadOnly !== "undefined" && v instanceof DOMMatrixReadOnly) {
+        const st = matrixState(v);
+        const mx = (typeof DOMMatrix !== "undefined" && v instanceof DOMMatrix)
+          ? new DOMMatrix(st.is2D ? twoDimensionalValues(st.values) : st.values)
+          : new DOMMatrixReadOnly(st.is2D ? twoDimensionalValues(st.values) : st.values);
+        memo.set(v, mx);
+        return mx;
+      }
+      const out = {};
         const keys = Object.keys(v);
         for (let k = 0; k < keys.length; k++) {
           out[keys[k]] = enc(v[keys[k]]);
@@ -20457,7 +20884,29 @@ const CSS_TYPED_OM_GLOBALS = {
           const Ctor = global[v.c] || (typeof globalThis !== "undefined" && globalThis[v.c]) || Uint8Array;
           return new Ctor(buf, v.o, v.l);
         }
-        const out = {};
+        if (typeof DOMPointReadOnly !== "undefined" && v instanceof DOMPointReadOnly) {
+        const pt = (typeof DOMPoint !== "undefined" && v instanceof DOMPoint)
+          ? new DOMPoint(v.x, v.y, v.z, v.w)
+          : new DOMPointReadOnly(v.x, v.y, v.z, v.w);
+        memo.set(v, pt);
+        return pt;
+      }
+      if (typeof DOMRectReadOnly !== "undefined" && v instanceof DOMRectReadOnly) {
+        const rc = (typeof DOMRect !== "undefined" && v instanceof DOMRect)
+          ? new DOMRect(v.x, v.y, v.width, v.height)
+          : new DOMRectReadOnly(v.x, v.y, v.width, v.height);
+        memo.set(v, rc);
+        return rc;
+      }
+      if (typeof DOMMatrixReadOnly !== "undefined" && v instanceof DOMMatrixReadOnly) {
+        const st = matrixState(v);
+        const mx = (typeof DOMMatrix !== "undefined" && v instanceof DOMMatrix)
+          ? new DOMMatrix(st.is2D ? twoDimensionalValues(st.values) : st.values)
+          : new DOMMatrixReadOnly(st.is2D ? twoDimensionalValues(st.values) : st.values);
+        memo.set(v, mx);
+        return mx;
+      }
+      const out = {};
         const keys = Object.keys(v);
         for (let k = 0; k < keys.length; k++) {
           out[keys[k]] = dec(v[keys[k]]);

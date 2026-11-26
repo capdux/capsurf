@@ -144,8 +144,19 @@ pub struct CdpRequest {
                 } else if (trimmed[idx] == 'n') {
                     id_val = 0;
                 } else {
-                    if (extracted_id := extractJsonInt(trimmed, "id")) {
-                        id_val = extracted_id;
+                    let is_neg = false;
+                    if (trimmed[idx] == '-') {
+                        is_neg = true;
+                        idx += 1;
+                    }
+                    let val: i64 = 0;
+                    let has_digits = false;
+                    while (idx < trimmed.len && trimmed[idx] >= '0' && trimmed[idx] <= '9') : (idx += 1) {
+                        val = val * 10 + @as(i64, trimmed[idx] - '0');
+                        has_digits = true;
+                    }
+                    if (has_digits) {
+                        id_val = if (is_neg) -val else val;
                     }
                 }
             }
@@ -177,7 +188,12 @@ pub struct CdpRequest {
                 envelope_error_message: "Invalid Request",
             };
         }
-        const method_val = extractJsonString(trimmed, "method") ?? "";
+        m_idx += 1;
+        const m_start = m_idx;
+        while (m_idx < trimmed.len && trimmed[m_idx] != '"') : (m_idx += 1) {
+            if (trimmed[m_idx] == '\\' && m_idx + 1 < trimmed.len) m_idx += 1;
+        }
+        const method_val = if (m_idx < trimmed.len) trimmed[m_start..m_idx] else "";
         if (method_val.len == 0) {
             return CdpRequest {
                 id: id_val,

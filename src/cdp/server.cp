@@ -1049,6 +1049,7 @@ pub struct CdpServer {
             new_sess.ensureLayout();
         }
         new_sess.owner_target_registry = &_.session.target_registry;
+        new_sess.owner_cookie_jar = &_.session.cookie_jar;
         if (_.session.binding_count > 0) {
             let bi: usize = 0;
             while (bi < _.session.binding_count) : (bi += 1) {

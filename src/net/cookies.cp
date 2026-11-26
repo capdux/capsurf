@@ -185,6 +185,105 @@ fn isValidCookieValue(s: []const u8): bool {
     return true;
 }
 
+fn parseMonth3(s: []const u8): i64? {
+    if (s.len < 3) return null;
+    const m = s[0..3];
+    if (std.ascii.eqlIgnoreCase(m, "jan")) return 1;
+    if (std.ascii.eqlIgnoreCase(m, "feb")) return 2;
+    if (std.ascii.eqlIgnoreCase(m, "mar")) return 3;
+    if (std.ascii.eqlIgnoreCase(m, "apr")) return 4;
+    if (std.ascii.eqlIgnoreCase(m, "may")) return 5;
+    if (std.ascii.eqlIgnoreCase(m, "jun")) return 6;
+    if (std.ascii.eqlIgnoreCase(m, "jul")) return 7;
+    if (std.ascii.eqlIgnoreCase(m, "aug")) return 8;
+    if (std.ascii.eqlIgnoreCase(m, "sep")) return 9;
+    if (std.ascii.eqlIgnoreCase(m, "oct")) return 10;
+    if (std.ascii.eqlIgnoreCase(m, "nov")) return 11;
+    if (std.ascii.eqlIgnoreCase(m, "dec")) return 12;
+    return null;
+}
+
+fn daysFromCivil(y_in: i64, m: i64, d: i64): i64 {
+    const y = if (m <= 2) y_in - 1 else y_in;
+    const era = @divFloor(y, 400);
+    const yoe = y - era * 400;
+    const doy = @divFloor(153 * (m + (if (m > 2) @as(i64, -3) else @as(i64, 9))) + 2, 5) + d - 1;
+    const doe = yoe * 365 + @divFloor(yoe, 4) - @divFloor(yoe, 100) + doy;
+    return era * 146097 + doe - 719468;
+}
+
+fn parseHttpDateMs(raw: []const u8): i64? {
+    let s = std.mem.trim(u8, raw, " \t\r\n");
+    if (s.len == 0) return null;
+
+    if (comma := std.mem.indexOfScalar(u8, s, ',')) {
+        s = std.mem.trim(u8, s[comma + 1 ..], " \t");
+    }
+
+    let toks: [8][]const u8 = [""; 8];
+    let tok_count: usize = 0;
+    let i: usize = 0;
+    while (i < s.len && tok_count < 8) {
+        while (i < s.len && (s[i] == ' ' || s[i] == '\t' || s[i] == '-' || s[i] == ':')) : (i += 1) {}
+        if (i >= s.len) break;
+        const start = i;
+        while (i < s.len && s[i] != ' ' && s[i] != '\t' && s[i] != '-' && s[i] != ':') : (i += 1) {}
+        toks[tok_count] = s[start..i];
+        tok_count += 1;
+    }
+
+    if (tok_count < 6) return null;
+
+    let day: i64 = 0;
+    let mon: i64 = 0;
+    let year: i64 = 0;
+    let hh: i64 = 0;
+    let mm: i64 = 0;
+    let ss: i64 = 0;
+
+    if (m0 := parseMonth3(toks[0])) {
+        // asctime: Jan 01 00:00:00 1970 (or after skipping weekday)
+        mon = m0;
+        day = std.fmt.parseInt(i64, toks[1], 10) catch return null;
+        hh = std.fmt.parseInt(i64, toks[2], 10) catch return null;
+        mm = std.fmt.parseInt(i64, toks[3], 10) catch return null;
+        ss = std.fmt.parseInt(i64, toks[4], 10) catch return null;
+        year = std.fmt.parseInt(i64, toks[5], 10) catch return null;
+    } else if (m1 := parseMonth3(toks[1])) {
+        // RFC 1123 / RFC 850: 01 Jan 1970 00:00:00 GMT
+        day = std.fmt.parseInt(i64, toks[0], 10) catch return null;
+        mon = m1;
+        year = std.fmt.parseInt(i64, toks[2], 10) catch return null;
+        hh = std.fmt.parseInt(i64, toks[3], 10) catch return null;
+        mm = std.fmt.parseInt(i64, toks[4], 10) catch return null;
+        ss = std.fmt.parseInt(i64, toks[5], 10) catch return null;
+    } else if (tok_count >= 7) {
+        // asctime with weekday without comma: Thu Jan 01 00:00:00 1970
+        const m1b = parseMonth3(toks[1]);
+        if (m1b == null) return null;
+        mon = m1b.?;
+        day = std.fmt.parseInt(i64, toks[2], 10) catch return null;
+        hh = std.fmt.parseInt(i64, toks[3], 10) catch return null;
+        mm = std.fmt.parseInt(i64, toks[4], 10) catch return null;
+        ss = std.fmt.parseInt(i64, toks[5], 10) catch return null;
+        year = std.fmt.parseInt(i64, toks[6], 10) catch return null;
+    } else {
+        return null;
+    }
+
+    if (year >= 0 && year <= 69) {
+        year += 2000;
+    } else if (year >= 70 && year <= 99) {
+        year += 1900;
+    }
+    if (year < 1601 || mon < 1 || mon > 12 || day < 1 || day > 31) return null;
+    if (hh < 0 || hh > 23 || mm < 0 || mm > 59 || ss < 0 || ss > 59) return null;
+
+    const days = daysFromCivil(year, mon, day);
+    const secs = days * 86400 + hh * 3600 + mm * 60 + ss;
+    return secs * MILLISECONDS_PER_SECOND;
+}
+
 pub struct ParsedSetCookie {
     name: []const u8 = "",
     value: []const u8 = "",
@@ -394,7 +493,7 @@ pub struct CookieJar {
             }
         }
 
-        // Calculate expires_at
+        // Calculate expires_at (Max-Age takes precedence over Expires per RFC 6265)
         let expires_at: i64? = null;
         if (parsed.has_max_age) {
             if (parsed.max_age.? <= 0) {
@@ -414,6 +513,26 @@ pub struct CookieJar {
                 };
             } else {
                 expires_at = _.now() + parsed.max_age.? * MILLISECONDS_PER_SECOND;
+            }
+        } else if (parsed.expires.len > 0) {
+            if (exp_ms := parseHttpDateMs(parsed.expires)) {
+                if (exp_ms <= _.now()) {
+                    * = _.remove(parsed.name, "", host, parsed.path);
+                    return CookieEntry {
+                        name: parsed.name,
+                        value: parsed.value,
+                        host: host,
+                        path: parsed.path,
+                        secure: parsed.secure,
+                        http_only: is_http_only,
+                        same_site: parsed.same_site,
+                        host_only: host_only,
+                        expires_at: exp_ms,
+                        created_at: _.now(),
+                    };
+                } else {
+                    expires_at = exp_ms;
+                }
             }
         }
 

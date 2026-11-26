@@ -569,9 +569,6 @@ Range.prototype.createContextualFragment = function (fragmentHtml) {
     const rawSet = (typeof globalThis !== "undefined" && globalThis.__capsurf_raw_setInnerHTML) || _nativeSetInnerHtml;
     if (rawSet) {
       rawSet.call(temp, fullHtml);
-      if (fullHtml.indexOf("<template") !== -1 && typeof processSubtreeTemplates === "function") {
-        processSubtreeTemplates(temp);
-      }
     } else {
       temp.innerHTML = fullHtml;
     }
@@ -1112,6 +1109,52 @@ Selection.prototype.containsNode = function (node, allowPartialContainment) {
 Selection.prototype.toString = function () {
   const r = selLive(this);
   if (r && !r.collapsed) {
+    const isHtmlInert = function (node) {
+      let cur = node;
+      while (cur) {
+        if (cur.nodeType === 1) {
+          const ns = cur.namespaceURI;
+          if ((!ns || ns === "http://www.w3.org/1999/xhtml") && typeof cur.hasAttribute === "function" && cur.hasAttribute("inert")) {
+            return true;
+          }
+        }
+        cur = cur.parentNode;
+      }
+      return false;
+    };
+    const root = r.commonAncestorContainer;
+    if (root) {
+      let out = "";
+      const sc = r.startContainer, so = r.startOffset;
+      const ec = r.endContainer, eo = r.endOffset;
+      const walkNonInert = function (n) {
+        if (!n) return;
+        if (n.nodeType === 1) {
+          const ns = n.namespaceURI;
+          if ((!ns || ns === "http://www.w3.org/1999/xhtml") && typeof n.hasAttribute === "function" && n.hasAttribute("inert")) {
+            return;
+          }
+        }
+        if (n.nodeType === 3) {
+          if (isHtmlInert(n)) return;
+          const txt = n.data !== undefined ? String(n.data) : String(n.textContent || "");
+          if (n === sc && n === ec) {
+            out += txt.slice(so, eo);
+          } else if (n === sc) {
+            out += txt.slice(so);
+          } else if (n === ec) {
+            out += txt.slice(0, eo);
+          } else if (compareBoundaryPoints(n, txt.length, sc, so) > 0 && compareBoundaryPoints(n, 0, ec, eo) < 0) {
+            out += txt;
+          }
+          return;
+        }
+        const kids = n.childNodes || n._children || [];
+        for (let i = 0; i < kids.length; i++) walkNonInert(kids[i]);
+      };
+      walkNonInert(root);
+      return out;
+    }
     return r.toString ? r.toString() : "";
   }
   const st = _selState.get(this);

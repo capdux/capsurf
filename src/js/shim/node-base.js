@@ -310,10 +310,15 @@ Node.prototype.cloneNode = function (deep) {
   if (this.nodeType === ELEMENT_NODE) {
     const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
     const nativeCreate = typeof globalThis !== "undefined" ? globalThis.__capsurf_native_createElement : null;
-    const tag = String(this.localName || this.tagName || "div").toLowerCase();
-    const clone = (doc && typeof nativeCreate === "function")
-      ? nativeCreate.call(doc, tag)
-      : ((typeof document !== "undefined" && document.createElement) ? document.createElement(tag) : null);
+    const ns = this._namespaceURI !== undefined ? this._namespaceURI : this.namespaceURI;
+    const isNonHtmlNs = Boolean(ns && ns !== "http://www.w3.org/1999/xhtml");
+    const rawTag = String(this.tagName || "div");
+    const tag = isNonHtmlNs ? rawTag : String(this.localName || rawTag).toLowerCase();
+    const clone = (isNonHtmlNs && doc && typeof doc.createElementNS === "function")
+      ? doc.createElementNS(ns, rawTag)
+      : ((doc && typeof nativeCreate === "function")
+        ? nativeCreate.call(doc, tag)
+        : ((typeof document !== "undefined" && document.createElement) ? document.createElement(tag) : null));
     if (!clone) return this;
     if (this.id) clone.id = this.id;
     if (this.className) clone.className = this.className;
@@ -338,6 +343,13 @@ Node.prototype.cloneNode = function (deep) {
       }
     }
     const upgraded = typeof upgradeElement === "function" ? upgradeElement(clone) : clone;
+    if (!upgraded._namespaceURI || upgraded._namespaceURI === "http://www.w3.org/1999/xhtml") {
+      const registry = (typeof customElements !== "undefined" && customElements) || (typeof global !== "undefined" && global.customElements);
+      const Ctor = (registry && typeof registry.get === "function") ? registry.get(tag) : null;
+      if (Ctor && typeof Ctor === "function" && !Ctor.prototype.isPrototypeOf(upgraded) && typeof globalThis !== "undefined" && typeof globalThis.upgradeCustomElement === "function") {
+        globalThis.upgradeCustomElement(upgraded, Ctor, { tagName: tag, fireConnectedCallback: false });
+      }
+    }
     if (tag === "input") {
       if (this._valueDirty) {
         upgraded._valueDirty = true;
@@ -585,12 +597,24 @@ function notifyConnectedCustomElements(node) {
   if (!node.isConnected) return;
 
   const tagName = String(node.localName || node.tagName || "").toLowerCase();
-  const registry = (typeof customElements !== "undefined" && customElements) || (typeof global !== "undefined" && global.customElements);
-  const Ctor = (registry && typeof registry.get === "function") ? registry.get(tagName) : null;
+  const isAttr = node.getAttribute ? node.getAttribute("is") : null;
+  const getDef = typeof globalThis !== "undefined" ? globalThis.__capsurf_getCustomElementDefinition : null;
+  let def = null;
+  if (typeof getDef === "function") {
+    if (isAttr !== null && isAttr !== undefined) {
+      const extDef = getDef(String(isAttr));
+      if (extDef && extDef.extendsTag === tagName) def = extDef;
+    } else {
+      const autoDef = getDef(tagName);
+      if (autoDef && !autoDef.extendsTag) def = autoDef;
+    }
+  }
+  const Ctor = def ? def.constructor : null;
+  const ceName = def ? def.name : tagName;
   if (Ctor && typeof Ctor === "function") {
     if (!Ctor.prototype.isPrototypeOf(node)) {
       if (typeof globalThis !== "undefined" && typeof globalThis.upgradeCustomElement === "function") {
-        globalThis.upgradeCustomElement(node, Ctor, { tagName: tagName, fireConnectedCallback: true });
+        globalThis.upgradeCustomElement(node, Ctor, { tagName: ceName, fireConnectedCallback: true });
       }
     } else if (typeof node.connectedCallback === "function") {
       try {
@@ -601,11 +625,112 @@ function notifyConnectedCustomElements(node) {
     }
   }
 
+  if (node._shadowRoot) {
+    notifyConnectedCustomElements(node._shadowRoot);
+  }
   const kids = node.childNodes || node._children;
   if (kids && kids.length) {
     for (let i = 0; i < kids.length; i++) {
       notifyConnectedCustomElements(kids[i]);
     }
+  }
+}
+
+function notifyDisconnectedCustomElements(node) {
+  if (!node || typeof node !== "object") return;
+  if (node.nodeType === DOCUMENT_FRAGMENT_NODE) {
+    const kids = node.childNodes || node._children;
+    if (kids && kids.length) {
+      for (let i = 0; i < kids.length; i++) {
+        notifyDisconnectedCustomElements(kids[i]);
+      }
+    }
+    return;
+  }
+  if (node.nodeType !== ELEMENT_NODE) return;
+  if (typeof node.disconnectedCallback === "function") {
+    try {
+      node.disconnectedCallback();
+    } catch (e) {
+      if (typeof console !== "undefined" && console.warn) console.warn(e);
+    }
+  }
+  if (node._shadowRoot) {
+    notifyDisconnectedCustomElements(node._shadowRoot);
+  }
+  const kids = node.childNodes || node._children;
+  if (kids && kids.length) {
+    for (let i = 0; i < kids.length; i++) {
+      notifyDisconnectedCustomElements(kids[i]);
+    }
+  }
+}
+
+function adoptSubtreeOnInsert(node, oldDoc, newDoc) {
+  if (!node || typeof node !== "object") return;
+  try {
+    Object.defineProperty(node, "ownerDocument", { value: newDoc, writable: true, configurable: true });
+  } catch (e) {
+    try { node.ownerDocument = newDoc; } catch (e2) {}
+  }
+  if (node.nodeType === ELEMENT_NODE && oldDoc && newDoc && oldDoc !== newDoc && typeof node.adoptedCallback === "function") {
+    try { node.adoptedCallback(oldDoc, newDoc); } catch (e) {}
+  }
+  if (node._shadowRoot) {
+    adoptSubtreeOnInsert(node._shadowRoot, oldDoc, newDoc);
+  }
+  const kids = node.childNodes || node._children;
+  if (kids && kids.length) {
+    for (let i = 0; i < kids.length; i++) {
+      adoptSubtreeOnInsert(kids[i], oldDoc, newDoc);
+    }
+  }
+}
+
+function detachChildInternal(parent, child, suppressLifecycle) {
+  if (!parent || !child) return;
+  const children = ensureChildren(parent);
+  const idx = children.indexOf(child);
+  if (idx === -1 && child.parentNode !== parent) return;
+  const wasConnected = Boolean(parent.isConnected);
+  if (idx >= 0) {
+    if (typeof global !== "undefined" && typeof global.__capsurf_rangeOnNodeRemoved === "function") {
+      global.__capsurf_rangeOnNodeRemoved(parent, child, idx);
+    }
+    children.splice(idx, 1);
+  }
+  child.parentNode = null;
+
+  if (nativeElementRemoveChild && typeof nativeElementRemoveChild === "function") {
+    try {
+      nativeElementRemoveChild.call(parent, child);
+    } catch (e) {}
+  }
+  if (typeof parent._nid === "number" && parent._nid > 0 && parent.nodeType === DOCUMENT_FRAGMENT_NODE && typeof global.__capsurf_node_remove_child === "function") {
+    try {
+      global.__capsurf_node_remove_child(parent._nid, child);
+    } catch (e) {}
+  }
+
+  if (wasConnected && !suppressLifecycle) {
+    notifyDisconnectedCustomElements(child);
+  }
+
+  if (typeof notifyMutation === "function") {
+    const rec = new MutationRecord("childList", parent);
+    rec.removedNodes = [child];
+    notifyMutation(rec);
+  }
+
+  if (parent._shadowRoot && typeof global.__capsurf_scheduleSlotChange === "function") {
+    global.__capsurf_scheduleSlotChange(parent);
+  }
+  if (parent.isConnected && typeof global !== "undefined" && typeof global.__capsurf_syncNamedGlobals === "function") {
+    const mayHaveNamed = child && child.nodeType === 1 && (
+      (typeof child.hasAttribute === "function" && (child.hasAttribute("id") || child.hasAttribute("name"))) ||
+      !!(child._children && child._children.some && child._children.some(function (k) { return k && k.nodeType === 1; }))
+    );
+    if (mayHaveNamed) global.__capsurf_syncNamedGlobals();
   }
 }
 
@@ -637,35 +762,51 @@ Node.prototype.appendChild = function (child) {
     return child;
   }
 
+  const oldDoc = child.ownerDocument || null;
+  const newDoc = this.nodeType === DOCUMENT_NODE ? this : (this.ownerDocument || null);
+  const wasConnected = Boolean(child.isConnected);
+  const willBeConnected = Boolean(this.isConnected);
+  const docChanged = Boolean(oldDoc && newDoc && oldDoc !== newDoc);
+
   // If child already has a parent or owner fragment, remove from it
   if (child._ownerFragment && child._ownerFragment !== this && typeof child._ownerFragment.removeChild === "function") {
     try {
-      child._ownerFragment.removeChild(child);
+      detachChildInternal(child._ownerFragment, child, true);
     } catch (e) {}
     _setHidden(child, "_ownerFragment", null);
   }
-  if (child.parentNode && typeof child.parentNode.removeChild === "function") {
+  if (child.parentNode) {
     try {
-      child.parentNode.removeChild(child);
+      detachChildInternal(child.parentNode, child, true);
     } catch (e) {}
+  }
+
+  if (wasConnected && (!willBeConnected || docChanged)) {
+    notifyDisconnectedCustomElements(child);
+  }
+  if (docChanged) {
+    adoptSubtreeOnInsert(child, oldDoc, newDoc);
   }
 
   // If child is a parsed node, adopt it safely into this document
   if (isParsedNode(child)) {
     child.parentNode = this;
-    child.ownerDocument = this.ownerDocument || this;
+    child.ownerDocument = newDoc || this;
     if (child.nodeType === 1) { // ELEMENT_NODE
       // When adopted, child's subtree in parsed document is not adopted into live tree
       child._children = [];
     }
     ensureChildren(this).push(child);
     executeConnectedScripts(child);
+    if (willBeConnected && (!wasConnected || docChanged)) {
+      notifyConnectedCustomElements(child);
+    }
     return child;
   }
 
   // Handle native element / node
   child.parentNode = this;
-  child.ownerDocument = this.ownerDocument || this;
+  child.ownerDocument = newDoc || this;
   ensureChildren(this).push(child);
 
   if (nativeElementAppendChild && typeof nativeElementAppendChild === "function") {
@@ -690,7 +831,9 @@ Node.prototype.appendChild = function (child) {
   }
 
   executeConnectedScripts(child);
-  notifyConnectedCustomElements(child);
+  if (willBeConnected && (!wasConnected || docChanged)) {
+    notifyConnectedCustomElements(child);
+  }
   if (child && child.nodeType === 1 && child.isConnected) {
     const ctag = String(child.localName || child.tagName || "").toLowerCase();
     if ((ctag === "iframe" || ctag === "frame") && typeof global !== "undefined" && typeof global.__capsurf_on_iframe_connected === "function") {
@@ -714,6 +857,15 @@ Node.prototype.insertBefore = function (newChild, refChild) {
   }
   if (!newChild || typeof newChild !== "object" || !isGenuineNode(newChild)) {
     throw new TypeError("Failed to execute 'insertBefore' on 'Node': parameter 1 is not of type 'Node'.");
+  }
+  // Prevent cycles: newChild must not be an inclusive ancestor of this
+  let anc = this;
+  while (anc) {
+    if (anc === newChild) {
+      const DOMEx = typeof DOMException !== "undefined" ? DOMException : Error;
+      throw new DOMEx("Failed to execute 'insertBefore' on 'Node': The new child element contains the parent.", "HierarchyRequestError");
+    }
+    anc = anc.parentNode;
   }
   if (refChild == null) {
     return this.appendChild(newChild);
@@ -743,20 +895,33 @@ Node.prototype.insertBefore = function (newChild, refChild) {
     return newChild;
   }
 
+  const oldDoc = newChild.ownerDocument || null;
+  const newDoc = this.nodeType === DOCUMENT_NODE ? this : (this.ownerDocument || null);
+  const wasConnected = Boolean(newChild.isConnected);
+  const willBeConnected = Boolean(this.isConnected);
+  const docChanged = Boolean(oldDoc && newDoc && oldDoc !== newDoc);
+
   if (newChild._ownerFragment && newChild._ownerFragment !== this && typeof newChild._ownerFragment.removeChild === "function") {
     try {
-      newChild._ownerFragment.removeChild(newChild);
+      detachChildInternal(newChild._ownerFragment, newChild, true);
     } catch (e) {}
     newChild._ownerFragment = null;
   }
-  if (newChild.parentNode && typeof newChild.parentNode.removeChild === "function") {
+  if (newChild.parentNode) {
     try {
-      newChild.parentNode.removeChild(newChild);
+      detachChildInternal(newChild.parentNode, newChild, true);
     } catch (e) {}
   }
 
+  if (wasConnected && (!willBeConnected || docChanged)) {
+    notifyDisconnectedCustomElements(newChild);
+  }
+  if (docChanged) {
+    adoptSubtreeOnInsert(newChild, oldDoc, newDoc);
+  }
+
   newChild.parentNode = this;
-  newChild.ownerDocument = this.ownerDocument || this;
+  newChild.ownerDocument = newDoc || this;
   if (isParsedNode(newChild) && newChild.nodeType === 1) {
     newChild._children = [];
   }
@@ -791,7 +956,9 @@ Node.prototype.insertBefore = function (newChild, refChild) {
   }
 
   executeConnectedScripts(newChild);
-  notifyConnectedCustomElements(newChild);
+  if (willBeConnected && (!wasConnected || docChanged)) {
+    notifyConnectedCustomElements(newChild);
+  }
   if (newChild && newChild.nodeType === 1 && newChild.isConnected) {
     const ctag = String(newChild.localName || newChild.tagName || "").toLowerCase();
     if ((ctag === "iframe" || ctag === "frame") && typeof global !== "undefined" && typeof global.__capsurf_on_iframe_connected === "function") {
@@ -828,6 +995,7 @@ Node.prototype.removeChild = function (child) {
     throw err;
   }
 
+  const wasConnected = Boolean(this.isConnected);
   if (idx >= 0) {
     if (typeof global !== "undefined" && typeof global.__capsurf_rangeOnNodeRemoved === "function") {
       global.__capsurf_rangeOnNodeRemoved(this, child, idx);
@@ -845,6 +1013,10 @@ Node.prototype.removeChild = function (child) {
     try {
       global.__capsurf_node_remove_child(this._nid, child);
     } catch (e) {}
+  }
+
+  if (wasConnected) {
+    notifyDisconnectedCustomElements(child);
   }
 
   if (typeof notifyMutation === "function") {
@@ -899,20 +1071,33 @@ Node.prototype.replaceChild = function (newChild, oldChild) {
     return oldChild;
   }
 
+  const oldDoc = newChild.ownerDocument || null;
+  const newDoc = this.nodeType === DOCUMENT_NODE ? this : (this.ownerDocument || null);
+  const wasNewConnected = Boolean(newChild.isConnected);
+  const willBeConnected = Boolean(this.isConnected);
+  const docChanged = Boolean(oldDoc && newDoc && oldDoc !== newDoc);
+
   if (newChild._ownerFragment && newChild._ownerFragment !== this && typeof newChild._ownerFragment.removeChild === "function") {
     try {
-      newChild._ownerFragment.removeChild(newChild);
+      detachChildInternal(newChild._ownerFragment, newChild, true);
     } catch (e) {}
     newChild._ownerFragment = null;
   }
-  if (newChild.parentNode && typeof newChild.parentNode.removeChild === "function") {
+  if (newChild.parentNode) {
     try {
-      newChild.parentNode.removeChild(newChild);
+      detachChildInternal(newChild.parentNode, newChild, true);
     } catch (e) {}
   }
 
+  if (wasNewConnected && (!willBeConnected || docChanged)) {
+    notifyDisconnectedCustomElements(newChild);
+  }
+  if (docChanged) {
+    adoptSubtreeOnInsert(newChild, oldDoc, newDoc);
+  }
+
   newChild.parentNode = this;
-  newChild.ownerDocument = this.ownerDocument || this;
+  newChild.ownerDocument = newDoc || this;
   if (isParsedNode(newChild) && newChild.nodeType === 1) {
     newChild._children = [];
   }
@@ -945,6 +1130,10 @@ Node.prototype.replaceChild = function (newChild, oldChild) {
     }
   }
 
+  if (willBeConnected) {
+    notifyDisconnectedCustomElements(oldChild);
+  }
+
   if (typeof notifyMutation === "function") {
     const rec = new MutationRecord("childList", this);
     rec.addedNodes = [newChild];
@@ -957,6 +1146,9 @@ Node.prototype.replaceChild = function (newChild, oldChild) {
   }
 
   executeConnectedScripts(newChild);
+  if (willBeConnected && (!wasNewConnected || docChanged)) {
+    notifyConnectedCustomElements(newChild);
+  }
 
   return oldChild;
 };
@@ -1105,9 +1297,6 @@ if (typeof Element !== "undefined" && Element.prototype) {
         }
         this._children = null;
         origSetInnerHtml.call(this, v);
-        if (typeof processSubtreeTemplates === "function") {
-          processSubtreeTemplates(this);
-        }
         let newKids = [];
         try {
           newKids = Array.from(this.childNodes || this._children || []);
@@ -1352,6 +1541,23 @@ Text.prototype = Object.create(CharacterData.prototype);
 Text.prototype.constructor = Text;
 Object.defineProperty(Text.prototype, "nodeType", { value: TEXT_NODE, writable: true, configurable: true });
 Object.defineProperty(Text.prototype, "nodeName", { value: "#text", writable: true, configurable: true });
+Object.defineProperty(Text.prototype, "tagName", { get: function () { return undefined; }, configurable: true });
+const _nodeTagNameDesc = Object.getOwnPropertyDescriptor(Node.prototype, "tagName");
+if (_nodeTagNameDesc && _nodeTagNameDesc.get) {
+  const _origNodeTagNameGet = _nodeTagNameDesc.get;
+  Object.defineProperty(Node.prototype, "tagName", {
+    get: function () {
+      if (this.nodeType !== 1) return undefined;
+      return _origNodeTagNameGet.call(this);
+    },
+    configurable: true,
+  });
+} else {
+  Object.defineProperty(Node.prototype, "tagName", {
+    get: function () { return undefined; },
+    configurable: true,
+  });
+}
 Object.defineProperty(Text.prototype, "wholeText", {
   get: function () {
     let cur = this;
@@ -1419,6 +1625,7 @@ Comment.prototype = Object.create(CharacterData.prototype);
 Comment.prototype.constructor = Comment;
 Object.defineProperty(Comment.prototype, "nodeType", { value: COMMENT_NODE, writable: true, configurable: true });
 Object.defineProperty(Comment.prototype, "nodeName", { value: "#comment", writable: true, configurable: true });
+Object.defineProperty(Comment.prototype, "tagName", { get: function () { return undefined; }, configurable: true });
 markNative(Comment, "Comment");
 
 function CDATASection(data) {
@@ -1456,6 +1663,14 @@ function DocumentFragment() {
 }
 DocumentFragment.prototype = Object.create(Node.prototype);
 DocumentFragment.prototype.constructor = DocumentFragment;
+Object.defineProperty(DocumentFragment.prototype, Symbol.toStringTag, {
+  value: "DocumentFragment",
+  configurable: true,
+});
+Object.defineProperty(DocumentFragment.prototype, "tagName", {
+  get: function () { return undefined; },
+  configurable: true,
+});
 DocumentFragment.prototype.appendChild = function (child) {
   if (!child || typeof child !== "object") return child;
   if (child._ownerFragment && child._ownerFragment !== this && typeof child._ownerFragment.removeChild === "function") {
@@ -1761,6 +1976,10 @@ function ShadowRoot(host, mode) {
 }
 ShadowRoot.prototype = Object.create(DocumentFragment.prototype);
 ShadowRoot.prototype.constructor = ShadowRoot;
+Object.defineProperty(ShadowRoot.prototype, Symbol.toStringTag, {
+  value: "ShadowRoot",
+  configurable: true,
+});
 Object.defineProperty(ShadowRoot.prototype, "nodeType", {
   get: function () { return DOCUMENT_FRAGMENT_NODE; },
   configurable: true,

@@ -65,7 +65,13 @@ function installButtonElement(global) {
   const HTMLElementProto = (global.HTMLElement && global.HTMLElement.prototype) || ElementProto;
 
   function HTMLButtonElement() {
-    this._customValidityMessage = "";
+    if (global.HTMLElement && global.HTMLElement._upgradeTarget) {
+      const target = global.HTMLElement._upgradeTarget;
+      global.HTMLElement._upgradeTarget = null;
+      target._customValidityMessage = "";
+      return target;
+    }
+    throw new TypeError("Illegal constructor");
   }
   HTMLButtonElement.prototype = Object.create(HTMLElementProto);
   HTMLButtonElement.prototype.constructor = HTMLButtonElement;

@@ -16,6 +16,56 @@ struct SerializationOpts {
     max_depth: i32 = 99,
 }
 
+const MAX_OBJ_CTX_ENTRIES: usize = 512;
+
+struct ObjCtxEntry {
+    session_key: usize = 0,
+    obj_id_buf: [64]u8 = [0; 64],
+    obj_id_len: usize = 0,
+    exec_ctx_id: i64 = 0,
+}
+
+let obj_ctx_entries: [MAX_OBJ_CTX_ENTRIES]ObjCtxEntry = [ObjCtxEntry{}; MAX_OBJ_CTX_ENTRIES];
+let obj_ctx_cursor: usize = 0;
+
+fn recordObjectContextFromJson(session_key: usize, json_str: []const u8, exec_ctx_id: i64) {
+    if (exec_ctx_id <= 1) return;
+    if (oid := extractJsonString(json_str, "objectId")) {
+        if (oid.len == 0 || oid.len > 64) return;
+        let i: usize = 0;
+        while (i < MAX_OBJ_CTX_ENTRIES) : (i += 1) {
+            if (obj_ctx_entries[i].session_key == session_key &&
+                obj_ctx_entries[i].obj_id_len == oid.len &&
+                std.mem.eql(u8, obj_ctx_entries[i].obj_id_buf[0..obj_ctx_entries[i].obj_id_len], oid)) {
+                obj_ctx_entries[i].exec_ctx_id = exec_ctx_id;
+                return;
+            }
+        }
+        let slot = &obj_ctx_entries[obj_ctx_cursor];
+        slot.session_key = session_key;
+        @memcpy(slot.obj_id_buf[0..oid.len], oid);
+        slot.obj_id_len = oid.len;
+        slot.exec_ctx_id = exec_ctx_id;
+        obj_ctx_cursor = (obj_ctx_cursor + 1) % MAX_OBJ_CTX_ENTRIES;
+    }
+}
+
+fn lookupObjectContext(session_key: usize, oid: []const u8): (i64)? {
+    if (oid.len == 0 || oid.len > 64) return null;
+    let i: usize = 0;
+    while (i < MAX_OBJ_CTX_ENTRIES) : (i += 1) {
+        if (obj_ctx_entries[i].session_key == session_key &&
+            obj_ctx_entries[i].obj_id_len == oid.len &&
+            std.mem.eql(u8, obj_ctx_entries[i].obj_id_buf[0..obj_ctx_entries[i].obj_id_len], oid)) {
+            if (obj_ctx_entries[i].exec_ctx_id > 1) {
+                return obj_ctx_entries[i].exec_ctx_id;
+            }
+            return null;
+        }
+    }
+    return null;
+}
+
 fn parseSerializationOptions(params_raw: []const u8): SerializationOpts {
     let opts = SerializationOpts{};
     if (ser_obj := extractJsonObject(params_raw, "serializationOptions")) {
@@ -350,11 +400,28 @@ pub struct RuntimeHandler {
                 }
                 return CdpResponse.ok(req.id, out_buf[0..res_len]);
             }
-            const exec_ctx_id = extractJsonInt(req.params_raw, "executionContextId");
+            const session_key: usize = unsafe { @intFromPtr(session) };
+            let exec_ctx_id = extractJsonInt(req.params_raw, "executionContextId");
+            const raw_object_id = extractJsonString(req.params_raw, "objectId");
+            const args_json = extractJsonArray(req.params_raw, "arguments") ?? "[]";
+            if (exec_ctx_id == null) {
+                if (oid := raw_object_id) {
+                    if (found_cid := lookupObjectContext(session_key, oid)) {
+                        if (session.isValidContextId(found_cid)) {
+                            exec_ctx_id = found_cid;
+                        }
+                    }
+                } else if (arg_oid := extractJsonString(args_json, "objectId")) {
+                    if (found_cid := lookupObjectContext(session_key, arg_oid)) {
+                        if (session.isValidContextId(found_cid)) {
+                            exec_ctx_id = found_cid;
+                        }
+                    }
+                }
+            }
             if (exec_ctx_id != null && !session.isValidContextId(exec_ctx_id.?)) {
                 return CdpResponse.err(req.id, -32000, "Cannot find context with specified id");
             }
-            const raw_object_id = extractJsonString(req.params_raw, "objectId");
             const object_id = raw_object_id ?? (if (exec_ctx_id != null) "globalThis" else "");
             const raw_decl = extractJsonString(req.params_raw, "functionDeclaration") ?? "";
             let decl_buf = session.allocator.alloc(u8, @max(raw_decl.len + 1, @as(usize, 65536))) catch return CdpResponse.err(req.id, -32000, "Out of memory");
@@ -365,7 +432,6 @@ pub struct RuntimeHandler {
             const return_by_value = extractJsonBool(req.params_raw, "returnByValue") ?? false;
             const await_promise = extractJsonBool(req.params_raw, "awaitPromise") ?? false;
             const ser_opts = parseSerializationOptions(req.params_raw);
-            const args_json = extractJsonArray(req.params_raw, "arguments") ?? "[]";
             
             const in_iso = (exec_ctx_id != null && exec_ctx_id.? > 1) || session.isIsolatedObjectId(object_id);
             const restored_node: i32 = if (in_iso) session.restoreIsolatedNodeIfNeeded() else 0;
@@ -486,6 +552,9 @@ pub struct RuntimeHandler {
             }
             if (std.mem.startsWith(u8, out_buf[0..res_len], "__CAPSURF_CDP_ERROR__:")) {
                 return CdpResponse.err(req.id, -32000, out_buf["__CAPSURF_CDP_ERROR__:".len..res_len]);
+            }
+            if (cid := exec_ctx_id) {
+                recordObjectContextFromJson(unsafe { @intFromPtr(session) }, out_buf[0..res_len], cid);
             }
             return CdpResponse.ok(req.id, out_buf[0..res_len]);
         }
@@ -683,6 +752,9 @@ pub struct RuntimeHandler {
             }
             if (std.mem.startsWith(u8, out_buf[0..eval_len], "__CAPSURF_CDP_ERROR__:")) {
                 return CdpResponse.err(req.id, -32000, out_buf["__CAPSURF_CDP_ERROR__:".len..eval_len]);
+            }
+            if (cid := context_id) {
+                recordObjectContextFromJson(unsafe { @intFromPtr(session) }, out_buf[0..eval_len], cid);
             }
             return CdpResponse.ok(req.id, out_buf[0..eval_len]);
         }

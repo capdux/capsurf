@@ -12,8 +12,18 @@ if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_notifyFileC
     if (!Array.isArray(globalThis.__capsurf_pending_file_choosers)) {
       globalThis.__capsurf_pending_file_choosers = [];
     }
+    let nid = Number(ctrl._nid) || 0;
+    if (!nid) {
+      if (!globalThis.__capsurf_child_dom_next_id || globalThis.__capsurf_child_dom_next_id < 1500000) {
+        globalThis.__capsurf_child_dom_next_id = 1500000;
+      }
+      nid = globalThis.__capsurf_child_dom_next_id++;
+      try { ctrl._nid = nid; } catch (e) {}
+      if (!globalThis.__capsurf_child_dom_nodes) globalThis.__capsurf_child_dom_nodes = {};
+      globalThis.__capsurf_child_dom_nodes[nid] = ctrl;
+    }
     globalThis.__capsurf_pending_file_choosers.push({
-      backendNodeId: Number(ctrl._nid) || 0,
+      backendNodeId: nid,
       mode: (ctrl.hasAttribute && (ctrl.hasAttribute("multiple") || ctrl.hasAttribute("webkitdirectory"))) ? "selectMultiple" : "selectSingle",
       frameId: (ctrl.ownerDocument && ctrl.ownerDocument.defaultView && ctrl.ownerDocument.defaultView.__capsurf_frame_id) || (typeof window !== "undefined" && window.__capsurf_frame_id) || undefined
     });
@@ -125,6 +135,20 @@ function installHtmlElementExtensions(proto) {
   const nativeHasAttribute = proto.hasAttribute || (typeof Element !== "undefined" && Element.prototype && Element.prototype.hasAttribute);
   const nativeSetAttribute = proto.setAttribute || (typeof Element !== "undefined" && Element.prototype && Element.prototype.setAttribute);
   const nativeRemoveAttribute = proto.removeAttribute || (typeof Element !== "undefined" && Element.prototype && Element.prototype.removeAttribute);
+
+  Object.defineProperty(proto, "inert", {
+    get: function () {
+      return Boolean(nativeHasAttribute && nativeHasAttribute.call(this, "inert"));
+    },
+    set: function (v) {
+      if (v) {
+        if (nativeSetAttribute) nativeSetAttribute.call(this, "inert", "");
+      } else {
+        if (nativeRemoveAttribute) nativeRemoveAttribute.call(this, "inert");
+      }
+    },
+    configurable: true,
+  });
 
   Object.defineProperty(proto, "hidden", {
     get: function () {
@@ -430,6 +454,11 @@ function installHtmlElementExtensions(proto) {
       if (!cv && cur.style && cur.style.contentVisibility) cv = String(cur.style.contentVisibility).trim().toLowerCase();
       if (disp === "none") return false;
       if (cur !== el && cv === "hidden") return false;
+      const curNs = cur.namespaceURI;
+      const isHtmlCur = !curNs || curNs === "http://www.w3.org/1999/xhtml";
+      if (isHtmlCur && typeof cur.hasAttribute === "function" && cur.hasAttribute("inert")) {
+        return false;
+      }
       cur = cur.assignedSlot || cur.parentElement || (cur.parentNode && cur.parentNode.nodeType === 11 ? cur.parentNode.host : null);
     }
     const tag = String(el.tagName || el.localName || "").toLowerCase();

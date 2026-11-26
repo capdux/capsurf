@@ -3,6 +3,7 @@ vendor/
 
 # 临时探测与复现目录、编译输出与缓存
 temp/
+tmp/
 bin/
 bin_*/
 .cap/
@@ -10,6 +11,7 @@ test/wpt/.wpt/
 test/pptr/.puppeteer/
 test/pw/.playwright/
 test/pw/test-results/
+test/panda/
 node_modules/*
 !node_modules/cloudflare:test
 

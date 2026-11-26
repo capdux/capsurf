@@ -9,7 +9,9 @@ function DOMTokenList(getter, setter, supportedSet) {
   const proxy = new Proxy(this, {
     get: function (target, prop, receiver) {
       if (typeof prop === "string" && /^\d+$/.test(prop)) {
-        return target.item(Number(prop));
+        const idx = Number(prop);
+        const tokens = target._getTokens();
+        return idx < tokens.length ? tokens[idx] : undefined;
       }
       return Reflect.get(target, prop, receiver);
     },
@@ -22,6 +24,17 @@ function DOMTokenList(getter, setter, supportedSet) {
   });
   _dtlState.set(proxy, st);
   return proxy;
+}
+
+function validateDOMToken(token, methodName) {
+  const str = String(token);
+  if (str === "") {
+    throw new DOMException("Failed to execute '" + methodName + "' on 'DOMTokenList': The token provided must not be empty.", "SyntaxError");
+  }
+  if (/[\t\n\f\r ]/.test(str)) {
+    throw new DOMException("Failed to execute '" + methodName + "' on 'DOMTokenList': The token provided ('" + str + "') contains HTML space characters, which are not valid in tokens.", "InvalidCharacterError");
+  }
+  return str;
 }
 
 DOMTokenList.prototype._getTokens = function () {
@@ -77,40 +90,38 @@ DOMTokenList.prototype.contains = function (token) {
 };
 
 DOMTokenList.prototype.add = function () {
-  const tokens = this._getTokens();
-  let changed = false;
+  const validated = [];
   for (let i = 0; i < arguments.length; i++) {
-    const token = String(arguments[i]);
-    if (!token || /\s/.test(token)) {
-      throw new Error("InvalidCharacterError: Invalid token '" + token + "'");
-    }
-    if (tokens.indexOf(token) === -1) {
-      tokens.push(token);
-      changed = true;
+    validated.push(validateDOMToken(arguments[i], "add"));
+  }
+  if (validated.length === 0) return;
+  const tokens = this._getTokens();
+  for (let i = 0; i < validated.length; i++) {
+    if (tokens.indexOf(validated[i]) === -1) {
+      tokens.push(validated[i]);
     }
   }
-  if (changed) this._setTokens(tokens);
+  this._setTokens(tokens);
 };
 
 DOMTokenList.prototype.remove = function () {
-  let tokens = this._getTokens();
-  let changed = false;
+  const validated = [];
   for (let i = 0; i < arguments.length; i++) {
-    const token = String(arguments[i]);
-    const idx = tokens.indexOf(token);
+    validated.push(validateDOMToken(arguments[i], "remove"));
+  }
+  if (validated.length === 0) return;
+  const tokens = this._getTokens();
+  for (let i = 0; i < validated.length; i++) {
+    const idx = tokens.indexOf(validated[i]);
     if (idx !== -1) {
       tokens.splice(idx, 1);
-      changed = true;
     }
   }
-  if (changed) this._setTokens(tokens);
+  this._setTokens(tokens);
 };
 
 DOMTokenList.prototype.toggle = function (token, force) {
-  const str = String(token);
-  if (!str || /\s/.test(str)) {
-    throw new Error("InvalidCharacterError: Invalid token '" + str + "'");
-  }
+  const str = validateDOMToken(token, "toggle");
   const has = this.contains(str);
   if (force === true) {
     if (!has) this.add(str);
@@ -130,11 +141,21 @@ DOMTokenList.prototype.toggle = function (token, force) {
 };
 
 DOMTokenList.prototype.replace = function (oldToken, newToken) {
+  const oldStr = validateDOMToken(oldToken, "replace");
+  const newStr = validateDOMToken(newToken, "replace");
   const tokens = this._getTokens();
-  const idx = tokens.indexOf(String(oldToken));
+  const idx = tokens.indexOf(oldStr);
   if (idx === -1) return false;
-  tokens[idx] = String(newToken);
-  this._setTokens(tokens);
+  tokens[idx] = newStr;
+  const deduped = [];
+  const seen = new Set();
+  for (let i = 0; i < tokens.length; i++) {
+    if (!seen.has(tokens[i])) {
+      seen.add(tokens[i]);
+      deduped.push(tokens[i]);
+    }
+  }
+  this._setTokens(deduped);
   return true;
 };
 
@@ -870,6 +891,14 @@ const elementChildrenCache = new WeakMap();
 function getElementChildren(parent) {
   const kids = [];
   const up = typeof upgradeElement === "function" ? upgradeElement : (typeof globalThis !== "undefined" && globalThis.upgradeElement);
+  if (parent && parent.nodeType === 9) {
+    const de = parent.documentElement;
+    if (de && de.nodeType === 1) {
+      if (up) up(de);
+      kids.push(de);
+    }
+    return kids;
+  }
   if (parent && parent.firstChild !== undefined) {
     let child = parent.firstChild;
     while (child) {
