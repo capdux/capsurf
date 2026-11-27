@@ -3731,3 +3731,8 @@
 - **顶层 JSON 键遮蔽与 `Fetch` 请求 ID 复用**：`CdpRequest.parse` 此前虽定位了顶层 `"id"`，却调用全串扁平搜索导致 `touchPoints[0].id` 遮蔽顶层 `id`；`Fetch.continueRequest` 续行后未保存原 `net_id` 导致 `pollNetworkEvents` 重发 `req-2`。两处共性修复直接打通 `elementhandle.test` 全部 5 项 `touch*` 及 `page-route` (51/51)。
 - **子帧全链路闭环（`ParsedDocument` + `Runtime` + `Input` + `Page`）**：打通了 `innerHTML` `iframe` 连接、`document.open/write/close` 生命周期、非 DOM `objectId` 路由至创建时 `executionContextId`、`Input.dispatchMouseEvent` 穿透 `<iframe>` 坐标扣减、`collectDocIframeEntries` 断连过滤与 `emitNewChildFrameEvents` 递归防误卸载，一次拿下 `click.test` (26/26)、`elementhandle.test` (48/48)、`selectors-frame` (15/15)、`frame-hierarchy` (12/12)、`page-filechooser` (6/6)、`page-add-locator-handler` (13/13)。
 - **`test/panda/` 4 路并发轻量化基线与高扇出收割**：通过 `scripts/panda_run.mjs`（本地 HTTP + 原生 CDP `testing.assertOk()` 轮询，4 进程并发 1500ms 超时），在 2 分 40 秒内完成 572 项 Lightpanda 洁净室黑盒页面扫描，经 3 轮共性修复由 `113/517` 跃升至 `136/517`；`page-click` 同步由 `85/102` 升至 `90/102`。
+
+## Phase 967 — 异步 `fetch()` 调度、`border: none` 修复与 Panda 160/517
+- **非阻塞异步 `fetch()` 调度器**：`PendingAsyncHttpSlot` + `pumpAsyncHttpFetches` 替换同源简单 `fetch()` 的同步阻塞路径，`server.cp` `net_idle_tracker` 感知活跃请求数并识别 SSE 长连接，一举打通 `page-network-response` (21/21)、`page-network-idle` (3→9/10) 与 `page-network-request` (7→20/27)。
+- **`border: medium none` 级联归零**：修复 `Cascade.parseBorderWidthToken` 提前返回 `3.0` 的缺陷，消除 Playwright `Highlight` mask 元素的 3px `#333` 边框与 `(+3,+3)` 偏移，直接拿下 `elementhandle-screenshot` (11/11) 与 `page-screenshot` (28→36/44)。
+- **`ErrorEvent` 暴露真实异常 + 16 核跑批**：`executeClassicScript` 派发 `ErrorEvent` 消除 22 项超时，配合 `panda_run.mjs -j 16` 多轮收割使 `test/panda/` 达到 **160/517**。

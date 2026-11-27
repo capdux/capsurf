@@ -118,7 +118,7 @@ function createDatasetProxy(element) {
 function installHtmlElementExtensions(proto) {
   if (!proto) return;
 
-  Object.defineProperty(proto, "dataset", {
+  const datasetDesc = {
     get: function () {
       const ns = this.namespaceURI;
       if (ns !== undefined && ns !== "http://www.w3.org/1999/xhtml" && ns !== "http://www.w3.org/2000/svg" && ns !== "http://www.w3.org/1998/Math/MathML") {
@@ -130,7 +130,11 @@ function installHtmlElementExtensions(proto) {
       return this._datasetProxy;
     },
     configurable: true,
-  });
+  };
+  Object.defineProperty(proto, "dataset", datasetDesc);
+  if (typeof globalThis !== "undefined" && globalThis.SVGElement && globalThis.SVGElement.prototype && !Object.getOwnPropertyDescriptor(globalThis.SVGElement.prototype, "dataset")) {
+    Object.defineProperty(globalThis.SVGElement.prototype, "dataset", datasetDesc);
+  }
 
   const nativeHasAttribute = proto.hasAttribute || (typeof Element !== "undefined" && Element.prototype && Element.prototype.hasAttribute);
   const nativeSetAttribute = proto.setAttribute || (typeof Element !== "undefined" && Element.prototype && Element.prototype.setAttribute);
@@ -225,9 +229,12 @@ function installHtmlElementExtensions(proto) {
 
   Object.defineProperty(proto, "isContentEditable", {
     get: function () {
+      if (this.namespaceURI && this.namespaceURI !== "http://www.w3.org/1999/xhtml") {
+        return false;
+      }
       let cur = this;
       while (cur) {
-        if (cur.nodeType === 1 && typeof cur.hasAttribute === "function" && cur.hasAttribute("contenteditable")) {
+        if (cur.nodeType === 1 && (!cur.namespaceURI || cur.namespaceURI === "http://www.w3.org/1999/xhtml") && typeof cur.hasAttribute === "function" && cur.hasAttribute("contenteditable")) {
           const raw = cur.getAttribute("contenteditable");
           const low = String(raw == null ? "" : raw).toLowerCase();
           if (low === "false") return false;
@@ -267,11 +274,16 @@ function installHtmlElementExtensions(proto) {
 
   if (!proto.click) {
     proto.click = function () {
+      const selfTag = String(this.tagName || this.localName || "").toLowerCase();
+      if ((selfTag === "button" || selfTag === "input" || selfTag === "select" || selfTag === "textarea") &&
+          typeof globalThis !== "undefined" && typeof globalThis.__capsurf_isElementDisabled === "function" &&
+          globalThis.__capsurf_isElementDisabled(this)) {
+        return;
+      }
       const MouseCtor = (global.__capsurf_nativeEvents && global.__capsurf_nativeEvents.MouseEvent) || MouseEvent;
       const dispatchTrusted = typeof dispatchTrustedEvent === "function"
         ? dispatchTrustedEvent
         : function (t, e) { return t.dispatchEvent(e); };
-      const selfTag = String(this.tagName || this.localName || "").toLowerCase();
       const selfType = selfTag === "input" ? String(this.getAttribute ? (this.getAttribute("type") || "text") : "text").toLowerCase() : "";
       const isMutableInput = selfTag === "input" && !this.disabled && !(this.hasAttribute && this.hasAttribute("disabled"));
       let preSaved = null;
@@ -438,6 +450,7 @@ function installHtmlElementExtensions(proto) {
   function isFocusableElement(el) {
     if (!el || el.nodeType !== 1) return false;
     if (el.disabled) return false;
+    if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_isElementDisabled === "function" && globalThis.__capsurf_isElementDisabled(el)) return false;
     let cur = el;
     while (cur && cur.nodeType === 1) {
       let disp = "";
@@ -469,7 +482,8 @@ function installHtmlElementExtensions(proto) {
       return true;
     }
     if (typeof el.hasAttribute === "function" && el.hasAttribute("tabindex")) {
-      return true;
+      const ti = String(el.getAttribute("tabindex") || "").trim();
+      if (/^[+-]?\d+$/.test(ti)) return true;
     }
     if (el.isContentEditable) return true;
     if (typeof el.getAttribute === "function") {
@@ -482,10 +496,17 @@ function installHtmlElementExtensions(proto) {
   if (!proto.focus) {
     proto.focus = function (options) {
       if (!isFocusableElement(this)) return;
+      let prevActive = null;
       if (typeof document !== "undefined") {
         if (document.activeElement === this) return;
-        if (document.activeElement && document.activeElement !== this && typeof document.activeElement.blur === "function") {
-          document.activeElement.blur();
+        prevActive = document.activeElement || null;
+        if (prevActive && prevActive !== this && typeof prevActive.blur === "function") {
+          prevActive._focusNextTarget = this;
+          try {
+            prevActive.blur();
+          } finally {
+            delete prevActive._focusNextTarget;
+          }
         }
         document.activeElement = this;
       }
@@ -496,19 +517,20 @@ function installHtmlElementExtensions(proto) {
           this.scrollIntoView({ block: "nearest", inline: "nearest" });
         }
       }
-      const evt = new FocusEvent("focus", { bubbles: false, cancelable: false });
-      this.dispatchEvent(evt);
+      this.dispatchEvent(new FocusEvent("focus", { bubbles: false, cancelable: false, composed: true, relatedTarget: prevActive }));
+      this.dispatchEvent(new FocusEvent("focusin", { bubbles: true, cancelable: false, composed: true, relatedTarget: prevActive }));
     };
     markNative(proto.focus, "focus");
   }
 
   if (!proto.blur) {
     proto.blur = function () {
+      const nextTarget = this._focusNextTarget || null;
       if (typeof document !== "undefined" && document.activeElement === this) {
-        document.activeElement = document.body || null;
+        document.activeElement = nextTarget || document.body || null;
       }
-      const evt = new FocusEvent("blur", { bubbles: false, cancelable: false });
-      this.dispatchEvent(evt);
+      this.dispatchEvent(new FocusEvent("blur", { bubbles: false, cancelable: false, composed: true, relatedTarget: nextTarget }));
+      this.dispatchEvent(new FocusEvent("focusout", { bubbles: true, cancelable: false, composed: true, relatedTarget: nextTarget }));
     };
     markNative(proto.blur, "blur");
   }

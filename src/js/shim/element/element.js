@@ -876,6 +876,75 @@ function installElementExtensions(proto) {
     });
   }
 
+  function isElementCanBeDisabled(el) {
+    if (!el || el.nodeType !== 1) return false;
+    const tag = String(el.localName || el.tagName || "").toLowerCase();
+    return tag === "button" || tag === "input" || tag === "select" || tag === "textarea" ||
+      tag === "fieldset" || tag === "optgroup" || tag === "option";
+  }
+
+  function isInFirstLegendOfFieldset(el, fieldset) {
+    let firstLegend = null;
+    let c = fieldset.firstChild;
+    while (c) {
+      if (c.nodeType === 1 && String(c.localName || c.tagName || "").toLowerCase() === "legend") {
+        firstLegend = c;
+        break;
+      }
+      c = c.nextSibling;
+    }
+    if (!firstLegend) return false;
+    let cur = el;
+    while (cur && cur !== fieldset) {
+      if (cur === firstLegend) return true;
+      cur = cur.parentNode;
+    }
+    return false;
+  }
+
+  function isElementActuallyDisabled(el) {
+    if (!isElementCanBeDisabled(el)) return false;
+    if (typeof el.hasAttribute === "function" && el.hasAttribute("disabled")) return true;
+    const tag = String(el.localName || el.tagName || "").toLowerCase();
+    if (tag === "button" || tag === "input" || tag === "select" || tag === "textarea") {
+      let cur = el.parentNode;
+      while (cur && cur.nodeType === 1) {
+        const ctag = String(cur.localName || cur.tagName || "").toLowerCase();
+        if (ctag === "fieldset" && typeof cur.hasAttribute === "function" && cur.hasAttribute("disabled")) {
+          if (!isInFirstLegendOfFieldset(el, cur)) return true;
+        }
+        cur = cur.parentNode;
+      }
+      return false;
+    }
+    if (tag === "optgroup") {
+      let cur = el.parentNode;
+      while (cur && cur.nodeType === 1) {
+        const ctag = String(cur.localName || cur.tagName || "").toLowerCase();
+        if (ctag === "datalist") return false;
+        if (ctag === "select") return isElementActuallyDisabled(cur);
+        cur = cur.parentNode;
+      }
+      return false;
+    }
+    if (tag === "option") {
+      let cur = el.parentNode;
+      while (cur && cur.nodeType === 1) {
+        const ctag = String(cur.localName || cur.tagName || "").toLowerCase();
+        if (ctag === "datalist") return false;
+        if (ctag === "optgroup" && typeof cur.hasAttribute === "function" && cur.hasAttribute("disabled")) return true;
+        if (ctag === "select") return isElementActuallyDisabled(cur);
+        cur = cur.parentNode;
+      }
+      return false;
+    }
+    return false;
+  }
+  if (typeof globalThis !== "undefined") {
+    globalThis.__capsurf_isElementDisabled = isElementActuallyDisabled;
+    globalThis.__capsurf_isElementCanBeDisabled = isElementCanBeDisabled;
+  }
+
   const origTagNameDesc = Object.getOwnPropertyDescriptor(proto, "tagName");
   const origTagNameGet = origTagNameDesc && origTagNameDesc.get;
   if (origTagNameGet) {
@@ -897,10 +966,13 @@ function installElementExtensions(proto) {
 
   Object.defineProperty(proto, "localName", {
     get: function () {
+      if (this._localNameOverride !== undefined) return this._localNameOverride;
       const tag = this.tagName || "";
+      const colon = tag.indexOf(":");
+      const local = colon !== -1 ? tag.slice(colon + 1) : tag;
       const ns = this._namespaceURI !== undefined ? this._namespaceURI : this.namespaceURI;
-      if (ns && ns !== "http://www.w3.org/1999/xhtml") return tag;
-      return tag.replace(/[A-Z]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 32));
+      if (ns && ns !== "http://www.w3.org/1999/xhtml") return local;
+      return local.replace(/[A-Z]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 32));
     },
     configurable: true,
   });
@@ -992,6 +1064,24 @@ function installElementExtensions(proto) {
       }
     };
     markNative(proto.append, "append");
+  }
+
+  if (!proto.prepend) {
+    proto.prepend = function (...nodes) {
+      const first = this.firstChild || null;
+      for (const n of nodes) {
+        let node;
+        if (n && typeof n === "object" && typeof n.nodeType === "number") {
+          node = n;
+        } else if (typeof document !== "undefined" && document.createTextNode) {
+          node = document.createTextNode(String(n));
+        } else {
+          node = new Text(String(n));
+        }
+        this.insertBefore(node, first);
+      }
+    };
+    markNative(proto.prepend, "prepend");
   }
 
   if (!proto.replaceChildren) {
@@ -2272,6 +2362,7 @@ function installElementExtensions(proto) {
         if (origProtoMatches.call(this, selector)) return true;
         const rootNode = typeof this.getRootNode === "function" ? this.getRootNode() : null;
         if (!(rootNode && rootNode.host) &&
+            !(s.includes("[") && (s.includes("\\") || s.includes("\0"))) &&
             !/:(?:is|where|has|not|scope|defined|state|first-child|last-child|only-child|first-of-type|last-of-type|only-of-type|nth-)/i.test(s)) {
           return false;
         }
@@ -2285,8 +2376,8 @@ function installElementExtensions(proto) {
       return matchesElementSelector(this, s, sr, true);
     }
     if (s === ":checked") return Boolean(this.checked || (String(this.tagName || "").toUpperCase() === "OPTION" && this.selected));
-    if (s === ":disabled") return Boolean(this.disabled);
-    if (s === ":enabled") return !this.disabled;
+    if (s === ":disabled") return isElementActuallyDisabled(this);
+    if (s === ":enabled") return isElementCanBeDisabled(this) && !isElementActuallyDisabled(this);
     if (s === ":focus") return Boolean(typeof document !== "undefined" && (document._activeElement === this || document.activeElement === this));
     if (s.endsWith(":focus")) {
       const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
@@ -3570,6 +3661,9 @@ function installElementExtensions(proto) {
     const ShadowRootCtor = typeof ShadowRoot !== "undefined" ? ShadowRoot : (global.ShadowRoot || null);
     const shadow = ShadowRootCtor ? new ShadowRootCtor(this, mode) : new DocumentFragment();
     shadow.slotAssignment = init.slotAssignment === "manual" ? "manual" : "named";
+    shadow.delegatesFocus = Boolean(init.delegatesFocus);
+    shadow.serializable = Boolean(init.serializable);
+    shadow.clonable = Boolean(init.clonable);
     if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_isElementDefined === "function" && !globalThis.__capsurf_isElementDefined(this)) {
       shadow._preDefinition = true;
     }
@@ -3598,6 +3692,29 @@ function installElementExtensions(proto) {
     return shadow;
   };
   markNative(proto.attachShadow, "attachShadow");
+
+  if (!proto.getHTML) {
+    proto.getHTML = markNative(function (options) {
+      if (typeof global.__capsurf_getHTMLImpl === "function") {
+        return global.__capsurf_getHTMLImpl(this, options);
+      }
+      return this.innerHTML || "";
+    }, "getHTML");
+  }
+
+  if (!proto.setHTMLUnsafe) {
+    proto.setHTMLUnsafe = markNative(function (html) {
+      if (arguments.length === 0) {
+        throw new TypeError("Failed to execute 'setHTMLUnsafe' on 'Element': 1 argument required, but only 0 present.");
+      }
+      this.innerHTML = String(html);
+      const proc = (typeof globalThis !== "undefined" && globalThis.__capsurf_processSubtreeTemplates) ||
+        (typeof global !== "undefined" && global.__capsurf_processSubtreeTemplates);
+      if (typeof proc === "function") {
+        proc(this);
+      }
+    }, "setHTMLUnsafe");
+  }
 
   Object.defineProperty(proto, "_shadowRoot", {
     get: function () {

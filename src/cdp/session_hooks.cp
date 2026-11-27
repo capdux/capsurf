@@ -208,6 +208,21 @@ pub fn registerHttpRequestHook(hook: HttpRequestHookFn) {
     g_http_req_hook = hook;
 }
 
+pub type HttpRequestAsyncHookFn = *const fn (
+    session_ptr: *void,
+    url: []const u8,
+    method: []const u8,
+    headers_json: []const u8,
+    post_data: []const u8,
+    resolve_fn: JSValue,
+    reject_fn: JSValue,
+): bool;
+let g_http_req_async_hook: (HttpRequestAsyncHookFn)? = null;
+
+pub fn registerHttpRequestAsyncHook(hook: HttpRequestAsyncHookFn) {
+    g_http_req_async_hook = hook;
+}
+
 pub type SyncXhrHookFn = *const fn (session_ptr: *void, url: []const u8, method: []const u8, post_data: []const u8, content_type: []const u8, headers_json: []const u8, out_buf: []u8): i64;
 let g_sync_xhr_hook: (SyncXhrHookFn)? = null;
 
@@ -490,6 +505,86 @@ pub fn registerFetchPauseHook(session_ptr: *void, hook: FetchPauseHookFn) {
             }
             if (n < 0) return jsNull();
             return JS_NewStringLen(ctx, buf.ptr, @as(usize, @intCast(n)));
+        }
+    }
+    return jsNull();
+}
+
+@c fn js_capsurf_http_request_async(ctx: *JSContext, this_val: JSValue, argc: i32, argv: [*]const JSValue!): JSValue {
+    * = this_val;
+    if (argc < 1) return jsNull();
+    let url_len: usize = 0;
+    const url_ptr = JS_ToCStringLen2(ctx, &url_len, unsafe { argv[0] }, 0);
+    if (url_ptr == null) return jsNull();
+    defer JS_FreeCString(ctx, url_ptr);
+    const url = unsafe { url_ptr.?[0..url_len] };
+
+    let method: []const u8 = "GET";
+    let method_ptr: ([*c]const u8)? = null;
+    if (argc >= 2) {
+        let method_len: usize = 0;
+        method_ptr = JS_ToCStringLen2(ctx, &method_len, unsafe { argv[1] }, 0);
+        if (method_ptr != null && method_len > 0) {
+            method = unsafe { method_ptr.?[0..method_len] };
+        }
+    }
+    defer if (method_ptr != null) JS_FreeCString(ctx, method_ptr);
+
+    let headers_json: []const u8 = "{}";
+    let headers_ptr: ([*c]const u8)? = null;
+    if (argc >= 3) {
+        let headers_len: usize = 0;
+        headers_ptr = JS_ToCStringLen2(ctx, &headers_len, unsafe { argv[2] }, 0);
+        if (headers_ptr != null && headers_len > 0) {
+            headers_json = unsafe { headers_ptr.?[0..headers_len] };
+        }
+    }
+    defer if (headers_ptr != null) JS_FreeCString(ctx, headers_ptr);
+
+    let post_data: []const u8 = "";
+    let post_ptr: ([*c]const u8)? = null;
+    if (argc >= 4) {
+        const arg3 = unsafe { argv[3] };
+        let got_u8 = false;
+        if (arg3.tag == JS_TAG_OBJECT) {
+            let u8_len: usize = 0;
+            const u8_ptr = JS_GetUint8Array(ctx, &u8_len, arg3);
+            if (u8_ptr != null) {
+                if (u8_len > 0) {
+                    post_data = unsafe { u8_ptr.?[0..u8_len] };
+                }
+                got_u8 = true;
+            } else {
+                const exc = JS_GetException(ctx);
+                JS_FreeValue(ctx, exc);
+            }
+        }
+        if (!got_u8 && !jsIsNull(arg3) && !jsIsUndefined(arg3)) {
+            let post_len: usize = 0;
+            post_ptr = JS_ToCStringLen2(ctx, &post_len, arg3, 0);
+            if (post_ptr != null && post_len > 0) {
+                post_data = unsafe { post_ptr.?[0..post_len] };
+            }
+        }
+    }
+    defer if (post_ptr != null) JS_FreeCString(ctx, post_ptr);
+
+    if (hook := g_http_req_async_hook) {
+        const resolved_sess_ptr = lookupSessionByCtx(ctx) ?? g_http_session_ptr;
+        if (sess_ptr := resolved_sess_ptr) {
+            let resolving_funcs: [2]JSValue = [jsUndefined(), jsUndefined()];
+            const promise = JS_NewPromiseCapability(ctx, unsafe { @ptrCast(&resolving_funcs) });
+            if (jsIsException(promise)) {
+                return promise;
+            }
+            const ok = hook(sess_ptr, url, method, headers_json, post_data, resolving_funcs[0], resolving_funcs[1]);
+            if (!ok) {
+                JS_FreeValue(ctx, resolving_funcs[0]);
+                JS_FreeValue(ctx, resolving_funcs[1]);
+                JS_FreeValue(ctx, promise);
+                return jsNull();
+            }
+            return promise;
         }
     }
     return jsNull();
@@ -1348,6 +1443,7 @@ pub fn registerSessionHooksNative(raw_ctx: *JSContext) {
     defineMethod(raw_ctx, global_obj, "__capsurf_fixture_fetch", js_capsurf_fixture_fetch, 2);
     defineMethod(raw_ctx, global_obj, "__capsurf_http_get", js_capsurf_http_get, 1);
     defineMethod(raw_ctx, global_obj, "__capsurf_http_request", js_capsurf_http_request, 5);
+    defineMethod(raw_ctx, global_obj, "__capsurf_http_request_async", js_capsurf_http_request_async, 4);
     defineMethod(raw_ctx, global_obj, "__capsurf_sync_xhr", js_capsurf_sync_xhr, 5);
     defineMethod(raw_ctx, global_obj, "__capsurf_should_intercept_fetch", js_capsurf_should_intercept_fetch, 2);
     defineMethod(raw_ctx, global_obj, "__capsurf_fetch_pause", js_capsurf_fetch_pause, 5);
@@ -2943,11 +3039,7 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "            g.document._reopenDoctype = null;\n" ++
     "            if (typeof g.__capsurf_set_quirks_mode === 'function') g.__capsurf_set_quirks_mode(true);\n" ++
     "          }\n" ++
-    "          var hm = reopenBuf.match(/<head[^>]*>([\\s\\S]*?)<\\/head>/i);\n" ++
-    "          if (g.document.head) g.document.head.innerHTML = hm ? hm[1] : '';\n" ++
-    "          var m = reopenBuf.match(/<body[^>]*>([\\s\\S]*?)<\\/body>/i);\n" ++
-    "          var bodyHtml = m ? m[1] : reopenBuf.replace(/^\\s*<!DOCTYPE[^>]*>/i, '').replace(/<head[^>]*>[\\s\\S]*?<\\/head>/gi, '').replace(/<\\/?html[^>]*>/gi, '');\n" ++
-    "          if (g.document.body) g.document.body.innerHTML = bodyHtml;\n" ++
+    "          var hm = reopenBuf.match(/<head[^>]*>([\\s\\S]*?)<\\/head>/i); var m = reopenBuf.match(/<body[^>]*>([\\s\\S]*?)<\\/body>/i); var headHtml = hm ? hm[1] : '';\n          if (m) { var bodyIdx = reopenBuf.search(/<body[^>]*>/i); if (bodyIdx > 0) { var beforeBody = reopenBuf.slice(0, bodyIdx).replace(/^\\s*<!DOCTYPE[^>]*>/i, '').replace(/<head[^>]*>[\\s\\S]*?<\\/head>/gi, '').replace(/<\\/?html[^>]*>/gi, '').trim(); if (beforeBody) headHtml = headHtml ? (headHtml + '\\n' + beforeBody) : beforeBody; } }\n          if (g.document.head) g.document.head.innerHTML = headHtml;\n          var bodyHtml = m ? m[1] : reopenBuf.replace(/^\\s*<!DOCTYPE[^>]*>/i, '').replace(/<head[^>]*>[\\s\\S]*?<\\/head>/gi, '').replace(/<\\/?html[^>]*>/gi, '');\n          if (g.document.body) g.document.body.innerHTML = bodyHtml;\n" ++
     "          if (typeof g.__capsurf_syncNamedGlobals === 'function') g.__capsurf_syncNamedGlobals();\n" ++
     "          if (typeof g.document.querySelectorAll === 'function') {\n" ++
     "            var reopenScripts = g.document.querySelectorAll('script');\n" ++
@@ -3226,16 +3318,8 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "          json: function(){ return Promise.resolve(JSON.parse(txt)); }\n" ++
     "        });\n" ++
     "      }\n" ++
-    "      return OrigFetch.apply(this, arguments).catch(function(err) {\n" ++
-    "        if (err && err.name === 'TypeError' && typeof err.message === 'string' && err.message.indexOf('CORS header') !== -1 && (isRedirFixture || (init && init._redirected))) {\n" ++
-    "          return Promise.reject(new TypeError('Failed to fetch'));\n" ++
-    "        }\n" ++
-    "        return Promise.reject(err);\n" ++
-    "      });\n" ++
-    "    };\n" ++
-    "    g.fetch = wrappedFetch;\n" ++
-    "    if (typeof window !== 'undefined') window.fetch = wrappedFetch;\n" ++
-    "  }\n" ++
+    "      if (typeof g.__capsurf_http_request_async === 'function' && typeof input === 'string' && absCheck.indexOf('http://') === 0 && !isRedirFixture && absCheck.indexOf('/__fixtures/') === -1) {\n        var sameOriginAsync = false; try { sameOriginAsync = (pageOrigin !== 'null' && new URL(absCheck).origin.toLowerCase() === pageOrigin.toLowerCase()); } catch (e) {}\n        var interceptAsync = (typeof g.__capsurf_should_intercept_fetch === 'function' && g.__capsurf_should_intercept_fetch(absCheck, 'Fetch'));\n        var simpleOptsAsync = (!init || ((!init.mode || init.mode === 'cors' || init.mode === 'same-origin' || init.mode === 'no-cors') && (!init.redirect || init.redirect === 'follow') && !init.signal && (init.body === undefined || init.body === null || typeof init.body === 'string')));\n        if (sameOriginAsync && !interceptAsync && simpleOptsAsync) {\n          var aMethod = (init && init.method) ? String(init.method).toUpperCase() : 'GET'; var aHeaders = {};\n          if (init && init.headers) { try { if (typeof init.headers.forEach === 'function') { init.headers.forEach(function(v, k) { aHeaders[String(k).toLowerCase()] = String(v); }); } else if (typeof init.headers === 'object') { var ahk = Object.keys(init.headers); for (var ahi = 0; ahi < ahk.length; ahi++) aHeaders[String(ahk[ahi]).toLowerCase()] = String(init.headers[ahk[ahi]]); } } catch (e) {} }\n          var aBody = (init && init.body !== undefined && init.body !== null) ? String(init.body) : '';\n          var asyncP = g.__capsurf_http_request_async(absCheck, aMethod, JSON.stringify(aHeaders), aBody);\n          if (asyncP && typeof asyncP.then === 'function') {\n            return asyncP.then(function(resObj) {\n              if (!resObj || resObj.error) return Promise.reject(new TypeError('Failed to fetch'));\n              var b64 = resObj.bodyBase64 || ''; var bin = b64 ? atob(b64) : ''; var u8 = new Uint8Array(bin.length); for (var bi = 0; bi < bin.length; bi++) u8[bi] = bin.charCodeAt(bi) & 255;\n              var hdrsObj = {}; try { hdrsObj = JSON.parse(resObj.headersJson || '{}'); } catch (e) {}\n              var hdrPairs = []; var hks = Object.keys(hdrsObj);\n              for (var hi2 = 0; hi2 < hks.length; hi2++) { var hk2 = hks[hi2]; var hv2 = String(hdrsObj[hk2]); if (hv2.indexOf('\\n') !== -1) { var parts2 = hv2.split('\\n'); for (var pi2 = 0; pi2 < parts2.length; pi2++) hdrPairs.push([hk2, parts2[pi2]]); } else { hdrPairs.push([hk2, hv2]); } }\n              return new Response(u8, { status: resObj.status, statusText: resObj.statusText || '', url: resObj.url || absCheck, headers: hdrPairs, _allowAnyStatus: true, _immutableHeaders: true });\n            });\n          }\n        }\n      }\n" ++
+    "      return OrigFetch.apply(this, arguments).catch(function(err) { if (err && err.name === 'TypeError' && typeof err.message === 'string' && err.message.indexOf('CORS header') !== -1 && (isRedirFixture || (init && init._redirected))) { return Promise.reject(new TypeError('Failed to fetch')); } return Promise.reject(err); });\n    };\n    g.fetch = wrappedFetch; if (typeof window !== 'undefined') window.fetch = wrappedFetch;\n  }\n" ++
     "  if (typeof g.CanvasRenderingContext2D === 'function' && g.CanvasRenderingContext2D.prototype && typeof g.CanvasRenderingContext2D.prototype.drawImage === 'function' && !g.CanvasRenderingContext2D.prototype.drawImage.__capsurf_withheld_wrapped) {\n" ++
     "    var origDrawImage = g.CanvasRenderingContext2D.prototype.drawImage;\n" ++
     "    var wrappedDrawImage = function(image) {\n" ++

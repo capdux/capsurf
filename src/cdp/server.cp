@@ -2207,7 +2207,8 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                 }
             }
             const base_poll_ms: i32 = if (fast_poll) 5 else 15;
-            const poll_ms: i32 = if (pending_wheel.active || has_active_promise) 1 else base_poll_ms;
+            const async_fetch_active: u32 = if (_.session.has_document) _.session.activeAsyncFetchCount() else 0;
+            const poll_ms: i32 = if (pending_wheel.active || has_active_promise || async_fetch_active > 0) 1 else base_poll_ms;
             const base_nfds: usize = if (_.listen_fd >= 0) 2 else 1;
             let net_pfds: [MAX_SCHEDULER_SLOTS]NetPollFd = [NetPollFd{ fd: -1, events: 0, revents: 0 }; MAX_SCHEDULER_SLOTS];
             let slot_indices: [MAX_SCHEDULER_SLOTS]usize = [0; MAX_SCHEDULER_SLOTS];
@@ -2234,7 +2235,7 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                 * = _.net_scheduler.stepSockets(&net_pfds, &slot_indices, net_nfds, tick_now_ms);
             }
             * = _.net_scheduler.startPending(tick_now_ms);
-            const net_active: u32 = @as(u32, @intCast(_.net_scheduler.inflightCount()));
+            const net_active: u32 = @as(u32, @intCast(_.net_scheduler.inflightCount())) + async_fetch_active;
             const net_queued: u32 = @as(u32, @intCast(_.net_scheduler.queuedCount()));
             const net_dispatch_pending = _.net_scheduler.hasPendingDispatch();
             _.net_idle_tracker.sampleIdle(net_active, net_queued, net_dispatch_pending, tick_now_ms);

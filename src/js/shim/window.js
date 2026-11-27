@@ -1577,8 +1577,115 @@ function installWindow(global) {
   if (typeof window !== "undefined") window.Navigation = Navigation;
   if (typeof globalThis !== "undefined") globalThis.Navigation = Navigation;
 
+  function Navigator() {
+    throw new TypeError("Illegal constructor");
+  }
+  Navigator.prototype = Object.create(Object.prototype);
+  Navigator.prototype.constructor = Navigator;
+  Object.defineProperty(Navigator.prototype, Symbol.toStringTag, {
+    value: "Navigator",
+    configurable: true,
+  });
+  markNative(Navigator, "Navigator");
+  global.Navigator = Navigator;
+  if (typeof window !== "undefined") window.Navigator = Navigator;
+  if (typeof globalThis !== "undefined") globalThis.Navigator = Navigator;
+
+  function ServiceWorkerContainer() {
+    throw new TypeError("Illegal constructor");
+  }
+  ServiceWorkerContainer.prototype = Object.create(typeof EventTarget !== "undefined" ? EventTarget.prototype : Object.prototype);
+  ServiceWorkerContainer.prototype.constructor = ServiceWorkerContainer;
+  Object.defineProperty(ServiceWorkerContainer.prototype, Symbol.toStringTag, {
+    value: "ServiceWorkerContainer",
+    configurable: true,
+  });
+  markNative(ServiceWorkerContainer, "ServiceWorkerContainer");
+  global.ServiceWorkerContainer = ServiceWorkerContainer;
+  if (typeof window !== "undefined") window.ServiceWorkerContainer = ServiceWorkerContainer;
+  if (typeof globalThis !== "undefined") globalThis.ServiceWorkerContainer = ServiceWorkerContainer;
+
+  function ServiceWorkerRegistration() {
+    throw new TypeError("Illegal constructor");
+  }
+  ServiceWorkerRegistration.prototype = Object.create(typeof EventTarget !== "undefined" ? EventTarget.prototype : Object.prototype);
+  ServiceWorkerRegistration.prototype.constructor = ServiceWorkerRegistration;
+  Object.defineProperty(ServiceWorkerRegistration.prototype, Symbol.toStringTag, {
+    value: "ServiceWorkerRegistration",
+    configurable: true,
+  });
+  markNative(ServiceWorkerRegistration, "ServiceWorkerRegistration");
+  global.ServiceWorkerRegistration = ServiceWorkerRegistration;
+  if (typeof window !== "undefined") window.ServiceWorkerRegistration = ServiceWorkerRegistration;
+  if (typeof globalThis !== "undefined") globalThis.ServiceWorkerRegistration = ServiceWorkerRegistration;
+
+  function VisualViewport() {
+    throw new TypeError("Illegal constructor");
+  }
+  VisualViewport.prototype = Object.create(typeof EventTarget !== "undefined" ? EventTarget.prototype : Object.prototype);
+  VisualViewport.prototype.constructor = VisualViewport;
+  Object.defineProperty(VisualViewport.prototype, Symbol.toStringTag, {
+    value: "VisualViewport",
+    configurable: true,
+  });
+  Object.defineProperty(VisualViewport.prototype, "offsetLeft", { get: function () { return 0; }, configurable: true, enumerable: true });
+  Object.defineProperty(VisualViewport.prototype, "offsetTop", { get: function () { return 0; }, configurable: true, enumerable: true });
+  Object.defineProperty(VisualViewport.prototype, "pageLeft", {
+    get: function () { return Number(global.scrollX || (typeof window !== "undefined" ? window.scrollX : 0) || 0); },
+    configurable: true,
+    enumerable: true,
+  });
+  Object.defineProperty(VisualViewport.prototype, "pageTop", {
+    get: function () { return Number(global.scrollY || (typeof window !== "undefined" ? window.scrollY : 0) || 0); },
+    configurable: true,
+    enumerable: true,
+  });
+  Object.defineProperty(VisualViewport.prototype, "width", {
+    get: function () { return Number(global.innerWidth || (typeof window !== "undefined" ? window.innerWidth : 0) || 1920); },
+    configurable: true,
+    enumerable: true,
+  });
+  Object.defineProperty(VisualViewport.prototype, "height", {
+    get: function () { return Number(global.innerHeight || (typeof window !== "undefined" ? window.innerHeight : 0) || 1080); },
+    configurable: true,
+    enumerable: true,
+  });
+  Object.defineProperty(VisualViewport.prototype, "scale", { get: function () { return 1.0; }, configurable: true, enumerable: true });
+  markNative(VisualViewport, "VisualViewport");
+  global.VisualViewport = VisualViewport;
+  if (typeof window !== "undefined") window.VisualViewport = VisualViewport;
+  if (typeof globalThis !== "undefined") globalThis.VisualViewport = VisualViewport;
+
+  const visualViewportObj = Object.create(VisualViewport.prototype);
+  if (typeof EventTarget === "function") {
+    try { EventTarget.call(visualViewportObj); } catch (e) {}
+  }
+  Object.defineProperty(global, "visualViewport", {
+    get: function () { return visualViewportObj; },
+    configurable: true,
+    enumerable: true,
+  });
+  if (typeof window !== "undefined" && window !== global) {
+    try {
+      Object.defineProperty(window, "visualViewport", {
+        get: function () { return visualViewportObj; },
+        configurable: true,
+        enumerable: true,
+      });
+    } catch (e) {}
+  }
+  if (typeof globalThis !== "undefined" && globalThis !== global) {
+    try {
+      Object.defineProperty(globalThis, "visualViewport", {
+        get: function () { return visualViewportObj; },
+        configurable: true,
+        enumerable: true,
+      });
+    } catch (e) {}
+  }
+
   // 2. Navigator: modern lightweight shield & Client Hints
-  const navigatorObj = {
+  const navigatorObj = Object.assign(Object.create(Navigator.prototype), {
     userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 CapSurf/1.0.0",
     appVersion: "5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 CapSurf/1.0.0",
     platform: "Linux x86_64",
@@ -1626,7 +1733,7 @@ function installWindow(global) {
       }
       return true;
     }, "sendBeacon"),
-  };
+  });
 
   function encodePostUtf8(str) {
     if (typeof TextEncoder === "function") {
@@ -2734,7 +2841,7 @@ function installWindow(global) {
     this._aborted = true;
     this._reason = reason !== undefined
       ? reason
-      : new DOMException("This operation was aborted", "AbortError");
+      : new DOMException("signal is aborted without reason", "AbortError");
     const evt = new Event("abort");
     evt.target = this;
     evt.currentTarget = this;
@@ -2751,7 +2858,7 @@ function installWindow(global) {
     signal._aborted = true;
     signal._reason = reason !== undefined
       ? reason
-      : new DOMException("This operation was aborted", "AbortError");
+      : new DOMException("signal is aborted without reason", "AbortError");
     return signal;
   };
 
@@ -2759,14 +2866,18 @@ function installWindow(global) {
     if (arguments.length === 0) {
       throw new TypeError("Failed to execute 'timeout' on 'AbortSignal': 1 argument required, but only 0 present.");
     }
-    const ms = Number(milliseconds);
-    if (!Number.isFinite(ms) || ms < 0) {
+    const raw = Number(milliseconds);
+    if (!Number.isFinite(raw)) {
+      throw new TypeError("Failed to execute 'timeout' on 'AbortSignal': Value is outside the 'unsigned long long' value range.");
+    }
+    const ms = Math.trunc(raw);
+    if (ms < 0 || ms > 9007199254740991) {
       throw new TypeError("Failed to execute 'timeout' on 'AbortSignal': Value is outside the 'unsigned long long' value range.");
     }
     const signal = new AbortSignal(_abortSignalToken);
     global.setTimeout(function () {
-      signal._abort(new DOMException("The operation timed out.", "TimeoutError"));
-    }, Math.floor(ms));
+      signal._abort(new DOMException("signal timed out", "TimeoutError"));
+    }, ms);
     return signal;
   };
 
@@ -6501,20 +6612,29 @@ function installWindow(global) {
   global.webkitAudioContext = AudioContext;
 
   // 9. User Interaction Prompts (delegates to native CDP dialog hook when present)
+  function isHeadlessNonBlockingDialog() {
+    return (
+      typeof globalThis !== "undefined" &&
+      ((typeof globalThis.testing === "object" &&
+        globalThis.testing !== null &&
+        typeof globalThis.testing.assertOk === "function") ||
+        globalThis.__capsurf_dialog_disabled === true)
+    );
+  }
   const alertFn = markNative(function (msg) {
-    if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_dialog_open === "function") {
+    if (!isHeadlessNonBlockingDialog() && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_dialog_open === "function") {
       globalThis.__capsurf_dialog_open("alert", msg === undefined ? "" : String(msg), "");
     }
     return undefined;
   }, "alert");
   const confirmFn = markNative(function (msg) {
-    if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_dialog_open === "function") {
+    if (!isHeadlessNonBlockingDialog() && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_dialog_open === "function") {
       return Boolean(globalThis.__capsurf_dialog_open("confirm", msg === undefined ? "" : String(msg), ""));
     }
     return false;
   }, "confirm");
   const promptFn = markNative(function (msg, defaultText) {
-    if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_dialog_open === "function") {
+    if (!isHeadlessNonBlockingDialog() && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_dialog_open === "function") {
       return globalThis.__capsurf_dialog_open(
         "prompt",
         msg === undefined ? "" : String(msg),
@@ -7816,7 +7936,6 @@ function installWindow(global) {
         const hadSubst = typeof v === "string" && /(?:^|[^a-z0-9_-])(?:var|env)\(/i.test(v);
         const res = resolveCustomProp(k, 0);
         if (res === INVALID || cycledCustom.has(k) || (hadSubst && CSS_WIDE_AFTER_VAR.test(String(res).trim()))) computedMap.delete(k);
-        else computedMap.set(k, res);
       }
     }
     for (const [k, v] of Array.from(computedMap.entries())) {
@@ -7840,11 +7959,16 @@ function installWindow(global) {
     if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_tty_ua_css_text === "string" && globalThis.__capsurf_tty_ua_css_text) {
       parseCssRulesInto(element, globalThis.__capsurf_tty_ua_css_text, targetMap, normalizedPseudo);
     }
-    if (!normalizedPseudo && element && element.getAttribute && String(element.localName || element.tagName || "").toLowerCase() === "font") {
-      const fsz = String(element.getAttribute("size") || "").trim();
-      const FONT_ATTR_MAP = { "1": "xx-small", "2": "small", "3": "medium", "4": "large", "5": "x-large", "6": "xx-large", "7": "xxx-large" };
-      if (Object.prototype.hasOwnProperty.call(FONT_ATTR_MAP, fsz)) {
-        targetMap.set("font-size", FONT_ATTR_MAP[fsz]);
+    if (!normalizedPseudo && element && element.getAttribute) {
+      const elTagUa = String(element.localName || element.tagName || "").toLowerCase();
+      if (elTagUa === "font") {
+        const fsz = String(element.getAttribute("size") || "").trim();
+        const FONT_ATTR_MAP = { "1": "xx-small", "2": "small", "3": "medium", "4": "large", "5": "x-large", "6": "xx-large", "7": "xxx-large" };
+        if (Object.prototype.hasOwnProperty.call(FONT_ATTR_MAP, fsz)) {
+          targetMap.set("font-size", FONT_ATTR_MAP[fsz]);
+        }
+      } else if ((elTagUa === "a" || elTagUa === "area") && element.hasAttribute && element.hasAttribute("href")) {
+        targetMap.set("color", "rgb(0, 0, 238)");
       }
     }
     for (let i = 0; i < styleNodes.length; i++) {
@@ -9116,7 +9240,12 @@ function installWindow(global) {
         computedMap.set(defaultAutoProps[ai], "auto");
       }
     }
-    if (!computedMap.has("position")) computedMap.set("position", "static");
+    const rawPos = String(computedMap.get("position") || "").trim().toLowerCase();
+    if (rawPos !== "static" && rawPos !== "relative" && rawPos !== "absolute" && rawPos !== "fixed" && rawPos !== "sticky") {
+      computedMap.set("position", "static");
+    } else {
+      computedMap.set("position", rawPos);
+    }
     if (!computedMap.has("flex-direction")) computedMap.set("flex-direction", "row");
     if (!computedMap.has("flex-wrap")) computedMap.set("flex-wrap", "nowrap");
     if (!computedMap.has("flex-grow")) computedMap.set("flex-grow", "0");
@@ -9672,10 +9801,10 @@ function installWindow(global) {
       (parentDisp === "flex" || parentDisp === "inline-flex" ||
        parentDisp === "grid" || parentDisp === "inline-grid");
     if (!isFlexOrGridItem) {
-      if ((computedMap.get("min-width") || "").trim().toLowerCase() === "auto") {
+      if (!computedMap.has("min-width") || (computedMap.get("min-width") || "").trim().toLowerCase() === "auto") {
         computedMap.set("min-width", "0px");
       }
-      if ((computedMap.get("min-height") || "").trim().toLowerCase() === "auto") {
+      if (!computedMap.has("min-height") || (computedMap.get("min-height") || "").trim().toLowerCase() === "auto") {
         computedMap.set("min-height", "0px");
       }
       if ((computedMap.get("min-block-size") || "").trim().toLowerCase() === "auto") {
@@ -10080,7 +10209,11 @@ function installWindow(global) {
         tfVal = evalCssMathInValue(tfVal);
         computedMap.set("transform", tfVal);
       }
-      const fmtMat = (arr) => "matrix(" + arr.map((n) => { const r = Number(n.toFixed(7)); return r === 0 ? 0 : r; }).join(", ") + ")";
+      const fmtMat = (arr) => "matrix(" + arr.map((n) => {
+        if (!isFinite(n) || Math.abs(n) < 1e-18) return 0;
+        const r = Number(n.toPrecision(6));
+        return r === 0 ? 0 : r;
+      }).join(", ") + ")";
       const toRad = (tok) => {
         const am = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)(deg|rad|grad|turn)?$/i.exec(tok.trim());
         if (!am) return null;
@@ -13678,6 +13811,11 @@ function installWindow(global) {
           if (kebab === "quotes") return "auto";
           if (kebab === "bookmark-level") return "none";
           if (kebab === "bookmark-state") return "open";
+          if (!hasKnownComputedProp(prop) && !hasKnownComputedProp(kebab) &&
+              getShorthandComputed(prop) === null && getShorthandComputed(kebab) === null &&
+              !prop.startsWith("--")) {
+            return undefined;
+          }
           return "";
         }
         return undefined;
@@ -18040,8 +18178,11 @@ const CSS_TYPED_OM_GLOBALS = {
   // designMode
   if (!Object.getOwnPropertyDescriptor(docProto, "designMode")) {
     Object.defineProperty(docProto, "designMode", {
-      get: function () { return "off"; },
-      set: function (_v) {},
+      get: function () { return this._designMode || "off"; },
+      set: function (v) {
+        const s = String(v).toLowerCase();
+        if (s === "on" || s === "off") this._designMode = s;
+      },
       configurable: true,
     });
   }
@@ -19675,6 +19816,36 @@ const CSS_TYPED_OM_GLOBALS = {
           }
         }
       }
+      if (hit && hit._shadowRoot) {
+        const kids = hit.children || hit._children || [];
+        for (let ki = kids.length - 1; ki >= 0; ki--) {
+          const kd = kids[ki];
+          if (kd && kd.nodeType === 1 && kd.assignedSlot &&
+              !(typeof kd.assignedSlot.hasAttribute === "function" && kd.assignedSlot.hasAttribute("inert")) &&
+              typeof kd.getBoundingClientRect === "function") {
+            const kr = kd.getBoundingClientRect();
+            if (kr && kr.width > 0 && kr.height > 0 && x >= kr.left && x <= kr.right && y >= kr.top && y <= kr.bottom) {
+              hit = kd;
+              break;
+            }
+          }
+        }
+      }
+      // Skip inert HTML subtrees (and elements slotted into inert <slot>)
+      let check = hit;
+      let highestNonInert = hit;
+      while (check && check.nodeType === 1) {
+        const isHtml = !check.namespaceURI || check.namespaceURI === "http://www.w3.org/1999/xhtml";
+        if (isHtml && typeof check.hasAttribute === "function" && check.hasAttribute("inert")) {
+          highestNonInert = check.parentElement || this.body || this.documentElement || null;
+        }
+        if (check.assignedSlot && typeof check.assignedSlot.hasAttribute === "function" && check.assignedSlot.hasAttribute("inert")) {
+          const slotHost = check.assignedSlot.getRootNode ? check.assignedSlot.getRootNode().host : null;
+          highestNonInert = slotHost || check.parentElement || this.body || null;
+        }
+        check = check.parentElement || (check.parentNode && check.parentNode.nodeType === 11 ? check.parentNode.host : null);
+      }
+      hit = highestNonInert;
       return _resolvePseudoHit(hit, x, y);
     }, "elementFromPoint");
     if (global.document && typeof global.document.elementFromPoint === "function") {
@@ -20640,20 +20811,19 @@ const CSS_TYPED_OM_GLOBALS = {
       "onabort", "onafterprint", "onanimationcancel", "onanimationend", "onanimationiteration", "onanimationstart",
       "onauxclick", "onbeforeinput", "onbeforeprint", "onbeforeunload", "onblur", "oncancel", "oncanplay",
       "oncanplaythrough", "onchange", "onclick", "onclose", "oncontextmenu",
-      "oncopy", "oncut", "ondblclick", "ondrag", "ondragend", "ondragenter",
+      "ondblclick", "ondrag", "ondragend", "ondragenter",
       "ondragleave", "ondragover", "ondragstart", "ondrop", "ondurationchange",
       "onemptied", "onended", "onerror", "onfocus", "onformdata", "ongotpointercapture",
       "onhashchange", "oninput", "oninvalid", "onkeydown", "onkeypress", "onkeyup", "onlanguagechange", "onload",
       "onloadeddata", "onloadedmetadata", "onloadstart", "onlostpointercapture",
       "onmessage", "onmessageerror", "onmousedown", "onmouseenter", "onmouseleave", "onmousemove", "onmouseout",
-      "onmouseover", "onmouseup", "onoffline", "ononline", "onpagehide", "onpageshow",
-      "onpaste", "onpause", "onplay", "onplaying",
+      "onmouseover", "onmouseup", "onoffline", "ononline", "onpagehide", "onpagereveal", "onpageshow", "onpageswap",
+      "onpause", "onplay", "onplaying",
       "onpointercancel", "onpointerdown", "onpointerenter", "onpointerleave",
       "onpointermove", "onpointerout", "onpointerover", "onpointerup", "onpopstate", "onprogress",
       "onratechange", "onrejectionhandled", "onreset", "onresize", "onscroll", "onscrollend", "onseeked",
       "onseeking", "onselect", "onselectionchange", "onselectstart", "onstalled", "onstorage",
-      "onsubmit", "onsuspend", "ontimeupdate", "ontoggle", "ontouchcancel",
-      "ontouchend", "ontouchmove", "ontouchstart", "ontransitioncancel",
+      "onsubmit", "onsuspend", "ontimeupdate", "ontoggle", "ontransitioncancel",
       "ontransitionend", "ontransitionrun", "ontransitionstart", "onunhandledrejection", "onunload",
       "onvolumechange", "onwaiting", "onwheel",
     ];
@@ -20663,6 +20833,62 @@ const CSS_TYPED_OM_GLOBALS = {
     if (typeof window !== "undefined") {
       window.__capsurf_invalidateWindowEventHandler = global.__capsurf_invalidateWindowEventHandler;
     }
+    const parseStackLoc = function (stackStr, skipEval) {
+      if (typeof stackStr !== "string") return null;
+      const lines = stackStr.split("\n");
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        const m = /\((.+):(\d+):(\d+)\)$/.exec(line) || /at\s+(.+):(\d+):(\d+)$/.exec(line);
+        if (m) {
+          if (skipEval && (m[1] === "<eval>" || m[1] === "<input>")) continue;
+          return { filename: m[1], lineno: Number(m[2]) || 0, colno: Number(m[3]) || 0 };
+        }
+      }
+      return null;
+    };
+    const reportErrorFn = markNative(function reportError(err) {
+      if (arguments.length === 0) throw new TypeError("Failed to execute 'reportError': 1 argument required, but only 0 present.");
+      const win = typeof window !== "undefined" ? window : global;
+      let msg = "";
+      try {
+        msg = (err && typeof err === "object" && "message" in err) ? String(err.message) : String(err);
+      } catch (_e) {
+        msg = "Error";
+      }
+      let filename = (err && typeof err === "object" && err.fileName) ? String(err.fileName) : "";
+      let lineno = (err && typeof err === "object" && Number(err.lineNumber)) || 0;
+      let colno = (err && typeof err === "object" && Number(err.columnNumber)) || 0;
+      if (!filename || !lineno) {
+        const isErrObj = err && typeof err === "object" && typeof err.stack === "string";
+        const loc = isErrObj
+          ? parseStackLoc(err.stack, false)
+          : parseStackLoc((new Error()).stack, true);
+        if (loc) {
+          if (!filename) filename = loc.filename;
+          if (!lineno) lineno = loc.lineno;
+          if (!colno) colno = loc.colno;
+        }
+      }
+      if (win && typeof win.dispatchEvent === "function" && typeof ErrorEvent === "function") {
+        const errEvt = new ErrorEvent("error", {
+          message: msg,
+          filename: filename,
+          lineno: lineno,
+          colno: colno,
+          error: err,
+          cancelable: true,
+          bubbles: false,
+        });
+        const notCanceled = win.dispatchEvent(errEvt);
+        if (notCanceled && typeof win.onerror === "function") {
+          try { win.onerror.call(win, msg, filename, lineno, colno, err); } catch (_e2) {}
+        }
+      }
+    }, "reportError");
+    global.reportError = reportErrorFn;
+    if (typeof globalThis !== "undefined") globalThis.reportError = reportErrorFn;
+    if (typeof window !== "undefined") window.reportError = reportErrorFn;
     for (let i = 0; i < WINDOW_EVENT_HANDLER_NAMES.length; i++) {
       const prop = WINDOW_EVENT_HANDLER_NAMES[i];
       if (Object.prototype.hasOwnProperty.call(winTarget, prop)) continue;

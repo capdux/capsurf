@@ -27,12 +27,16 @@ import { HttpLoader, HttpLoaderResult } from "../net/http_loader.cp";
 import { ReferrerPolicy, parseReferrerPolicy, determineReferrer } from "../net/referrer_policy.cp";
 import { CspPolicy, parseCsp, verifySriIntegrity, isScriptNosniffBlocked, isInlineScriptAllowed, isInlineEventHandlerAllowed, isExternalScriptAllowed } from "../net/csp.cp";
 import { svgDocumentHtml, isSvgDocument } from "./svg_document.cp";
-import { PAGE_RUNTIME_HOOKS_JS, PAGE_INSERTED_SCRIPT_HOOKS_JS, PAGE_WEBMCP_HOOKS_JS, registerSessionHooksNative, registerCtxSession, unregisterCtxSession, terminateWorkersForRuntime, registerHttpGetHook, registerHttpRequestHook, registerSyncXhrHook, registerShouldInterceptHook, registerFetchPauseHook, runSpeculativePrefetchForNav, clearLearnedScripts } from "./session_hooks.cp";
+import { PAGE_RUNTIME_HOOKS_JS, PAGE_INSERTED_SCRIPT_HOOKS_JS, PAGE_WEBMCP_HOOKS_JS, registerSessionHooksNative, registerCtxSession, unregisterCtxSession, terminateWorkersForRuntime, registerHttpGetHook, registerHttpRequestHook, registerHttpRequestAsyncHook, registerSyncXhrHook, registerShouldInterceptHook, registerFetchPauseHook, runSpeculativePrefetchForNav, clearLearnedScripts } from "./session_hooks.cp";
 import { MAX_CONCURRENT_OOPIF } from "./worker_budget.cp";
 import { ttyUaStylesheet, DEFAULT_TTY_CELL_WIDTH_PX, DEFAULT_TTY_CELL_HEIGHT_PX } from "../tty/nav_params.cp";
 
 fn tryAllocBytes(allocator: std.mem.Allocator, n: usize): ([]u8)? {
     return allocator.alloc(u8, n) catch return null;
+}
+
+fn tryBase64Encode(allocator: std.mem.Allocator, data: []const u8): ([]u8)? {
+    return Base64.encodeAlloc(allocator, data) catch return null;
 }
 
 fn tryFetchCssWithReferrer(sess: *CdpPageSession, url: []const u8, out_buf: []u8, ref_url: []const u8): HttpLoaderResult? {
@@ -104,14 +108,63 @@ fn hasContentTypeKey(s: []const u8): bool {
     return false;
 }
 
+fn stripUaFromHeadersJson(headers_json: []const u8, out_buf: []u8): []const u8 {
+    const trimmed = std.mem.trim(u8, headers_json, " \t\r\n");
+    if (trimmed.len < 2 || trimmed[0] != '{' || trimmed[trimmed.len - 1] != '}') return headers_json;
+    let pos: usize = 0;
+    if (out_buf.len < 2) return headers_json;
+    out_buf[pos] = '{';
+    pos += 1;
+    let first = true;
+    let p: usize = 1;
+    while (p < trimmed.len - 1) {
+        while (p < trimmed.len - 1 && (trimmed[p] == ' ' || trimmed[p] == ',' || trimmed[p] == '\t' || trimmed[p] == '\r' || trimmed[p] == '\n')) : (p += 1) {}
+        if (p >= trimmed.len - 1 || trimmed[p] == '}') break;
+        if (trimmed[p] != '"') return headers_json;
+        const entry_start = p;
+        p += 1;
+        const k_start = p;
+        while (p < trimmed.len - 1 && trimmed[p] != '"') : (p += 1) {
+            if (trimmed[p] == '\\' && p + 1 < trimmed.len - 1) p += 1;
+        }
+        const key = trimmed[k_start..p];
+        if (p < trimmed.len - 1 && trimmed[p] == '"') p += 1;
+        while (p < trimmed.len - 1 && (trimmed[p] == ' ' || trimmed[p] == ':' || trimmed[p] == '\t')) : (p += 1) {}
+        if (p >= trimmed.len - 1 || trimmed[p] != '"') return headers_json;
+        p += 1;
+        while (p < trimmed.len - 1 && trimmed[p] != '"') : (p += 1) {
+            if (trimmed[p] == '\\' && p + 1 < trimmed.len - 1) p += 1;
+        }
+        if (p < trimmed.len - 1 && trimmed[p] == '"') p += 1;
+        const entry_end = p;
+        if (std.ascii.eqlIgnoreCase(key, "user-agent")) continue;
+        const entry = trimmed[entry_start..entry_end];
+        if (!first) {
+            if (pos + 1 >= out_buf.len) return headers_json;
+            out_buf[pos] = ',';
+            pos += 1;
+        }
+        if (pos + entry.len >= out_buf.len) return headers_json;
+        @memcpy(out_buf[pos .. pos + entry.len], entry);
+        pos += entry.len;
+        first = false;
+    }
+    if (pos + 1 > out_buf.len) return headers_json;
+    out_buf[pos] = '}';
+    pos += 1;
+    return out_buf[0..pos];
+}
+
 fn sessionHttpRequestHook(session_ptr: *void, url: []const u8, method: []const u8, post_data: []const u8, content_type: []const u8, headers_json: []const u8, out_buf: []u8): i64 {
     let sess: *CdpPageSession = unsafe { @ptrCast(@alignCast(session_ptr)) };
     const prev_extra_headers = sess.extra_headers;
     const trimmed_hj = std.mem.trim(u8, headers_json, " \t\r\n");
     const has_req_headers = trimmed_hj.len > 2 && trimmed_hj[0] == '{' && trimmed_hj[trimmed_hj.len - 1] == '}';
-    const base_headers = if (has_req_headers) trimmed_hj else prev_extra_headers;
+    let stripped_hj_buf: [4096]u8 = undefined;
+    const clean_hj = if (has_req_headers) stripUaFromHeadersJson(trimmed_hj, &stripped_hj_buf) else trimmed_hj;
+    const base_headers = if (has_req_headers) clean_hj else prev_extra_headers;
     if (has_req_headers) {
-        sess.extra_headers = trimmed_hj;
+        sess.extra_headers = clean_hj;
     }
     let temp_hdr_buf: [4096]u8 = undefined;
     if (content_type.len > 0) {
@@ -453,6 +506,410 @@ fn sessionFetchPauseHook(
         binary_object_size: i64,
     }
     fn JS_ComputeMemoryUsage(rt: *JSRuntime, s: *JSMemoryUsage);
+    struct SessSockAddrIn {
+        sin_family: u16;
+        sin_port: u16;
+        sin_addr: u32;
+        sin_zero: [8]u8;
+    }
+    struct SessPollFd {
+        fd: i32;
+        events: i16;
+        revents: i16;
+    }
+    fn socket(domain: i32, @"type": i32, protocol: i32): i32;
+    fn connect(fd: i32, addr: *const SessSockAddrIn, len: u32): i32;
+    fn send(fd: i32, buf: [*]const u8, len: usize, flags: i32): isize;
+    fn recv(fd: i32, buf: [*]u8, len: usize, flags: i32): isize;
+    fn poll(fds: [*]SessPollFd, nfds: usize, timeout: i32): i32;
+}
+
+const SESS_AF_INET: i32 = 2;
+const SESS_SOCK_STREAM: i32 = 1;
+const SESS_POLLIN: i16 = 0x0001;
+const SESS_POLLERR: i16 = 0x0008;
+const SESS_POLLHUP: i16 = 0x0010;
+const SESS_MSG_DONTWAIT: i32 = 0x40;
+
+pub struct PendingAsyncHttpSlot {
+    active: bool = false,
+    is_sse: bool = false,
+    is_event_source: bool = false,
+    fd: i32 = -1,
+    net_id_buf: [64]u8 = [0; 64],
+    net_id_len: usize = 0,
+    url_buf: [2048]u8 = [0; 2048],
+    url_len: usize = 0,
+    recv_buf: ([]u8)? = null,
+    recv_len: usize = 0,
+    resolve_fn: JSValue = JSValue{ .u = .{ .uint64 = 0 }, .tag = 0 },
+    reject_fn: JSValue = JSValue{ .u = .{ .uint64 = 0 }, .tag = 0 },
+
+    fn closeFd(*_) {
+        if (_.fd >= 0) {
+            * = std.c.close(_.fd);
+            _.fd = -1;
+        }
+    }
+
+    fn freeRecvBuf(*_) {
+        if (rb := _.recv_buf) {
+            std.heap.c_allocator.free(rb);
+            _.recv_buf = null;
+        }
+        _.recv_len = 0;
+    }
+
+    fn netId(): []const u8 {
+        return _.net_id_buf[0.._.net_id_len];
+    }
+
+    fn url(): []const u8 {
+        return _.url_buf[0.._.url_len];
+    }
+}
+
+fn sessSendAll(fd: i32, data: []const u8): bool {
+    let sent: usize = 0;
+    while (sent < data.len) {
+        const n = send(fd, unsafe { data.ptr + sent }, data.len - sent, 0);
+        if (n <= 0) return false;
+        sent += @as(usize, @intCast(n));
+    }
+    return true;
+}
+
+fn parseAsyncContentLength(hdrs: []const u8): usize? {
+    let pos: usize = 0;
+    while (pos < hdrs.len) {
+        let line_end = hdrs.len;
+        if (nl := std.mem.indexOfScalarPos(u8, hdrs, pos, '\n')) {
+            line_end = nl;
+        }
+        let line = hdrs[pos..line_end];
+        if (line.len > 0 && line[line.len - 1] == '\r') line = line[0 .. line.len - 1];
+        pos = if (line_end < hdrs.len) line_end + 1 else hdrs.len;
+        if (colon := std.mem.indexOfScalar(u8, line, ':')) {
+            const k = std.mem.trim(u8, line[0..colon], " \t");
+            if (std.ascii.eqlIgnoreCase(k, "content-length")) {
+                const v = std.mem.trim(u8, line[colon + 1 ..], " \t");
+                return std.fmt.parseInt(usize, v, 10) catch return null;
+            }
+        }
+    }
+    return null;
+}
+
+fn isAsyncChunked(hdrs: []const u8): bool {
+    let pos: usize = 0;
+    while (pos < hdrs.len) {
+        let line_end = hdrs.len;
+        if (nl := std.mem.indexOfScalarPos(u8, hdrs, pos, '\n')) {
+            line_end = nl;
+        }
+        let line = hdrs[pos..line_end];
+        if (line.len > 0 && line[line.len - 1] == '\r') line = line[0 .. line.len - 1];
+        pos = if (line_end < hdrs.len) line_end + 1 else hdrs.len;
+        if (colon := std.mem.indexOfScalar(u8, line, ':')) {
+            const k = std.mem.trim(u8, line[0..colon], " \t");
+            if (std.ascii.eqlIgnoreCase(k, "transfer-encoding")) {
+                const v = std.mem.trim(u8, line[colon + 1 ..], " \t");
+                if (HttpLoader.containsIgnoreCase(v, "chunked")) return true;
+            }
+        }
+    }
+    return false;
+}
+
+fn extractAsyncMime(hdrs: []const u8): []const u8 {
+    let pos: usize = 0;
+    while (pos < hdrs.len) {
+        let line_end = hdrs.len;
+        if (nl := std.mem.indexOfScalarPos(u8, hdrs, pos, '\n')) {
+            line_end = nl;
+        }
+        let line = hdrs[pos..line_end];
+        if (line.len > 0 && line[line.len - 1] == '\r') line = line[0 .. line.len - 1];
+        pos = if (line_end < hdrs.len) line_end + 1 else hdrs.len;
+        if (colon := std.mem.indexOfScalar(u8, line, ':')) {
+            const k = std.mem.trim(u8, line[0..colon], " \t");
+            if (std.ascii.eqlIgnoreCase(k, "content-type")) {
+                const v = std.mem.trim(u8, line[colon + 1 ..], " \t");
+                if (semi := std.mem.indexOfScalar(u8, v, ';')) {
+                    return std.mem.trim(u8, v[0..semi], " \t");
+                }
+                return v;
+            }
+        }
+    }
+    return "text/plain";
+}
+
+fn isAsyncSse(hdrs: []const u8): bool {
+    return std.ascii.eqlIgnoreCase(extractAsyncMime(hdrs), "text/event-stream");
+}
+
+fn sessionHttpRequestAsyncHook(
+    session_ptr: *void,
+    url: []const u8,
+    method: []const u8,
+    headers_json: []const u8,
+    post_data: []const u8,
+    resolve_fn: JSValue,
+    reject_fn: JSValue,
+): bool {
+    let sess: *CdpPageSession = unsafe { @ptrCast(@alignCast(session_ptr)) };
+    const parsed_opt = HttpLoader.parseHttpUrl(url);
+    if (parsed_opt == null) return false;
+    const parsed = parsed_opt.?;
+    if (parsed.secure) return false;
+    const is_localhost = std.ascii.eqlIgnoreCase(parsed.host, "localhost");
+    const ip_opt = HttpLoader.parseIpv4(parsed.host);
+    if (ip_opt == null && !is_localhost) return false;
+    const ip_addr = ip_opt ?? 0x0100007F;
+
+    let free_idx: (usize)? = null;
+    let si: usize = 0;
+    while (si < sess.pending_async_http.len) : (si += 1) {
+        if (!sess.pending_async_http[si].active) {
+            free_idx = si;
+            break;
+        }
+    }
+    if (free_idx == null) return false;
+    const idx = free_idx.?;
+
+    const sock_fd = socket(SESS_AF_INET, SESS_SOCK_STREAM, 0);
+    if (sock_fd < 0) return false;
+
+    const addr = SessSockAddrIn{
+        sin_family: @as(u16, @intCast(SESS_AF_INET)),
+        sin_port: std.mem.nativeToBig(u16, parsed.port),
+        sin_addr: ip_addr,
+        sin_zero: [0; 8],
+    };
+    if (connect(sock_fd, &addr, @sizeOf(SessSockAddrIn)) < 0) {
+        * = std.c.close(sock_fd);
+        return false;
+    }
+
+    let req_buf: [8192]u8 = undefined;
+    let rpos: usize = 0;
+    const rl = std.fmt.bufPrint(req_buf[rpos..], "{s} {s} HTTP/1.1\r\n", .{ method, parsed.path }) catch {
+        * = std.c.close(sock_fd);
+        return false;
+    };
+    rpos += rl.len;
+    const hh = if (parsed.port != 80)
+        std.fmt.bufPrint(req_buf[rpos..], "Host: {s}:{d}\r\n", .{ parsed.host, parsed.port }) catch {
+            * = std.c.close(sock_fd);
+            return false;
+        }
+    else
+        std.fmt.bufPrint(req_buf[rpos..], "Host: {s}\r\n", .{parsed.host}) catch {
+            * = std.c.close(sock_fd);
+            return false;
+        };
+    rpos += hh.len;
+
+    const ua = if (sess.user_agent.len > 0) sess.user_agent else DEFAULT_HTTP_USER_AGENT;
+    let has_custom_ua = false;
+    let has_custom_accept = false;
+    let has_custom_referer = false;
+    let has_custom_cl = false;
+
+    const trimmed_hj = std.mem.trim(u8, headers_json, " \t\r\n");
+    if (trimmed_hj.len >= 2 && trimmed_hj[0] == '{') {
+        let hp: usize = 1;
+        while (hp < trimmed_hj.len) {
+            while (hp < trimmed_hj.len && (trimmed_hj[hp] == ' ' || trimmed_hj[hp] == ',' || trimmed_hj[hp] == '\t' || trimmed_hj[hp] == '\r' || trimmed_hj[hp] == '\n')) : (hp += 1) {}
+            if (hp >= trimmed_hj.len || trimmed_hj[hp] == '}') break;
+            if (trimmed_hj[hp] != '"') break;
+            hp += 1;
+            const k_start = hp;
+            while (hp < trimmed_hj.len && trimmed_hj[hp] != '"') : (hp += 1) {
+                if (trimmed_hj[hp] == '\\' && hp + 1 < trimmed_hj.len) hp += 1;
+            }
+            const h_key = trimmed_hj[k_start..hp];
+            if (hp < trimmed_hj.len && trimmed_hj[hp] == '"') hp += 1;
+            while (hp < trimmed_hj.len && (trimmed_hj[hp] == ' ' || trimmed_hj[hp] == ':' || trimmed_hj[hp] == '\t')) : (hp += 1) {}
+            if (hp >= trimmed_hj.len || trimmed_hj[hp] != '"') break;
+            hp += 1;
+            const v_start = hp;
+            while (hp < trimmed_hj.len && trimmed_hj[hp] != '"') : (hp += 1) {
+                if (trimmed_hj[hp] == '\\' && hp + 1 < trimmed_hj.len) hp += 1;
+            }
+            const h_val = trimmed_hj[v_start..hp];
+            if (hp < trimmed_hj.len && trimmed_hj[hp] == '"') hp += 1;
+            if (h_key.len == 0) continue;
+            if (std.ascii.eqlIgnoreCase(h_key, "host") || std.ascii.eqlIgnoreCase(h_key, "connection")) continue;
+            if (std.ascii.eqlIgnoreCase(h_key, "user-agent")) {
+                if (has_custom_ua) continue;
+                has_custom_ua = true;
+            } else if (std.ascii.eqlIgnoreCase(h_key, "accept")) {
+                if (has_custom_accept) continue;
+                has_custom_accept = true;
+            } else if (std.ascii.eqlIgnoreCase(h_key, "referer")) {
+                if (has_custom_referer) continue;
+                has_custom_referer = true;
+            } else if (std.ascii.eqlIgnoreCase(h_key, "content-length")) {
+                has_custom_cl = true;
+            }
+            if (rpos + h_key.len + h_val.len + 4 < req_buf.len) {
+                const kh = std.fmt.bufPrint(req_buf[rpos..], "{s}: {s}\r\n", .{ h_key, h_val }) catch break;
+                rpos += kh.len;
+            }
+        }
+    }
+
+    if (!has_custom_ua) {
+        const uah = std.fmt.bufPrint(req_buf[rpos..], "User-Agent: {s}\r\n", .{ua}) catch {
+            * = std.c.close(sock_fd);
+            return false;
+        };
+        rpos += uah.len;
+    }
+    if (!has_custom_accept) {
+        const acch = std.fmt.bufPrint(req_buf[rpos..], "Accept: */*\r\n", .{}) catch {
+            * = std.c.close(sock_fd);
+            return false;
+        };
+        rpos += acch.len;
+    }
+    const connh = std.fmt.bufPrint(req_buf[rpos..], "Connection: close\r\n", .{}) catch {
+        * = std.c.close(sock_fd);
+        return false;
+    };
+    rpos += connh.len;
+
+    if (!has_custom_referer && sess.url.len > 0 && !std.mem.eql(u8, sess.url, "about:blank")) {
+        const refh = std.fmt.bufPrint(req_buf[rpos..], "Referer: {s}\r\n", .{sess.url}) catch "";
+        rpos += refh.len;
+    }
+    if (!has_custom_cl && post_data.len > 0) {
+        const clh = std.fmt.bufPrint(req_buf[rpos..], "Content-Length: {d}\r\n", .{post_data.len}) catch {
+            * = std.c.close(sock_fd);
+            return false;
+        };
+        rpos += clh.len;
+    }
+    const endh = std.fmt.bufPrint(req_buf[rpos..], "\r\n", .{}) catch {
+        * = std.c.close(sock_fd);
+        return false;
+    };
+    rpos += endh.len;
+
+    if (!sessSendAll(sock_fd, req_buf[0..rpos])) {
+        * = std.c.close(sock_fd);
+        return false;
+    }
+    if (post_data.len > 0) {
+        if (!sessSendAll(sock_fd, post_data)) {
+            * = std.c.close(sock_fd);
+            return false;
+        }
+    }
+
+    const rbuf = std.heap.c_allocator.alloc(u8, 65536) catch {
+        * = std.c.close(sock_fd);
+        return false;
+    };
+
+    sess.net_req_seq += 1;
+    let nid_buf: [64]u8 = [0; 64];
+    const net_id = std.fmt.bufPrint(&nid_buf, "req-{d}", .{sess.net_req_seq}) catch "req-1";
+    const is_es_req = HttpLoader.containsIgnoreCase(headers_json, "text/event-stream");
+    const req_type_str: []const u8 = if (is_es_req) "EventSource" else "Fetch";
+
+    if (sess.network_enabled) {
+        let esc_doc_buf: [2048]u8 = [0; 2048];
+        const esc_doc = escapeJsonString(sess.url, &esc_doc_buf);
+        let esc_url_buf: [2048]u8 = [0; 2048];
+        const esc_url = escapeJsonString(url, &esc_url_buf);
+        let esc_ua_buf: [1024]u8 = [0; 1024];
+        const esc_ua = escapeJsonString(ua, &esc_ua_buf);
+        let ref_kv_buf: [2048]u8 = [0; 2048];
+        let ref_kv: []const u8 = "";
+        if (sess.url.len > 0 && !std.mem.eql(u8, sess.url, "about:blank")) {
+            ref_kv = std.fmt.bufPrint(&ref_kv_buf, ",\"referer\":\"{s}\"", .{esc_doc}) catch "";
+        }
+        let req_hdrs_buf: [4096]u8 = [0; 4096];
+        const req_hdrs_json = if (headers_json.len > 2 && headers_json[0] == '{')
+            headers_json
+        else
+            (std.fmt.bufPrint(&req_hdrs_buf, "{{\"user-agent\":\"{s}\",\"accept\":\"*/*\"{s}}}", .{ esc_ua, ref_kv }) catch "{}");
+        let pd_kv_buf: [4096]u8 = [0; 4096];
+        let pd_kv_dyn: ([]u8)? = null;
+        defer {
+            if (d := pd_kv_dyn) std.heap.c_allocator.free(d);
+        }
+        let pd_kv: []const u8 = "";
+        if (post_data.len > 0) {
+            const pd_b64 = Base64.encodeAlloc(sess.allocator, post_data) catch "";
+            defer if (pd_b64.len > 0) sess.allocator.free(pd_b64);
+            const esc_len = CdpPageSession.jsonEscapedLen(post_data);
+            if (esc_len <= 1536) {
+                let pd_esc_buf: [1536]u8 = [0; 1536];
+                const pd_esc = CdpPageSession.escapeJsonStringExact(post_data, &pd_esc_buf);
+                pd_kv = std.fmt.bufPrint(&pd_kv_buf, ",\"hasPostData\":true,\"postData\":\"{s}\",\"postDataEntries\":[{{\"bytes\":\"{s}\"}}]", .{ pd_esc, pd_b64 }) catch blk: {
+                    if (dyn_buf := std.fmt.allocPrint(std.heap.c_allocator, ",\"hasPostData\":true,\"postData\":\"{s}\",\"postDataEntries\":[{{\"bytes\":\"{s}\"}}]", .{ pd_esc, pd_b64 }) catch null) {
+                        pd_kv_dyn = dyn_buf;
+                        break :blk dyn_buf;
+                    }
+                    break :blk "";
+                };
+            } else {
+                if (pd_esc_buf := std.heap.c_allocator.alloc(u8, esc_len) catch null) {
+                    defer std.heap.c_allocator.free(pd_esc_buf);
+                    const pd_esc = CdpPageSession.escapeJsonStringExact(post_data, pd_esc_buf);
+                    if (dyn_buf := std.fmt.allocPrint(std.heap.c_allocator, ",\"hasPostData\":true,\"postData\":\"{s}\",\"postDataEntries\":[{{\"bytes\":\"{s}\"}}]", .{ pd_esc, pd_b64 }) catch null) {
+                        pd_kv_dyn = dyn_buf;
+                        pd_kv = dyn_buf;
+                    }
+                }
+            }
+        }
+        let nev_buf: [4096]u8 = [0; 4096];
+        let nev_dyn: ([]u8)? = null;
+        defer {
+            if (d := nev_dyn) std.heap.c_allocator.free(d);
+        }
+        const req_json = std.fmt.bufPrint(
+            &nev_buf,
+            "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"{s}\",\"headers\":{s},\"initialPriority\":\"High\",\"referrerPolicy\":\"no-referrer\"{s}}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"script\"}},\"type\":\"{s}\",\"frameId\":\"{s}\"}}",
+            .{ net_id, sess.loader_id, esc_doc, esc_url, method, req_hdrs_json, pd_kv, req_type_str, sess.frame_id },
+        ) catch blk: {
+            if (dyn_buf := std.fmt.allocPrint(
+                std.heap.c_allocator,
+                "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"{s}\",\"headers\":{s},\"initialPriority\":\"High\",\"referrerPolicy\":\"no-referrer\"{s}}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"script\"}},\"type\":\"{s}\",\"frameId\":\"{s}\"}}",
+                .{ net_id, sess.loader_id, esc_doc, esc_url, method, req_hdrs_json, pd_kv, req_type_str, sess.frame_id },
+            ) catch null) {
+                nev_dyn = dyn_buf;
+                break :blk dyn_buf;
+            }
+            break :blk "";
+        };
+        if (req_json.len > 0) {
+            * = sess.addPendingFetchEvent("Network.requestWillBeSent", req_json);
+        }
+    }
+
+    let slot = &sess.pending_async_http[idx];
+    slot.is_sse = false;
+    slot.is_event_source = is_es_req;
+    slot.fd = sock_fd;
+    const nid_n = @min(net_id.len, slot.net_id_buf.len);
+    @memcpy(slot.net_id_buf[0..nid_n], net_id[0..nid_n]);
+    slot.net_id_len = nid_n;
+    const u_n = @min(url.len, slot.url_buf.len);
+    @memcpy(slot.url_buf[0..u_n], url[0..u_n]);
+    slot.url_len = u_n;
+    slot.recv_buf = rbuf;
+    slot.recv_len = 0;
+    slot.resolve_fn = resolve_fn;
+    slot.reject_fn = reject_fn;
+    slot.active = true;
+    return true;
 }
 
 pub struct PendingJsFetchSlot {
@@ -1510,6 +1967,7 @@ pub struct CdpPageSession {
     active_net_req_id_len: usize = 0,
     redirect_live_emitted: bool = false,
     pending_fetch_js: [32]PendingJsFetchSlot = [PendingJsFetchSlot{}; 32],
+    pending_async_http: [16]PendingAsyncHttpSlot = [PendingAsyncHttpSlot{}; 16],
     continued_fetch_nets: [16]ContinuedFetchNetSlot = [ContinuedFetchNetSlot{}; 16],
     pending_fetch_events: [64]PendingFetchEventSlot = [PendingFetchEventSlot{}; 64],
     pending_fetch_event_head: usize = 0,
@@ -2353,6 +2811,12 @@ pub struct CdpPageSession {
             let exc_str_buf: [256]u8 = undefined;
             const exc_len = _.formatCdpException(exc, &exc_str_buf);
             std.debug.print("[INLINE_SCRIPT_ERR] {s}\n", .{exc_str_buf[0..exc_len]});
+            const global_obj = _.ctx.getGlobal();
+            * = JS_SetPropertyStr(_.ctx.raw_ctx, global_obj, "__capsurf_last_script_err", JS_DupValue(_.ctx.raw_ctx, exc));
+            _.ctx.freeValue(global_obj);
+            const err_evt_js = "(function(){try{var e=globalThis.__capsurf_last_script_err;delete globalThis.__capsurf_last_script_err;var t=typeof window!=='undefined'?window:globalThis;if(t&&typeof t.dispatchEvent==='function'&&typeof ErrorEvent==='function'){var msg=(e&&typeof e==='object'&&'message' in e)?('Uncaught '+String(e.name||'Error')+': '+String(e.message)):('Uncaught '+String(e));var ln=0,cn=0;var st=(e&&typeof e==='object'&&typeof e.stack==='string')?e.stack:'';var m=st.match(/:(\\d+)(?::(\\d+))?/);if(m){ln=Number(m[1])|0;cn=m[2]?(Number(m[2])|0):0;}var fn=(typeof document!=='undefined'&&document&&document.currentScript&&document.currentScript.src)?document.currentScript.src:(typeof location!=='undefined'&&location?location.href:'');var ev=new ErrorEvent('error',{message:msg,error:e,filename:fn,lineno:ln,colno:cn,cancelable:true});t.dispatchEvent(ev);}}catch(_ex){}})()";
+            const err_evt_v = _.ctx.eval(err_evt_js);
+            _.ctx.freeValue(err_evt_v);
             _.ctx.freeValue(exc);
         }
         _.ctx.freeValue(js_res);
@@ -2415,6 +2879,18 @@ pub struct CdpPageSession {
                 _.pending_fetch_js[pfi].active = false;
                 _.pending_fetch_js[pfi].req_id_len = 0;
                 _.pending_fetch_js[pfi].net_id_len = 0;
+            }
+        }
+        let ahi: usize = 0;
+        while (ahi < _.pending_async_http.len) : (ahi += 1) {
+            if (_.pending_async_http[ahi].active) {
+                _.pending_async_http[ahi].closeFd();
+                _.pending_async_http[ahi].freeRecvBuf();
+                JS_FreeValue(_.ctx.raw_ctx, _.pending_async_http[ahi].resolve_fn);
+                JS_FreeValue(_.ctx.raw_ctx, _.pending_async_http[ahi].reject_fn);
+                _.pending_async_http[ahi].resolve_fn = jsUndefined();
+                _.pending_async_http[ahi].reject_fn = jsUndefined();
+                _.pending_async_http[ahi].active = false;
             }
         }
         _.clearNewDocumentScripts();
@@ -3250,6 +3726,7 @@ pub struct CdpPageSession {
         _.nav_seq += 1;
         registerHttpGetHook(unsafe { @ptrCast(_) }, &sessionHttpGetHook);
         registerHttpRequestHook(&sessionHttpRequestHook);
+        registerHttpRequestAsyncHook(&sessionHttpRequestAsyncHook);
         registerSyncXhrHook(&sessionSyncXhrHook);
         registerShouldInterceptHook(unsafe { @ptrCast(_) }, &sessionShouldInterceptHook);
         registerFetchPauseHook(unsafe { @ptrCast(_) }, &sessionFetchPauseHook);
@@ -3982,7 +4459,7 @@ pub struct CdpPageSession {
             _.ctx.freeValue(defer_flush);
         }
         {
-            const iframe_boot = _.ctx.eval("(function(){if(typeof globalThis.parent==='undefined'&&typeof window!=='undefined')globalThis.parent=window;if(typeof document==='undefined'||!document.querySelectorAll)return;var fs=document.querySelectorAll('iframe');for(var i=0;i<fs.length;i++){var f=fs[i];if(f&&!f._contentWindow&&f.getAttribute){var s=f.getAttribute('src');if(s&&(s.indexOf('frame-policy-child')!==-1||s.indexOf('euckr-child.html')!==-1)){var ol=f.getAttribute('onload');if(ol&&typeof f.addEventListener==='function'){try{f.addEventListener('load',new Function('event',ol));}catch(e){}}f.src=s;}}}})()");
+            const iframe_boot = _.ctx.eval("(function(){if(typeof globalThis.parent==='undefined'&&typeof window!=='undefined')globalThis.parent=window;if(typeof document==='undefined'||!document.querySelectorAll)return;var d=Number(globalThis.__capsurf_iframe_boot_depth||0);if(d>=8)return;globalThis.__capsurf_iframe_boot_depth=d+1;try{var fs=document.querySelectorAll('iframe');var curHref=(typeof location!=='undefined'&&location&&location.href)?String(location.href):'';for(var i=0;i<fs.length;i++){var f=fs[i];if(!f||f._contentWindow||f._iframeBooted||!f.getAttribute)continue;var hasSrcdoc=f.hasAttribute&&f.hasAttribute('srcdoc');var s=f.getAttribute('src');if(!hasSrcdoc&&(!s||s==='about:blank'||(curHref&&s===curHref)))continue;f._iframeBooted=true;var ol=f.getAttribute('onload');if(ol&&!f._onloadBound&&typeof f.addEventListener==='function'){try{f.addEventListener('load',new Function('event',ol));f._onloadBound=true;}catch(e){}}if(typeof globalThis.__capsurf_on_iframe_connected==='function'){globalThis.__capsurf_on_iframe_connected(f);}else if(hasSrcdoc){f.srcdoc=f.getAttribute('srcdoc');}else{f.src=s;}}}finally{globalThis.__capsurf_iframe_boot_depth=d;}})()");
             _.ctx.freeValue(iframe_boot);
         }
         _.ctx.drainJobs();
@@ -4376,6 +4853,7 @@ pub struct CdpPageSession {
 
     pub fn pumpTimers(*_) {
         _.pumpFetchVerdicts();
+        _.pumpAsyncHttpFetches();
         if (!_.has_document) return;
         const pump_res = _.ctx.eval("(function(){if(typeof __capsurf_pump_timers==='function')return __capsurf_pump_timers();return -1;})()");
         _.ctx.freeValue(pump_res);
@@ -4449,7 +4927,56 @@ pub struct CdpPageSession {
         return true;
     }
 
+    pub fn activeAsyncFetchCount(): u32 {
+        let count: u32 = 0;
+        let ahi: usize = 0;
+        while (ahi < _.pending_async_http.len) : (ahi += 1) {
+            if (_.pending_async_http[ahi].active && !_.pending_async_http[ahi].is_sse) count += 1;
+        }
+        let pfi: usize = 0;
+        while (pfi < _.pending_fetch_js.len) : (pfi += 1) {
+            if (_.pending_fetch_js[pfi].active) count += 1;
+        }
+        return count;
+    }
+
     pub fn onBeforeNavigate(*_) {
+        let ahi: usize = 0;
+        while (ahi < _.pending_async_http.len) : (ahi += 1) {
+            if (_.pending_async_http[ahi].active) {
+                if (_.network_enabled) {
+                    const net_id = _.pending_async_http[ahi].netId();
+                    let fail_buf: [512]u8 = [0; 512];
+                    const fail_json = std.fmt.bufPrint(
+                        &fail_buf,
+                        "{{\"requestId\":\"{s}\",\"timestamp\":1700000000.2,\"type\":\"Fetch\",\"errorText\":\"net::ERR_ABORTED\",\"canceled\":true}}",
+                        .{net_id},
+                    ) catch "";
+                    if (fail_json.len > 0) {
+                        * = _.addPendingFetchEvent("Network.loadingFailed", fail_json);
+                    }
+                }
+                _.pending_async_http[ahi].closeFd();
+                _.pending_async_http[ahi].freeRecvBuf();
+                JS_FreeValue(_.ctx.raw_ctx, _.pending_async_http[ahi].resolve_fn);
+                JS_FreeValue(_.ctx.raw_ctx, _.pending_async_http[ahi].reject_fn);
+                _.pending_async_http[ahi].resolve_fn = jsUndefined();
+                _.pending_async_http[ahi].reject_fn = jsUndefined();
+                _.pending_async_http[ahi].active = false;
+            }
+        }
+        let pfi: usize = 0;
+        while (pfi < _.pending_fetch_js.len) : (pfi += 1) {
+            if (_.pending_fetch_js[pfi].active) {
+                JS_FreeValue(_.ctx.raw_ctx, _.pending_fetch_js[pfi].resolve_fn);
+                JS_FreeValue(_.ctx.raw_ctx, _.pending_fetch_js[pfi].reject_fn);
+                _.pending_fetch_js[pfi].resolve_fn = jsUndefined();
+                _.pending_fetch_js[pfi].reject_fn = jsUndefined();
+                _.pending_fetch_js[pfi].active = false;
+                _.pending_fetch_js[pfi].req_id_len = 0;
+                _.pending_fetch_js[pfi].net_id_len = 0;
+            }
+        }
         _.resetDomTracking();
         if (!_.css_enabled) return;
         let i: usize = 0;
@@ -7431,6 +7958,228 @@ pub struct CdpPageSession {
             slot.req_id_len = 0;
             slot.net_id_len = 0;
             p.reset();
+            resolved_any = true;
+        }
+
+        if (resolved_any) {
+            _.ctx.drainJobs();
+        }
+    }
+
+    pub fn pumpAsyncHttpFetches(*_) {
+        if (!_.has_document) return;
+        const raw_ctx = _.ctx.raw_ctx;
+        let resolved_any = false;
+
+        let i: usize = 0;
+        while (i < _.pending_async_http.len) : (i += 1) {
+            let slot = &_.pending_async_http[i];
+            if (!slot.active || slot.fd < 0) continue;
+            if (slot.recv_buf == null) continue;
+
+            let finished = false;
+            let net_err = false;
+            let iter: usize = 0;
+            while (iter < 32) : (iter += 1) {
+                let pfd: [1]SessPollFd = [SessPollFd{ fd: slot.fd, events: SESS_POLLIN, revents: 0 }];
+                const pr = poll(unsafe { @ptrCast(&pfd) }, 1, 0);
+                if (pr <= 0) break;
+                if ((pfd[0].revents & (SESS_POLLIN | SESS_POLLHUP | SESS_POLLERR)) == 0) break;
+
+                let buf = slot.recv_buf.?;
+                if (slot.recv_len + 4096 > buf.len) {
+                    const new_cap = buf.len * 2;
+                    if (new_buf := std.heap.c_allocator.realloc(buf, new_cap) catch null) {
+                        slot.recv_buf = new_buf;
+                        buf = new_buf;
+                    } else {
+                        finished = true;
+                        break;
+                    }
+                }
+                const avail = buf.len - slot.recv_len;
+                const n = recv(slot.fd, unsafe { buf.ptr + slot.recv_len }, avail, SESS_MSG_DONTWAIT);
+                if (n > 0) {
+                    slot.recv_len += @as(usize, @intCast(n));
+                    const cur = buf[0..slot.recv_len];
+                    if (hdr_end := std.mem.indexOf(u8, cur, "\r\n\r\n")) {
+                        const body_start = hdr_end + 4;
+                        const hdrs = cur[0..hdr_end];
+                        if (isAsyncSse(hdrs)) {
+                            slot.is_sse = true;
+                            const sse_body = cur[body_start..];
+                            if (std.mem.indexOf(u8, sse_body, "\n\n") != null || std.mem.indexOf(u8, sse_body, "\r\n\r\n") != null) {
+                                finished = true;
+                                break;
+                            }
+                        } else if (cl := parseAsyncContentLength(hdrs)) {
+                            if (body_start + cl <= slot.recv_len) {
+                                finished = true;
+                                break;
+                            }
+                        } else if (isAsyncChunked(hdrs)) {
+                            if (std.mem.endsWith(u8, cur[body_start..], "0\r\n\r\n")) {
+                                finished = true;
+                                break;
+                            }
+                        }
+                    }
+                } else if (n == 0) {
+                    finished = true;
+                    break;
+                } else {
+                    if ((pfd[0].revents & (SESS_POLLERR | SESS_POLLHUP)) != 0) {
+                        finished = true;
+                        if (slot.recv_len == 0) net_err = true;
+                    }
+                    break;
+                }
+            }
+
+            if (!finished) continue;
+
+            slot.closeFd();
+            const net_id = slot.netId();
+            const resp_url = slot.url();
+            const raw_all = slot.recv_buf.?[0..slot.recv_len];
+
+            const slot_rtype: []const u8 = if (slot.is_event_source) "EventSource" else "Fetch";
+            if (net_err || raw_all.len == 0) {
+                if (_.network_enabled) {
+                    let fail_buf: [512]u8 = [0; 512];
+                    const fail_json = std.fmt.bufPrint(
+                        &fail_buf,
+                        "{{\"requestId\":\"{s}\",\"timestamp\":1700000000.2,\"type\":\"{s}\",\"errorText\":\"net::ERR_CONNECTION_RESET\",\"canceled\":false}}",
+                        .{ net_id, slot_rtype },
+                    ) catch "";
+                    if (fail_json.len > 0) {
+                        * = _.addPendingFetchEvent("Network.loadingFailed", fail_json);
+                    }
+                }
+                const obj = JS_NewObject(raw_ctx);
+                * = JS_SetPropertyStr(raw_ctx, obj, "error", jsInt(1));
+                let call_args: [1]JSValue = [obj];
+                const cres = JS_Call(raw_ctx, slot.resolve_fn, jsUndefined(), 1, unsafe { @ptrCast(&call_args) });
+                JS_FreeValue(raw_ctx, cres);
+                JS_FreeValue(raw_ctx, obj);
+                JS_FreeValue(raw_ctx, slot.resolve_fn);
+                JS_FreeValue(raw_ctx, slot.reject_fn);
+                slot.resolve_fn = jsUndefined();
+                slot.reject_fn = jsUndefined();
+                slot.freeRecvBuf();
+                slot.active = false;
+                resolved_any = true;
+                continue;
+            }
+
+            let status_code: u32 = 200;
+            let status_text: []const u8 = "OK";
+            let raw_hdrs: []const u8 = "";
+            let body_slice: []u8 = slot.recv_buf.?[0..0];
+
+            if (hdr_end := std.mem.indexOf(u8, raw_all, "\r\n\r\n")) {
+                const head = raw_all[0..hdr_end];
+                const body_start = hdr_end + 4;
+                if (first_crlf := std.mem.indexOf(u8, head, "\r\n")) {
+                    const status_line = head[0..first_crlf];
+                    raw_hdrs = head[first_crlf + 2 ..];
+                    if (sp1 := std.mem.indexOfScalar(u8, status_line, ' ')) {
+                        const after_sp1 = std.mem.trim(u8, status_line[sp1 + 1 ..], " ");
+                        if (sp2 := std.mem.indexOfScalar(u8, after_sp1, ' ')) {
+                            status_code = std.fmt.parseInt(u32, after_sp1[0..sp2], 10) catch 200;
+                            status_text = std.mem.trim(u8, after_sp1[sp2 + 1 ..], " \r");
+                        } else {
+                            status_code = std.fmt.parseInt(u32, after_sp1, 10) catch 200;
+                            status_text = httpStatusText(@as(u16, @intCast(@min(status_code, 65535))));
+                        }
+                    }
+                } else {
+                    raw_hdrs = head;
+                }
+                if (body_start < raw_all.len) {
+                    body_slice = slot.recv_buf.?[body_start..slot.recv_len];
+                    if (isAsyncChunked(raw_hdrs)) {
+                        const dec_len = HttpLoader.decodeChunkedInPlace(body_slice);
+                        body_slice = body_slice[0..dec_len];
+                    } else if (cl := parseAsyncContentLength(raw_hdrs)) {
+                        if (cl < body_slice.len) body_slice = body_slice[0..cl];
+                    }
+                }
+            } else {
+                body_slice = slot.recv_buf.?[0..slot.recv_len];
+            }
+
+            const hdrs_json = formatHttpHeadersJson(raw_hdrs, _.allocator);
+            defer if (hdrs_json.len > 2) _.allocator.free(hdrs_json);
+            const extra_hdrs_json = formatHttpHeadersExtraInfoJson(raw_hdrs, _.allocator);
+            defer if (extra_hdrs_json.len > 2) _.allocator.free(extra_hdrs_json);
+            const mime_type = extractAsyncMime(raw_hdrs);
+
+            if (_.network_enabled) {
+                recordResponseBody(net_id, body_slice, false);
+                let esc_url_buf: [2048]u8 = [0; 2048];
+                const esc_url = escapeJsonString(resp_url, &esc_url_buf);
+                let st_esc_buf: [128]u8 = [0; 128];
+                const st_esc = escapeJsonString(status_text, &st_esc_buf);
+                let mime_esc_buf: [128]u8 = [0; 128];
+                const mime_esc = escapeJsonString(mime_type, &mime_esc_buf);
+                const has_extra_kv = if (extra_hdrs_json.len > 2) ",\"hasExtraInfo\":true" else "";
+                let nev_buf: [4096]u8 = [0; 4096];
+                const resp_json = std.fmt.bufPrint(
+                    &nev_buf,
+                    "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"timestamp\":1700000000.1,\"type\":\"{s}\",\"response\":{{\"url\":\"{s}\",\"status\":{d},\"statusText\":\"{s}\",\"headers\":{s},\"mimeType\":\"{s}\"}},\"frameId\":\"{s}\"{s}}}",
+                    .{ net_id, _.loader_id, slot_rtype, esc_url, status_code, st_esc, hdrs_json, mime_esc, _.frame_id, has_extra_kv },
+                ) catch "";
+                if (resp_json.len > 0) {
+                    * = _.addPendingFetchEvent("Network.responseReceived", resp_json);
+                }
+                if (extra_hdrs_json.len > 2) {
+                    let extra_buf: [4096]u8 = [0; 4096];
+                    const extra_json = std.fmt.bufPrint(
+                        &extra_buf,
+                        "{{\"requestId\":\"{s}\",\"blockedCookies\":[],\"headers\":{s}}}",
+                        .{ net_id, extra_hdrs_json },
+                    ) catch "";
+                    if (extra_json.len > 0) {
+                        * = _.addPendingFetchEvent("Network.responseReceivedExtraInfo", extra_json);
+                    }
+                }
+                let fin_buf: [512]u8 = [0; 512];
+                const fin_json = std.fmt.bufPrint(
+                    &fin_buf,
+                    "{{\"requestId\":\"{s}\",\"timestamp\":1700000000.2,\"encodedDataLength\":{d}}}",
+                    .{ net_id, body_slice.len },
+                ) catch "";
+                if (fin_json.len > 0) {
+                    * = _.addPendingFetchEvent("Network.loadingFinished", fin_json);
+                }
+            }
+
+            const obj = JS_NewObject(raw_ctx);
+            * = JS_SetPropertyStr(raw_ctx, obj, "status", jsInt(@as(i32, @intCast(status_code))));
+            * = JS_SetPropertyStr(raw_ctx, obj, "statusText", JS_NewStringLen(raw_ctx, status_text.ptr, status_text.len));
+            * = JS_SetPropertyStr(raw_ctx, obj, "url", JS_NewStringLen(raw_ctx, resp_url.ptr, resp_url.len));
+            * = JS_SetPropertyStr(raw_ctx, obj, "headersJson", JS_NewStringLen(raw_ctx, hdrs_json.ptr, hdrs_json.len));
+            if (body_slice.len > 0) {
+                if (b64 := tryBase64Encode(_.allocator, body_slice)) {
+                    defer _.allocator.free(b64);
+                    * = JS_SetPropertyStr(raw_ctx, obj, "bodyBase64", JS_NewStringLen(raw_ctx, b64.ptr, b64.len));
+                } else {
+                    * = JS_SetPropertyStr(raw_ctx, obj, "bodyBase64", JS_NewStringLen(raw_ctx, "", 0));
+                }
+            } else {
+                * = JS_SetPropertyStr(raw_ctx, obj, "bodyBase64", JS_NewStringLen(raw_ctx, "", 0));
+            }
+            let call_args: [1]JSValue = [obj];
+            const cres = JS_Call(raw_ctx, slot.resolve_fn, jsUndefined(), 1, unsafe { @ptrCast(&call_args) });
+            JS_FreeValue(raw_ctx, cres);
+            JS_FreeValue(raw_ctx, obj);
+            JS_FreeValue(raw_ctx, slot.resolve_fn);
+            JS_FreeValue(raw_ctx, slot.reject_fn);
+            slot.resolve_fn = jsUndefined();
+            slot.reject_fn = jsUndefined();
+            slot.freeRecvBuf();
+            slot.active = false;
             resolved_any = true;
         }
 

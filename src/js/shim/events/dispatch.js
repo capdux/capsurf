@@ -349,17 +349,29 @@ function internalDispatch(target, event, trusted) {
 
     let _inErrorReportingMode = false;
     function reportListenerError(e) {
-      if (typeof console !== "undefined" && console.error) console.error(e);
       if (_inErrorReportingMode) return;
       _inErrorReportingMode = true;
       try {
         const win = typeof window !== "undefined" ? window : global;
-        const msg = (e && e.message) ? String(e.message) : String(e);
-        if (win && typeof win.onerror === "function") {
-          try {
-            win.onerror.call(win, msg, "", 0, 0, e);
-          } catch (e2) {}
+        const msg = (e && typeof e === "object" && "message" in e) ? String(e.message) : String(e);
+        if (win && typeof win.dispatchEvent === "function" && typeof ErrorEvent === "function") {
+          const errEvt = new ErrorEvent("error", {
+            message: msg,
+            filename: (e && e.fileName) ? String(e.fileName) : "",
+            lineno: (e && Number(e.lineNumber)) || 0,
+            colno: (e && Number(e.columnNumber)) || 0,
+            error: e,
+            cancelable: true,
+            bubbles: false,
+          });
+          const notCanceled = win.dispatchEvent(errEvt);
+          if (notCanceled && typeof win.onerror === "function") {
+            try { win.onerror.call(win, msg, errEvt.filename, errEvt.lineno, errEvt.colno, e); } catch (e2) {}
+          }
+        } else if (win && typeof win.onerror === "function") {
+          try { win.onerror.call(win, msg, "", 0, 0, e); } catch (e2) {}
         }
+      } catch (_re) {
       } finally {
         _inErrorReportingMode = false;
       }
@@ -429,7 +441,9 @@ function internalDispatch(target, event, trusted) {
         const hasOwnProp = Object.prototype.hasOwnProperty.call(entry, propName);
         if (!hydrated[propName]) {
           hydrated[propName] = true;
-          if (!hasOwnProp && typeof entry.getAttribute === "function") {
+          if (!hasOwnProp && typeof entry.getAttribute === "function" &&
+              propName !== "ontouchstart" && propName !== "ontouchmove" &&
+              propName !== "ontouchend" && propName !== "ontouchcancel") {
             const attrVal = entry.getAttribute(propName);
             if (typeof attrVal === "string" && attrVal && entry[propName] == null) {
               try {
@@ -466,7 +480,16 @@ function internalDispatch(target, event, trusted) {
         if (typeof fn === "function" && !isImmediateStopped()) {
           try {
             const ret = fn.call(entry, event);
-            if (ret === false) {
+            if (propName === "onbeforeunload") {
+              if (typeof BeforeUnloadEvent === "function" && event instanceof BeforeUnloadEvent) {
+                if (ret !== null && ret !== undefined) {
+                  if (event.returnValue === "") {
+                    try { event.returnValue = String(ret); } catch (_) {}
+                  }
+                  event.preventDefault();
+                }
+              }
+            } else if (ret === false) {
               event.preventDefault();
             }
           } catch (e) {

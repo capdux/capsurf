@@ -111,8 +111,7 @@ function installHtmlClasses(global) {
     "onpointermove", "onpointerout", "onpointerover", "onpointerup", "onprogress",
     "onratechange", "onreset", "onresize", "onscroll", "onscrollend", "onseeked",
     "onseeking", "onselect", "onselectionchange", "onselectstart", "onstalled",
-    "onsubmit", "onsuspend", "ontimeupdate", "ontoggle", "ontouchcancel",
-    "ontouchend", "ontouchmove", "ontouchstart", "ontransitioncancel",
+    "onsubmit", "onsuspend", "ontimeupdate", "ontoggle", "ontransitioncancel",
     "ontransitionend", "ontransitionrun", "ontransitionstart", "onvolumechange",
     "onwaiting", "onwheel",
   ];
@@ -166,6 +165,31 @@ function installHtmlClasses(global) {
       get: getter,
       set: setter,
     });
+  }
+  if (typeof Document !== "undefined" && Document.prototype) {
+    const _docEventHandlers = new WeakMap();
+    const docHandlerNames = GLOBAL_EVENT_HANDLER_NAMES.concat(["onvisibilitychange", "onsecuritypolicyviolation"]);
+    for (let i = 0; i < docHandlerNames.length; i++) {
+      const prop = docHandlerNames[i];
+      if (Object.prototype.hasOwnProperty.call(Document.prototype, prop)) continue;
+      const evType = prop.slice(2);
+      Object.defineProperty(Document.prototype, prop, {
+        get: function () {
+          const m = _docEventHandlers.get(this);
+          return (m && Object.prototype.hasOwnProperty.call(m, prop)) ? m[prop] : null;
+        },
+        set: function (v) {
+          let m = _docEventHandlers.get(this);
+          if (!m) {
+            m = Object.create(null);
+            _docEventHandlers.set(this, m);
+          }
+          m[prop] = (v !== null && (typeof v === "function" || typeof v === "object")) ? v : null;
+        },
+        enumerable: true,
+        configurable: true,
+      });
+    }
   }
 
   // HTML rendered text fragment helper (for innerText / outerText setters)
@@ -2019,7 +2043,31 @@ function installHtmlClasses(global) {
   });
 
   markNative(HTMLScriptElement, "HTMLScriptElement");
+  HTMLScriptElement.supports = markNative(function (type) {
+    if (arguments.length === 0) {
+      throw new TypeError("Failed to execute 'supports' on 'HTMLScriptElement': 1 argument required, but only 0 present.");
+    }
+    const t = String(type);
+    return t === "classic" || t === "module" || t === "importmap";
+  }, "supports");
   global.HTMLScriptElement = HTMLScriptElement;
+
+  // 3b. HTMLUnknownElement
+  function HTMLUnknownElement() {}
+  HTMLUnknownElement.prototype = Object.create(HTMLElementProto);
+  HTMLUnknownElement.prototype.constructor = HTMLUnknownElement;
+  Object.defineProperty(HTMLUnknownElement.prototype, Symbol.toStringTag, {
+    value: "HTMLUnknownElement",
+    configurable: true,
+  });
+  markNative(HTMLUnknownElement, "HTMLUnknownElement");
+  global.HTMLUnknownElement = HTMLUnknownElement;
+  if (typeof globalThis !== "undefined") {
+    globalThis.HTMLUnknownElement = HTMLUnknownElement;
+  }
+  if (typeof window !== "undefined") {
+    window.HTMLUnknownElement = HTMLUnknownElement;
+  }
 
   // 4. HTMLCanvasElement
   function HTMLCanvasElement() {}
@@ -3976,6 +4024,29 @@ function installHtmlClasses(global) {
     });
   };
 
+  const defUnsignedIntAttr = function (ctorName, prop, attr, defVal) {
+    const C = global[ctorName];
+    if (typeof C !== "function") return;
+    Object.defineProperty(C.prototype, prop, {
+      get: function () {
+        const v = this.getAttribute(attr);
+        if (v === null) return defVal;
+        const s = String(v).replace(/^[\t\n\f\r ]+/, "");
+        const m = /^(\d+)/.exec(s);
+        if (!m) return defVal;
+        const n = Number(m[1]);
+        return (Number.isFinite(n) && n >= 0 && n <= 2147483647) ? n : defVal;
+      },
+      set: function (v) {
+        const u = Number(v) >>> 0;
+        const val = u <= 2147483647 ? u : defVal;
+        this.setAttribute(attr, String(val));
+      },
+      enumerable: true,
+      configurable: true,
+    });
+  };
+
   defIntAttr("HTMLOListElement", "start", "start", 1);
   defBoolAttr("HTMLOListElement", "reversed", "reversed");
   defStrAttr("HTMLOListElement", "type", "type");
@@ -3990,11 +4061,11 @@ function installHtmlClasses(global) {
   defStrAttr("HTMLMarqueeElement", "height", "height");
   defStrAttr("HTMLMarqueeElement", "width", "width");
   defBoolAttr("HTMLMarqueeElement", "trueSpeed", "truespeed");
-  defIntAttr("HTMLMarqueeElement", "hspace", "hspace", 0);
-  defIntAttr("HTMLMarqueeElement", "vspace", "vspace", 0);
+  defUnsignedIntAttr("HTMLMarqueeElement", "hspace", "hspace", 0);
+  defUnsignedIntAttr("HTMLMarqueeElement", "vspace", "vspace", 0);
   defIntAttr("HTMLMarqueeElement", "loop", "loop", -1);
-  defIntAttr("HTMLMarqueeElement", "scrollAmount", "scrollamount", 6);
-  defIntAttr("HTMLMarqueeElement", "scrollDelay", "scrolldelay", 85);
+  defUnsignedIntAttr("HTMLMarqueeElement", "scrollAmount", "scrollamount", 6);
+  defUnsignedIntAttr("HTMLMarqueeElement", "scrollDelay", "scrolldelay", 85);
 
   // HTMLProgressElement & HTMLMeterElement shared float parser
   const parseValidHtmlFloat = function (s) {
@@ -4046,8 +4117,7 @@ function installHtmlClasses(global) {
         get: function () {
           if (!this.hasAttribute("value")) return -1.0;
           const n = parseValidHtmlFloat(this.getAttribute("value"));
-          if (!Number.isFinite(n)) return -1.0;
-          const clamped = n <= 0 ? 0.0 : n;
+          const clamped = (!Number.isFinite(n) || n <= 0) ? 0.0 : n;
           const m = getMax(this);
           return (clamped > m ? m : clamped) / m;
         },
@@ -4642,21 +4712,126 @@ function installHtmlClasses(global) {
     enumerable: true,
   });
   markNative(SVGElement, "SVGElement");
+  const elDatasetDesc = Object.getOwnPropertyDescriptor(ElementProto, "dataset");
+  if (elDatasetDesc) {
+    if (!Object.getOwnPropertyDescriptor(HTMLElementProto, "dataset")) {
+      Object.defineProperty(HTMLElementProto, "dataset", elDatasetDesc);
+    }
+    if (!Object.getOwnPropertyDescriptor(SVGElement.prototype, "dataset")) {
+      Object.defineProperty(SVGElement.prototype, "dataset", elDatasetDesc);
+    }
+  }
   global.SVGElement = SVGElement;
   if (typeof globalThis !== "undefined") {
     globalThis.SVGElement = SVGElement;
   }
 
-  function SVGSVGElement() {
-    SVGElement.call(this);
+  for (const animName of [
+    "SVGAnimatedEnumeration",
+    "SVGAnimatedLength",
+    "SVGAnimatedNumber",
+    "SVGAnimatedBoolean",
+    "SVGAnimatedInteger",
+    "SVGAnimatedRect",
+    "SVGAnimatedTransformList",
+    "SVGStringList",
+    "SVGTransformList",
+    "SVGLength",
+  ]) {
+    if (!global[animName]) {
+      const Ctor = function () {};
+      Object.defineProperty(Ctor.prototype, Symbol.toStringTag, { value: animName, configurable: true });
+      markNative(Ctor, animName);
+      global[animName] = Ctor;
+      if (typeof globalThis !== "undefined") globalThis[animName] = Ctor;
+    }
   }
-  SVGSVGElement.prototype = Object.create(SVGElement.prototype);
-  SVGSVGElement.prototype.constructor = SVGSVGElement;
-  markNative(SVGSVGElement, "SVGSVGElement");
-  global.SVGSVGElement = SVGSVGElement;
-  if (typeof globalThis !== "undefined") {
-    globalThis.SVGSVGElement = SVGSVGElement;
+
+  function defSvgSub(name, BaseCtor, constants) {
+    const fn = function () { BaseCtor.call(this); };
+    fn.prototype = Object.create(BaseCtor.prototype);
+    fn.prototype.constructor = fn;
+    Object.defineProperty(fn.prototype, Symbol.toStringTag, { value: name, configurable: true });
+    if (constants) {
+      for (const k in constants) {
+        Object.defineProperty(fn, k, { value: constants[k], enumerable: true });
+        Object.defineProperty(fn.prototype, k, { value: constants[k], enumerable: true });
+      }
+    }
+    markNative(fn, name);
+    global[name] = fn;
+    if (typeof globalThis !== "undefined") globalThis[name] = fn;
+    return fn;
   }
+
+  function SVGUnitTypes() {}
+  SVGUnitTypes.SVG_UNIT_TYPE_UNKNOWN = 0;
+  SVGUnitTypes.SVG_UNIT_TYPE_USERSPACEONUSE = 1;
+  SVGUnitTypes.SVG_UNIT_TYPE_OBJECTBOUNDINGBOX = 2;
+  markNative(SVGUnitTypes, "SVGUnitTypes");
+  global.SVGUnitTypes = SVGUnitTypes;
+  if (typeof globalThis !== "undefined") globalThis.SVGUnitTypes = SVGUnitTypes;
+
+  const SVGGraphicsElement = defSvgSub("SVGGraphicsElement", SVGElement);
+  const SVGGeometryElement = defSvgSub("SVGGeometryElement", SVGGraphicsElement);
+  const SVGSVGElement = defSvgSub("SVGSVGElement", SVGGraphicsElement);
+  const SVGGElement = defSvgSub("SVGGElement", SVGGraphicsElement);
+  const SVGDefsElement = defSvgSub("SVGDefsElement", SVGGraphicsElement);
+  const SVGSymbolElement = defSvgSub("SVGSymbolElement", SVGGraphicsElement);
+  const SVGUseElement = defSvgSub("SVGUseElement", SVGGraphicsElement);
+  const SVGSwitchElement = defSvgSub("SVGSwitchElement", SVGGraphicsElement);
+  const SVGForeignObjectElement = defSvgSub("SVGForeignObjectElement", SVGGraphicsElement);
+  const SVGImageElement = defSvgSub("SVGImageElement", SVGGraphicsElement);
+
+  defSvgSub("SVGPathElement", SVGGeometryElement);
+  defSvgSub("SVGRectElement", SVGGeometryElement);
+  defSvgSub("SVGCircleElement", SVGGeometryElement);
+  defSvgSub("SVGEllipseElement", SVGGeometryElement);
+  defSvgSub("SVGLineElement", SVGGeometryElement);
+  defSvgSub("SVGPolylineElement", SVGGeometryElement);
+  defSvgSub("SVGPolygonElement", SVGGeometryElement);
+
+  const SVGTextContentElement = defSvgSub("SVGTextContentElement", SVGGraphicsElement, {
+    LENGTHADJUST_UNKNOWN: 0,
+    LENGTHADJUST_SPACING: 1,
+    LENGTHADJUST_SPACINGANDGLYPHS: 2,
+  });
+  const SVGTextPositioningElement = defSvgSub("SVGTextPositioningElement", SVGTextContentElement);
+  defSvgSub("SVGTextElement", SVGTextPositioningElement);
+  defSvgSub("SVGTSpanElement", SVGTextPositioningElement);
+  defSvgSub("SVGTextPathElement", SVGTextContentElement, {
+    TEXTPATH_METHODTYPE_UNKNOWN: 0,
+    TEXTPATH_METHODTYPE_ALIGN: 1,
+    TEXTPATH_METHODTYPE_STRETCH: 2,
+    TEXTPATH_SPACINGTYPE_UNKNOWN: 0,
+    TEXTPATH_SPACINGTYPE_AUTO: 1,
+    TEXTPATH_SPACINGTYPE_EXACT: 2,
+  });
+
+  const SVGGradientElement = defSvgSub("SVGGradientElement", SVGElement, {
+    SVG_SPREADMETHOD_UNKNOWN: 0,
+    SVG_SPREADMETHOD_PAD: 1,
+    SVG_SPREADMETHOD_REFLECT: 2,
+    SVG_SPREADMETHOD_REPEAT: 3,
+  });
+  defSvgSub("SVGLinearGradientElement", SVGGradientElement);
+  defSvgSub("SVGRadialGradientElement", SVGGradientElement);
+  defSvgSub("SVGStopElement", SVGElement);
+  defSvgSub("SVGClipPathElement", SVGElement);
+  defSvgSub("SVGMaskElement", SVGElement);
+  defSvgSub("SVGMarkerElement", SVGElement, {
+    SVG_MARKERUNITS_UNKNOWN: 0,
+    SVG_MARKERUNITS_USERSPACEONUSE: 1,
+    SVG_MARKERUNITS_STROKEWIDTH: 2,
+    SVG_MARKER_ORIENT_UNKNOWN: 0,
+    SVG_MARKER_ORIENT_AUTO: 1,
+    SVG_MARKER_ORIENT_ANGLE: 2,
+  });
+  defSvgSub("SVGPatternElement", SVGElement);
+  defSvgSub("SVGViewElement", SVGElement);
+  defSvgSub("SVGTitleElement", SVGElement);
+  defSvgSub("SVGDescElement", SVGElement);
+  defSvgSub("SVGMetadataElement", SVGElement);
 
   const SVG_GEOMETRY_LOCALS = new Set([
     "circle",
@@ -4852,6 +5027,8 @@ function processSubtreeTemplates(root) {
             shadow = host.attachShadow({
               mode: mode,
               delegatesFocus: Boolean(tpl.hasAttribute && tpl.hasAttribute("shadowrootdelegatesfocus")),
+              serializable: Boolean(tpl.hasAttribute && tpl.hasAttribute("shadowrootserializable")),
+              clonable: Boolean(tpl.hasAttribute && tpl.hasAttribute("shadowrootclonable")),
             });
           } catch (e) {
             shadow = host.shadowRoot || host._shadowRoot;
@@ -4876,3 +5053,5 @@ function processSubtreeTemplates(root) {
     }
   }
 }
+if (typeof global !== "undefined") global.__capsurf_processSubtreeTemplates = processSubtreeTemplates;
+if (typeof globalThis !== "undefined") globalThis.__capsurf_processSubtreeTemplates = processSubtreeTemplates;

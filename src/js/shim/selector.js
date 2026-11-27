@@ -71,8 +71,82 @@ function splitTopLevelSelectorList(str) {
   return out;
 }
 
+function validateQuotedCssString(rawQuoted) {
+  for (let qi = 1; qi < rawQuoted.length - 1; qi++) {
+    const ch = rawQuoted[qi];
+    if (ch === "\\") {
+      if (qi + 1 >= rawQuoted.length - 1) return false;
+      if (rawQuoted[qi + 1] === "\r" && qi + 2 < rawQuoted.length - 1 && rawQuoted[qi + 2] === "\n") {
+        qi += 2;
+      } else {
+        qi += 1;
+      }
+      continue;
+    }
+    if (ch === "\n" || ch === "\r" || ch === "\f") return false;
+  }
+  return true;
+}
+
+function isValidUnquotedAttrIdent(rawVal) {
+  let k = 0;
+  while (k < rawVal.length && /[ \t\r\n\f]/.test(rawVal[k])) k++;
+  if (k >= rawVal.length) return false;
+  // Must start like a CSS <ident-token>
+  if (rawVal[k] === "-") {
+    k++;
+    if (k >= rawVal.length) return false;
+    if (rawVal[k] >= "0" && rawVal[k] <= "9") return false;
+    if (rawVal[k] === "\\") {
+      const nx = consumeCssEscape(rawVal, k);
+      if (nx < 0) return false;
+      k = nx;
+    } else if (!/[a-zA-Z_-]|[^\x00-\x7f]|\x00/.test(rawVal[k])) {
+      return false;
+    } else {
+      k++;
+    }
+  } else if (rawVal[k] === "\\") {
+    const nx = consumeCssEscape(rawVal, k);
+    if (nx < 0) return false;
+    k = nx;
+  } else if (/[a-zA-Z_]|[^\x00-\x7f]|\x00/.test(rawVal[k])) {
+    k++;
+  } else {
+    return false;
+  }
+  while (k < rawVal.length) {
+    const ch = rawVal[k];
+    if (ch === "\\") {
+      const nx = consumeCssEscape(rawVal, k);
+      if (nx < 0) return false;
+      k = nx;
+      continue;
+    }
+    if (/[a-zA-Z0-9_-]|[^\x00-\x7f]|\x00/.test(ch)) {
+      k++;
+      continue;
+    }
+    if (/[ \t\r\n\f]/.test(ch)) {
+      while (k < rawVal.length && /[ \t\r\n\f]/.test(rawVal[k])) k++;
+      return k === rawVal.length;
+    }
+    return false;
+  }
+  return true;
+}
+
+function unescapeCssStringOrIdent(raw, isQuoted) {
+  if (!raw) return raw;
+  let s = raw.replace(/\0/g, "\uFFFD");
+  if (isQuoted) {
+    s = s.replace(/\\(?:\r\n|[\n\r\f])/g, "");
+  }
+  return unescapeCssIdent(s);
+}
+
 function canonicalizeComplexSelector(raw, inHas, inFunc, inPart) {
-  if (/[\x00-\x08\x0b\x0e-\x1f\x7f]/.test(raw)) return null;
+  if (/[\x01-\x08\x0b\x0e-\x1f\x7f]/.test(raw)) return null;
   const s = raw.trim();
   if (!s) return null;
   let i = 0;
@@ -145,18 +219,21 @@ function canonicalizeComplexSelector(raw, inHas, inFunc, inPart) {
       if (attrName.startsWith("|")) attrName = attrName.slice(1);
       if (!attrName) return null;
       if (am[2]) {
-        let attrVal = am[3].trim();
+        let rawAttrVal = am[3];
+        let attrVal = rawAttrVal.trim();
         let mod = "";
-        const modMatch = /^("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s"']+)\s*([iIsS])$/.exec(attrVal);
+        const modMatch = /^("(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|[^\s"']+)\s+([iIsS])$/.exec(attrVal);
         if (modMatch) {
           attrVal = modMatch[1].trim();
+          rawAttrVal = attrVal;
           mod = " " + modMatch[2].toLowerCase();
         }
         if ((attrVal.startsWith('"') && attrVal.endsWith('"')) || (attrVal.startsWith("'") && attrVal.endsWith("'"))) {
+          if (!validateQuotedCssString(attrVal)) return null;
           const innerV = attrVal.slice(1, -1).replace(/\\'/g, "'").replace(/(?<!\\)"/g, '\\"');
           attrVal = '"' + innerV + '"';
         } else {
-          if (!attrVal || /\s/.test(attrVal)) return null;
+          if (!isValidUnquotedAttrIdent(rawAttrVal)) return null;
           attrVal = '"' + attrVal.replace(/"/g, '\\"') + '"';
         }
         out += "[" + attrName + am[2] + attrVal + mod + "]";
@@ -426,7 +503,7 @@ function stripSelectorComments(str) {
 
 function canonicalizeSelectorList(selector, inHas, inFunc) {
   if (typeof selector !== "string") selector = String(selector);
-  if (/[\x00-\x08\x0b\x0e-\x1f\x7f]/.test(selector)) return null;
+  if (/[\x01-\x08\x0b\x0e-\x1f\x7f]/.test(selector)) return null;
   const noComments = stripSelectorComments(selector);
   if (noComments === null) return null;
   const parts = splitTopLevelSelectorList(noComments.trim());
@@ -466,6 +543,7 @@ function wrapQuerySelector(origFn) {
       return null;
     }
     if ((s.includes(":checked") || s.includes(":scope") || s.includes("&") || s.includes(":has(") ||
+         (s.includes("[") && (s.includes("\\") || s.includes("\0"))) ||
          ((this === document || this.nodeType === 11) && /:(?:first-child|last-child|only-child|first-of-type|last-of-type|only-of-type|nth-)/i.test(s))) &&
         typeof findInSubtree === "function" && typeof matchesElementSelector === "function") {
       const scopeEl = this === document ? (document.documentElement || document) : this;
@@ -492,6 +570,7 @@ function wrapQuerySelectorAll(origFn) {
       return new NodeList([]);
     }
     if ((s.includes(":checked") || s.includes(":scope") || s.includes("&") || s.includes(":has(") ||
+         (s.includes("[") && (s.includes("\\") || s.includes("\0"))) ||
          ((this === document || this.nodeType === 11) && /:(?:first-child|last-child|only-child|first-of-type|last-of-type|only-of-type|nth-)/i.test(s))) &&
         typeof findInSubtree === "function" && typeof matchesElementSelector === "function") {
       const scopeEl = this === document ? (document.documentElement || document) : this;
@@ -569,8 +648,19 @@ function matchesCompoundSelector(el, compound, scopeRoot) {
       }
       if (!hasClass) return false;
     } else if (ch === "[") {
-      const closeIdx = s.indexOf("]", i + 1);
-      if (closeIdx === -1) return false;
+      let closeIdx = i + 1;
+      let bq = "";
+      while (closeIdx < len) {
+        if (bq) {
+          if (s[closeIdx] === "\\" && closeIdx + 1 < len) { closeIdx += 2; continue; }
+          if (s[closeIdx] === bq) bq = "";
+        } else {
+          if (s[closeIdx] === '"' || s[closeIdx] === "'") bq = s[closeIdx];
+          else if (s[closeIdx] === "]") break;
+        }
+        closeIdx++;
+      }
+      if (closeIdx >= len) return false;
       const inside = s.slice(i + 1, closeIdx).trim();
       i = closeIdx + 1;
       const eqIdx = inside.indexOf("=");
@@ -592,10 +682,12 @@ function matchesCompoundSelector(el, compound, scopeRoot) {
         } else if (/\s+[sS]$/.test(expectedVal)) {
           expectedVal = expectedVal.slice(0, -1).trim();
         }
-        if ((expectedVal.startsWith('"') && expectedVal.endsWith('"')) ||
-            (expectedVal.startsWith("'") && expectedVal.endsWith("'"))) {
+        const isQuotedVal = (expectedVal.startsWith('"') && expectedVal.endsWith('"')) ||
+            (expectedVal.startsWith("'") && expectedVal.endsWith("'"));
+        if (isQuotedVal) {
           expectedVal = expectedVal.slice(1, -1);
         }
+        expectedVal = unescapeCssStringOrIdent(expectedVal, isQuotedVal);
         let actualVal = typeof el.getAttribute === "function" ? el.getAttribute(attrName) : null;
         if (actualVal === null) return false;
         if (caseInsensitive) {
@@ -626,8 +718,31 @@ function matchesCompoundSelector(el, compound, scopeRoot) {
       const pseudo = s.slice(start, i).toLowerCase();
       if (pseudo === ":checked") { if (!el.checked && !(String(el.tagName || "").toUpperCase() === "OPTION" && el.selected)) return false; }
       else if (pseudo === ":popover-open") { if (!el._popoverOpen) return false; }
-      else if (pseudo === ":disabled") { if (!el.disabled) return false; }
-      else if (pseudo === ":enabled") { if (el.disabled) return false; }
+      else if (pseudo === ":disabled") {
+        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_isElementDisabled === "function") {
+          if (!globalThis.__capsurf_isElementDisabled(el)) return false;
+        } else if (!el.disabled) {
+          return false;
+        }
+      }
+      else if (pseudo === ":enabled") {
+        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_isElementDisabled === "function") {
+          if (!globalThis.__capsurf_isElementCanBeDisabled(el) || globalThis.__capsurf_isElementDisabled(el)) return false;
+        } else if (el.disabled) {
+          return false;
+        }
+      }
+      else if (pseudo === ":read-write" || pseudo === ":read-only") {
+        const doc = el.ownerDocument || (typeof document !== "undefined" ? document : null);
+        const inDesignMode = doc && String(doc.designMode || "").toLowerCase() === "on" && el.isConnected !== false;
+        const t = String(el.localName || el.tagName || "").toLowerCase();
+        const isDisabled = typeof globalThis !== "undefined" && typeof globalThis.__capsurf_isElementDisabled === "function"
+          ? globalThis.__capsurf_isElementDisabled(el) : Boolean(el.disabled);
+        const isEditableControl = (t === "input" || t === "textarea") && !el.readOnly && !isDisabled;
+        const rw = Boolean(inDesignMode || el.isContentEditable || isEditableControl);
+        if (pseudo === ":read-write" && !rw) return false;
+        if (pseudo === ":read-only" && rw) return false;
+      }
       else if (pseudo === ":focus") {
         const doc = el.ownerDocument || (typeof document !== "undefined" ? document : null);
         const ae = doc && (doc.activeElement || doc._activeElement);
@@ -989,6 +1104,7 @@ function splitSelectorList(sel) {
     const ch = sel[i];
     if (quote) {
       buf += ch;
+      if (ch === "\\" && i + 1 < sel.length) { buf += sel[++i]; continue; }
       if (ch === quote) quote = "";
       continue;
     }

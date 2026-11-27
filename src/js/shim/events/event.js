@@ -432,7 +432,7 @@ function UIEvent(type, options) {
     throw new TypeError("UIEvent: view must be a Window or null");
   }
   _uiEventState.set(this, {
-    view: opts.view !== undefined ? opts.view : (typeof window !== "undefined" ? window : null),
+    view: opts.view !== undefined ? opts.view : null,
     detail: typeof opts.detail === "number" ? opts.detail : 0,
     which: typeof opts.which === "number" ? opts.which : 0,
   });
@@ -551,6 +551,7 @@ MouseEvent.prototype.getModifierState = function (name) {
     case "Control": return s.ctrlKey;
     case "Shift": return s.shiftKey;
     case "Meta": return s.metaKey;
+    case "Accel": return s.ctrlKey || s.metaKey;
     default: return false;
   }
 };
@@ -591,20 +592,8 @@ function KeyboardEvent(type, options) {
   UIEvent.call(this, type, options);
   const opts = (options !== null && typeof options === "object") ? options : {};
   const key = typeof opts.key === "string" ? opts.key : "";
-  let keyCode = 0;
-  if (typeof opts.keyCode === "number") {
-    keyCode = opts.keyCode;
-  } else if (key && key.length === 1) {
-    keyCode = key.toUpperCase().charCodeAt(0);
-  }
-  let charCode = 0;
-  if (typeof opts.charCode === "number") {
-    charCode = opts.charCode;
-  } else if (type === "keypress" && key === "Enter") {
-    charCode = 13;
-  } else if (type === "keypress" && key && key.length === 1) {
-    charCode = key.charCodeAt(0);
-  }
+  const keyCode = typeof opts.keyCode === "number" ? opts.keyCode : 0;
+  const charCode = typeof opts.charCode === "number" ? opts.charCode : 0;
   const which = typeof opts.which === "number" ? opts.which : keyCode;
   const codeStr = typeof opts.code === "string" ? opts.code : "";
   const derivedLoc = codeStr.endsWith("Left") ? 1 : (codeStr.endsWith("Right") ? 2 : (codeStr.startsWith("Numpad") ? 3 : 0));
@@ -658,6 +647,7 @@ KeyboardEvent.prototype.getModifierState = function (name) {
     case "Control": return s.ctrlKey;
     case "Shift": return s.shiftKey;
     case "Meta": return s.metaKey;
+    case "Accel": return s.ctrlKey || s.metaKey;
     default: return false;
   }
 };
@@ -672,7 +662,6 @@ KeyboardEvent.prototype.initKeyboardEvent = function (
   this.initUIEvent(type, bubbles, cancelable, view, 0);
   const s = _keyboardEventState.get(this);
   if (s) {
-    s.key = key !== undefined ? String(key) : "";
     s.location = location !== undefined ? (Number(location) >>> 0) : 0;
     s.ctrlKey = Boolean(ctrlKey);
     s.altKey = Boolean(altKey);
@@ -715,12 +704,26 @@ Object.defineProperty(FocusEvent.prototype, "relatedTarget", {
 function InputEvent(type, options) {
   UIEvent.call(this, type, options);
   const opts = (options !== null && typeof options === "object") ? options : {};
+  let targetRanges = [];
+  if (opts.targetRanges !== undefined) {
+    if (opts.targetRanges === null || typeof opts.targetRanges[Symbol.iterator] !== "function") {
+      throw new TypeError("Failed to construct 'InputEvent': Failed to read the 'targetRanges' property from 'InputEventInit': The provided value cannot be converted to a sequence.");
+    }
+    const arr = Array.from(opts.targetRanges);
+    const SR = typeof StaticRange === "function" ? StaticRange : null;
+    for (let i = 0; i < arr.length; i++) {
+      if (!arr[i] || typeof arr[i] !== "object" || (SR && !(arr[i] instanceof SR))) {
+        throw new TypeError("Failed to construct 'InputEvent': Failed to read the 'targetRanges' property from 'InputEventInit': Failed to convert value to 'StaticRange'.");
+      }
+    }
+    targetRanges = arr;
+  }
   _inputEventState.set(this, {
     data: opts.data !== undefined ? (opts.data === null ? null : String(opts.data)) : null,
     isComposing: Boolean(opts.isComposing),
     inputType: typeof opts.inputType === "string" ? opts.inputType : "",
     dataTransfer: opts.dataTransfer || null,
-    targetRanges: Array.isArray(opts.targetRanges) ? opts.targetRanges.slice() : [],
+    targetRanges: targetRanges,
   });
 }
 InputEvent.prototype = Object.create(UIEvent.prototype);
@@ -739,10 +742,35 @@ markNative(InputEvent, "InputEvent");
   });
 });
 
+function _getInputRangeRoot(node) {
+  let cur = node;
+  while (cur && cur.parentNode) cur = cur.parentNode;
+  return cur || null;
+}
+
 InputEvent.prototype.getTargetRanges = function () {
   const s = _inputEventState.get(this);
   if (!s) throw new TypeError("Illegal invocation");
-  return s.targetRanges.slice();
+  const es = _eventState.get(this);
+  if (es && es.dispatched && !es.isDispatching) return [];
+  if (es && es.isDispatching) {
+    const curTarget = es.currentTarget;
+    const curRoot = (curTarget && typeof curTarget === "object") ? _getInputRangeRoot(curTarget) : null;
+    const out = [];
+    for (let i = 0; i < s.targetRanges.length; i++) {
+      const r = s.targetRanges[i];
+      const rr = _getInputRangeRoot(r.startContainer);
+      if (rr === curRoot) out.push(r);
+    }
+    return out;
+  }
+  const out = [];
+  for (let i = 0; i < s.targetRanges.length; i++) {
+    const r = s.targetRanges[i];
+    const rr = _getInputRangeRoot(r.startContainer);
+    if (!(rr && rr.nodeType === 11 && rr.host)) out.push(r);
+  }
+  return out;
 };
 markNative(InputEvent.prototype.getTargetRanges, "getTargetRanges");
 
@@ -923,7 +951,7 @@ CompositionEvent.prototype.initCompositionEvent = function (type, bubbles, cance
   this.initUIEvent(type, bubbles, cancelable, view, 0);
   const s = _compositionEventState.get(this);
   if (s) {
-    s.data = data !== undefined ? String(data) : "";
+    s.data = data !== undefined ? String(data) : "undefined";
   }
 };
 markNative(CompositionEvent.prototype.initCompositionEvent, "initCompositionEvent");
@@ -1472,26 +1500,35 @@ Object.defineProperty(BeforeUnloadEvent.prototype, "returnValue", {
 // -------------------------------------------------------------
 // Touch, TouchList, TouchEvent
 // -------------------------------------------------------------
+function _touchFiniteNum(val, name, fround) {
+  if (val === undefined) return 0;
+  const n = Number(val);
+  if (!Number.isFinite(n)) {
+    throw new TypeError("Failed to construct 'Touch': The provided double value for '" + name + "' is non-finite.");
+  }
+  return fround ? Math.fround(n) : n;
+}
+
 function Touch(init) {
   if (arguments.length === 0 || init === null || typeof init !== "object") {
     throw new TypeError("Failed to construct 'Touch': 1 argument required, and it must be an object.");
   }
-  if (init.identifier === undefined || init.target === null || typeof init.target !== "object") {
-    throw new TypeError("Failed to construct 'Touch': 'identifier' and 'target' are required.");
+  if (init.identifier === undefined || init.target === null || typeof init.target !== "object" || typeof init.target.addEventListener !== "function") {
+    throw new TypeError("Failed to construct 'Touch': 'identifier' and 'target' (an EventTarget) are required.");
   }
   _touchState.set(this, {
-    identifier: Number(init.identifier) || 0,
+    identifier: Number(init.identifier) | 0,
     target: init.target,
-    clientX: Number(init.clientX) || 0,
-    clientY: Number(init.clientY) || 0,
-    screenX: Number(init.screenX) || 0,
-    screenY: Number(init.screenY) || 0,
-    pageX: Number(init.pageX) || 0,
-    pageY: Number(init.pageY) || 0,
-    radiusX: Number(init.radiusX) || 0,
-    radiusY: Number(init.radiusY) || 0,
-    rotationAngle: Number(init.rotationAngle) || 0,
-    force: Number(init.force) || 0,
+    clientX: _touchFiniteNum(init.clientX, "clientX", false),
+    clientY: _touchFiniteNum(init.clientY, "clientY", false),
+    screenX: _touchFiniteNum(init.screenX, "screenX", false),
+    screenY: _touchFiniteNum(init.screenY, "screenY", false),
+    pageX: _touchFiniteNum(init.pageX, "pageX", false),
+    pageY: _touchFiniteNum(init.pageY, "pageY", false),
+    radiusX: _touchFiniteNum(init.radiusX, "radiusX", true),
+    radiusY: _touchFiniteNum(init.radiusY, "radiusY", true),
+    rotationAngle: _touchFiniteNum(init.rotationAngle, "rotationAngle", true),
+    force: _touchFiniteNum(init.force, "force", true),
   });
 }
 Object.defineProperty(Touch.prototype, Symbol.toStringTag, {
@@ -1562,11 +1599,18 @@ TouchList.prototype[Symbol.iterator] = function () {
 };
 
 function _toTouchList(input) {
+  if (input === undefined) return new TouchList(_internalConstruct, []);
   if (input instanceof TouchList) return input;
-  if (input && typeof input[Symbol.iterator] === "function") {
-    return new TouchList(_internalConstruct, Array.from(input));
+  if (input === null || typeof input[Symbol.iterator] !== "function") {
+    throw new TypeError("Failed to construct 'TouchEvent': The provided value cannot be converted to a sequence.");
   }
-  return new TouchList(_internalConstruct, []);
+  const arr = Array.from(input);
+  for (let i = 0; i < arr.length; i++) {
+    if (!(arr[i] instanceof Touch)) {
+      throw new TypeError("Failed to construct 'TouchEvent': Failed to convert value to 'Touch'.");
+    }
+  }
+  return new TouchList(_internalConstruct, arr);
 }
 
 function TouchEvent(type, options) {
@@ -1599,6 +1643,93 @@ markNative(TouchEvent, "TouchEvent");
   Object.defineProperty(TouchEvent.prototype, prop, {
     get: function () {
       const s = _touchEventState.get(this);
+      if (!s) throw new TypeError("Illegal invocation");
+      return s[prop];
+    },
+    enumerable: true,
+    configurable: true,
+  });
+});
+
+// -------------------------------------------------------------
+// ClipboardEvent
+// -------------------------------------------------------------
+const _clipboardEventState = new WeakMap();
+function ClipboardEvent(type, options) {
+  if (arguments.length === 0) {
+    throw new TypeError("Failed to construct 'ClipboardEvent': 1 argument required, but only 0 present.");
+  }
+  Event.call(this, type, options);
+  const opts = (options !== null && typeof options === "object") ? options : {};
+  _clipboardEventState.set(this, {
+    clipboardData: opts.clipboardData !== undefined ? opts.clipboardData : null,
+  });
+}
+ClipboardEvent.prototype = Object.create(Event.prototype);
+ClipboardEvent.prototype.constructor = ClipboardEvent;
+Object.defineProperty(ClipboardEvent.prototype, Symbol.toStringTag, {
+  value: "ClipboardEvent",
+  writable: false,
+  enumerable: false,
+  configurable: true,
+});
+markNative(ClipboardEvent, "ClipboardEvent");
+Object.defineProperty(ClipboardEvent.prototype, "clipboardData", {
+  get: function () {
+    const s = _clipboardEventState.get(this);
+    if (!s) throw new TypeError("Illegal invocation");
+    return s.clipboardData;
+  },
+  enumerable: true,
+  configurable: true,
+});
+
+// -------------------------------------------------------------
+// SecurityPolicyViolationEvent
+// -------------------------------------------------------------
+const _spvEventState = new WeakMap();
+function SecurityPolicyViolationEvent(type, options) {
+  if (arguments.length === 0) {
+    throw new TypeError("Failed to construct 'SecurityPolicyViolationEvent': 1 argument required, but only 0 present.");
+  }
+  const opts = (options !== null && typeof options === "object") ? options : {};
+  const disposition = opts.disposition !== undefined ? String(opts.disposition) : "enforce";
+  if (disposition !== "enforce" && disposition !== "report") {
+    throw new TypeError("Failed to construct 'SecurityPolicyViolationEvent': The provided value '" + disposition + "' is not a valid enum value of type SecurityPolicyViolationEventDisposition.");
+  }
+  Event.call(this, type, { bubbles: true, cancelable: false, composed: true });
+  _spvEventState.set(this, {
+    documentURI: opts.documentURI !== undefined ? String(opts.documentURI) : "",
+    referrer: opts.referrer !== undefined ? String(opts.referrer) : "",
+    blockedURI: opts.blockedURI !== undefined ? String(opts.blockedURI) : "",
+    violatedDirective: opts.violatedDirective !== undefined ? String(opts.violatedDirective) : "",
+    effectiveDirective: opts.effectiveDirective !== undefined ? String(opts.effectiveDirective) : "",
+    originalPolicy: opts.originalPolicy !== undefined ? String(opts.originalPolicy) : "",
+    sourceFile: opts.sourceFile !== undefined ? String(opts.sourceFile) : "",
+    sample: opts.sample !== undefined ? String(opts.sample) : "",
+    disposition: disposition,
+    statusCode: opts.statusCode !== undefined ? (Number(opts.statusCode) >>> 0) & 0xFFFF : 0,
+    lineNumber: opts.lineNumber !== undefined ? (Number(opts.lineNumber) >>> 0) : 0,
+    columnNumber: opts.columnNumber !== undefined ? (Number(opts.columnNumber) >>> 0) : 0,
+  });
+}
+SecurityPolicyViolationEvent.prototype = Object.create(Event.prototype);
+SecurityPolicyViolationEvent.prototype.constructor = SecurityPolicyViolationEvent;
+Object.defineProperty(SecurityPolicyViolationEvent.prototype, Symbol.toStringTag, {
+  value: "SecurityPolicyViolationEvent",
+  writable: false,
+  enumerable: false,
+  configurable: true,
+});
+markNative(SecurityPolicyViolationEvent, "SecurityPolicyViolationEvent");
+[
+  "documentURI", "referrer", "blockedURI", "violatedDirective",
+  "effectiveDirective", "originalPolicy", "sourceFile", "sample",
+  "disposition", "statusCode", "lineNumber", "columnNumber",
+].forEach(function (prop) {
+  Object.defineProperty(SecurityPolicyViolationEvent.prototype, prop, {
+    get: function () {
+      const s = _spvEventState.get(this);
       if (!s) throw new TypeError("Illegal invocation");
       return s[prop];
     },

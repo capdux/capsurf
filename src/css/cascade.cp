@@ -3926,6 +3926,57 @@ pub struct ComputedStyle {
             }
             return;
         }
+        if (std.ascii.eqlIgnoreCase(name, "border-style")) {
+            let is_none: [4]bool = [false; 4];
+            let cnt: usize = 0;
+            let pos: usize = 0;
+            while (cnt < 4) {
+                const tok_opt = nextCssValueToken(val, &pos);
+                if (tok_opt == null) break;
+                const tok = tok_opt.?;
+                is_none[cnt] = std.ascii.eqlIgnoreCase(tok, "none") || std.ascii.eqlIgnoreCase(tok, "hidden");
+                cnt += 1;
+            }
+            if (cnt > 0) {
+                const t_none = is_none[0];
+                const r_none = if (cnt >= 2) is_none[1] else is_none[0];
+                const b_none = if (cnt >= 3) is_none[2] else is_none[0];
+                const l_none = if (cnt >= 4) is_none[3] else r_none;
+                if (t_none && _.tryClaimSlot(PROP_BORDER_TOP, weight)) _.border_top_width = 0.0;
+                if (r_none && _.tryClaimSlot(PROP_BORDER_RIGHT, weight)) _.border_right_width = 0.0;
+                if (b_none && _.tryClaimSlot(PROP_BORDER_BOTTOM, weight)) _.border_bottom_width = 0.0;
+                if (l_none && _.tryClaimSlot(PROP_BORDER_LEFT, weight)) _.border_left_width = 0.0;
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "border-top-style")) {
+            const trimmed = std.mem.trim(u8, val, " \t\r\n");
+            if (std.ascii.eqlIgnoreCase(trimmed, "none") || std.ascii.eqlIgnoreCase(trimmed, "hidden")) {
+                if (_.tryClaimSlot(PROP_BORDER_TOP, weight)) _.border_top_width = 0.0;
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "border-right-style")) {
+            const trimmed = std.mem.trim(u8, val, " \t\r\n");
+            if (std.ascii.eqlIgnoreCase(trimmed, "none") || std.ascii.eqlIgnoreCase(trimmed, "hidden")) {
+                if (_.tryClaimSlot(PROP_BORDER_RIGHT, weight)) _.border_right_width = 0.0;
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "border-bottom-style")) {
+            const trimmed = std.mem.trim(u8, val, " \t\r\n");
+            if (std.ascii.eqlIgnoreCase(trimmed, "none") || std.ascii.eqlIgnoreCase(trimmed, "hidden")) {
+                if (_.tryClaimSlot(PROP_BORDER_BOTTOM, weight)) _.border_bottom_width = 0.0;
+            }
+            return;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "border-left-style")) {
+            const trimmed = std.mem.trim(u8, val, " \t\r\n");
+            if (std.ascii.eqlIgnoreCase(trimmed, "none") || std.ascii.eqlIgnoreCase(trimmed, "hidden")) {
+                if (_.tryClaimSlot(PROP_BORDER_LEFT, weight)) _.border_left_width = 0.0;
+            }
+            return;
+        }
         if (std.ascii.eqlIgnoreCase(name, "border-radius")) {
             // Take the horizontal radii part (before optional '/')
             const slash_idx = std.mem.indexOfScalar(u8, val, '/');
@@ -5946,11 +5997,14 @@ pub struct Cascade {
     }
 
     static fn parseBorderWidthToken(val_str: []const u8, root_font_px: f32): f32 {
-        let it = std.mem.tokenizeAny(u8, val_str, " \t\r\n");
-        while (tok := it.next()) {
+        let style_it = std.mem.tokenizeAny(u8, val_str, " \t\r\n");
+        while (tok := style_it.next()) {
             if (std.ascii.eqlIgnoreCase(tok, "none") || std.ascii.eqlIgnoreCase(tok, "hidden")) {
                 return 0.0;
             }
+        }
+        let it = std.mem.tokenizeAny(u8, val_str, " \t\r\n");
+        while (tok := it.next()) {
             if (std.ascii.eqlIgnoreCase(tok, "thin")) return 1.0;
             if (std.ascii.eqlIgnoreCase(tok, "medium")) return 3.0;
             if (std.ascii.eqlIgnoreCase(tok, "thick")) return 5.0;

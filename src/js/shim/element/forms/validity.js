@@ -403,28 +403,32 @@ function computeInputStep(type, currentValue, minAttr, maxAttr, stepAttr, n, val
   }
 
   const offset = (current - base) / step;
+  const stepEps = Math.max(STEP_ALIGNMENT_EPSILON, Math.abs(offset) * 1e-12);
   let next;
-  if (Math.abs(offset - Math.round(offset)) > STEP_ALIGNMENT_EPSILON) {
-    next =
-      base +
-      (n >= 0
-        ? Math.ceil(offset - STEP_ALIGNMENT_EPSILON)
-        : Math.floor(offset + STEP_ALIGNMENT_EPSILON)) *
-        step;
+  if (n === 0) {
+    return { noop: true };
+  }
+  if (Math.abs(offset - Math.round(offset)) > stepEps) {
+    if (n > 0) {
+      next = base + (Math.ceil(offset - stepEps) + (n - 1)) * step;
+    } else {
+      next = base + (Math.floor(offset + stepEps) + (n + 1)) * step;
+    }
   } else {
     next = current + n * step;
   }
-
   if (max != null && next > max) {
-    const overshoot = Math.ceil((next - max) / step);
+    const overshoot = Math.ceil((next - max) / step - stepEps);
     next = next - overshoot * step;
   }
   if (min != null && next < min) {
-    const undershoot = Math.ceil((min - next) / step);
+    const undershoot = Math.ceil((min - next) / step - stepEps);
     next = next + undershoot * step;
   }
 
-  if (type !== "number" && type !== "range") {
+  if (type === "number" || type === "range") {
+    next = Number(next.toPrecision(12));
+  } else {
     next = Math.round(next);
   }
   if ((min != null && next < min) || (max != null && next > max)) {
@@ -490,6 +494,13 @@ function hasAncestorDatalist(control) {
   return false;
 }
 
+function _isControlDisabled(control) {
+  if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_isElementDisabled === "function") {
+    return globalThis.__capsurf_isElementDisabled(control);
+  }
+  return Boolean(control.disabled);
+}
+
 function computeWillValidate(control) {
   if (!control) return false;
   const tag = (control.tagName || control.localName || "").toLowerCase();
@@ -504,13 +515,13 @@ function computeWillValidate(control) {
     ) {
       return false;
     }
-    if (control.disabled || control.readOnly) return false;
+    if (_isControlDisabled(control) || control.readOnly) return false;
   } else if (tag === "textarea") {
-    if (control.disabled || control.readOnly) return false;
+    if (_isControlDisabled(control) || control.readOnly) return false;
   } else if (tag === "select") {
-    if (control.disabled) return false;
+    if (_isControlDisabled(control)) return false;
   } else if (tag === "button") {
-    if (control.disabled) return false;
+    if (_isControlDisabled(control)) return false;
     if ((control.type || "submit").toLowerCase() !== "submit") return false;
   } else {
     return false;

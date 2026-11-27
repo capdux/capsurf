@@ -411,15 +411,12 @@ function ensureChildren(node) {
         child = nativeElementFirstChild.call(node);
       }
       while (child) {
+        const nextChild = nativeElementNextSibling ? nativeElementNextSibling.call(child) : null;
         if (child.nodeType === 1 && typeof upgradeElement === "function") {
-          upgradeElement(child);
+          try { upgradeElement(child); } catch (e) {}
         }
         node._children.push(child);
-        if (nativeElementNextSibling) {
-          child = nativeElementNextSibling.call(child);
-        } else {
-          break;
-        }
+        child = nextChild;
       }
     } catch (e) {}
   }
@@ -1364,18 +1361,76 @@ Node.prototype.lookupNamespaceURI = function (prefix) {
   return parent ? parent.lookupNamespaceURI(p) : null;
 };
 
+Node.prototype.lookupPrefix = function (namespace) {
+  if (namespace === null || namespace === undefined || namespace === "") return null;
+  const ns = String(namespace);
+  if (this.nodeType === 1) { // ELEMENT_NODE
+    let n = this;
+    while (n && n.nodeType === 1) {
+      if (n.namespaceURI === ns && n.prefix !== null && n.prefix !== undefined && n.prefix !== "") {
+        if (typeof n.lookupNamespaceURI !== "function" || n.lookupNamespaceURI(n.prefix) === ns) {
+          return n.prefix;
+        }
+      }
+      const attrs = n.attributes;
+      if (attrs) {
+        const len = attrs.length || 0;
+        for (let i = 0; i < len; i++) {
+          const a = attrs[i];
+          if (!a) continue;
+          const aPrefix = a.prefix || null;
+          const aLocal = a.localName || a.name;
+          let candPrefix = null;
+          if (a.namespaceURI === "http://www.w3.org/2000/xmlns/") {
+            if (aPrefix === "xmlns" && aLocal) {
+              candPrefix = aLocal;
+            } else if (typeof a.name === "string" && a.name.indexOf("xmlns:") === 0) {
+              candPrefix = a.name.slice(6);
+            }
+          }
+          if (candPrefix && a.value === ns) {
+            if (typeof this.lookupNamespaceURI !== "function" || this.lookupNamespaceURI(candPrefix) === ns) {
+              return candPrefix;
+            }
+          }
+        }
+      }
+      n = n.parentElement || n.parentNode;
+    }
+    return null;
+  }
+  if (this.nodeType === 9) { // DOCUMENT_NODE
+    return this.documentElement ? this.documentElement.lookupPrefix(ns) : null;
+  }
+  if (this.nodeType === 10 || this.nodeType === 11) { // DOCUMENT_TYPE_NODE || DOCUMENT_FRAGMENT_NODE
+    return null;
+  }
+  if (this.nodeType === 2) { // ATTRIBUTE_NODE
+    return this.ownerElement ? this.ownerElement.lookupPrefix(ns) : null;
+  }
+  const parent = this.parentElement || this.parentNode;
+  return parent ? parent.lookupPrefix(ns) : null;
+};
+
 function computeDocumentBaseURI(doc) {
   if (!doc) return "about:blank";
   const docUrl = doc.URL || doc.documentURI || (doc.location && doc.location.href) || (typeof location !== "undefined" && location && location.href) || "about:blank";
-  if (typeof doc.querySelector === "function") {
-    const baseEl = doc.querySelector("base[href]");
-    if (baseEl && typeof baseEl.getAttribute === "function") {
-      const bHref = baseEl.getAttribute("href");
-      if (bHref !== null) {
-        try {
-          return new URL(String(bHref).trim(), docUrl).href;
-        } catch (e) {}
-      }
+  let baseEl = null;
+  if (typeof findInSubtree === "function") {
+    baseEl = findInSubtree(doc, function (el) {
+      return el && el.nodeType === 1 &&
+        String(el.localName || el.tagName || "").toLowerCase() === "base" &&
+        typeof el.hasAttribute === "function" && el.hasAttribute("href");
+    }, true);
+  } else if (typeof doc.querySelector === "function") {
+    baseEl = doc.querySelector("base[href]");
+  }
+  if (baseEl && typeof baseEl.getAttribute === "function") {
+    const bHref = baseEl.getAttribute("href");
+    if (bHref !== null) {
+      try {
+        return new URL(String(bHref).trim(), docUrl).href;
+      } catch (e) {}
     }
   }
   return String(docUrl);
@@ -1394,6 +1449,78 @@ Node.prototype.isSameNode = function (otherNode) {
   return this === otherNode;
 };
 
+Node.prototype.isEqualNode = function (otherNode) {
+  if (arguments.length < 1) {
+    throw new TypeError("Failed to execute 'isEqualNode' on 'Node': 1 argument required, but only 0 present.");
+  }
+  if (otherNode === null || otherNode === undefined) return false;
+  if (typeof otherNode !== "object" || typeof otherNode.nodeType !== "number") {
+    throw new TypeError("Failed to execute 'isEqualNode' on 'Node': parameter 1 is not of type 'Node'.");
+  }
+  if (this === otherNode) return true;
+  if (this.nodeType !== otherNode.nodeType) return false;
+  const nt = this.nodeType;
+  if (nt === 1) {
+    if ((this.namespaceURI || null) !== (otherNode.namespaceURI || null)) return false;
+    if ((this.prefix || null) !== (otherNode.prefix || null)) return false;
+    if ((this.localName || this.tagName || "") !== (otherNode.localName || otherNode.tagName || "")) return false;
+    const a1 = this.attributes;
+    const a2 = otherNode.attributes;
+    const len1 = a1 ? a1.length : 0;
+    const len2 = a2 ? a2.length : 0;
+    if (len1 !== len2) return false;
+    for (let i = 0; i < len1; i++) {
+      const attr1 = a1[i];
+      let matched = false;
+      for (let j = 0; j < len2; j++) {
+        const attr2 = a2[j];
+        if ((attr1.namespaceURI || null) === (attr2.namespaceURI || null) &&
+            (attr1.localName || attr1.name) === (attr2.localName || attr2.name) &&
+            String(attr1.value) === String(attr2.value)) {
+          matched = true;
+          break;
+        }
+      }
+      if (!matched) return false;
+    }
+  } else if (nt === 10) {
+    if ((this.name || "") !== (otherNode.name || "")) return false;
+    if ((this.publicId || "") !== (otherNode.publicId || "")) return false;
+    if ((this.systemId || "") !== (otherNode.systemId || "")) return false;
+  } else if (nt === 7) {
+    if ((this.target || "") !== (otherNode.target || "")) return false;
+    if ((this.data || "") !== (otherNode.data || "")) return false;
+  } else if (nt === 3 || nt === 4 || nt === 8) {
+    const d1 = this.data !== undefined ? String(this.data) : String(this.textContent || "");
+    const d2 = otherNode.data !== undefined ? String(otherNode.data) : String(otherNode.textContent || "");
+    if (d1 !== d2) return false;
+  } else if (nt === 2) {
+    if ((this.namespaceURI || null) !== (otherNode.namespaceURI || null)) return false;
+    if ((this.localName || this.name) !== (otherNode.localName || otherNode.name)) return false;
+    if (String(this.value) !== String(otherNode.value)) return false;
+  }
+  const c1 = [];
+  for (let c = this.firstChild; c; c = c.nextSibling) c1.push(c);
+  if (c1.length === 0 && this._children && this._children.length > 0) {
+    for (let i = 0; i < this._children.length; i++) c1.push(this._children[i]);
+  } else if (c1.length === 0 && this.childNodes && this.childNodes.length > 0) {
+    for (let i = 0; i < this.childNodes.length; i++) c1.push(this.childNodes[i]);
+  }
+  const c2 = [];
+  for (let c = otherNode.firstChild; c; c = c.nextSibling) c2.push(c);
+  if (c2.length === 0 && otherNode._children && otherNode._children.length > 0) {
+    for (let i = 0; i < otherNode._children.length; i++) c2.push(otherNode._children[i]);
+  } else if (c2.length === 0 && otherNode.childNodes && otherNode.childNodes.length > 0) {
+    for (let i = 0; i < otherNode.childNodes.length; i++) c2.push(otherNode.childNodes[i]);
+  }
+  if (c1.length !== c2.length) return false;
+  for (let i = 0; i < c1.length; i++) {
+    if (!c1[i].isEqualNode(c2[i])) return false;
+  }
+  return true;
+};
+markNative(Node.prototype.isEqualNode, "isEqualNode");
+
 markNative(Node, "Node");
 markNative(Node.prototype.isSameNode, "isSameNode");
 markNative(Node.prototype.contains, "contains");
@@ -1405,8 +1532,12 @@ markNative(Node.prototype.removeChild, "removeChild");
 markNative(Node.prototype.replaceChild, "replaceChild");
 markNative(Node.prototype.hasChildNodes, "hasChildNodes");
 markNative(Node.prototype.lookupNamespaceURI, "lookupNamespaceURI");
+markNative(Node.prototype.lookupPrefix, "lookupPrefix");
 if (typeof Attr !== "undefined" && Attr.prototype && !Attr.prototype.lookupNamespaceURI) {
   Attr.prototype.lookupNamespaceURI = Node.prototype.lookupNamespaceURI;
+}
+if (typeof Attr !== "undefined" && Attr.prototype && !Attr.prototype.lookupPrefix) {
+  Attr.prototype.lookupPrefix = Node.prototype.lookupPrefix;
 }
 markNative(Node.prototype.getRootNode, "getRootNode");
 markNative(Node.prototype.normalize, "normalize");
@@ -1816,6 +1947,37 @@ DocumentFragment.prototype.prepend = function (...nodes) {
 };
 markNative(DocumentFragment.prototype.prepend, "prepend");
 
+function _validateDocumentChildren(nodes) {
+  let elemCount = 0;
+  let doctypeCount = 0;
+  for (let i = 0; i < nodes.length; i++) {
+    const c = nodes[i];
+    if (!c) continue;
+    if (c.nodeType === 11) {
+      const kids = Array.from(c.childNodes || c._children || []);
+      for (let j = 0; j < kids.length; j++) {
+        const k = kids[j];
+        if (k.nodeType === 3) throw new DOMException("Nodes of type '#text' may not be inserted inside nodes of type '#document'.", "HierarchyRequestError");
+        if (k.nodeType === 1) {
+          elemCount++;
+          if (elemCount > 1) throw new DOMException("Only one element on document allowed.", "HierarchyRequestError");
+        } else if (k.nodeType === 10) {
+          doctypeCount++;
+          if (doctypeCount > 1 || elemCount > 0) throw new DOMException("Invalid doctype position.", "HierarchyRequestError");
+        }
+      }
+    } else if (c.nodeType === 3) {
+      throw new DOMException("Nodes of type '#text' may not be inserted inside nodes of type '#document'.", "HierarchyRequestError");
+    } else if (c.nodeType === 1) {
+      elemCount++;
+      if (elemCount > 1) throw new DOMException("Only one element on document allowed.", "HierarchyRequestError");
+    } else if (c.nodeType === 10) {
+      doctypeCount++;
+      if (doctypeCount > 1 || elemCount > 0) throw new DOMException("Invalid doctype position.", "HierarchyRequestError");
+    }
+  }
+}
+
 function replaceChildrenImpl(parent, nodes) {
   const existing = Array.from(parent.childNodes || []);
   const converted = [];
@@ -1828,6 +1990,9 @@ function replaceChildrenImpl(parent, nodes) {
     } else {
       converted.push(new Text(String(n)));
     }
+  }
+  if (parent.nodeType === 9) {
+    _validateDocumentChildren(converted);
   }
   const run = function () {
     while (parent.firstChild) {
@@ -2065,6 +2230,8 @@ ShadowRoot.prototype.elementFromPoint = markNative(function (x, y) {
       if (!k || k.nodeType !== 1) continue;
       const tag = String(k.localName || k.tagName || "").toLowerCase();
       if (tag === "style" || tag === "script" || tag === "template") continue;
+      if ((!k.namespaceURI || k.namespaceURI === "http://www.w3.org/1999/xhtml") &&
+          typeof k.hasAttribute === "function" && k.hasAttribute("inert")) continue;
       let pe = "";
       let vis = "";
       let disp = "";
@@ -2093,6 +2260,17 @@ ShadowRoot.prototype.elementFromPoint = markNative(function (x, y) {
     const deeper = best._shadowRoot.elementFromPoint(vx, vy);
     if (deeper) return deeper;
   }
+  if (!best && this.host && typeof this.host.getBoundingClientRect === "function") {
+    const h = this.host;
+    const isInertHost = (!h.namespaceURI || h.namespaceURI === "http://www.w3.org/1999/xhtml") &&
+      typeof h.hasAttribute === "function" && h.hasAttribute("inert");
+    if (!isInertHost) {
+      const hr = h.getBoundingClientRect();
+      if (hr && hr.width > 0 && hr.height > 0 && vx >= hr.left && vx <= hr.right && vy >= hr.top && vy <= hr.bottom) {
+        return h;
+      }
+    }
+  }
   return best;
 }, "elementFromPoint");
 
@@ -2106,6 +2284,114 @@ ShadowRoot.prototype.elementsFromPoint = markNative(function (x, y) {
   }
   return out;
 }, "elementsFromPoint");
+
+(function () {
+  const VOID_HTML_TAGS = new Set([
+    "area", "base", "basefont", "bgsound", "br", "col", "embed", "frame",
+    "hr", "img", "input", "keygen", "link", "meta", "param", "source",
+    "track", "wbr"
+  ]);
+  function escapeHtmlText(str) {
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/\u00a0/g, "&nbsp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+  function escapeHtmlAttr(str) {
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/\u00a0/g, "&nbsp;")
+      .replace(/"/g, "&quot;");
+  }
+  function getNodeKids(node) {
+    const out = [];
+    if (node.firstChild) {
+      for (let c = node.firstChild; c; c = c.nextSibling) out.push(c);
+      return out;
+    }
+    if (node._children && node._children.length > 0) return node._children;
+    if (node.childNodes && node.childNodes.length > 0) return node.childNodes;
+    return out;
+  }
+  function serializeChildren(node, serializableShadowRoots, shadowRootsSet) {
+    let html = "";
+    const kids = getNodeKids(node);
+    for (let i = 0; i < kids.length; i++) {
+      const ch = kids[i];
+      if (!ch) continue;
+      const nt = ch.nodeType;
+      if (nt === 1) {
+        const tag = String(ch.localName || ch.tagName || "").toLowerCase();
+        let attrStr = "";
+        const attrs = ch.attributes;
+        if (attrs && attrs.length) {
+          for (let ai = 0; ai < attrs.length; ai++) {
+            const a = attrs[ai];
+            if (!a) continue;
+            attrStr += " " + a.name + '="' + escapeHtmlAttr(a.value == null ? "" : a.value) + '"';
+          }
+        }
+        html += "<" + tag + attrStr + ">";
+        if (!VOID_HTML_TAGS.has(tag)) {
+          const sr = ch._shadowRoot;
+          if (sr && ((serializableShadowRoots && sr.serializable) || (shadowRootsSet && shadowRootsSet.has(sr)))) {
+            let srAttrs = ' shadowrootmode="' + (sr.mode || "open") + '"';
+            if (sr.delegatesFocus) srAttrs += ' shadowrootdelegatesfocus=""';
+            if (sr.serializable) srAttrs += ' shadowrootserializable=""';
+            if (sr.clonable) srAttrs += ' shadowrootclonable=""';
+            html += "<template" + srAttrs + ">" + serializeChildren(sr, serializableShadowRoots, shadowRootsSet) + "</template>";
+          }
+          if (tag === "template" && ch.content) {
+            html += serializeChildren(ch.content, serializableShadowRoots, shadowRootsSet);
+          } else {
+            html += serializeChildren(ch, serializableShadowRoots, shadowRootsSet);
+          }
+          html += "</" + tag + ">";
+        }
+      } else if (nt === 3) {
+        const txt = ch.data !== undefined ? ch.data : (ch.textContent || "");
+        html += escapeHtmlText(txt);
+      } else if (nt === 8) {
+        const cdata = ch.data !== undefined ? ch.data : (ch.textContent || "");
+        html += "<!--" + cdata + "-->";
+      } else if (nt === 7) {
+        html += "<?" + (ch.target || "") + " " + (ch.data || "") + "?>";
+      }
+    }
+    return html;
+  }
+  function getHTMLImpl(node, options) {
+    const opts = (options && typeof options === "object") ? options : {};
+    const serializableShadowRoots = Boolean(opts.serializableShadowRoots);
+    let shadowRootsSet = null;
+    if (opts.shadowRoots != null) {
+      shadowRootsSet = new Set();
+      for (const sr of opts.shadowRoots) shadowRootsSet.add(sr);
+    }
+    let out = "";
+    if (node && node.nodeType === 1) {
+      const sr = node._shadowRoot;
+      if (sr && ((serializableShadowRoots && sr.serializable) || (shadowRootsSet && shadowRootsSet.has(sr)))) {
+        let srAttrs = ' shadowrootmode="' + (sr.mode || "open") + '"';
+        if (sr.delegatesFocus) srAttrs += ' shadowrootdelegatesfocus=""';
+        if (sr.serializable) srAttrs += ' shadowrootserializable=""';
+        if (sr.clonable) srAttrs += ' shadowrootclonable=""';
+        out += "<template" + srAttrs + ">" + serializeChildren(sr, serializableShadowRoots, shadowRootsSet) + "</template>";
+      }
+    }
+    out += serializeChildren(node, serializableShadowRoots, shadowRootsSet);
+    return out;
+  }
+  global.__capsurf_getHTMLImpl = getHTMLImpl;
+  if (typeof globalThis !== "undefined") globalThis.__capsurf_getHTMLImpl = getHTMLImpl;
+  ShadowRoot.prototype.getHTML = markNative(function (options) {
+    if (!shadowRootState.has(this)) {
+      throw new TypeError("Illegal invocation");
+    }
+    return getHTMLImpl(this, options);
+  }, "getHTML");
+})();
 
 global.ShadowRoot = ShadowRoot;
 if (typeof globalThis !== "undefined") {

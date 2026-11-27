@@ -15,7 +15,7 @@ const opt = (flag, def) => {
 };
 const binPath = resolve(ROOT, opt("--bin", process.env.CAPSURF_BIN || "bin_dev/main"));
 const basePort = parseInt(opt("--port", "19950"), 10);
-const jobs = Math.max(1, parseInt(opt("-j", opt("--jobs", "4")), 10));
+const jobs = Math.max(1, parseInt(opt("-j", opt("--jobs", "16")), 10));
 const filter = opt("--filter", "");
 const timeoutMs = parseInt(opt("--timeout", "1500"), 10);
 const resultsOut = opt("--results-out", "tmp/panda_results.json");

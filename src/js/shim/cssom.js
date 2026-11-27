@@ -12489,7 +12489,7 @@
   let _capturedGetComputedStyle = null;
 
   function formatCssMatrixNumber(n) {
-    if (!isFinite(n) || Math.abs(n) < 1e-12) return "0";
+    if (!isFinite(n) || Math.abs(n) < 1e-18) return "0";
     const expStr = n.toExponential(5);
     const parts = expStr.split("e");
     const exp = parseInt(parts[1], 10);
@@ -12568,9 +12568,7 @@
       const deg = parseFloat(s) || 0;
       const mod = ((deg % 360) + 360) % 360;
       if (Math.abs(mod) < 1e-9 || Math.abs(mod - 360) < 1e-9) return [1, 0];
-      if (Math.abs(mod - 90) < 1e-9) return [0, 1];
       if (Math.abs(mod - 180) < 1e-9) return [-1, 0];
-      if (Math.abs(mod - 270) < 1e-9) return [0, -1];
     }
     const rad = parseTransformAngleRad(raw);
     return [Math.cos(rad), Math.sin(rad)];
@@ -12917,7 +12915,9 @@
                 val = receiver[unprefixed] || (target.getPropertyValue ? target.getPropertyValue(unprefixed) : "");
               }
               if (typeof val === "string") {
-                val = resolveCssVars(element, val);
+                if (!k.startsWith("--")) {
+                  val = resolveCssVars(element, val);
+                }
                 if ((k === "color" || k.endsWith("-color")) && val.trim().toLowerCase() === "currentcolor") {
                   val = receiver.color || "rgb(0, 0, 0)";
                 }
@@ -13040,7 +13040,9 @@
 
           let val = target[prop];
           if (typeof val === "string") {
-            val = resolveCssVars(element, val);
+            if (!prop.startsWith("--")) {
+              val = resolveCssVars(element, val);
+            }
             if (!prop.startsWith("--") && kebab !== "animation-name" && kebab !== "font-family" && kebab !== "content" && kebab !== "quotes" &&
                 kebab !== "grid-row-start" && kebab !== "grid-row-end" && kebab !== "grid-column-start" && kebab !== "grid-column-end" &&
                 kebab !== "grid-row" && kebab !== "grid-column" && kebab !== "grid-area") {

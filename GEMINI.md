@@ -386,3 +386,10 @@
 3. **测试调度分层与 WPT 暂缓策略**：
    - **WPT 暂缓**：大型 WPT 跑批暂时挂起，集中全部算力与子智能体并发攻坚 **Playwright (`test/pw/`)** 与 **Lightpanda 洁净室黑盒集 (`test/panda/`)**（已加入 `.gitignore`，仅本地内部验证不入开源库）。
    - **双轨并进提速**：`test/panda/` 与 Playwright 并行推进；`scripts/panda_run.mjs` 采用 **并发 Tab/多实例 + 短超时 (`1.5s`) + 实时进度落盘**，将 572 项全扫压缩至 1~2 分钟内，优先收割大批量共性 DOM/Web API 缺失项。
+
+### 11.17 3小时自进化固化：96核满载并发、只读聚类前置与 `cpc from --ts` 迁移 (2026-11-27 第2轮自进化)
+
+- **96 核 128G 高并发跑批**：`scripts/panda_run.mjs` 默认 `-j 16`（~35s 扫完 517 项）、`scripts/e2e_suite.py` 使用 `--workers 16`，严禁低并发串行空耗时间。
+- **只读 `research` 聚类前置 + 精确行号派单**：面对 100+ 失败集群时，先派只读 `research` 子智能体对 `tmp/*.json` 做 `Counter` 聚类并定位精确 `src/` 行号，再派全新编码子智能体一刀切修复，消除探索往返 Token。
+- **`cpc from --ts --include-tests` 自动化转写 TS 测试**：转换 TS 测试用例为原生 CP `cap:test` 时，优先使用 `/data/dev/cp/cap/bin/cpc from --ts --include-tests --no-deps --verify` 生成初稿，再通过 `cpc brief -n 8` 收口，以利用 `cap test` 多核并发跑批。
+- **30 分钟上下文熔断**：严格监控子智能体运行时长，超过 30 分钟立即 `kill` 收回，保留其已落盘产物并派发全新子智能体接力，杜绝长上下文 $O(N^2)$ 膨胀。

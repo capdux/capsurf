@@ -505,6 +505,16 @@ Object.defineProperty(ParsedElement.prototype, "textContent", {
   configurable: true,
 });
 
+Object.defineProperty(ParsedElement.prototype, "innerText", {
+  get: function () {
+    return collectParsedText(this);
+  },
+  set: function (v) {
+    this.textContent = v;
+  },
+  configurable: true,
+});
+
 Object.defineProperty(ParsedElement.prototype, "childNodes", {
   get: function () {
     return new NodeList(this._children);

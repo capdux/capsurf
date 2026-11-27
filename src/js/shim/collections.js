@@ -959,9 +959,43 @@ NodeList.prototype[Symbol.iterator] = function () {
         return { value: self[idx++], done: false };
       }
       return { value: undefined, done: true };
-    }
+    },
+    [Symbol.iterator]: function () { return this; }
   };
 };
+NodeList.prototype.values = NodeList.prototype[Symbol.iterator];
+NodeList.prototype.keys = function () {
+  const self = this;
+  let idx = 0;
+  return {
+    next: function () {
+      if (idx < self.length) {
+        return { value: idx++, done: false };
+      }
+      return { value: undefined, done: true };
+    },
+    [Symbol.iterator]: function () { return this; }
+  };
+};
+NodeList.prototype.entries = function () {
+  const self = this;
+  let idx = 0;
+  return {
+    next: function () {
+      if (idx < self.length) {
+        const i = idx++;
+        return { value: [i, self[i]], done: false };
+      }
+      return { value: undefined, done: true };
+    },
+    [Symbol.iterator]: function () { return this; }
+  };
+};
+markNative(NodeList.prototype.item, "item");
+markNative(NodeList.prototype.forEach, "forEach");
+markNative(NodeList.prototype.keys, "keys");
+markNative(NodeList.prototype.values, "values");
+markNative(NodeList.prototype.entries, "entries");
 markNative(NodeList, "NodeList");
 
 function Attr(name, value, ownerElement, namespaceURI, localName, prefix) {

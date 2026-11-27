@@ -281,34 +281,64 @@ function NodeIterator(root, whatToShow, filter) {
   });
 });
 
+function _niNextInTree(root, node) {
+  if (node.firstChild) return node.firstChild;
+  let cur = node;
+  while (cur && cur !== root) {
+    if (cur.nextSibling) return cur.nextSibling;
+    cur = cur.parentNode || cur.parentElement;
+  }
+  return null;
+}
+
+function _niPrevInTree(root, node) {
+  if (node === root) return null;
+  if (node.previousSibling) {
+    let cur = node.previousSibling;
+    while (cur.lastChild) cur = cur.lastChild;
+    return cur;
+  }
+  return node.parentNode || node.parentElement || null;
+}
+
 NodeIterator.prototype.nextNode = function () {
   const st = _niState.get(this);
   if (!st) throw new TypeError("Illegal invocation");
-  if (st.firstCall) {
-    st.firstCall = false;
-    if (filterNode(st.root, st.whatToShow, st.filter) === FILTER_ACCEPT) {
-      st.referenceNode = st.root;
+  let node = st.referenceNode;
+  let beforeNode = st.pointerBeforeReferenceNode;
+  while (true) {
+    if (!beforeNode) {
+      node = _niNextInTree(st.root, node);
+      if (!node) return null;
+    } else {
+      beforeNode = false;
+    }
+    if (filterNode(node, st.whatToShow, st.filter) === FILTER_ACCEPT) {
+      st.referenceNode = node;
       st.pointerBeforeReferenceNode = false;
-      return st.root;
+      return node;
     }
   }
-  const node = st.walker.nextNode();
-  if (node) {
-    st.referenceNode = node;
-    st.pointerBeforeReferenceNode = false;
-  }
-  return node;
 };
 
 NodeIterator.prototype.previousNode = function () {
   const st = _niState.get(this);
   if (!st) throw new TypeError("Illegal invocation");
-  const node = st.walker.previousNode();
-  if (node) {
-    st.referenceNode = node;
-    st.pointerBeforeReferenceNode = true;
+  let node = st.referenceNode;
+  let beforeNode = st.pointerBeforeReferenceNode;
+  while (true) {
+    if (beforeNode) {
+      node = _niPrevInTree(st.root, node);
+      if (!node) return null;
+    } else {
+      beforeNode = true;
+    }
+    if (filterNode(node, st.whatToShow, st.filter) === FILTER_ACCEPT) {
+      st.referenceNode = node;
+      st.pointerBeforeReferenceNode = true;
+      return node;
+    }
   }
-  return node;
 };
 
 NodeIterator.prototype.detach = function () {};

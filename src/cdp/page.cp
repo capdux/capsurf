@@ -1960,14 +1960,26 @@ pub struct PageHandler {
             }
 
             if (session.network_enabled && !std.ascii.eqlIgnoreCase(fetch_res.final_url, "about:blank") && event_count.* < out_events.len) {
+                let req_hdrs_obj: []const u8 = "{}";
+                if (fetch_res.req_headers_text.len > 0) {
+                    if (crlf := std.mem.indexOf(u8, fetch_res.req_headers_text, "\r\n")) {
+                        req_hdrs_obj = formatHttpHeadersJson(fetch_res.req_headers_text[crlf + 2 ..], session.allocator);
+                    }
+                }
+                if (std.mem.eql(u8, req_hdrs_obj, "{}")) {
+                    let ua_esc_buf: [512]u8 = [0; 512];
+                    const ua_val = if (session.user_agent.len > 0) session.user_agent else DEFAULT_HTTP_USER_AGENT;
+                    const esc_ua = escapeJsonString(ua_val, &ua_esc_buf);
+                    req_hdrs_obj = std.fmt.allocPrint(session.allocator, "{{\"user-agent\":\"{s}\"}}", .{esc_ua}) catch "{}";
+                }
                 if (fetch_res.redirect_count == 0) {
                     if (!skip_first_request_will_be_sent) {
                         let esc_u_buf: [2048]u8 = [0; 2048];
                         const esc_u = escapeJsonString(fetch_res.final_url, &esc_u_buf);
                         const req_json = std.fmt.allocPrint(
                             session.allocator,
-                            "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{{}}}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"other\"}},\"type\":\"Document\",\"frameId\":\"{s}\"}}",
-                            .{ doc_req_id, session.loader_id, esc_u, esc_u, session.frame_id },
+                            "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{s}}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"other\"}},\"type\":\"Document\",\"frameId\":\"{s}\"}}",
+                            .{ doc_req_id, session.loader_id, esc_u, esc_u, req_hdrs_obj, session.frame_id },
                         ) catch "{}";
                         out_events[event_count.*] = CdpEvent.create("Network.requestWillBeSent", req_json);
                         event_count.* += 1;
@@ -1976,10 +1988,16 @@ pub struct PageHandler {
                     if (!skip_first_request_will_be_sent) {
                         let esc_u0_buf: [2048]u8 = [0; 2048];
                         const esc_u0 = escapeJsonString(fetch_res.redirect_urls[0], &esc_u0_buf);
+                        let hop0_req_hdrs = req_hdrs_obj;
+                        if (fetch_res.redirect_hops[0].req_headers_text.len > 0) {
+                            if (crlf0 := std.mem.indexOf(u8, fetch_res.redirect_hops[0].req_headers_text, "\r\n")) {
+                                hop0_req_hdrs = formatHttpHeadersJson(fetch_res.redirect_hops[0].req_headers_text[crlf0 + 2 ..], session.allocator);
+                            }
+                        }
                         const req0_json = std.fmt.allocPrint(
                             session.allocator,
-                            "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{{}}}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"other\"}},\"type\":\"Document\",\"frameId\":\"{s}\"}}",
-                            .{ doc_req_id, session.loader_id, esc_u0, esc_u0, session.frame_id },
+                            "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{s}}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"other\"}},\"type\":\"Document\",\"frameId\":\"{s}\"}}",
+                            .{ doc_req_id, session.loader_id, esc_u0, esc_u0, hop0_req_hdrs, session.frame_id },
                         ) catch "{}";
                         out_events[event_count.*] = CdpEvent.create("Network.requestWillBeSent", req0_json);
                         event_count.* += 1;
@@ -1993,23 +2011,34 @@ pub struct PageHandler {
                             const prev_u = fetch_res.redirect_urls[hi - 1];
                             let esc_prev_buf: [2048]u8 = [0; 2048];
                             const esc_prev = escapeJsonString(prev_u, &esc_prev_buf);
-                            const req_json = std.fmt.allocPrint(
-                                session.allocator,
-                                "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{{}}}},\"redirectResponse\":{{\"url\":\"{s}\",\"status\":302,\"statusText\":\"Found\",\"headers\":{{}},\"mimeType\":\"text/html\"}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"other\"}},\"type\":\"Document\",\"frameId\":\"{s}\"}}",
-                                .{ doc_req_id, session.loader_id, esc_u, esc_u, esc_prev, session.frame_id },
-                            ) catch "{}";
-                            out_events[event_count.*] = CdpEvent.create("Network.requestWillBeSent", req_json);
-                            event_count.* += 1;
+                            const prev_hop = &fetch_res.redirect_hops[hi - 1];
+                            const prev_status: u32 = if (prev_hop.status_code > 0) prev_hop.status_code else 302;
+                            const prev_st = if (prev_hop.status_text.len > 0) prev_hop.status_text else "Found";
+                            let prev_st_buf: [128]u8 = [0; 128];
+                            const esc_prev_st = escapeJsonString(prev_st, &prev_st_buf);
+                            const prev_hdrs_json = if (prev_hop.raw_headers.len > 0) formatHttpHeadersJson(prev_hop.raw_headers, session.allocator) else "{}";
+                            const prev_mime: []const u8 = "text/html";
+                            let hop_req_hdrs = req_hdrs_obj;
+                            if (hi < fetch_res.redirect_hops.len && fetch_res.redirect_hops[hi].req_headers_text.len > 0) {
+                                if (crlf_h := std.mem.indexOf(u8, fetch_res.redirect_hops[hi].req_headers_text, "\r\n")) {
+                                    hop_req_hdrs = formatHttpHeadersJson(fetch_res.redirect_hops[hi].req_headers_text[crlf_h + 2 ..], session.allocator);
+                                }
+                            }
+                            if (event_count.* < out_events.len) {
+                                const req_json = std.fmt.allocPrint(
+                                    session.allocator,
+                                    "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{s}}},\"redirectResponse\":{{\"url\":\"{s}\",\"status\":{d},\"statusText\":\"{s}\",\"headers\":{s},\"mimeType\":\"{s}\"}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"other\"}},\"type\":\"Document\",\"frameId\":\"{s}\"}}",
+                                    .{ doc_req_id, session.loader_id, esc_u, esc_u, hop_req_hdrs, esc_prev, prev_status, esc_prev_st, prev_hdrs_json, prev_mime, session.frame_id },
+                                ) catch "{}";
+                                out_events[event_count.*] = CdpEvent.create("Network.requestWillBeSent", req_json);
+                                event_count.* += 1;
+                            }
                         }
                     }
                 }
                 if (fetch_res.req_headers_text.len > 0 && event_count.* < out_events.len) {
                     let req_ht_buf: [8192]u8 = undefined;
                     const req_ht_esc = escapeJsonString(fetch_res.req_headers_text, &req_ht_buf);
-                    let req_hdrs_obj: []const u8 = "{}";
-                    if (crlf := std.mem.indexOf(u8, fetch_res.req_headers_text, "\r\n")) {
-                        req_hdrs_obj = formatHttpHeadersJson(fetch_res.req_headers_text[crlf + 2 ..], session.allocator);
-                    }
                     const req_extra_json = std.fmt.allocPrint(
                         session.allocator,
                         "{{\"requestId\":\"{s}\",\"associatedCookies\":[],\"headers\":{s},\"headersText\":\"{s}\"}}",
