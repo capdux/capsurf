@@ -308,6 +308,11 @@ Node.prototype.cloneNode = function (deep) {
     c.ownerDocument = this.ownerDocument;
     return c;
   }
+  if (this.nodeType === PROCESSING_INSTRUCTION_NODE) {
+    const pi = new ProcessingInstruction(this.target, this.data);
+    pi.ownerDocument = this.ownerDocument;
+    return pi;
+  }
   if (this.nodeType === DOCUMENT_FRAGMENT_NODE) {
     const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
     const nativeFrag = typeof globalThis !== "undefined" ? globalThis.__capsurf_native_createDocumentFragment : null;
@@ -390,6 +395,7 @@ function isGenuineNode(obj) {
   if (_NodeCtor && obj instanceof _NodeCtor) return true;
   if (typeof global !== "undefined" && global.Node && obj instanceof global.Node) return true;
   if (isParsedNode(obj)) return true;
+  if (typeof obj._nid === "number" && obj._nid > 0 && typeof obj.nodeType === "number") return true;
   return false;
 }
 
@@ -746,6 +752,12 @@ function detachChildInternal(parent, child, suppressLifecycle) {
 
   if (parent._shadowRoot && typeof global.__capsurf_scheduleSlotChange === "function") {
     global.__capsurf_scheduleSlotChange(parent);
+  } else if (parent.nodeType === 1 && String(parent.localName || parent.tagName || "").toLowerCase() === "slot") {
+    const rn = typeof parent.getRootNode === "function" ? parent.getRootNode() : null;
+    if (rn && rn.nodeType === 11 && rn.host && typeof global.__capsurf_scheduleSlotChange === "function") {
+      parent._slotchangeDirty = true;
+      global.__capsurf_scheduleSlotChange(rn.host);
+    }
   }
   if (parent) {
     const pDoc = parent.nodeType === DOCUMENT_NODE ? parent : (parent.ownerDocument || null);
@@ -807,9 +819,6 @@ Node.prototype.appendChild = function (child) {
     } catch (e) {}
   }
 
-  if (wasConnected && (!willBeConnected || docChanged)) {
-    notifyDisconnectedCustomElements(child);
-  }
   if (docChanged) {
     adoptSubtreeOnInsert(child, oldDoc, newDoc);
   }
@@ -823,6 +832,9 @@ Node.prototype.appendChild = function (child) {
       child._children = [];
     }
     ensureChildren(this).push(child);
+    if (wasConnected && (!willBeConnected || docChanged)) {
+      notifyDisconnectedCustomElements(child);
+    }
     executeConnectedScripts(child);
     if (willBeConnected && (!wasConnected || docChanged)) {
       notifyConnectedCustomElements(child);
@@ -848,6 +860,10 @@ Node.prototype.appendChild = function (child) {
     } catch (e) {}
   }
 
+  if (wasConnected && (!willBeConnected || docChanged)) {
+    notifyDisconnectedCustomElements(child);
+  }
+
   if (typeof notifyMutation === "function") {
     const rec = new MutationRecord("childList", this);
     rec.addedNodes = [child];
@@ -858,6 +874,12 @@ Node.prototype.appendChild = function (child) {
 
   if (this._shadowRoot && typeof global.__capsurf_scheduleSlotChange === "function") {
     global.__capsurf_scheduleSlotChange(this);
+  } else if (this.nodeType === 1 && String(this.localName || this.tagName || "").toLowerCase() === "slot") {
+    const rn = typeof this.getRootNode === "function" ? this.getRootNode() : null;
+    if (rn && rn.nodeType === 11 && rn.host && typeof global.__capsurf_scheduleSlotChange === "function") {
+      this._slotchangeDirty = true;
+      global.__capsurf_scheduleSlotChange(rn.host);
+    }
   }
 
   executeConnectedScripts(child);
@@ -869,6 +891,9 @@ Node.prototype.appendChild = function (child) {
     if ((ctag === "iframe" || ctag === "frame") && typeof global !== "undefined" && typeof global.__capsurf_on_iframe_connected === "function") {
       global.__capsurf_on_iframe_connected(child);
     }
+  }
+  if (this.nodeType === 1 && String(this.localName || this.tagName || "").toLowerCase() === "style") {
+    this._sheet = null;
   }
   { const _idDoc = this.nodeType === DOCUMENT_NODE ? this : (this.ownerDocument || null); if (_idDoc) { try { _idDoc._capsurfIdDirty = true; } catch (e) {} } }
   if (this.isConnected && typeof global !== "undefined" && typeof global.__capsurf_syncNamedGlobals === "function") {
@@ -961,9 +986,6 @@ Node.prototype.insertBefore = function (newChild, refChild) {
     } catch (e) {}
   }
 
-  if (wasConnected && (!willBeConnected || docChanged)) {
-    notifyDisconnectedCustomElements(newChild);
-  }
   if (docChanged) {
     adoptSubtreeOnInsert(newChild, oldDoc, newDoc);
   }
@@ -993,6 +1015,10 @@ Node.prototype.insertBefore = function (newChild, refChild) {
     } catch (e) {}
   }
 
+  if (wasConnected && (!willBeConnected || docChanged)) {
+    notifyDisconnectedCustomElements(newChild);
+  }
+
   if (typeof notifyMutation === "function") {
     const rec = new MutationRecord("childList", this);
     rec.addedNodes = [newChild];
@@ -1003,6 +1029,12 @@ Node.prototype.insertBefore = function (newChild, refChild) {
 
   if (this._shadowRoot && typeof global.__capsurf_scheduleSlotChange === "function") {
     global.__capsurf_scheduleSlotChange(this);
+  } else if (this.nodeType === 1 && String(this.localName || this.tagName || "").toLowerCase() === "slot") {
+    const rn = typeof this.getRootNode === "function" ? this.getRootNode() : null;
+    if (rn && rn.nodeType === 11 && rn.host && typeof global.__capsurf_scheduleSlotChange === "function") {
+      this._slotchangeDirty = true;
+      global.__capsurf_scheduleSlotChange(rn.host);
+    }
   }
 
   executeConnectedScripts(newChild);
@@ -1014,6 +1046,9 @@ Node.prototype.insertBefore = function (newChild, refChild) {
     if ((ctag === "iframe" || ctag === "frame") && typeof global !== "undefined" && typeof global.__capsurf_on_iframe_connected === "function") {
       global.__capsurf_on_iframe_connected(newChild);
     }
+  }
+  if (this.nodeType === 1 && String(this.localName || this.tagName || "").toLowerCase() === "style") {
+    this._sheet = null;
   }
   { const _idDoc = this.nodeType === DOCUMENT_NODE ? this : (this.ownerDocument || null); if (_idDoc) { try { _idDoc._capsurfIdDirty = true; } catch (e) {} } }
   if (this.isConnected && typeof global !== "undefined" && typeof global.__capsurf_syncNamedGlobals === "function") {
@@ -1082,6 +1117,15 @@ Node.prototype.removeChild = function (child) {
 
   if (this._shadowRoot && typeof global.__capsurf_scheduleSlotChange === "function") {
     global.__capsurf_scheduleSlotChange(this);
+  } else if (this.nodeType === 1 && String(this.localName || this.tagName || "").toLowerCase() === "slot") {
+    const rn = typeof this.getRootNode === "function" ? this.getRootNode() : null;
+    if (rn && rn.nodeType === 11 && rn.host && typeof global.__capsurf_scheduleSlotChange === "function") {
+      this._slotchangeDirty = true;
+      global.__capsurf_scheduleSlotChange(rn.host);
+    }
+  }
+  if (this.nodeType === 1 && String(this.localName || this.tagName || "").toLowerCase() === "style") {
+    this._sheet = null;
   }
   { const _idDoc = this.nodeType === DOCUMENT_NODE ? this : (this.ownerDocument || null); if (_idDoc) { try { _idDoc._capsurfIdDirty = true; } catch (e) {} } }
   if (this.isConnected && typeof global !== "undefined" && typeof global.__capsurf_syncNamedGlobals === "function") {
@@ -1233,6 +1277,12 @@ Node.prototype.replaceChild = function (newChild, oldChild) {
 
   if (this._shadowRoot && typeof global.__capsurf_scheduleSlotChange === "function") {
     global.__capsurf_scheduleSlotChange(this);
+  } else if (this.nodeType === 1 && String(this.localName || this.tagName || "").toLowerCase() === "slot") {
+    const rn = typeof this.getRootNode === "function" ? this.getRootNode() : null;
+    if (rn && rn.nodeType === 11 && rn.host && typeof global.__capsurf_scheduleSlotChange === "function") {
+      this._slotchangeDirty = true;
+      global.__capsurf_scheduleSlotChange(rn.host);
+    }
   }
 
   executeConnectedScripts(newChild);
@@ -1431,6 +1481,7 @@ if (typeof Element !== "undefined" && Element.prototype) {
     }
   }, "moveBefore");
   Element.prototype.moveBefore = moveBeforeFn;
+  global.__capsurf_moveBeforeFn = moveBeforeFn;
   if (typeof Document !== "undefined" && Document.prototype) {
     Document.prototype.moveBefore = moveBeforeFn;
   }
@@ -1501,10 +1552,65 @@ if (typeof Element !== "undefined" && Element.prototype) {
         }
         this._children = null;
         origSetInnerHtml.call(this, v);
+        try {
+          const ctxTag = String(this.localName || this.tagName || "").toLowerCase();
+          const TABLE_CTX = { table: 1, thead: 1, tbody: 1, tfoot: 1, tr: 1, colgroup: 1, caption: 1, template: 1 };
+          const ORPHAN_TABLE = { tr: 1, td: 1, th: 1, tbody: 1, thead: 1, tfoot: 1, caption: 1, colgroup: 1, col: 1 };
+          const ns = this.namespaceURI;
+          if ((!ns || ns === "http://www.w3.org/1999/xhtml") && !TABLE_CTX[ctxTag] && !this._skipTableUnwrap) {
+            let changed = true;
+            while (changed) {
+              changed = false;
+              const kids = Array.from(this.childNodes || this._children || []);
+              for (let ki = 0; ki < kids.length; ki++) {
+                const k = kids[ki];
+                if (k && k.nodeType === 1) {
+                  const kt = String(k.localName || k.tagName || "").toLowerCase();
+                  if (ORPHAN_TABLE[kt]) {
+                    const gkids = Array.from(k.childNodes || k._children || []);
+                    for (let gi = 0; gi < gkids.length; gi++) {
+                      this.insertBefore(gkids[gi], k);
+                    }
+                    this.removeChild(k);
+                    changed = true;
+                  }
+                }
+              }
+            }
+          }
+        } catch (e) {}
         let newKids = [];
         try {
           newKids = Array.from(this.childNodes || this._children || []);
         } catch (e) {}
+        if (typeof globalThis !== "undefined" && typeof globalThis.upgradeCustomElement === "function" && typeof globalThis.__capsurf_getCustomElementDefinition === "function") {
+          const getDef = globalThis.__capsurf_getCustomElementDefinition;
+          const upgradeFn = globalThis.upgradeCustomElement;
+          const upgradeTree = function (el) {
+            if (!el || el.nodeType !== 1) return;
+            const ns = el._namespaceURI !== undefined ? el._namespaceURI : el.namespaceURI;
+            if (!ns || ns === "http://www.w3.org/1999/xhtml") {
+              const tag = String(el.localName || el.tagName || "").toLowerCase();
+              const isAttr = el.getAttribute ? el.getAttribute("is") : null;
+              let def = null;
+              if (isAttr !== null && isAttr !== undefined) {
+                const extDef = getDef(String(isAttr));
+                if (extDef && extDef.extendsTag === tag) def = extDef;
+              } else {
+                const autoDef = getDef(tag);
+                if (autoDef && !autoDef.extendsTag) def = autoDef;
+              }
+              if (def && def.constructor && !def.constructor.prototype.isPrototypeOf(el)) {
+                upgradeFn(el, def.constructor, { tagName: def.name || tag, fireConnectedCallback: Boolean(el.isConnected) });
+              }
+            }
+            const ks = el.childNodes || el._children;
+            if (ks && ks.length) {
+              for (let j = 0; j < ks.length; j++) upgradeTree(ks[j]);
+            }
+          };
+          for (let i = 0; i < newKids.length; i++) upgradeTree(newKids[i]);
+        }
         if ((oldKids.length > 0 || newKids.length > 0) && typeof notifyMutation === "function") {
           const rec = new MutationRecord("childList", this);
           rec.removedNodes = oldKids;
@@ -1523,9 +1629,9 @@ if (typeof Element !== "undefined" && Element.prototype) {
 
 Node.prototype.lookupNamespaceURI = function (prefix) {
   let p = prefix === "" ? null : prefix;
+  if (p === "xml") return "http://www.w3.org/XML/1998/namespace";
+  if (p === "xmlns") return "http://www.w3.org/2000/xmlns/";
   if (this.nodeType === 1) { // ELEMENT_NODE
-    if (p === "xml") return "http://www.w3.org/XML/1998/namespace";
-    if (p === "xmlns") return "http://www.w3.org/2000/xmlns/";
     let n = this;
     while (n && n.nodeType === 1) {
       if (n.prefix === p && n.namespaceURI) return n.namespaceURI;
@@ -1785,6 +1891,12 @@ function characterDataReplaceData(node, offset, count, data) {
       nativeElementSetTextContent.call(node, node._data);
     } catch (e) {}
   }
+  if (node.parentNode && node.parentNode.nodeType === 1 && String(node.parentNode.localName || node.parentNode.tagName || "").toLowerCase() === "style") {
+    node.parentNode._sheet = null;
+    if (nativeElementSetTextContent) {
+      try { nativeElementSetTextContent.call(node.parentNode, node.parentNode.textContent); } catch (e) {}
+    }
+  }
   if (typeof global !== "undefined" && typeof global.__capsurf_rangeOnReplaceData === "function") {
     global.__capsurf_rangeOnReplaceData(node, off, cnt, str.length);
   }
@@ -2015,11 +2127,14 @@ function ProcessingInstruction(target, data) {
   this._data = String(data !== undefined ? data : "");
   this._target = String(target !== undefined ? target : "");
   this.nodeType = PROCESSING_INSTRUCTION_NODE;
-  this.nodeName = this._target;
 }
 ProcessingInstruction.prototype = Object.create(CharacterData.prototype);
 ProcessingInstruction.prototype.constructor = ProcessingInstruction;
 Object.defineProperty(ProcessingInstruction.prototype, "nodeType", { value: PROCESSING_INSTRUCTION_NODE, writable: true, configurable: true });
+Object.defineProperty(ProcessingInstruction.prototype, "nodeName", {
+  get: function () { return this._target || ""; },
+  configurable: true,
+});
 Object.defineProperty(ProcessingInstruction.prototype, "target", {
   get: function () { return this._target || ""; },
   configurable: true,
@@ -2034,6 +2149,9 @@ function DocumentFragment() {
 }
 DocumentFragment.prototype = Object.create(Node.prototype);
 DocumentFragment.prototype.constructor = DocumentFragment;
+if (typeof global.__capsurf_moveBeforeFn === "function") {
+  DocumentFragment.prototype.moveBefore = global.__capsurf_moveBeforeFn;
+}
 Object.defineProperty(DocumentFragment.prototype, Symbol.toStringTag, {
   value: "DocumentFragment",
   configurable: true,

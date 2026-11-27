@@ -7,7 +7,7 @@ import { CdpBoxModel, CdpTarget, CdpRequest, CdpResponse, CdpEvent, extractJsonS
 import { CdpPageSession, escapeJsonString, DEFAULT_HTTP_USER_AGENT } from "./session.cp";
 import { CdpDispatcher } from "./dispatch.cp";
 import { drainDomMutationEvents, ByteSlice } from "./dom.cp";
-import { performPendingNavigation, markFetchNavPreAnnounced, emitNewChildFrameEvents } from "./page.cp";
+import { performPendingNavigation, markFetchNavPreAnnounced, emitNewChildFrameEvents, canUseAsyncHttpNav, buildAsyncNavHttpRequest, parseRawHttpToLoaderResult, takePendingJsNavUrl, completePageNavigationFromResult, completePendingNavigationFromResult, consumeFetchNavPreAnnounced } from "./page.cp";
 import { FetchHandler, InterceptVerdict } from "./fetch.cp";
 import { MockFixtures } from "../net/mock_fixtures.cp";
 import { NodeId, NULL_NODE, NodeType } from "../dom/dom.cp";
@@ -96,6 +96,75 @@ pub struct PendingSlowEval {
     session_id_len: usize = 0,
 }
 
+pub const MAX_ASYNC_NAVS: usize = 8;
+
+pub const AsyncNavPhase = enum {
+    connecting,
+    writing,
+    reading,
+};
+
+pub struct AsyncNavSlot {
+    active: bool = false,
+    superseded: bool = false,
+    is_cdp_nav: bool = false,
+    fd: i32 = -1,
+    phase: AsyncNavPhase = .connecting,
+    target_sess: (*CdpPageSession)? = null,
+    session_id_buf: [128]u8 = [0; 128],
+    session_id_len: usize = 0,
+    req_id: i64 = 0,
+    raw_id_buf: [64]u8 = [0; 64],
+    raw_id_len: usize = 0,
+    loader_id_buf: [64]u8 = [0; 64],
+    loader_id_len: usize = 0,
+    url_buf: [2048]u8 = [0; 2048],
+    url_len: usize = 0,
+    referrer_buf: [2048]u8 = [0; 2048],
+    referrer_len: usize = 0,
+    payload_buf: [4096]u8 = [0; 4096],
+    payload_len: usize = 0,
+    skip_first_req_sent: bool = false,
+    send_buf: [8192]u8 = [0; 8192],
+    send_len: usize = 0,
+    send_offset: usize = 0,
+    recv_buf: ([]u8)? = null,
+    recv_len: usize = 0,
+    started_ms: i64 = 0,
+
+    fn closeFd(*_) {
+        if (_.fd >= 0) {
+            * = std.c.close(_.fd);
+            _.fd = -1;
+        }
+    }
+
+    fn reset(*_) {
+        _.closeFd();
+        if (rb := _.recv_buf) {
+            std.heap.c_allocator.free(rb);
+            _.recv_buf = null;
+        }
+        _.active = false;
+        _.superseded = false;
+        _.is_cdp_nav = false;
+        _.phase = .connecting;
+        _.target_sess = null;
+        _.session_id_len = 0;
+        _.req_id = 0;
+        _.raw_id_len = 0;
+        _.loader_id_len = 0;
+        _.url_len = 0;
+        _.referrer_len = 0;
+        _.payload_len = 0;
+        _.skip_first_req_sent = false;
+        _.send_len = 0;
+        _.send_offset = 0;
+        _.recv_len = 0;
+        _.started_ms = 0;
+    }
+}
+
 pub struct PendingNavState {
     pending_nav_active: bool = false,
     pending_nav_deadline_ms: i64 = 0,
@@ -112,6 +181,7 @@ pub struct PendingNavState {
     pending_fetch_nav_req_id_len: usize = 0,
     pending_evals: [8]PendingSlowEval = [PendingSlowEval{}; 8],
     pending_eval_count: usize = 0,
+    async_navs: [MAX_ASYNC_NAVS]AsyncNavSlot = [AsyncNavSlot{}; MAX_ASYNC_NAVS],
 }
 
 pub struct PendingWheelReply {
@@ -1019,7 +1089,13 @@ pub struct CdpServer {
                         if (tid := _.session.target_registry.findTargetIdBySessionId(sid)) {
                             const flen = @min(tid.len, _.tab_sessions[j].frame_id_buf.len);
                             @memcpy(_.tab_sessions[j].frame_id_buf[0..flen], tid[0..flen]);
-                            _.tab_sessions[j].page_session.?.frame_id = _.tab_sessions[j].frame_id_buf[0..flen];
+                            const fid_slice = _.tab_sessions[j].frame_id_buf[0..flen];
+                            _.tab_sessions[j].page_session.?.frame_id = fid_slice;
+                            if (dctx := _.tab_sessions[j].page_session.?.dom_ctx) {
+                                const dlen = @min(fid_slice.len, dctx.frame_id_buf.len);
+                                @memcpy(dctx.frame_id_buf[0..dlen], fid_slice[0..dlen]);
+                                dctx.frame_id_len = dlen;
+                            }
                         }
                         return _.tab_sessions[j].page_session.?;
                     }
@@ -1074,6 +1150,11 @@ pub struct CdpServer {
                 @memcpy(_.tab_sessions[slot_idx].frame_id_buf[0..flen], tid[0..flen]);
                 new_sess.frame_id = _.tab_sessions[slot_idx].frame_id_buf[0..flen];
                 new_sess.target_id = new_sess.frame_id;
+                if (dctx := new_sess.dom_ctx) {
+                    const dlen = @min(new_sess.frame_id.len, dctx.frame_id_buf.len);
+                    @memcpy(dctx.frame_id_buf[0..dlen], new_sess.frame_id[0..dlen]);
+                    dctx.frame_id_len = dlen;
+                }
                 if (t_idx := _.session.target_registry.findTargetIndex(tid)) {
                     const tgt = &_.session.target_registry.targets[t_idx];
                     if (tgt.opener_id_len > 0 && std.mem.eql(u8, tgt.url(), "about:blank")) {
@@ -1092,9 +1173,19 @@ pub struct CdpServer {
                 }
             } else {
                 new_sess.frame_id = std.fmt.bufPrint(&_.tab_sessions[slot_idx].frame_id_buf, "capsurf-frame-tab-{d}", .{slot_idx + 2}) catch "capsurf-frame-001";
+                if (dctx := new_sess.dom_ctx) {
+                    const dlen = @min(new_sess.frame_id.len, dctx.frame_id_buf.len);
+                    @memcpy(dctx.frame_id_buf[0..dlen], new_sess.frame_id[0..dlen]);
+                    dctx.frame_id_len = dlen;
+                }
             }
         } else {
             new_sess.frame_id = std.fmt.bufPrint(&_.tab_sessions[slot_idx].frame_id_buf, "capsurf-frame-tab-{d}", .{slot_idx + 2}) catch "capsurf-frame-001";
+            if (dctx := new_sess.dom_ctx) {
+                const dlen = @min(new_sess.frame_id.len, dctx.frame_id_buf.len);
+                @memcpy(dctx.frame_id_buf[0..dlen], new_sess.frame_id[0..dlen]);
+                dctx.frame_id_len = dlen;
+            }
         }
         _.tab_sessions[slot_idx].active = true;
         if (sid.len > 0) {
@@ -1765,6 +1856,378 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
         }
     }
 
+    static fn emitAsyncNavAbortEventsAndReply(client_fd: i32, slot: *AsyncNavSlot)! {
+        const sess = slot.target_sess orelse return;
+        const lid = slot.loader_id_buf[0..slot.loader_id_len];
+        const sid = slot.session_id_buf[0..slot.session_id_len];
+        const has_sid = sid.len > 0 && !std.mem.startsWith(u8, sid, "capsurf-cdp-session-");
+
+        if (sess.network_enabled) {
+            let evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+            let ecnt: usize = 0;
+            const nav_u = slot.url_buf[0..slot.url_len];
+            if (!slot.skip_first_req_sent && nav_u.len > 0) {
+                let esc_u_buf: [2048]u8 = [0; 2048];
+                const esc_u = escapeJsonString(nav_u, &esc_u_buf);
+                const req_p = std.fmt.allocPrint(
+                    sess.allocator,
+                    "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{{}}}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"other\"}},\"type\":\"Document\",\"frameId\":\"{s}\"}}",
+                    .{ lid, lid, esc_u, esc_u, sess.frame_id },
+                ) catch "";
+                if (req_p.len > 0) {
+                    evts[ecnt] = CdpEvent.create("Network.requestWillBeSent", req_p);
+                    if (has_sid) evts[ecnt].session_id = sid;
+                    ecnt += 1;
+                }
+            }
+            const fail_p = std.fmt.allocPrint(
+                sess.allocator,
+                "{{\"requestId\":\"{s}\",\"timestamp\":1700000000.01,\"type\":\"Document\",\"errorText\":\"net::ERR_ABORTED\",\"canceled\":true}}",
+                .{lid},
+            ) catch "";
+            if (fail_p.len > 0) {
+                evts[ecnt] = CdpEvent.create("Network.loadingFailed", fail_p);
+                if (has_sid) evts[ecnt].session_id = sid;
+                ecnt += 1;
+            }
+            if (ecnt > 0) {
+                emitCdpEventsToFd(client_fd, &evts, ecnt)?;
+            }
+        }
+
+        let res_buf: [512]u8 = [0; 512];
+        const res_json = std.fmt.bufPrint(
+            &res_buf,
+            "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"isDownload\":false,\"errorText\":\"net::ERR_ABORTED\"}}",
+            .{ sess.frame_id, lid },
+        ) catch "{\"isDownload\":false,\"errorText\":\"net::ERR_ABORTED\"}";
+        let msg_buf: [1024]u8 = [0; 1024];
+        const raw_id = slot.raw_id_buf[0..slot.raw_id_len];
+        let msg: []const u8 = "";
+        if (raw_id.len > 0) {
+            if (sid.len > 0) {
+                msg = std.fmt.bufPrint(&msg_buf, "{{\"id\":\"{s}\",\"result\":{s},\"sessionId\":\"{s}\"}}", .{ raw_id, res_json, sid }) catch return;
+            } else {
+                msg = std.fmt.bufPrint(&msg_buf, "{{\"id\":\"{s}\",\"result\":{s}}}", .{ raw_id, res_json }) catch return;
+            }
+        } else {
+            if (sid.len > 0) {
+                msg = std.fmt.bufPrint(&msg_buf, "{{\"id\":{d},\"result\":{s},\"sessionId\":\"{s}\"}}", .{ slot.req_id, res_json, sid }) catch return;
+            } else {
+                msg = std.fmt.bufPrint(&msg_buf, "{{\"id\":{d},\"result\":{s}}}", .{ slot.req_id, res_json }) catch return;
+            }
+        }
+        writeWsTextFrame(client_fd, msg)?;
+    }
+
+    static fn abortAsyncNavForSession(client_fd: i32, nav_state: *PendingNavState, sess: *CdpPageSession)! {
+        let i: usize = 0;
+        while (i < MAX_ASYNC_NAVS) : (i += 1) {
+            let slot = &nav_state.async_navs[i];
+            if (!slot.active || slot.superseded) continue;
+            if (slot.target_sess == sess) {
+                if (slot.is_cdp_nav) {
+                    emitAsyncNavAbortEventsAndReply(client_fd, slot)?;
+                    slot.reset();
+                } else {
+                    slot.superseded = true;
+                }
+            }
+        }
+    }
+
+    static fn startAsyncNavSlot(
+        nav_state: *PendingNavState,
+        sess: *CdpPageSession,
+        sid: []const u8,
+        is_cdp_nav: bool,
+        req_id: i64,
+        raw_id: []const u8,
+        payload: []const u8,
+        url: []const u8,
+        referrer: []const u8,
+        skip_first_req_sent: bool,
+    ): bool {
+        let free_idx: usize = MAX_ASYNC_NAVS;
+        let i: usize = 0;
+        while (i < MAX_ASYNC_NAVS) : (i += 1) {
+            if (!nav_state.async_navs[i].active) {
+                free_idx = i;
+                break;
+            }
+        }
+        if (free_idx >= MAX_ASYNC_NAVS) return false;
+
+        let slot = &nav_state.async_navs[free_idx];
+        slot.reset();
+
+        let ip_addr: u32 = 0;
+        let port: u16 = 80;
+        const slen = buildAsyncNavHttpRequest(sess, url, referrer, &slot.send_buf, &ip_addr, &port);
+        if (slen == 0) return false;
+
+        const fd = socket(AF_INET, SOCK_STREAM | HttpScheduler.SOCK_NONBLOCK, 0);
+        if (fd < 0) return false;
+
+        const zero_sin: [8]u8 = [0; 8];
+        const addr = HttpScheduler.NetSockAddrIn{
+            sin_family: @as(u16, AF_INET),
+            sin_port: HttpScheduler.htonsU16(port),
+            sin_addr: ip_addr,
+            sin_zero: zero_sin,
+        };
+        const rc = HttpScheduler.connect(fd, &addr, @as(u32, @sizeOf(HttpScheduler.NetSockAddrIn)));
+        let initial_phase = AsyncNavPhase.connecting;
+        if (rc == 0) {
+            initial_phase = .writing;
+        } else {
+            let so_err: i32 = 0;
+            let so_len: u32 = @as(u32, @sizeOf(i32));
+            const gsrc = HttpScheduler.getsockopt(fd, HttpScheduler.SOL_SOCKET, HttpScheduler.SO_ERROR, &so_err, &so_len);
+            if (!(gsrc == 0 && (so_err == 0 || so_err == HttpScheduler.EINPROGRESS))) {
+                * = std.c.close(fd);
+                return false;
+            }
+        }
+
+        const rbuf = std.heap.c_allocator.alloc(u8, 262144) catch {
+            * = std.c.close(fd);
+            return false;
+        };
+
+        slot.active = true;
+        slot.superseded = false;
+        slot.is_cdp_nav = is_cdp_nav;
+        slot.fd = fd;
+        slot.phase = initial_phase;
+        slot.target_sess = sess;
+        slot.req_id = req_id;
+        slot.skip_first_req_sent = skip_first_req_sent;
+        slot.send_len = slen;
+        slot.send_offset = 0;
+        slot.recv_buf = rbuf;
+        slot.recv_len = 0;
+        slot.started_ms = serverNowMs();
+
+        const sid_copy = @min(sid.len, slot.session_id_buf.len);
+        if (sid_copy > 0) @memcpy(slot.session_id_buf[0..sid_copy], sid[0..sid_copy]);
+        slot.session_id_len = sid_copy;
+
+        const rid_copy = @min(raw_id.len, slot.raw_id_buf.len);
+        if (rid_copy > 0) @memcpy(slot.raw_id_buf[0..rid_copy], raw_id[0..rid_copy]);
+        slot.raw_id_len = rid_copy;
+
+        const lid_copy = @min(sess.loader_id.len, slot.loader_id_buf.len);
+        if (lid_copy > 0) @memcpy(slot.loader_id_buf[0..lid_copy], sess.loader_id[0..lid_copy]);
+        slot.loader_id_len = lid_copy;
+
+        const u_copy = @min(url.len, slot.url_buf.len);
+        if (u_copy > 0) @memcpy(slot.url_buf[0..u_copy], url[0..u_copy]);
+        slot.url_len = u_copy;
+
+        const ref_copy = @min(referrer.len, slot.referrer_buf.len);
+        if (ref_copy > 0) @memcpy(slot.referrer_buf[0..ref_copy], referrer[0..ref_copy]);
+        slot.referrer_len = ref_copy;
+
+        const p_copy = @min(payload.len, slot.payload_buf.len);
+        if (p_copy > 0) @memcpy(slot.payload_buf[0..p_copy], payload[0..p_copy]);
+        slot.payload_len = p_copy;
+
+        return true;
+    }
+
+    static fn tryStartAsyncPendingNav(nav_state: *PendingNavState, sess: *CdpPageSession, sid: []const u8): bool {
+        if (!sess.has_document) return false;
+        let i: usize = 0;
+        while (i < MAX_ASYNC_NAVS) : (i += 1) {
+            if (nav_state.async_navs[i].active && !nav_state.async_navs[i].superseded && nav_state.async_navs[i].target_sess == sess) {
+                return false;
+            }
+        }
+        let url_buf: [2048]u8 = [0; 2048];
+        const ulen = takePendingJsNavUrl(sess, &url_buf);
+        if (ulen == 0) return false;
+        return startAsyncNavSlot(nav_state, sess, sid, false, 0, "", "", url_buf[0..ulen], "", false);
+    }
+
+    fn tryInterceptAsyncPageNav(*_, client_fd: i32, cdp_req: CdpRequest, payload: []const u8, nav_state: *PendingNavState): bool! {
+        if (!std.mem.eql(u8, cdp_req.method, "Page.navigate")) return false;
+        const nav_sess = _.resolveSessionForRequest(cdp_req);
+        abortAsyncNavForSession(client_fd, nav_state, nav_sess)?;
+        const nav_url_raw = extractJsonString(cdp_req.params_raw, "url") ?? "";
+        const req_frame_id = extractJsonString(cdp_req.params_raw, "frameId") ?? nav_sess.frame_id;
+        if (req_frame_id.len > 0 && !std.mem.eql(u8, req_frame_id, nav_sess.frame_id)) return false;
+        let unesc_nav_buf: [2048]u8 = [0; 2048];
+        let nav_url_clean: []const u8 = nav_url_raw;
+        if (nav_url_raw.len > 0 && nav_url_raw.len <= unesc_nav_buf.len) {
+            nav_url_clean = unescapeJsonString(nav_url_raw, &unesc_nav_buf);
+        }
+        if (!canUseAsyncHttpNav(nav_sess, nav_url_clean)) return false;
+        const bctx = extractJsonString(cdp_req.params_raw, "browserContextId") ?? "";
+        if (bctx.len > 0) nav_sess.setContextId(bctx);
+        nav_sess.nextLoaderId();
+        const skip_req_sent = consumeFetchNavPreAnnounced(nav_sess.loader_id);
+        const nav_ref = extractJsonString(cdp_req.params_raw, "referrer") ?? "";
+        return startAsyncNavSlot(
+            nav_state,
+            nav_sess,
+            cdp_req.session_id,
+            true,
+            cdp_req.id,
+            cdp_req.raw_id,
+            payload,
+            nav_url_clean,
+            nav_ref,
+            skip_req_sent,
+        );
+    }
+
+    fn completeAsyncNavSlot(*_, client_fd: i32, slot: *AsyncNavSlot, pending_promises: *[]PendingPromise, nav_state: *PendingNavState, net_ok: bool)! {
+        if (slot.superseded) {
+            slot.reset();
+            return;
+        }
+        const sess = slot.target_sess orelse {
+            slot.reset();
+            return;
+        };
+        const sid = slot.session_id_buf[0..slot.session_id_len];
+        const has_sid = sid.len > 0 && !std.mem.startsWith(u8, sid, "capsurf-cdp-session-");
+        const nav_url = slot.url_buf[0..slot.url_len];
+        const ref_url = slot.referrer_buf[0..slot.referrer_len];
+
+        if (!slot.is_cdp_nav) {
+            if (net_ok) {
+                if (rb := slot.recv_buf) {
+                    if (fetch_res := parseRawHttpToLoaderResult(rb[0..slot.recv_len], nav_url, slot.send_buf[0..slot.send_len])) {
+                        let nav_events: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+                        let nav_event_count: usize = 0;
+                        if (completePendingNavigationFromResult(sess, &nav_events, &nav_event_count, fetch_res)) {
+                            if (has_sid) {
+                                let ei: usize = 0;
+                                while (ei < nav_event_count) : (ei += 1) {
+                                    if (nav_events[ei].session_id.len == 0 && !std.mem.startsWith(u8, nav_events[ei].method, "Browser.")) {
+                                        nav_events[ei].session_id = sid;
+                                    }
+                                }
+                            }
+                            emitCdpEventsToFd(client_fd, &nav_events, nav_event_count)?;
+                        }
+                    }
+                }
+            }
+            slot.reset();
+            return;
+        }
+
+        if (net_ok) {
+            if (rb := slot.recv_buf) {
+                if (fetch_res := parseRawHttpToLoaderResult(rb[0..slot.recv_len], nav_url, slot.send_buf[0..slot.send_len])) {
+                    const out_buf = std.heap.c_allocator.alloc(u8, 65536) catch {
+                        slot.reset();
+                        return;
+                    };
+                    defer std.heap.c_allocator.free(out_buf);
+                    let events: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+                    let event_count: usize = 0;
+                    const resp = completePageNavigationFromResult(
+                        sess,
+                        slot.req_id,
+                        out_buf,
+                        &events,
+                        &event_count,
+                        ref_url,
+                        slot.skip_first_req_sent,
+                        fetch_res,
+                    );
+                    if (has_sid) {
+                        let ei: usize = 0;
+                        while (ei < event_count) : (ei += 1) {
+                            if (events[ei].session_id.len == 0 && !std.mem.startsWith(u8, events[ei].method, "Browser.")) {
+                                events[ei].session_id = sid;
+                            }
+                        }
+                    }
+                    emitCdpEventsToFd(client_fd, &events, event_count)?;
+
+                    let msg_buf: [4096]u8 = [0; 4096];
+                    const raw_id = slot.raw_id_buf[0..slot.raw_id_len];
+                    let msg: []const u8 = "";
+                    if (resp.error_code == 0) {
+                        if (raw_id.len > 0) {
+                            if (sid.len > 0) {
+                                msg = std.fmt.bufPrint(&msg_buf, "{{\"id\":\"{s}\",\"result\":{s},\"sessionId\":\"{s}\"}}", .{ raw_id, resp.result_json, sid }) catch "";
+                            } else {
+                                msg = std.fmt.bufPrint(&msg_buf, "{{\"id\":\"{s}\",\"result\":{s}}}", .{ raw_id, resp.result_json }) catch "";
+                            }
+                        } else {
+                            if (sid.len > 0) {
+                                msg = std.fmt.bufPrint(&msg_buf, "{{\"id\":{d},\"result\":{s},\"sessionId\":\"{s}\"}}", .{ resp.id, resp.result_json, sid }) catch "";
+                            } else {
+                                msg = std.fmt.bufPrint(&msg_buf, "{{\"id\":{d},\"result\":{s}}}", .{ resp.id, resp.result_json }) catch "";
+                            }
+                        }
+                    } else {
+                        if (raw_id.len > 0) {
+                            if (sid.len > 0) {
+                                msg = std.fmt.bufPrint(&msg_buf, "{{\"id\":\"{s}\",\"error\":{{\"code\":{d},\"message\":\"{s}\"}},\"sessionId\":\"{s}\"}}", .{ raw_id, resp.error_code, resp.error_message, sid }) catch "";
+                            } else {
+                                msg = std.fmt.bufPrint(&msg_buf, "{{\"id\":\"{s}\",\"error\":{{\"code\":{d},\"message\":\"{s}\"}}}}", .{ raw_id, resp.error_code, resp.error_message }) catch "";
+                            }
+                        } else {
+                            if (sid.len > 0) {
+                                msg = std.fmt.bufPrint(&msg_buf, "{{\"id\":{d},\"error\":{{\"code\":{d},\"message\":\"{s}\"}},\"sessionId\":\"{s}\"}}", .{ resp.id, resp.error_code, resp.error_message, sid }) catch "";
+                            } else {
+                                msg = std.fmt.bufPrint(&msg_buf, "{{\"id\":{d},\"error\":{{\"code\":{d},\"message\":\"{s}\"}}}}", .{ resp.id, resp.error_code, resp.error_message }) catch "";
+                            }
+                        }
+                    }
+                    if (msg.len > 0) {
+                        writeWsTextFrame(client_fd, msg)?;
+                    }
+                    slot.reset();
+                    return;
+                }
+            }
+            // Fallback for 3xx redirects or Content-Encoding: gzip/br
+            if (slot.payload_len > 0) {
+                const fallback_req = CdpRequest.parse(slot.payload_buf[0..slot.payload_len]);
+                slot.reset();
+                _.dispatchCdpCommand(client_fd, fallback_req, pending_promises, nav_state)?;
+                return;
+            }
+        }
+
+        // Network failure
+        let res_buf: [512]u8 = [0; 512];
+        const lid = slot.loader_id_buf[0..slot.loader_id_len];
+        const err_res = std.fmt.bufPrint(
+            &res_buf,
+            "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"isDownload\":false,\"errorText\":\"net::ERR_CONNECTION_RESET\"}}",
+            .{ sess.frame_id, lid },
+        ) catch "{\"isDownload\":false,\"errorText\":\"net::ERR_CONNECTION_RESET\"}";
+        let msg_buf: [1024]u8 = [0; 1024];
+        const raw_id = slot.raw_id_buf[0..slot.raw_id_len];
+        let msg: []const u8 = "";
+        if (raw_id.len > 0) {
+            if (sid.len > 0) {
+                msg = std.fmt.bufPrint(&msg_buf, "{{\"id\":\"{s}\",\"result\":{s},\"sessionId\":\"{s}\"}}", .{ raw_id, err_res, sid }) catch "";
+            } else {
+                msg = std.fmt.bufPrint(&msg_buf, "{{\"id\":\"{s}\",\"result\":{s}}}", .{ raw_id, err_res }) catch "";
+            }
+        } else {
+            if (sid.len > 0) {
+                msg = std.fmt.bufPrint(&msg_buf, "{{\"id\":{d},\"result\":{s},\"sessionId\":\"{s}\"}}", .{ slot.req_id, err_res, sid }) catch "";
+            } else {
+                msg = std.fmt.bufPrint(&msg_buf, "{{\"id\":{d},\"result\":{s}}}", .{ slot.req_id, err_res }) catch "";
+            }
+        }
+        if (msg.len > 0) {
+            writeWsTextFrame(client_fd, msg)?;
+        }
+        slot.reset();
+    }
+
     static fn flushDeferredLoadEventsForSession(client_fd: i32, sess: *CdpPageSession, sid: []const u8)! {
         if (!sess.has_document) return;
         if (!sess.pending_main_load_deferred && !sess.pending_child_load_deferred) return;
@@ -2146,7 +2609,13 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
 
         // Pending slow-navigation state for non-blocking navigate window
         let nav_state = std.heap.c_allocator.create(PendingNavState) catch return;
-        defer std.heap.c_allocator.destroy(nav_state);
+        defer {
+            let ani_d: usize = 0;
+            while (ani_d < MAX_ASYNC_NAVS) : (ani_d += 1) {
+                nav_state.async_navs[ani_d].reset();
+            }
+            std.heap.c_allocator.destroy(nav_state);
+        }
         nav_state.* = PendingNavState{};
         defer markFetchNavPreAnnounced("");
         let pending_promises = std.heap.c_allocator.alloc(PendingPromise, 16) catch return;
@@ -2244,7 +2713,7 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                 }
             }
 
-            let pfds: [2 + MAX_SCHEDULER_SLOTS]PollFd = [PollFd{ fd: -1, events: 0, revents: 0 }; 2 + MAX_SCHEDULER_SLOTS];
+            let pfds: [2 + MAX_SCHEDULER_SLOTS + MAX_ASYNC_NAVS]PollFd = [PollFd{ fd: -1, events: 0, revents: 0 }; 2 + MAX_SCHEDULER_SLOTS + MAX_ASYNC_NAVS];
             pfds[0] = PollFd{ fd: client_fd, events: POLLIN, revents: 0 };
             pfds[1] = PollFd{ fd: _.listen_fd, events: POLLIN, revents: 0 };
             let fast_poll = _.session.screencast_handler.isActive() && _.session.screencast_handler.state.min_frame_interval_ms <= 16;
@@ -2275,6 +2744,14 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                     break;
                 }
             }
+            let has_active_async_nav = false;
+            let ani_chk: usize = 0;
+            while (ani_chk < MAX_ASYNC_NAVS) : (ani_chk += 1) {
+                if (nav_state.async_navs[ani_chk].active) {
+                    has_active_async_nav = true;
+                    break;
+                }
+            }
             const base_poll_ms: i32 = if (fast_poll) 5 else 15;
             let async_fetch_active: u32 = if (_.session.has_document) _.session.activeAsyncFetchCount() else 0;
             if (async_fetch_active == 0) {
@@ -2289,7 +2766,7 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                     }
                 }
             }
-            const poll_ms: i32 = if (pending_wheel.active || has_active_promise || async_fetch_active > 0) 1 else base_poll_ms;
+            const poll_ms: i32 = if (pending_wheel.active || has_active_promise || has_active_async_nav || async_fetch_active > 0) 1 else base_poll_ms;
             const base_nfds: usize = if (_.listen_fd >= 0) 2 else 1;
             let net_pfds: [MAX_SCHEDULER_SLOTS]NetPollFd = [NetPollFd{ fd: -1, events: 0, revents: 0 }; MAX_SCHEDULER_SLOTS];
             let slot_indices: [MAX_SCHEDULER_SLOTS]usize = [0; MAX_SCHEDULER_SLOTS];
@@ -2302,7 +2779,22 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                     revents: 0,
                 };
             }
-            const nfds: u64 = @as(u64, @intCast(base_nfds + net_nfds));
+            let anav_pfd_idx: [MAX_ASYNC_NAVS]usize = [0; MAX_ASYNC_NAVS];
+            let anav_nfds: usize = 0;
+            let ani_p: usize = 0;
+            while (ani_p < MAX_ASYNC_NAVS) : (ani_p += 1) {
+                if (nav_state.async_navs[ani_p].active && nav_state.async_navs[ani_p].fd >= 0) {
+                    const ev: i16 = if (nav_state.async_navs[ani_p].phase == .reading) POLLIN else HttpScheduler.POLLOUT;
+                    pfds[base_nfds + net_nfds + anav_nfds] = PollFd{
+                        fd: nav_state.async_navs[ani_p].fd,
+                        events: ev,
+                        revents: 0,
+                    };
+                    anav_pfd_idx[anav_nfds] = ani_p;
+                    anav_nfds += 1;
+                }
+            }
+            const nfds: u64 = @as(u64, @intCast(base_nfds + net_nfds + anav_nfds));
             const pr = poll(&pfds[0], nfds, poll_ms);
             if (pr < 0) {
                 break;
@@ -2314,6 +2806,71 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                     net_pfds[rfi].revents = pfds[base_nfds + rfi].revents;
                 }
                 * = _.net_scheduler.stepSockets(&net_pfds, &slot_indices, net_nfds, tick_now_ms);
+            }
+            if (anav_nfds > 0) {
+                let afi: usize = 0;
+                while (afi < anav_nfds) : (afi += 1) {
+                    const si = anav_pfd_idx[afi];
+                    let aslot = &nav_state.async_navs[si];
+                    if (!aslot.active || aslot.fd < 0) continue;
+                    const rev = pfds[base_nfds + net_nfds + afi].revents;
+                    if ((rev & (POLLERR | POLLNVAL)) != 0) {
+                        aslot.closeFd();
+                        _.completeAsyncNavSlot(client_fd, aslot, pending_promises, nav_state, false) catch break;
+                        continue;
+                    }
+                    if (aslot.phase == .connecting) {
+                        if ((rev & HttpScheduler.POLLOUT) != 0) {
+                            let so_err: i32 = 0;
+                            let so_len: u32 = @as(u32, @sizeOf(i32));
+                            const gsrc = HttpScheduler.getsockopt(aslot.fd, HttpScheduler.SOL_SOCKET, HttpScheduler.SO_ERROR, &so_err, &so_len);
+                            if (gsrc == 0 && so_err == 0) {
+                                aslot.phase = if (aslot.send_len > 0) .writing else .reading;
+                            } else {
+                                aslot.closeFd();
+                                _.completeAsyncNavSlot(client_fd, aslot, pending_promises, nav_state, false) catch break;
+                            }
+                        }
+                    } else if (aslot.phase == .writing) {
+                        if ((rev & HttpScheduler.POLLOUT) != 0) {
+                            const rem = aslot.send_len - aslot.send_offset;
+                            if (rem > 0) {
+                                const off = aslot.send_offset;
+                                const send_slice: []const u8 = aslot.send_buf[off..aslot.send_len];
+                                const sent = HttpScheduler.send(aslot.fd, send_slice.ptr, rem, HttpScheduler.MSG_DONTWAIT | HttpScheduler.MSG_NOSIGNAL);
+                                if (sent > 0) {
+                                    aslot.send_offset += @as(usize, @intCast(sent));
+                                } else if (sent == 0) {
+                                    aslot.closeFd();
+                                    _.completeAsyncNavSlot(client_fd, aslot, pending_promises, nav_state, false) catch break;
+                                    continue;
+                                }
+                            }
+                            if (aslot.send_offset >= aslot.send_len) {
+                                aslot.phase = .reading;
+                            }
+                        }
+                    } else if (aslot.phase == .reading) {
+                        if ((rev & (POLLIN | POLLHUP)) != 0) {
+                            if (rb := aslot.recv_buf) {
+                                const avail = rb.len - aslot.recv_len;
+                                if (avail == 0) {
+                                    aslot.closeFd();
+                                    _.completeAsyncNavSlot(client_fd, aslot, pending_promises, nav_state, true) catch break;
+                                } else {
+                                    const recv_slice = rb[aslot.recv_len..];
+                                    const rn = HttpScheduler.recv(aslot.fd, recv_slice.ptr, avail, HttpScheduler.MSG_DONTWAIT);
+                                    if (rn > 0) {
+                                        aslot.recv_len += @as(usize, @intCast(rn));
+                                    } else if (rn == 0 || (rev & POLLHUP) != 0) {
+                                        aslot.closeFd();
+                                        _.completeAsyncNavSlot(client_fd, aslot, pending_promises, nav_state, true) catch break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
             * = _.net_scheduler.startPending(tick_now_ms);
             const net_active: u32 = @as(u32, @intCast(_.net_scheduler.inflightCount())) + async_fetch_active;
@@ -2380,7 +2937,9 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                         emitNewChildFrameEvents(_.session, &cf_evts, &cf_cnt);
                         if (cf_cnt > 0) emitCdpEventsToFd(client_fd, &cf_evts, cf_cnt) catch break;
                     }
-                    _.flushPendingNavigation(client_fd) catch break;
+                    if (!tryStartAsyncPendingNav(nav_state, _.session, "")) {
+                        _.flushPendingNavigation(client_fd) catch break;
+                    }
                     if (_.session.binding_count > 0) {
                         let b_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
                         const b_cnt = _.session.pollBindingEvents(&b_evts);
@@ -2454,7 +3013,9 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                                     emitCdpEventsToFd(client_fd, &tcf_evts, tcf_cnt) catch break;
                                 }
                             }
-                            flushPendingNavigationForSession(client_fd, tab_sess, tab_sid) catch break;
+                            if (!tryStartAsyncPendingNav(nav_state, tab_sess, tab_sid)) {
+                                flushPendingNavigationForSession(client_fd, tab_sess, tab_sid) catch break;
+                            }
                             if (tab_sess.binding_count > 0) {
                                 let tb_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
                                 const tb_cnt = tab_sess.pollBindingEvents(&tb_evts);
@@ -2776,6 +3337,12 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                         nav_state.pending_evals[nav_state.pending_eval_count].session_id_len = slen;
                         nav_state.pending_eval_count += 1;
                     }
+                    continue;
+                }
+
+                // Intercept plain http:// Page.navigate for non-blocking concurrent navigation
+                const async_nav_started = _.tryInterceptAsyncPageNav(client_fd, cdp_req, payload, nav_state) catch break;
+                if (async_nav_started) {
                     continue;
                 }
 

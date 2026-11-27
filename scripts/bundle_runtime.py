@@ -32,6 +32,7 @@ MODULE_ORDER = [
     "element/forms/form.js",
     "element/forms/fieldset.js",
     "element/forms/label.js",
+    "streams.js",
     "file.js",
     "form-data.js",
     "traversal.js",

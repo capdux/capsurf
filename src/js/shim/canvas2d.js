@@ -3,7 +3,7 @@
 // Cloud vector recording and rendering engine for HTML5 Canvas 2D.
 // Configured by globalThis.__CAP_RENDER_CONFIG.canvasRecording (true: record ops, false: headless fast stub).
 
-const VALID_PNG_BASE64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+const VALID_PNG_BASE64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR42mNgAAAAAgAB5Sfe/AAAAABJRU5ErkJggg==";
 
 const _INTERNAL_CTX_SECRET = Symbol("CanvasRenderingContext2D_internal");
 const _ctxInstances = new WeakSet();
@@ -364,7 +364,7 @@ function Path2D(path) {
     this._ops = _parseSvgPathData(path);
   }
 }
-const pathMethods = ["moveTo", "lineTo", "quadraticCurveTo", "bezierCurveTo", "arcTo", "arc", "ellipse", "rect", "closePath"];
+const pathMethods = ["moveTo", "lineTo", "quadraticCurveTo", "bezierCurveTo", "arcTo", "arc", "ellipse", "rect", "roundRect", "closePath"];
 for (let i = 0; i < pathMethods.length; i++) {
   const m = pathMethods[i];
   Path2D.prototype[m] = function () {
@@ -1740,9 +1740,11 @@ CanvasRenderingContext2D.prototype.getImageData = function (sx, sy, sw, sh) {
   let intSw = (sw | 0);
   let intSh = (sh | 0);
 
-  if (intSw === 0 || intSh === 0) {
-    const err = new Error("IndexSizeError");
-    err.name = "IndexSizeError";
+  if (intSw <= 0 || intSh <= 0) {
+    const err = typeof DOMException !== "undefined"
+      ? new DOMException("Index or size is negative or greater than the allowed amount", "IndexSizeError")
+      : new Error("Index or size is negative or greater than the allowed amount");
+    if (!(err instanceof DOMException)) err.name = "IndexSizeError";
     throw err;
   }
 
@@ -1943,6 +1945,9 @@ function OffscreenCanvas(width, height) {
   if (arguments.length < 2) {
     throw new TypeError("Failed to construct 'OffscreenCanvas': 2 arguments required, but only " + arguments.length + " present.");
   }
+  if (typeof EventTarget === "function") {
+    try { EventTarget.call(this); } catch (e) {}
+  }
   let canvas = null;
   if (typeof document !== "undefined" && typeof document.createElement === "function") {
     canvas = document.createElement("canvas");
@@ -1958,6 +1963,24 @@ function OffscreenCanvas(width, height) {
   this.__backingCanvas = canvas;
   this._ctx2d = null;
 }
+if (typeof EventTarget === "function" && EventTarget.prototype) {
+  OffscreenCanvas.prototype = Object.create(EventTarget.prototype);
+  OffscreenCanvas.prototype.constructor = OffscreenCanvas;
+}
+
+function OffscreenCanvasRenderingContext2D() {
+  throw new TypeError("Illegal constructor");
+}
+OffscreenCanvasRenderingContext2D.prototype = Object.create(CanvasRenderingContext2D.prototype);
+OffscreenCanvasRenderingContext2D.prototype.constructor = OffscreenCanvasRenderingContext2D;
+Object.defineProperty(OffscreenCanvasRenderingContext2D.prototype, Symbol.toStringTag, {
+  value: "OffscreenCanvasRenderingContext2D",
+  configurable: true,
+});
+markNative(OffscreenCanvasRenderingContext2D, "OffscreenCanvasRenderingContext2D");
+if (typeof global !== "undefined") global.OffscreenCanvasRenderingContext2D = OffscreenCanvasRenderingContext2D;
+if (typeof window !== "undefined") window.OffscreenCanvasRenderingContext2D = OffscreenCanvasRenderingContext2D;
+if (typeof globalThis !== "undefined") globalThis.OffscreenCanvasRenderingContext2D = OffscreenCanvasRenderingContext2D;
 
 OffscreenCanvas.prototype.getContext = function (contextType, attributes) {
   const t = String(contextType).toLowerCase();
@@ -1965,11 +1988,17 @@ OffscreenCanvas.prototype.getContext = function (contextType, attributes) {
     return null;
   }
   if (t === "2d") {
-    if (this.__backingCanvas && typeof this.__backingCanvas.getContext === "function") {
-      return this.__backingCanvas.getContext(contextType, attributes);
-    }
     if (!this._ctx2d) {
-      this._ctx2d = new CanvasRenderingContext2D(this, _INTERNAL_CTX_SECRET);
+      let ctx;
+      if (this.__backingCanvas && typeof this.__backingCanvas.getContext === "function") {
+        ctx = this.__backingCanvas.getContext(contextType, attributes);
+      } else {
+        ctx = new CanvasRenderingContext2D(this, _INTERNAL_CTX_SECRET);
+      }
+      if (ctx) {
+        try { Object.setPrototypeOf(ctx, OffscreenCanvasRenderingContext2D.prototype); } catch (e) {}
+      }
+      this._ctx2d = ctx;
     }
     return this._ctx2d;
   }
@@ -2003,11 +2032,21 @@ Object.defineProperty(OffscreenCanvas.prototype, "height", {
 });
 
 OffscreenCanvas.prototype.convertToBlob = function (options) {
-  const type = (options && options.type) || "image/png";
-  if (typeof Blob !== "undefined") {
-    return Promise.resolve(new Blob([], { type: type }));
+  if (this._width === 0 || this._height === 0) {
+    const err = typeof DOMException !== "undefined"
+      ? new DOMException("Index or size is negative or greater than the allowed amount", "IndexSizeError")
+      : new Error("Index or size is negative or greater than the allowed amount");
+    return Promise.reject(err);
   }
-  return Promise.resolve({ type: type, size: 0 });
+  const type = (options && options.type) || "image/png";
+  const b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR42mNgAAAAAgAB5Sfe/AAAAABJRU5ErkJggg==";
+  if (typeof Blob !== "undefined") {
+    const bin = typeof atob === "function" ? atob(b64) : "";
+    const u8 = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    return Promise.resolve(new Blob([u8], { type: type }));
+  }
+  return Promise.resolve({ type: type, size: 67 });
 };
 
 OffscreenCanvas.prototype.transferToImageBitmap = function () {

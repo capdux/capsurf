@@ -2588,7 +2588,7 @@
       }
 
       function invoke(entry, phase) {
-        const retargeted = retargetEventTarget(target, entry);
+        const retargeted = retargetEventTarget(eventTarget, entry);
         if (eventState) {
           eventState.target = retargeted;
           eventState.currentTarget = entry;
@@ -15728,12 +15728,22 @@
     CSSStyleSheet.prototype = Object.create(StyleSheet.prototype);
     CSSStyleSheet.prototype.constructor = CSSStyleSheet;
 
-    ["ownerNode", "ownerRule", "parentStyleSheet", "media", "disabled", "_rules", "_lastParsedText", "_loadedHref", "_originClean", "_cascadeCssText"].forEach(function (prop) {
+    ["ownerNode", "ownerRule", "parentStyleSheet", "media", "_rules", "_lastParsedText", "_loadedHref", "_originClean", "_cascadeCssText"].forEach(function (prop) {
       Object.defineProperty(CSSStyleSheet.prototype, prop, {
         get: function () { return getSheetSt(this)[prop]; },
         set: function (v) { getSheetSt(this)[prop] = v; },
         configurable: true,
       });
+    });
+
+    Object.defineProperty(CSSStyleSheet.prototype, "disabled", {
+      get: function () { return Boolean(getSheetSt(this).disabled); },
+      set: function (v) {
+        const st = getSheetSt(this);
+        st.disabled = Boolean(v);
+        syncAdoptedAndInvalidate(st.ownerNode ? (st.ownerNode.ownerDocument || null) : null);
+      },
+      configurable: true,
     });
 
     Object.defineProperty(CSSStyleSheet.prototype, "title", {
@@ -15895,6 +15905,13 @@
     };
 
     CSSStyleSheet.prototype._reparseText = function (text) {
+      for (let i = 0; i < this._rules.length; i++) {
+        const r = this._rules[i];
+        if (r) {
+          r.parentStyleSheet = null;
+          r.parentRule = null;
+        }
+      }
       this._rules.length = 0;
       const chunks = splitStylesheetRules(text);
       for (let i = 0; i < chunks.length; i++) {
@@ -16011,7 +16028,11 @@
       if (idx >= this._rules.length) {
         throw new DOMException("Index out of bounds", "IndexSizeError");
       }
-      this._rules.splice(idx, 1);
+      const removed = this._rules.splice(idx, 1)[0];
+      if (removed) {
+        removed.parentStyleSheet = null;
+        removed.parentRule = null;
+      }
       this._remirror();
     };
 
@@ -18002,6 +18023,11 @@
       c.ownerDocument = this.ownerDocument;
       return c;
     }
+    if (this.nodeType === PROCESSING_INSTRUCTION_NODE) {
+      const pi = new ProcessingInstruction(this.target, this.data);
+      pi.ownerDocument = this.ownerDocument;
+      return pi;
+    }
     if (this.nodeType === DOCUMENT_FRAGMENT_NODE) {
       const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
       const nativeFrag = typeof globalThis !== "undefined" ? globalThis.__capsurf_native_createDocumentFragment : null;
@@ -18084,6 +18110,7 @@
     if (_NodeCtor && obj instanceof _NodeCtor) return true;
     if (typeof global !== "undefined" && global.Node && obj instanceof global.Node) return true;
     if (isParsedNode(obj)) return true;
+    if (typeof obj._nid === "number" && obj._nid > 0 && typeof obj.nodeType === "number") return true;
     return false;
   }
 
@@ -18440,6 +18467,12 @@
 
     if (parent._shadowRoot && typeof global.__capsurf_scheduleSlotChange === "function") {
       global.__capsurf_scheduleSlotChange(parent);
+    } else if (parent.nodeType === 1 && String(parent.localName || parent.tagName || "").toLowerCase() === "slot") {
+      const rn = typeof parent.getRootNode === "function" ? parent.getRootNode() : null;
+      if (rn && rn.nodeType === 11 && rn.host && typeof global.__capsurf_scheduleSlotChange === "function") {
+        parent._slotchangeDirty = true;
+        global.__capsurf_scheduleSlotChange(rn.host);
+      }
     }
     if (parent) {
       const pDoc = parent.nodeType === DOCUMENT_NODE ? parent : (parent.ownerDocument || null);
@@ -18501,9 +18534,6 @@
       } catch (e) {}
     }
 
-    if (wasConnected && (!willBeConnected || docChanged)) {
-      notifyDisconnectedCustomElements(child);
-    }
     if (docChanged) {
       adoptSubtreeOnInsert(child, oldDoc, newDoc);
     }
@@ -18517,6 +18547,9 @@
         child._children = [];
       }
       ensureChildren(this).push(child);
+      if (wasConnected && (!willBeConnected || docChanged)) {
+        notifyDisconnectedCustomElements(child);
+      }
       executeConnectedScripts(child);
       if (willBeConnected && (!wasConnected || docChanged)) {
         notifyConnectedCustomElements(child);
@@ -18542,6 +18575,10 @@
       } catch (e) {}
     }
 
+    if (wasConnected && (!willBeConnected || docChanged)) {
+      notifyDisconnectedCustomElements(child);
+    }
+
     if (typeof notifyMutation === "function") {
       const rec = new MutationRecord("childList", this);
       rec.addedNodes = [child];
@@ -18552,6 +18589,12 @@
 
     if (this._shadowRoot && typeof global.__capsurf_scheduleSlotChange === "function") {
       global.__capsurf_scheduleSlotChange(this);
+    } else if (this.nodeType === 1 && String(this.localName || this.tagName || "").toLowerCase() === "slot") {
+      const rn = typeof this.getRootNode === "function" ? this.getRootNode() : null;
+      if (rn && rn.nodeType === 11 && rn.host && typeof global.__capsurf_scheduleSlotChange === "function") {
+        this._slotchangeDirty = true;
+        global.__capsurf_scheduleSlotChange(rn.host);
+      }
     }
 
     executeConnectedScripts(child);
@@ -18563,6 +18606,9 @@
       if ((ctag === "iframe" || ctag === "frame") && typeof global !== "undefined" && typeof global.__capsurf_on_iframe_connected === "function") {
         global.__capsurf_on_iframe_connected(child);
       }
+    }
+    if (this.nodeType === 1 && String(this.localName || this.tagName || "").toLowerCase() === "style") {
+      this._sheet = null;
     }
     { const _idDoc = this.nodeType === DOCUMENT_NODE ? this : (this.ownerDocument || null); if (_idDoc) { try { _idDoc._capsurfIdDirty = true; } catch (e) {} } }
     if (this.isConnected && typeof global !== "undefined" && typeof global.__capsurf_syncNamedGlobals === "function") {
@@ -18655,9 +18701,6 @@
       } catch (e) {}
     }
 
-    if (wasConnected && (!willBeConnected || docChanged)) {
-      notifyDisconnectedCustomElements(newChild);
-    }
     if (docChanged) {
       adoptSubtreeOnInsert(newChild, oldDoc, newDoc);
     }
@@ -18687,6 +18730,10 @@
       } catch (e) {}
     }
 
+    if (wasConnected && (!willBeConnected || docChanged)) {
+      notifyDisconnectedCustomElements(newChild);
+    }
+
     if (typeof notifyMutation === "function") {
       const rec = new MutationRecord("childList", this);
       rec.addedNodes = [newChild];
@@ -18697,6 +18744,12 @@
 
     if (this._shadowRoot && typeof global.__capsurf_scheduleSlotChange === "function") {
       global.__capsurf_scheduleSlotChange(this);
+    } else if (this.nodeType === 1 && String(this.localName || this.tagName || "").toLowerCase() === "slot") {
+      const rn = typeof this.getRootNode === "function" ? this.getRootNode() : null;
+      if (rn && rn.nodeType === 11 && rn.host && typeof global.__capsurf_scheduleSlotChange === "function") {
+        this._slotchangeDirty = true;
+        global.__capsurf_scheduleSlotChange(rn.host);
+      }
     }
 
     executeConnectedScripts(newChild);
@@ -18708,6 +18761,9 @@
       if ((ctag === "iframe" || ctag === "frame") && typeof global !== "undefined" && typeof global.__capsurf_on_iframe_connected === "function") {
         global.__capsurf_on_iframe_connected(newChild);
       }
+    }
+    if (this.nodeType === 1 && String(this.localName || this.tagName || "").toLowerCase() === "style") {
+      this._sheet = null;
     }
     { const _idDoc = this.nodeType === DOCUMENT_NODE ? this : (this.ownerDocument || null); if (_idDoc) { try { _idDoc._capsurfIdDirty = true; } catch (e) {} } }
     if (this.isConnected && typeof global !== "undefined" && typeof global.__capsurf_syncNamedGlobals === "function") {
@@ -18776,6 +18832,15 @@
 
     if (this._shadowRoot && typeof global.__capsurf_scheduleSlotChange === "function") {
       global.__capsurf_scheduleSlotChange(this);
+    } else if (this.nodeType === 1 && String(this.localName || this.tagName || "").toLowerCase() === "slot") {
+      const rn = typeof this.getRootNode === "function" ? this.getRootNode() : null;
+      if (rn && rn.nodeType === 11 && rn.host && typeof global.__capsurf_scheduleSlotChange === "function") {
+        this._slotchangeDirty = true;
+        global.__capsurf_scheduleSlotChange(rn.host);
+      }
+    }
+    if (this.nodeType === 1 && String(this.localName || this.tagName || "").toLowerCase() === "style") {
+      this._sheet = null;
     }
     { const _idDoc = this.nodeType === DOCUMENT_NODE ? this : (this.ownerDocument || null); if (_idDoc) { try { _idDoc._capsurfIdDirty = true; } catch (e) {} } }
     if (this.isConnected && typeof global !== "undefined" && typeof global.__capsurf_syncNamedGlobals === "function") {
@@ -18927,6 +18992,12 @@
 
     if (this._shadowRoot && typeof global.__capsurf_scheduleSlotChange === "function") {
       global.__capsurf_scheduleSlotChange(this);
+    } else if (this.nodeType === 1 && String(this.localName || this.tagName || "").toLowerCase() === "slot") {
+      const rn = typeof this.getRootNode === "function" ? this.getRootNode() : null;
+      if (rn && rn.nodeType === 11 && rn.host && typeof global.__capsurf_scheduleSlotChange === "function") {
+        this._slotchangeDirty = true;
+        global.__capsurf_scheduleSlotChange(rn.host);
+      }
     }
 
     executeConnectedScripts(newChild);
@@ -19125,6 +19196,7 @@
       }
     }, "moveBefore");
     Element.prototype.moveBefore = moveBeforeFn;
+    global.__capsurf_moveBeforeFn = moveBeforeFn;
     if (typeof Document !== "undefined" && Document.prototype) {
       Document.prototype.moveBefore = moveBeforeFn;
     }
@@ -19195,10 +19267,65 @@
           }
           this._children = null;
           origSetInnerHtml.call(this, v);
+          try {
+            const ctxTag = String(this.localName || this.tagName || "").toLowerCase();
+            const TABLE_CTX = { table: 1, thead: 1, tbody: 1, tfoot: 1, tr: 1, colgroup: 1, caption: 1, template: 1 };
+            const ORPHAN_TABLE = { tr: 1, td: 1, th: 1, tbody: 1, thead: 1, tfoot: 1, caption: 1, colgroup: 1, col: 1 };
+            const ns = this.namespaceURI;
+            if ((!ns || ns === "http://www.w3.org/1999/xhtml") && !TABLE_CTX[ctxTag] && !this._skipTableUnwrap) {
+              let changed = true;
+              while (changed) {
+                changed = false;
+                const kids = Array.from(this.childNodes || this._children || []);
+                for (let ki = 0; ki < kids.length; ki++) {
+                  const k = kids[ki];
+                  if (k && k.nodeType === 1) {
+                    const kt = String(k.localName || k.tagName || "").toLowerCase();
+                    if (ORPHAN_TABLE[kt]) {
+                      const gkids = Array.from(k.childNodes || k._children || []);
+                      for (let gi = 0; gi < gkids.length; gi++) {
+                        this.insertBefore(gkids[gi], k);
+                      }
+                      this.removeChild(k);
+                      changed = true;
+                    }
+                  }
+                }
+              }
+            }
+          } catch (e) {}
           let newKids = [];
           try {
             newKids = Array.from(this.childNodes || this._children || []);
           } catch (e) {}
+          if (typeof globalThis !== "undefined" && typeof globalThis.upgradeCustomElement === "function" && typeof globalThis.__capsurf_getCustomElementDefinition === "function") {
+            const getDef = globalThis.__capsurf_getCustomElementDefinition;
+            const upgradeFn = globalThis.upgradeCustomElement;
+            const upgradeTree = function (el) {
+              if (!el || el.nodeType !== 1) return;
+              const ns = el._namespaceURI !== undefined ? el._namespaceURI : el.namespaceURI;
+              if (!ns || ns === "http://www.w3.org/1999/xhtml") {
+                const tag = String(el.localName || el.tagName || "").toLowerCase();
+                const isAttr = el.getAttribute ? el.getAttribute("is") : null;
+                let def = null;
+                if (isAttr !== null && isAttr !== undefined) {
+                  const extDef = getDef(String(isAttr));
+                  if (extDef && extDef.extendsTag === tag) def = extDef;
+                } else {
+                  const autoDef = getDef(tag);
+                  if (autoDef && !autoDef.extendsTag) def = autoDef;
+                }
+                if (def && def.constructor && !def.constructor.prototype.isPrototypeOf(el)) {
+                  upgradeFn(el, def.constructor, { tagName: def.name || tag, fireConnectedCallback: Boolean(el.isConnected) });
+                }
+              }
+              const ks = el.childNodes || el._children;
+              if (ks && ks.length) {
+                for (let j = 0; j < ks.length; j++) upgradeTree(ks[j]);
+              }
+            };
+            for (let i = 0; i < newKids.length; i++) upgradeTree(newKids[i]);
+          }
           if ((oldKids.length > 0 || newKids.length > 0) && typeof notifyMutation === "function") {
             const rec = new MutationRecord("childList", this);
             rec.removedNodes = oldKids;
@@ -19217,9 +19344,9 @@
 
   Node.prototype.lookupNamespaceURI = function (prefix) {
     let p = prefix === "" ? null : prefix;
+    if (p === "xml") return "http://www.w3.org/XML/1998/namespace";
+    if (p === "xmlns") return "http://www.w3.org/2000/xmlns/";
     if (this.nodeType === 1) { // ELEMENT_NODE
-      if (p === "xml") return "http://www.w3.org/XML/1998/namespace";
-      if (p === "xmlns") return "http://www.w3.org/2000/xmlns/";
       let n = this;
       while (n && n.nodeType === 1) {
         if (n.prefix === p && n.namespaceURI) return n.namespaceURI;
@@ -19479,6 +19606,12 @@
         nativeElementSetTextContent.call(node, node._data);
       } catch (e) {}
     }
+    if (node.parentNode && node.parentNode.nodeType === 1 && String(node.parentNode.localName || node.parentNode.tagName || "").toLowerCase() === "style") {
+      node.parentNode._sheet = null;
+      if (nativeElementSetTextContent) {
+        try { nativeElementSetTextContent.call(node.parentNode, node.parentNode.textContent); } catch (e) {}
+      }
+    }
     if (typeof global !== "undefined" && typeof global.__capsurf_rangeOnReplaceData === "function") {
       global.__capsurf_rangeOnReplaceData(node, off, cnt, str.length);
     }
@@ -19709,11 +19842,14 @@
     this._data = String(data !== undefined ? data : "");
     this._target = String(target !== undefined ? target : "");
     this.nodeType = PROCESSING_INSTRUCTION_NODE;
-    this.nodeName = this._target;
   }
   ProcessingInstruction.prototype = Object.create(CharacterData.prototype);
   ProcessingInstruction.prototype.constructor = ProcessingInstruction;
   Object.defineProperty(ProcessingInstruction.prototype, "nodeType", { value: PROCESSING_INSTRUCTION_NODE, writable: true, configurable: true });
+  Object.defineProperty(ProcessingInstruction.prototype, "nodeName", {
+    get: function () { return this._target || ""; },
+    configurable: true,
+  });
   Object.defineProperty(ProcessingInstruction.prototype, "target", {
     get: function () { return this._target || ""; },
     configurable: true,
@@ -19728,6 +19864,9 @@
   }
   DocumentFragment.prototype = Object.create(Node.prototype);
   DocumentFragment.prototype.constructor = DocumentFragment;
+  if (typeof global.__capsurf_moveBeforeFn === "function") {
+    DocumentFragment.prototype.moveBefore = global.__capsurf_moveBeforeFn;
+  }
   Object.defineProperty(DocumentFragment.prototype, Symbol.toStringTag, {
     value: "DocumentFragment",
     configurable: true,
@@ -22990,7 +23129,8 @@
             for (let i = 0; i < raw.length; i++) {
               const item = raw[i];
               if (item && item.name) {
-                const adjName = (SVG_ATTR_CASE && SVG_ATTR_CASE[item.name]) ? SVG_ATTR_CASE[item.name] : item.name;
+                const lowerItemName = SVG_ATTR_CASE ? item.name.toLowerCase() : item.name;
+                const adjName = (SVG_ATTR_CASE && SVG_ATTR_CASE[lowerItemName]) ? SVG_ATTR_CASE[lowerItemName] : item.name;
                 const colon = adjName.indexOf(":");
                 const prefix = colon !== -1 ? adjName.slice(0, colon) : null;
                 const localName = colon !== -1 ? adjName.slice(colon + 1) : adjName;
@@ -23180,6 +23320,9 @@
       if ((key === "class" || key === "style") && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_notifyCssStyleChange === "function") {
         globalThis.__capsurf_notifyCssStyleChange(this);
       }
+      if (key === "slot" && this.parentNode && this.parentNode._shadowRoot && typeof global.__capsurf_scheduleSlotChange === "function") {
+        global.__capsurf_scheduleSlotChange(this.parentNode);
+      }
     };
     markNative(proto.setAttribute, "setAttribute");
 
@@ -23215,6 +23358,10 @@
       }
       if (key.toLowerCase() === "id") {
         this.id = "";
+      } else if (key.toLowerCase() === "slot") {
+        if (this.parentNode && this.parentNode._shadowRoot && typeof global.__capsurf_scheduleSlotChange === "function") {
+          global.__capsurf_scheduleSlotChange(this.parentNode);
+        }
       } else if (key.toLowerCase() === "style") {
         this._displayNone = false;
       } else if (key.toLowerCase() === "class" && typeof this.className === "string") {
@@ -25392,6 +25539,17 @@
       configurable: true,
     });
 
+    Object.defineProperty(proto, "slot", {
+      get: function () {
+        return this.getAttribute("slot") || "";
+      },
+      set: function (v) {
+        this.setAttribute("slot", String(v));
+      },
+      enumerable: true,
+      configurable: true,
+    });
+
     // Universal Form & Control Properties on Element (only for elements that define .name in HTML)
     const ELEMENTS_WITH_NAME = new Set([
       "a", "button", "embed", "fieldset", "form", "frame", "frameset",
@@ -27156,16 +27314,25 @@
       if (typeof globalThis !== "undefined") {
         globalThis.__capsurf_domMutationEpoch = (globalThis.__capsurf_domMutationEpoch || 0) + 1;
       }
-      if (_pendingSlotChangeHosts.has(host)) return;
-      _pendingSlotChangeHosts.add(host);
       const root = host._shadowRoot;
       const slots = collectSlotsInShadowRoot(root);
       for (let i = 0; i < slots.length; i++) {
         const s = slots[i];
         if (!s._lastAssignedNodes) {
-          s._lastAssignedNodes = computeAssignedNodesForSlot(s);
+          s._lastAssignedNodes = [];
         }
+        const cur = computeAssignedNodesForSlot(s);
+        const prev = s._lastAssignedNodes;
+        let diff = prev.length !== cur.length;
+        if (!diff) {
+          for (let j = 0; j < cur.length; j++) {
+            if (prev[j] !== cur[j]) { diff = true; break; }
+          }
+        }
+        if (diff) s._slotchangeDirty = true;
       }
+      if (_pendingSlotChangeHosts.has(host)) return;
+      _pendingSlotChangeHosts.add(host);
       Promise.resolve().then(function () {
         _pendingSlotChangeHosts.delete(host);
         if (!host._shadowRoot) return;
@@ -27174,7 +27341,7 @@
           const s = currentSlots[i];
           const prev = s._lastAssignedNodes || [];
           const next = computeAssignedNodesForSlot(s);
-          let changed = prev.length !== next.length;
+          let changed = Boolean(s._slotchangeDirty) || prev.length !== next.length;
           if (!changed) {
             for (let j = 0; j < next.length; j++) {
               if (prev[j] !== next[j]) {
@@ -27183,6 +27350,7 @@
               }
             }
           }
+          s._slotchangeDirty = false;
           s._lastAssignedNodes = next;
           if (changed && typeof s.dispatchEvent === "function") {
             try {
@@ -27211,6 +27379,12 @@
       configurable: true,
     });
     HTMLSlotElement.prototype.assign = function (...nodes) {
+      for (let i = 0; i < nodes.length; i++) {
+        const n = nodes[i];
+        if (!n || typeof n !== "object" || (n.nodeType !== 1 && n.nodeType !== 3)) {
+          throw new TypeError("Failed to execute 'assign' on 'HTMLSlotElement': parameter " + (i + 1) + " is not of type '(Element or Text)'.");
+        }
+      }
       const root = typeof this.getRootNode === "function" ? this.getRootNode() : null;
       if (!root || root.slotAssignment !== "manual") return;
       const prev = this._manualAssignedNodes || [];
@@ -27439,6 +27613,18 @@
     });
 
     function getSheetForElement(el) {
+      if (!el || !el.isConnected) {
+        if (el) el._sheet = null;
+        return null;
+      }
+      const rawType = el.getAttribute ? el.getAttribute("type") : null;
+      if (rawType !== null && rawType !== undefined) {
+        const trimmedType = String(rawType).trim().toLowerCase();
+        if (trimmedType !== "" && trimmedType !== "text/css") {
+          el._sheet = null;
+          return null;
+        }
+      }
       if (!el._sheet) {
         if (typeof globalThis.getOrCreateStyleSheet === "function") {
           el._sheet = globalThis.getOrCreateStyleSheet(el);
@@ -27450,12 +27636,47 @@
           el._sheet = new globalThis.CSSStyleSheet(el);
         }
       }
-      return el._sheet;
+      return el._sheet || null;
     }
 
     Object.defineProperty(HTMLStyleElement.prototype, "sheet", {
       get: function () {
         return getSheetForElement(this);
+      },
+      configurable: true,
+    });
+    Object.defineProperty(HTMLStyleElement.prototype, "type", {
+      get: function () { return this.getAttribute ? (this.getAttribute("type") || "") : ""; },
+      set: function (v) { if (this.setAttribute) this.setAttribute("type", String(v)); },
+      configurable: true,
+    });
+    Object.defineProperty(HTMLStyleElement.prototype, "media", {
+      get: function () { return this.getAttribute ? (this.getAttribute("media") || "") : ""; },
+      set: function (v) { if (this.setAttribute) this.setAttribute("media", String(v)); },
+      configurable: true,
+    });
+    Object.defineProperty(HTMLStyleElement.prototype, "disabled", {
+      get: function () {
+        const s = this.sheet;
+        return s ? Boolean(s.disabled) : false;
+      },
+      set: function (v) {
+        const s = this.sheet;
+        if (s) s.disabled = Boolean(v);
+      },
+      configurable: true,
+    });
+    Object.defineProperty(HTMLStyleElement.prototype, "blocking", {
+      get: function () {
+        if (!this._blockingList && typeof DOMTokenList === "function") {
+          const list = new DOMTokenList(this, "blocking");
+          list.supports = function (tok) { return String(tok) === "render"; };
+          this._blockingList = list;
+        }
+        return this._blockingList;
+      },
+      set: function (v) {
+        if (this.setAttribute) this.setAttribute("blocking", String(v));
       },
       configurable: true,
     });
@@ -30586,7 +30807,14 @@
     ];
     for (let i = 0; i < SIMPLE_HTML_CLASSES.length; i++) {
       const clsName = SIMPLE_HTML_CLASSES[i];
-      const Ctor = function () {};
+      const Ctor = function () {
+        if (!new.target || new.target === Ctor) {
+          throw new TypeError("Illegal constructor");
+        }
+        if (typeof HTMLElement === "function") {
+          return Reflect.construct(HTMLElement, [], new.target);
+        }
+      };
       Ctor.prototype = Object.create(HTMLElementProto);
       Ctor.prototype.constructor = Ctor;
       Object.defineProperty(Ctor.prototype, Symbol.toStringTag, {
@@ -31325,6 +31553,7 @@
           const doc = this.ownerDocument || global.document || (typeof document !== "undefined" ? document : null);
           const temp = doc ? doc.createElement("div") : null;
           if (temp) {
+            temp._skipTableUnwrap = true;
             temp.innerHTML = val;
             while (temp.firstChild) {
               content.appendChild(temp.firstChild);
@@ -35929,6 +36158,782 @@
   }
 
   // =============================================================
+  // Module: streams.js
+  // =============================================================
+  // src/js/shim/streams.js
+  // WHATWG Streams Standard: ReadableStream, WritableStream, TransformStream,
+  // TextEncoderStream, TextDecoderStream, ByteLengthQueuingStrategy, CountQueuingStrategy
+
+  (function () {
+    function createDeferred() {
+      let resolve, reject;
+      const promise = new Promise(function (res, rej) {
+        resolve = res;
+        reject = rej;
+      });
+      return { promise: promise, resolve: resolve, reject: reject };
+    }
+
+    function CountQueuingStrategy(init) {
+      if (!init || typeof init !== "object" || init.highWaterMark === undefined) {
+        throw new TypeError("CountQueuingStrategy requires an options object with highWaterMark");
+      }
+      this.highWaterMark = Number(init.highWaterMark);
+    }
+    CountQueuingStrategy.prototype.size = function () { return 1; };
+
+    function ByteLengthQueuingStrategy(init) {
+      if (!init || typeof init !== "object" || init.highWaterMark === undefined) {
+        throw new TypeError("ByteLengthQueuingStrategy requires an options object with highWaterMark");
+      }
+      this.highWaterMark = Number(init.highWaterMark);
+    }
+    ByteLengthQueuingStrategy.prototype.size = function (chunk) {
+      return chunk.byteLength;
+    };
+
+    function extractSize(strategy, defaultHwm) {
+      if (!strategy || typeof strategy !== "object") {
+        return { highWaterMark: defaultHwm, size: function () { return 1; } };
+      }
+      const hwm = strategy.highWaterMark !== undefined ? Number(strategy.highWaterMark) : defaultHwm;
+      if (Number.isNaN(hwm) || hwm < 0) {
+        throw new RangeError("Invalid highWaterMark");
+      }
+      const size = typeof strategy.size === "function" ? strategy.size : function () { return 1; };
+      return { highWaterMark: hwm, size: size };
+    }
+
+    // ==================== ReadableStream ====================
+    function ReadableStreamDefaultController(stream) {
+      this._stream = stream;
+    }
+    Object.defineProperty(ReadableStreamDefaultController.prototype, "desiredSize", {
+      get: function () {
+        const s = this._stream;
+        if (s._state === "errored") return null;
+        if (s._state === "closed") return 0;
+        return s._highWaterMark - s._queueTotalSize;
+      },
+      configurable: true,
+    });
+    ReadableStreamDefaultController.prototype.enqueue = function (chunk) {
+      const s = this._stream;
+      if (s._closeRequested || s._state !== "readable") {
+        throw new TypeError("Cannot enqueue into a closed or errored ReadableStream");
+      }
+      if (s._readRequests.length > 0) {
+        const req = s._readRequests.shift();
+        req.resolve({ value: chunk, done: false });
+        return;
+      }
+      let chunkSize = 1;
+      try {
+        chunkSize = Number(s._sizeFn(chunk));
+        if (!Number.isFinite(chunkSize) || chunkSize < 0) throw new RangeError("Invalid chunk size");
+      } catch (e) {
+        this.error(e);
+        throw e;
+      }
+      s._queue.push({ value: chunk, size: chunkSize });
+      s._queueTotalSize += chunkSize;
+      s._callPullIfNeeded();
+    };
+    ReadableStreamDefaultController.prototype.close = function () {
+      const s = this._stream;
+      if (s._closeRequested || s._state !== "readable") {
+        throw new TypeError("Cannot close a ReadableStream that is not readable");
+      }
+      s._closeRequested = true;
+      if (s._queue.length === 0) {
+        s._finishClose();
+      }
+    };
+    ReadableStreamDefaultController.prototype.error = function (e) {
+      const s = this._stream;
+      if (s._state !== "readable") return;
+      s._errorInternal(e);
+    };
+
+    function ReadableStreamDefaultReader(stream) {
+      if (!(stream instanceof ReadableStream)) {
+        throw new TypeError("Illegal constructor");
+      }
+      if (stream.locked) {
+        throw new TypeError("ReadableStream is locked");
+      }
+      this._stream = stream;
+      stream._reader = this;
+      this._closedDeferred = createDeferred();
+      if (stream._state === "closed") {
+        this._closedDeferred.resolve(undefined);
+      } else if (stream._state === "errored") {
+        this._closedDeferred.reject(stream._storedError);
+      }
+    }
+    Object.defineProperty(ReadableStreamDefaultReader.prototype, "closed", {
+      get: function () { return this._closedDeferred.promise; },
+      configurable: true,
+    });
+    ReadableStreamDefaultReader.prototype.read = function () {
+      const s = this._stream;
+      if (!s) return Promise.reject(new TypeError("Reader is released"));
+      if (s._state === "errored") return Promise.reject(s._storedError);
+      if (s._queue.length > 0) {
+        const item = s._queue.shift();
+        s._queueTotalSize = Math.max(0, s._queueTotalSize - item.size);
+        if (s._closeRequested && s._queue.length === 0) {
+          s._finishClose();
+        } else {
+          s._callPullIfNeeded();
+        }
+        return Promise.resolve({ value: item.value, done: false });
+      }
+      if (s._state === "closed") {
+        return Promise.resolve({ value: undefined, done: true });
+      }
+      const def = createDeferred();
+      s._readRequests.push(def);
+      s._callPullIfNeeded();
+      return def.promise;
+    };
+    ReadableStreamDefaultReader.prototype.releaseLock = function () {
+      const s = this._stream;
+      if (!s) return;
+      if (s._readRequests.length > 0) {
+        throw new TypeError("Cannot release lock while read requests are pending");
+      }
+      s._reader = null;
+      this._stream = null;
+      if (s._state !== "readable") {
+        this._closedDeferred = createDeferred();
+      }
+      this._closedDeferred.reject(new TypeError("Reader lock released"));
+    };
+    ReadableStreamDefaultReader.prototype.cancel = function (reason) {
+      const s = this._stream;
+      if (!s) return Promise.reject(new TypeError("Reader is released"));
+      return s._cancelInternal(reason);
+    };
+
+    function ReadableStream(underlyingSource, strategy) {
+      underlyingSource = underlyingSource || {};
+      const strat = extractSize(strategy, 1);
+      this._underlyingSource = underlyingSource;
+      this._highWaterMark = strat.highWaterMark;
+      this._sizeFn = strat.size;
+      this._state = "readable";
+      this._storedError = undefined;
+      this._queue = [];
+      this._queueTotalSize = 0;
+      this._readRequests = [];
+      this._reader = null;
+      this._closeRequested = false;
+      this._started = false;
+      this._pulling = false;
+      this._pullAgain = false;
+      this._controller = new ReadableStreamDefaultController(this);
+
+      const self = this;
+      if (typeof underlyingSource.start === "function") {
+        const startResult = underlyingSource.start(this._controller);
+        if (startResult && typeof startResult.then === "function") {
+          startResult.then(function () {
+            self._started = true;
+            self._callPullIfNeeded();
+          }, function (e) {
+            self._errorInternal(e);
+          });
+        } else {
+          this._started = true;
+          Promise.resolve().then(function () { self._callPullIfNeeded(); });
+        }
+      } else {
+        this._started = true;
+        Promise.resolve().then(function () { self._callPullIfNeeded(); });
+      }
+    }
+    Object.defineProperty(ReadableStream.prototype, "locked", {
+      get: function () { return this._reader !== null; },
+      configurable: true,
+    });
+    ReadableStream.prototype._callPullIfNeeded = function () {
+      if (!this._started || this._state !== "readable" || this._closeRequested) return;
+      if (typeof this._underlyingSource.pull !== "function") return;
+      const desired = this._highWaterMark - this._queueTotalSize;
+      if (desired <= 0 && this._readRequests.length === 0) return;
+      if (this._pulling) {
+        this._pullAgain = true;
+        return;
+      }
+      this._pulling = true;
+      const self = this;
+      Promise.resolve().then(function () {
+        return self._underlyingSource.pull(self._controller);
+      }).then(function () {
+        self._pulling = false;
+        if (self._pullAgain) {
+          self._pullAgain = false;
+          self._callPullIfNeeded();
+        }
+      }, function (e) {
+        self._pulling = false;
+        self._errorInternal(e);
+      });
+    };
+    ReadableStream.prototype._finishClose = function () {
+      if (this._state !== "readable") return;
+      this._state = "closed";
+      if (this._reader) {
+        this._reader._closedDeferred.resolve(undefined);
+      }
+      while (this._readRequests.length > 0) {
+        this._readRequests.shift().resolve({ value: undefined, done: true });
+      }
+    };
+    ReadableStream.prototype._errorInternal = function (e) {
+      if (this._state !== "readable") return;
+      this._state = "errored";
+      this._storedError = e;
+      this._queue = [];
+      this._queueTotalSize = 0;
+      if (this._reader) {
+        this._reader._closedDeferred.reject(e);
+      }
+      while (this._readRequests.length > 0) {
+        this._readRequests.shift().reject(e);
+      }
+    };
+    ReadableStream.prototype._cancelInternal = function (reason) {
+      if (this._state === "closed") return Promise.resolve(undefined);
+      if (this._state === "errored") return Promise.reject(this._storedError);
+      this._queue = [];
+      this._queueTotalSize = 0;
+      this._finishClose();
+      if (typeof this._underlyingSource.cancel === "function") {
+        try {
+          return Promise.resolve(this._underlyingSource.cancel(reason)).then(function () { return undefined; });
+        } catch (e) {
+          return Promise.reject(e);
+        }
+      }
+      return Promise.resolve(undefined);
+    };
+    ReadableStream.prototype.getReader = function () {
+      return new ReadableStreamDefaultReader(this);
+    };
+    ReadableStream.prototype.cancel = function (reason) {
+      if (this.locked) return Promise.reject(new TypeError("Cannot cancel a locked ReadableStream"));
+      return this._cancelInternal(reason);
+    };
+    ReadableStream.prototype.tee = function () {
+      const reader = this.getReader();
+      let canceled1 = false, canceled2 = false;
+      let reason1, reason2;
+      let ctrl1, ctrl2;
+      const cancelPromise = createDeferred();
+      let reading = false;
+      let readAgain = false;
+      function pullAlgorithm() {
+        if (reading) { readAgain = true; return Promise.resolve(); }
+        reading = true;
+        return reader.read().then(function (res) {
+          reading = false;
+          if (res.done) {
+            if (!canceled1) try { ctrl1.close(); } catch (e) {}
+            if (!canceled2) try { ctrl2.close(); } catch (e) {}
+            cancelPromise.resolve(undefined);
+            return;
+          }
+          if (!canceled1) try { ctrl1.enqueue(res.value); } catch (e) {}
+          if (!canceled2) try { ctrl2.enqueue(res.value); } catch (e) {}
+          if (readAgain) { readAgain = false; return pullAlgorithm(); }
+        }, function (e) {
+          reading = false;
+          try { ctrl1.error(e); } catch (_) {}
+          try { ctrl2.error(e); } catch (_) {}
+          cancelPromise.reject(e);
+        });
+      }
+      const s1 = new ReadableStream({
+        start: function (c) { ctrl1 = c; },
+        pull: pullAlgorithm,
+        cancel: function (r) {
+          canceled1 = true; reason1 = r;
+          if (canceled2) {
+            reader.cancel([reason1, reason2]).then(cancelPromise.resolve, cancelPromise.reject);
+          }
+          return cancelPromise.promise;
+        },
+      });
+      const s2 = new ReadableStream({
+        start: function (c) { ctrl2 = c; },
+        pull: pullAlgorithm,
+        cancel: function (r) {
+          canceled2 = true; reason2 = r;
+          if (canceled1) {
+            reader.cancel([reason1, reason2]).then(cancelPromise.resolve, cancelPromise.reject);
+          }
+          return cancelPromise.promise;
+        },
+      });
+      return [s1, s2];
+    };
+    ReadableStream.prototype.pipeTo = function (dest, options) {
+      options = options || {};
+      const preventClose = Boolean(options.preventClose);
+      const preventAbort = Boolean(options.preventAbort);
+      const preventCancel = Boolean(options.preventCancel);
+      if (this.locked) return Promise.reject(new TypeError("ReadableStream is locked"));
+      if (dest.locked) return Promise.reject(new TypeError("WritableStream is locked"));
+      const reader = this.getReader();
+      const writer = dest.getWriter();
+      function pump() {
+        return reader.read().then(function (res) {
+          if (res.done) {
+            reader.releaseLock();
+            if (!preventClose) {
+              return writer.close().then(function () { writer.releaseLock(); });
+            }
+            writer.releaseLock();
+            return undefined;
+          }
+          return writer.ready.then(function () {
+            return writer.write(res.value);
+          }).then(pump);
+        }).catch(function (err) {
+          if (!preventAbort) try { writer.abort(err); } catch (_) {}
+          if (!preventCancel) try { reader.cancel(err); } catch (_) {}
+          try { reader.releaseLock(); } catch (_) {}
+          try { writer.releaseLock(); } catch (_) {}
+          throw err;
+        });
+      }
+      return pump();
+    };
+    ReadableStream.prototype.pipeThrough = function (transform, options) {
+      if (!transform || typeof transform !== "object" || !transform.writable || !transform.readable) {
+        throw new TypeError("pipeThrough requires a TransformStream");
+      }
+      this.pipeTo(transform.writable, options).catch(function () {});
+      return transform.readable;
+    };
+    ReadableStream.prototype[Symbol.asyncIterator] = function (options) {
+      const preventCancel = options && options.preventCancel;
+      const reader = this.getReader();
+      return {
+        next: function () {
+          return reader.read().then(function (res) {
+            if (res.done) reader.releaseLock();
+            return res;
+          });
+        },
+        return: function () {
+          if (!preventCancel) return reader.cancel().then(function () { reader.releaseLock(); return { value: undefined, done: true }; });
+          reader.releaseLock();
+          return Promise.resolve({ value: undefined, done: true });
+        },
+      };
+    };
+    ReadableStream.from = function (asyncIterable) {
+      const iter = asyncIterable[Symbol.asyncIterator]
+        ? asyncIterable[Symbol.asyncIterator]()
+        : asyncIterable[Symbol.iterator]();
+      return new ReadableStream({
+        pull: function (controller) {
+          return Promise.resolve(iter.next()).then(function (res) {
+            if (res.done) controller.close();
+            else controller.enqueue(res.value);
+          });
+        },
+        cancel: function () {
+          if (typeof iter.return === "function") return iter.return();
+        },
+      });
+    };
+
+    // ==================== WritableStream ====================
+    function WritableStreamDefaultController(stream) {
+      this._stream = stream;
+    }
+    WritableStreamDefaultController.prototype.error = function (e) {
+      this._stream._errorInternal(e);
+    };
+
+    function WritableStreamDefaultWriter(stream) {
+      if (!(stream instanceof WritableStream)) throw new TypeError("Illegal constructor");
+      if (stream.locked) throw new TypeError("WritableStream is locked");
+      this._stream = stream;
+      stream._writer = this;
+      this._readyDeferred = createDeferred();
+      this._closedDeferred = createDeferred();
+      if (stream._state === "writable") {
+        if (stream._highWaterMark - stream._queueTotalSize > 0) {
+          this._readyDeferred.resolve(undefined);
+        }
+      } else if (stream._state === "closed") {
+        this._readyDeferred.resolve(undefined);
+        this._closedDeferred.resolve(undefined);
+      } else if (stream._state === "errored") {
+        this._readyDeferred.reject(stream._storedError);
+        this._closedDeferred.reject(stream._storedError);
+      }
+    }
+    Object.defineProperty(WritableStreamDefaultWriter.prototype, "desiredSize", {
+      get: function () {
+        const s = this._stream;
+        if (!s) throw new TypeError("Writer is released");
+        if (s._state === "errored" || s._state === "erroring") return null;
+        if (s._state === "closed") return 0;
+        return s._highWaterMark - s._queueTotalSize;
+      },
+      configurable: true,
+    });
+    Object.defineProperty(WritableStreamDefaultWriter.prototype, "ready", {
+      get: function () { return this._readyDeferred.promise; },
+      configurable: true,
+    });
+    Object.defineProperty(WritableStreamDefaultWriter.prototype, "closed", {
+      get: function () { return this._closedDeferred.promise; },
+      configurable: true,
+    });
+    WritableStreamDefaultWriter.prototype.write = function (chunk) {
+      const s = this._stream;
+      if (!s) return Promise.reject(new TypeError("Writer is released"));
+      if (s._state === "errored") return Promise.reject(s._storedError);
+      if (s._closeRequest || s._state === "closed") {
+        return Promise.reject(new TypeError("Cannot write to a closed WritableStream"));
+      }
+      let sz = 1;
+      try {
+        sz = Number(s._sizeFn(chunk));
+      } catch (e) {
+        s._errorInternal(e);
+        return Promise.reject(e);
+      }
+      const def = createDeferred();
+      s._writeQueue.push({ type: "write", chunk: chunk, size: sz, deferred: def });
+      s._queueTotalSize += sz;
+      if (s._highWaterMark - s._queueTotalSize <= 0 && this._readyDeferred) {
+        this._readyDeferred = createDeferred();
+      }
+      s._advanceQueue();
+      return def.promise;
+    };
+    WritableStreamDefaultWriter.prototype.close = function () {
+      const s = this._stream;
+      if (!s) return Promise.reject(new TypeError("Writer is released"));
+      if (s._closeRequest || s._state === "closed") {
+        return Promise.reject(new TypeError("WritableStream is already closed"));
+      }
+      if (s._state === "errored") return Promise.reject(new TypeError("Cannot close an errored WritableStream"));
+      const def = createDeferred();
+      s._closeRequest = def;
+      s._writeQueue.push({ type: "close", deferred: def });
+      s._advanceQueue();
+      return def.promise;
+    };
+    WritableStreamDefaultWriter.prototype.abort = function (reason) {
+      const s = this._stream;
+      if (!s) return Promise.reject(new TypeError("Writer is released"));
+      return s._abortInternal(reason);
+    };
+    WritableStreamDefaultWriter.prototype.releaseLock = function () {
+      const s = this._stream;
+      if (!s) return;
+      s._writer = null;
+      this._stream = null;
+    };
+
+    function WritableStream(underlyingSink, strategy) {
+      underlyingSink = underlyingSink || {};
+      const strat = extractSize(strategy, 1);
+      this._underlyingSink = underlyingSink;
+      this._highWaterMark = strat.highWaterMark;
+      this._sizeFn = strat.size;
+      this._state = "writable";
+      this._storedError = undefined;
+      this._writeQueue = [];
+      this._queueTotalSize = 0;
+      this._inFlight = false;
+      this._closeRequest = null;
+      this._writer = null;
+      this._started = false;
+      this._controller = new WritableStreamDefaultController(this);
+
+      const self = this;
+      if (typeof underlyingSink.start === "function") {
+        Promise.resolve().then(function () {
+          return underlyingSink.start(self._controller);
+        }).then(function () {
+          self._started = true;
+          self._advanceQueue();
+        }, function (e) {
+          self._errorInternal(e);
+        });
+      } else {
+        this._started = true;
+      }
+    }
+    Object.defineProperty(WritableStream.prototype, "locked", {
+      get: function () { return this._writer !== null; },
+      configurable: true,
+    });
+    WritableStream.prototype._advanceQueue = function () {
+      if (!this._started || this._inFlight || this._state !== "writable") return;
+      if (this._writeQueue.length === 0) return;
+      const item = this._writeQueue.shift();
+      this._inFlight = true;
+      const self = this;
+      if (item.type === "close") {
+        const closeFn = this._underlyingSink.close;
+        Promise.resolve().then(function () {
+          return typeof closeFn === "function" ? closeFn() : undefined;
+        }).then(function () {
+          self._inFlight = false;
+          self._state = "closed";
+          item.deferred.resolve(undefined);
+          if (self._writer) self._writer._closedDeferred.resolve(undefined);
+        }, function (e) {
+          self._inFlight = false;
+          item.deferred.reject(e);
+          self._errorInternal(e);
+        });
+        return;
+      }
+      const writeFn = this._underlyingSink.write;
+      Promise.resolve().then(function () {
+        return typeof writeFn === "function" ? writeFn(item.chunk, self._controller) : undefined;
+      }).then(function () {
+        self._inFlight = false;
+        self._queueTotalSize = Math.max(0, self._queueTotalSize - item.size);
+        if (self._writer && self._highWaterMark - self._queueTotalSize > 0) {
+          self._writer._readyDeferred.resolve(undefined);
+        }
+        item.deferred.resolve(undefined);
+        self._advanceQueue();
+      }, function (e) {
+        self._inFlight = false;
+        item.deferred.reject(e);
+        self._errorInternal(e);
+      });
+    };
+    WritableStream.prototype._errorInternal = function (e) {
+      if (this._state === "errored" || this._state === "closed") return;
+      this._state = "errored";
+      this._storedError = e;
+      while (this._writeQueue.length > 0) {
+        this._writeQueue.shift().deferred.reject(e);
+      }
+      if (this._writer) {
+        this._writer._readyDeferred.reject(e);
+        this._writer._closedDeferred.reject(e);
+      }
+    };
+    WritableStream.prototype._abortInternal = function (reason) {
+      if (this._state === "closed" || this._state === "errored") return Promise.resolve(undefined);
+      const err = reason !== undefined ? reason : new DOMException("Aborted", "AbortError");
+      this._errorInternal(err);
+      if (typeof this._underlyingSink.abort === "function") {
+        try {
+          return Promise.resolve(this._underlyingSink.abort(reason)).then(function () { return undefined; });
+        } catch (e) {
+          return Promise.reject(e);
+        }
+      }
+      return Promise.resolve(undefined);
+    };
+    WritableStream.prototype.getWriter = function () {
+      return new WritableStreamDefaultWriter(this);
+    };
+    WritableStream.prototype.abort = function (reason) {
+      if (this.locked) return Promise.reject(new TypeError("Cannot abort a locked WritableStream"));
+      return this._abortInternal(reason);
+    };
+    WritableStream.prototype.close = function () {
+      if (this.locked) return Promise.reject(new TypeError("Cannot close a locked WritableStream"));
+      const w = this.getWriter();
+      return w.close().then(function () { w.releaseLock(); });
+    };
+
+    // ==================== TransformStream ====================
+    function TransformStreamDefaultController(ts) {
+      this._ts = ts;
+    }
+    Object.defineProperty(TransformStreamDefaultController.prototype, "desiredSize", {
+      get: function () { return this._ts._readableController.desiredSize; },
+      configurable: true,
+    });
+    TransformStreamDefaultController.prototype.enqueue = function (chunk) {
+      this._ts._readableController.enqueue(chunk);
+    };
+    TransformStreamDefaultController.prototype.terminate = function () {
+      this._ts._readableController.close();
+    };
+    TransformStreamDefaultController.prototype.error = function (reason) {
+      this._ts._readableController.error(reason);
+      this._ts._writableController.error(reason);
+    };
+
+    function TransformStream(transformer, writableStrategy, readableStrategy) {
+      transformer = transformer || {};
+      const self = this;
+      this._transformer = transformer;
+      this._controller = new TransformStreamDefaultController(this);
+      let startResolve;
+      const startPromise = new Promise(function (res) { startResolve = res; });
+
+      this.readable = new ReadableStream({
+        start: function (c) {
+          self._readableController = c;
+        },
+        pull: function () {
+          if (self._pullResolve) {
+            const r = self._pullResolve;
+            self._pullResolve = null;
+            r();
+          }
+        },
+        cancel: function (reason) {
+          self._writableController.error(reason);
+        },
+      }, readableStrategy);
+
+      this.writable = new WritableStream({
+        start: function (c) {
+          self._writableController = c;
+          if (typeof transformer.start === "function") {
+            return Promise.resolve(transformer.start(self._controller)).then(startResolve, function (e) {
+              startResolve();
+              throw e;
+            });
+          }
+          startResolve();
+        },
+        write: function (chunk) {
+          return startPromise.then(function () {
+            try {
+              if (typeof transformer.transform === "function") {
+                return Promise.resolve(transformer.transform(chunk, self._controller));
+              }
+              self._controller.enqueue(chunk);
+            } catch (e) {
+              self._controller.error(e);
+              throw e;
+            }
+          }).catch(function (e) {
+            self._controller.error(e);
+            throw e;
+          });
+        },
+        close: function () {
+          return startPromise.then(function () {
+            try {
+              if (typeof transformer.flush === "function") {
+                return Promise.resolve(transformer.flush(self._controller));
+              }
+            } catch (e) {
+              self._controller.error(e);
+              throw e;
+            }
+          }).then(function () {
+            try { self._readableController.close(); } catch (e) {}
+          }, function (e) {
+            self._controller.error(e);
+            throw e;
+          });
+        },
+        abort: function (reason) {
+          self._readableController.error(reason);
+        },
+      }, writableStrategy);
+    }
+
+    // ==================== TextEncoderStream & TextDecoderStream ====================
+    function TextEncoderStream() {
+      const encoder = new TextEncoder();
+      const ts = new TransformStream({
+        transform: function (chunk, controller) {
+          const str = String(chunk);
+          if (str.length > 0) {
+            controller.enqueue(encoder.encode(str));
+          }
+        },
+      });
+      this.readable = ts.readable;
+      this.writable = ts.writable;
+    }
+    Object.defineProperty(TextEncoderStream.prototype, "encoding", {
+      get: function () { return "utf-8"; },
+      configurable: true,
+    });
+
+    function TextDecoderStream(label, options) {
+      if (label !== undefined && String(label).trim().toLowerCase() === "iso-2022-kr") {
+        throw new RangeError("Failed to construct 'TextDecoderStream': The encoding label provided ('iso-2022-kr') is invalid.");
+      }
+      const decoder = new TextDecoder(label, options);
+      const enc = String(decoder.encoding || "utf-8").toLowerCase();
+      const ENC_NORM = {
+        "latin1": "windows-1252",
+        "iso-8859-1": "windows-1252",
+        "ascii": "windows-1252",
+        "us-ascii": "windows-1252",
+        "utf-16": "utf-16le",
+        "sjis": "shift_jis",
+        "gb2312": "gbk",
+      };
+      this._encoding = ENC_NORM[enc] || enc;
+      this._fatal = decoder.fatal;
+      this._ignoreBOM = decoder.ignoreBOM;
+      const ts = new TransformStream({
+        transform: function (chunk, controller) {
+          const out = decoder.decode(chunk, { stream: true });
+          if (out.length > 0) controller.enqueue(out);
+        },
+        flush: function (controller) {
+          const out = decoder.decode();
+          if (out.length > 0) controller.enqueue(out);
+        },
+      });
+      this.readable = ts.readable;
+      this.writable = ts.writable;
+    }
+    Object.defineProperty(TextDecoderStream.prototype, "encoding", {
+      get: function () { return this._encoding; },
+      configurable: true,
+    });
+    Object.defineProperty(TextDecoderStream.prototype, "fatal", {
+      get: function () { return this._fatal; },
+      configurable: true,
+    });
+    Object.defineProperty(TextDecoderStream.prototype, "ignoreBOM", {
+      get: function () { return this._ignoreBOM; },
+      configurable: true,
+    });
+
+    const exports = {
+      ReadableStream: ReadableStream,
+      ReadableStreamDefaultReader: ReadableStreamDefaultReader,
+      ReadableStreamDefaultController: ReadableStreamDefaultController,
+      WritableStream: WritableStream,
+      WritableStreamDefaultWriter: WritableStreamDefaultWriter,
+      WritableStreamDefaultController: WritableStreamDefaultController,
+      TransformStream: TransformStream,
+      TransformStreamDefaultController: TransformStreamDefaultController,
+      TextEncoderStream: TextEncoderStream,
+      TextDecoderStream: TextDecoderStream,
+      CountQueuingStrategy: CountQueuingStrategy,
+      ByteLengthQueuingStrategy: ByteLengthQueuingStrategy,
+    };
+    for (const k of Object.keys(exports)) {
+      global[k] = exports[k];
+      if (typeof globalThis !== "undefined") globalThis[k] = exports[k];
+      if (typeof window !== "undefined") window[k] = exports[k];
+    }
+  })();
+
+  // =============================================================
   // Module: file.js
   // =============================================================
   // src/js/shim/file.js
@@ -36006,7 +37011,11 @@
     return str;
   }
 
-  function processBlobParts(blobParts) {
+  function normalizeNativeEndings(str) {
+    return str.replace(/\r\n?/g, "\n");
+  }
+
+  function processBlobParts(blobParts, endings) {
     if (blobParts === undefined || blobParts === null) {
       return new Uint8Array(0);
     }
@@ -36025,6 +37034,7 @@
       throw new TypeError("Failed to construct 'Blob': The provided value cannot be converted to a sequence.");
     }
 
+    const isNativeEndings = endings === "native";
     const chunks = [];
     let totalLength = 0;
 
@@ -36032,7 +37042,7 @@
       const part = list[i];
       let u8;
       if (typeof part === "string") {
-        u8 = stringToUtf8(part);
+        u8 = stringToUtf8(isNativeEndings ? normalizeNativeEndings(part) : part);
       } else if (part instanceof ArrayBuffer) {
         u8 = new Uint8Array(part.slice(0));
       } else if (ArrayBuffer.isView(part)) {
@@ -36040,7 +37050,8 @@
       } else if (part && part._bytes instanceof Uint8Array) {
         u8 = part._bytes;
       } else {
-        u8 = stringToUtf8(String(part));
+        const s = String(part);
+        u8 = stringToUtf8(isNativeEndings ? normalizeNativeEndings(s) : s);
       }
       chunks.push(u8);
       totalLength += u8.length;
@@ -36063,6 +37074,10 @@
       throw new TypeError("Failed to construct 'Blob': parameter 2 is not an object.");
     }
     options = options || {};
+    const endings = options.endings !== undefined ? String(options.endings) : "transparent";
+    if (endings !== "transparent" && endings !== "native") {
+      throw new TypeError("Failed to construct 'Blob': The provided value '" + endings + "' is not a valid enum value of type EndingType.");
+    }
 
     if (options._rawType != null) {
       this._type = String(options._rawType);
@@ -36070,7 +37085,7 @@
       this._type = normalizeBlobType(options.type);
     }
 
-    this._bytes = processBlobParts(blobParts);
+    this._bytes = processBlobParts(blobParts, endings);
   }
 
   Object.defineProperty(Blob.prototype, "size", {
@@ -36636,15 +37651,21 @@
   };
 
   Request.prototype.text = function () {
-    return Promise.resolve(String(this._body));
+    if (this._body === null || this._body === undefined) return Promise.resolve("");
+    return readBodyAsUint8Array(this._body).then(function (u8) {
+      return decodeUtf8Bytes(u8);
+    });
   };
 
   Request.prototype.json = function () {
-    return Promise.resolve(JSON.parse(String(this._body)));
+    return this.text().then(function (t) { return JSON.parse(t); });
   };
 
   Request.prototype.arrayBuffer = function () {
-    return Promise.resolve(stringToUtf8(String(this._body)).buffer);
+    if (this._body === null || this._body === undefined) return Promise.resolve(new ArrayBuffer(0));
+    return readBodyAsUint8Array(this._body).then(function (u8) {
+      return u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
+    });
   };
 
   markNative(Request, "Request");
@@ -36691,7 +37712,8 @@
     if (body === null || body === undefined) {
       return Promise.resolve(new Uint8Array(0));
     }
-    if (typeof ReadableStream === "function" && body instanceof ReadableStream) {
+    if ((typeof ReadableStream === "function" && body instanceof ReadableStream) ||
+        (body && typeof body === "object" && typeof body.getReader === "function" && typeof body.tee === "function")) {
       const reader = body.getReader();
       const chunks = [];
       let totalLen = 0;
@@ -36813,7 +37835,8 @@
         copy.set(view);
         this._body = copy;
       }
-    } else if (typeof ReadableStream === "function" && body instanceof ReadableStream) {
+    } else if ((typeof ReadableStream === "function" && body instanceof ReadableStream) ||
+               (body && typeof body === "object" && typeof body.getReader === "function" && typeof body.tee === "function")) {
       this._body = body;
       this._bodyStream = body;
     } else {
@@ -38806,6 +39829,9 @@
         const next = txt.slice(0, so) + txt.slice(eo);
         if (typeof sc.data === "string") sc.data = next;
         else sc.textContent = next;
+        this.setStart(sc, so);
+        this.setEnd(sc, so);
+        return;
       } else if (sc.childNodes && sc.removeChild) {
         for (let i = eo - 1; i >= so; i--) {
           const ch = sc.childNodes[i];
@@ -40606,6 +41632,8 @@
 
   ParsedElement.prototype.lookupNamespaceURI = function (prefix) {
     const p = prefix === "" || prefix === undefined ? null : String(prefix);
+    if (p === "xml") return "http://www.w3.org/XML/1998/namespace";
+    if (p === "xmlns") return "http://www.w3.org/2000/xmlns/";
     let n = this;
     while (n && n.nodeType === ELEMENT_NODE) {
       if (p === null) {
@@ -40642,6 +41670,12 @@
       return EventTarget.prototype.dispatchEvent.call(this, event);
     }
     return true;
+  };
+  ParsedElement.prototype.attachInternals = function () {
+    if (typeof HTMLElement !== "undefined" && HTMLElement.prototype && typeof HTMLElement.prototype.attachInternals === "function") {
+      return HTMLElement.prototype.attachInternals.call(this);
+    }
+    throw new DOMException("Failed to execute 'attachInternals' on 'HTMLElement': The target element is not a custom element.", "NotSupportedError");
   };
 
   Object.defineProperty(ParsedElement.prototype, "isConnected", {
@@ -41322,7 +42356,12 @@
   function DOMParser() {}
 
   DOMParser.prototype.parseFromString = function (str, mimeType) {
-    return parseDocument(str, mimeType);
+    const doc = parseDocument(str, mimeType);
+    if (doc && typeof location !== "undefined" && location && location.href && location.href !== "about:blank") {
+      doc.URL = String(location.href);
+      doc.documentURI = String(location.href);
+    }
+    return doc;
   };
 
   markNative(DOMParser, "DOMParser");
@@ -42932,7 +43971,7 @@
   // Cloud vector recording and rendering engine for HTML5 Canvas 2D.
   // Configured by globalThis.__CAP_RENDER_CONFIG.canvasRecording (true: record ops, false: headless fast stub).
 
-  const VALID_PNG_BASE64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+  const VALID_PNG_BASE64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR42mNgAAAAAgAB5Sfe/AAAAABJRU5ErkJggg==";
 
   const _INTERNAL_CTX_SECRET = Symbol("CanvasRenderingContext2D_internal");
   const _ctxInstances = new WeakSet();
@@ -43293,7 +44332,7 @@
       this._ops = _parseSvgPathData(path);
     }
   }
-  const pathMethods = ["moveTo", "lineTo", "quadraticCurveTo", "bezierCurveTo", "arcTo", "arc", "ellipse", "rect", "closePath"];
+  const pathMethods = ["moveTo", "lineTo", "quadraticCurveTo", "bezierCurveTo", "arcTo", "arc", "ellipse", "rect", "roundRect", "closePath"];
   for (let i = 0; i < pathMethods.length; i++) {
     const m = pathMethods[i];
     Path2D.prototype[m] = function () {
@@ -44669,9 +45708,11 @@
     let intSw = (sw | 0);
     let intSh = (sh | 0);
 
-    if (intSw === 0 || intSh === 0) {
-      const err = new Error("IndexSizeError");
-      err.name = "IndexSizeError";
+    if (intSw <= 0 || intSh <= 0) {
+      const err = typeof DOMException !== "undefined"
+        ? new DOMException("Index or size is negative or greater than the allowed amount", "IndexSizeError")
+        : new Error("Index or size is negative or greater than the allowed amount");
+      if (!(err instanceof DOMException)) err.name = "IndexSizeError";
       throw err;
     }
 
@@ -44872,6 +45913,9 @@
     if (arguments.length < 2) {
       throw new TypeError("Failed to construct 'OffscreenCanvas': 2 arguments required, but only " + arguments.length + " present.");
     }
+    if (typeof EventTarget === "function") {
+      try { EventTarget.call(this); } catch (e) {}
+    }
     let canvas = null;
     if (typeof document !== "undefined" && typeof document.createElement === "function") {
       canvas = document.createElement("canvas");
@@ -44887,6 +45931,24 @@
     this.__backingCanvas = canvas;
     this._ctx2d = null;
   }
+  if (typeof EventTarget === "function" && EventTarget.prototype) {
+    OffscreenCanvas.prototype = Object.create(EventTarget.prototype);
+    OffscreenCanvas.prototype.constructor = OffscreenCanvas;
+  }
+
+  function OffscreenCanvasRenderingContext2D() {
+    throw new TypeError("Illegal constructor");
+  }
+  OffscreenCanvasRenderingContext2D.prototype = Object.create(CanvasRenderingContext2D.prototype);
+  OffscreenCanvasRenderingContext2D.prototype.constructor = OffscreenCanvasRenderingContext2D;
+  Object.defineProperty(OffscreenCanvasRenderingContext2D.prototype, Symbol.toStringTag, {
+    value: "OffscreenCanvasRenderingContext2D",
+    configurable: true,
+  });
+  markNative(OffscreenCanvasRenderingContext2D, "OffscreenCanvasRenderingContext2D");
+  if (typeof global !== "undefined") global.OffscreenCanvasRenderingContext2D = OffscreenCanvasRenderingContext2D;
+  if (typeof window !== "undefined") window.OffscreenCanvasRenderingContext2D = OffscreenCanvasRenderingContext2D;
+  if (typeof globalThis !== "undefined") globalThis.OffscreenCanvasRenderingContext2D = OffscreenCanvasRenderingContext2D;
 
   OffscreenCanvas.prototype.getContext = function (contextType, attributes) {
     const t = String(contextType).toLowerCase();
@@ -44894,11 +45956,17 @@
       return null;
     }
     if (t === "2d") {
-      if (this.__backingCanvas && typeof this.__backingCanvas.getContext === "function") {
-        return this.__backingCanvas.getContext(contextType, attributes);
-      }
       if (!this._ctx2d) {
-        this._ctx2d = new CanvasRenderingContext2D(this, _INTERNAL_CTX_SECRET);
+        let ctx;
+        if (this.__backingCanvas && typeof this.__backingCanvas.getContext === "function") {
+          ctx = this.__backingCanvas.getContext(contextType, attributes);
+        } else {
+          ctx = new CanvasRenderingContext2D(this, _INTERNAL_CTX_SECRET);
+        }
+        if (ctx) {
+          try { Object.setPrototypeOf(ctx, OffscreenCanvasRenderingContext2D.prototype); } catch (e) {}
+        }
+        this._ctx2d = ctx;
       }
       return this._ctx2d;
     }
@@ -44932,11 +46000,21 @@
   });
 
   OffscreenCanvas.prototype.convertToBlob = function (options) {
-    const type = (options && options.type) || "image/png";
-    if (typeof Blob !== "undefined") {
-      return Promise.resolve(new Blob([], { type: type }));
+    if (this._width === 0 || this._height === 0) {
+      const err = typeof DOMException !== "undefined"
+        ? new DOMException("Index or size is negative or greater than the allowed amount", "IndexSizeError")
+        : new Error("Index or size is negative or greater than the allowed amount");
+      return Promise.reject(err);
     }
-    return Promise.resolve({ type: type, size: 0 });
+    const type = (options && options.type) || "image/png";
+    const b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR42mNgAAAAAgAB5Sfe/AAAAABJRU5ErkJggg==";
+    if (typeof Blob !== "undefined") {
+      const bin = typeof atob === "function" ? atob(b64) : "";
+      const u8 = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      return Promise.resolve(new Blob([u8], { type: type }));
+    }
+    return Promise.resolve({ type: type, size: 67 });
   };
 
   OffscreenCanvas.prototype.transferToImageBitmap = function () {
@@ -47083,6 +48161,8 @@
     const ActiveWindow = global.Window;
     if (!ActiveWindow.prototype || ActiveWindow.prototype === Object.prototype) {
       ActiveWindow.prototype = Object.create(EventTarget.prototype);
+    } else if (typeof EventTarget === "function" && EventTarget.prototype && Object.getPrototypeOf(ActiveWindow.prototype) === Object.prototype) {
+      try { Object.setPrototypeOf(ActiveWindow.prototype, EventTarget.prototype); } catch (e) {}
     }
     Object.defineProperty(ActiveWindow.prototype, "constructor", {
       value: ActiveWindow,
@@ -47096,15 +48176,18 @@
         configurable: true,
       });
     } catch (e) {}
-    try {
-      Object.setPrototypeOf(global, ActiveWindow.prototype);
-      if (Object.prototype.hasOwnProperty.call(global, "constructor")) {
-        delete global.constructor;
-      }
-      if (Object.prototype.hasOwnProperty.call(global, Symbol.toStringTag)) {
-        delete global[Symbol.toStringTag];
-      }
-    } catch (e) {}
+    for (const _wt of [global, typeof window !== "undefined" ? window : null, typeof globalThis !== "undefined" ? globalThis : null]) {
+      if (!_wt || typeof _wt !== "object") continue;
+      try {
+        Object.setPrototypeOf(_wt, ActiveWindow.prototype);
+        if (Object.prototype.hasOwnProperty.call(_wt, "constructor")) {
+          delete _wt.constructor;
+        }
+        if (Object.prototype.hasOwnProperty.call(_wt, Symbol.toStringTag)) {
+          delete _wt[Symbol.toStringTag];
+        }
+      } catch (e) {}
+    }
     if (typeof window !== "undefined" && !window.Window) {
       window.Window = Window;
     }
@@ -47119,6 +48202,31 @@
     if (!global.frames) global.frames = global;
     if (typeof global.opener === "undefined") global.opener = null;
     if (typeof global.frameElement === "undefined") global.frameElement = null;
+    if (typeof global.isSecureContext === "undefined") {
+      const isSecDesc = {
+        get: function () {
+          try {
+            const loc = global.location;
+            if (!loc) return true;
+            const proto = String(loc.protocol || "").toLowerCase();
+            if (proto === "https:" || proto === "file:") return true;
+            const host = String(loc.hostname || "").toLowerCase();
+            return host === "127.0.0.1" || host === "localhost" || host === "[::1]" || host.endsWith(".localhost");
+          } catch (e) {
+            return true;
+          }
+        },
+        configurable: true,
+        enumerable: true,
+      };
+      Object.defineProperty(global, "isSecureContext", isSecDesc);
+      if (typeof window !== "undefined" && window !== global) {
+        try { Object.defineProperty(window, "isSecureContext", isSecDesc); } catch (e) {}
+      }
+      if (typeof globalThis !== "undefined" && globalThis !== global) {
+        try { Object.defineProperty(globalThis, "isSecureContext", isSecDesc); } catch (e) {}
+      }
+    }
     if (typeof window !== "undefined") {
       if (!window.parent) window.parent = window;
       if (!window.top) window.top = window;
@@ -49109,14 +50217,26 @@
       const opts = (typeof nameOrOptions === "object" && nameOrOptions !== null)
         ? nameOrOptions
         : { name: String(nameOrOptions), value: String(value !== undefined ? value : "") };
+      if (opts.maxAge !== undefined && opts.maxAge !== null && opts.expires !== undefined && opts.expires !== null) {
+        return Promise.reject(new TypeError("Failed to execute 'set' on 'CookieStore': Cannot specify both 'maxAge' and 'expires'."));
+      }
       const name = String(opts.name || "");
       const val = String(opts.value !== undefined ? opts.value : "");
+      let expiresVal = opts.expires != null ? Number(opts.expires) : null;
+      if (opts.maxAge !== undefined && opts.maxAge !== null) {
+        const ma = Number(opts.maxAge);
+        if (!Number.isFinite(ma) || ma <= 0) {
+          this._store.delete(name);
+          return Promise.resolve();
+        }
+        expiresVal = Date.now() + ma * 1000;
+      }
       const item = {
         name: name,
         value: val,
         domain: opts.domain != null ? String(opts.domain) : null,
         path: opts.path != null ? String(opts.path) : "/",
-        expires: opts.expires != null ? Number(opts.expires) : null,
+        expires: expiresVal,
         sameSite: opts.sameSite != null ? String(opts.sameSite) : "strict",
         partitioned: Boolean(opts.partitioned),
         secure: opts.secure !== undefined ? Boolean(opts.secure) : Boolean(global.isSecureContext),
@@ -53232,6 +54352,7 @@
       this._records = [];
       this._types = new Set();
       this._scheduled = false;
+      this._observeMode = null;
     }
     Object.defineProperty(PerformanceObserver, "supportedEntryTypes", {
       get: function () { return SUPPORTED_PERF_TYPES; },
@@ -53250,6 +54371,11 @@
       if (hasEntryTypes && hasType) {
         throw new TypeError("Failed to execute 'observe' on 'PerformanceObserver': Cannot specify both 'entryTypes' and 'type'.");
       }
+      const mode = hasEntryTypes ? "entryTypes" : "type";
+      if (this._observeMode !== null && this._observeMode !== mode) {
+        throw new DOMException("Failed to execute 'observe' on 'PerformanceObserver': An observer cannot switch between 'entryTypes' and 'type'.", "InvalidModificationError");
+      }
+      this._observeMode = mode;
       this._types.clear();
       if (hasEntryTypes) {
         const list = Array.from(options.entryTypes || []);
@@ -54042,22 +55168,46 @@
       const val = (m[2] || "").trim();
 
       if (feat === "min-width" || feat === "max-width" || feat === "width") {
-        const numM = val.match(/^([0-9.]+)\s*(px)?$/);
+        const numM = val.match(/^([0-9.]+)\s*(px|em|rem)?$/);
         if (!numM) return false;
-        const px = parseFloat(numM[1]);
+        const unit = numM[2] || "px";
+        const px = parseFloat(numM[1]) * (unit === "em" || unit === "rem" ? 16 : 1);
         if (isNaN(px)) return false;
         if (feat === "min-width") return w >= px;
         if (feat === "max-width") return w <= px;
         return w === px;
       }
       if (feat === "min-height" || feat === "max-height" || feat === "height") {
-        const numM = val.match(/^([0-9.]+)\s*(px)?$/);
+        const numM = val.match(/^([0-9.]+)\s*(px|em|rem)?$/);
         if (!numM) return false;
-        const px = parseFloat(numM[1]);
+        const unit = numM[2] || "px";
+        const px = parseFloat(numM[1]) * (unit === "em" || unit === "rem" ? 16 : 1);
         if (isNaN(px)) return false;
         if (feat === "min-height") return h >= px;
         if (feat === "max-height") return h <= px;
         return h === px;
+      }
+      if (feat === "min-device-width" || feat === "max-device-width" || feat === "device-width") {
+        const numM = val.match(/^([0-9.]+)\s*(px|em|rem)?$/);
+        if (!numM) return false;
+        const unit = numM[2] || "px";
+        const px = parseFloat(numM[1]) * (unit === "em" || unit === "rem" ? 16 : 1);
+        if (isNaN(px)) return false;
+        const dw = (typeof screen !== "undefined" && screen.width) || w;
+        if (feat === "min-device-width") return dw >= px;
+        if (feat === "max-device-width") return dw <= px;
+        return dw === px;
+      }
+      if (feat === "min-device-height" || feat === "max-device-height" || feat === "device-height") {
+        const numM = val.match(/^([0-9.]+)\s*(px|em|rem)?$/);
+        if (!numM) return false;
+        const unit = numM[2] || "px";
+        const px = parseFloat(numM[1]) * (unit === "em" || unit === "rem" ? 16 : 1);
+        if (isNaN(px)) return false;
+        const dh = (typeof screen !== "undefined" && screen.height) || h;
+        if (feat === "min-device-height") return dh >= px;
+        if (feat === "max-device-height") return dh <= px;
+        return dh === px;
       }
       if (feat === "orientation") {
         if (val === "landscape") return w >= h;
@@ -54066,10 +55216,10 @@
       }
       const ef = (typeof globalThis !== "undefined" && globalThis.__capsurf_emulated_features) || {};
       if (feat === "prefers-color-scheme") {
-        return val === (ef["prefers-color-scheme"] || "light");
+        return ef["prefers-color-scheme"] ? val === ef["prefers-color-scheme"] : false;
       }
       if (feat === "prefers-reduced-motion") {
-        return val === (ef["prefers-reduced-motion"] || "no-preference");
+        return ef["prefers-reduced-motion"] ? val === ef["prefers-reduced-motion"] : false;
       }
       if (feat === "forced-colors") {
         return val === (ef["forced-colors"] || "none");
@@ -54078,7 +55228,7 @@
         return val === (ef["prefers-contrast"] || "no-preference");
       }
       if (feat === "hover") {
-        return val === "hover";
+        return ef["hover"] ? val === ef["hover"] : false;
       }
       if (feat === "pointer") {
         return val === "fine";
@@ -54105,13 +55255,15 @@
 
     function evaluateMediaQuery(query) {
       if (!query || !String(query).trim()) return true;
-      const raw = String(query).toLowerCase().trim();
+      const raw = String(query).replace(/\/\*[\s\S]*?\*\//g, "").toLowerCase().trim();
+      if (!raw) return true;
       const w = (global.innerWidth || (typeof window !== "undefined" ? window.innerWidth : 1280)) || 1280;
       const h = (global.innerHeight || (typeof window !== "undefined" ? window.innerHeight : 720)) || 720;
       const dpr = (global.devicePixelRatio || (typeof window !== "undefined" ? window.devicePixelRatio : 1)) || 1;
       const curMedia = ((typeof globalThis !== "undefined" && globalThis.__capsurf_emulated_media) || "screen").toLowerCase();
       if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_eval_media_query === "function" &&
-          raw.indexOf("device-pixel-ratio") === -1 && raw.indexOf("resolution") === -1 && raw.indexOf("aspect-ratio") === -1 && raw.indexOf("prefers-") === -1) {
+          raw.indexOf("device-") === -1 && raw.indexOf("resolution") === -1 && raw.indexOf("aspect-ratio") === -1 &&
+          raw.indexOf("prefers-") === -1 && raw.indexOf("hover") === -1 && raw.indexOf("em") === -1 && !/\d\.\d/.test(raw)) {
         const nativeRes = globalThis.__capsurf_eval_media_query(raw, w, h, curMedia);
         if (typeof nativeRes === "boolean") return nativeRes;
       }
@@ -55594,13 +56746,17 @@
         let text = "";
         if (snTag === "link") {
           const sheet = sn.sheet;
-          if (sheet) {
+          if (sheet && !sheet.disabled) {
             if (typeof sheet._syncFromOwner === "function") sheet._syncFromOwner();
             text = sheet._cascadeCssText || "";
           }
         } else {
-          if (sn._sheet && typeof sn._sheet._syncFromOwner === "function") sn._sheet._syncFromOwner();
-          text = (sn._sheet && typeof sn._sheet._cascadeCssText === "string") ? sn._sheet._cascadeCssText : (sn.textContent || "");
+          if (sn._sheet && sn._sheet.disabled) {
+            text = "";
+          } else {
+            if (sn._sheet && typeof sn._sheet._syncFromOwner === "function") sn._sheet._syncFromOwner();
+            text = (sn._sheet && typeof sn._sheet._cascadeCssText === "string") ? sn._sheet._cascadeCssText : (sn.textContent || "");
+          }
         }
         if (text) {
           if (!collectRawComputedMap._sheetTexts) collectRawComputedMap._sheetTexts = [];
@@ -55626,12 +56782,14 @@
           if (!nd) return;
           const tg = nd.tagName ? String(nd.tagName).toLowerCase() : "";
           if (tg === "style") {
-            if (nd._sheet && typeof nd._sheet._syncFromOwner === "function") nd._sheet._syncFromOwner();
-            const t = (nd._sheet && typeof nd._sheet._cascadeCssText === "string") ? nd._sheet._cascadeCssText : (nd.textContent || "");
-            if (t) texts.push(t);
+            if (!nd._sheet || !nd._sheet.disabled) {
+              if (nd._sheet && typeof nd._sheet._syncFromOwner === "function") nd._sheet._syncFromOwner();
+              const t = (nd._sheet && typeof nd._sheet._cascadeCssText === "string") ? nd._sheet._cascadeCssText : (nd.textContent || "");
+              if (t) texts.push(t);
+            }
           } else if (tg === "link") {
             const rel = String((nd.getAttribute && nd.getAttribute("rel")) || "").trim().toLowerCase().split(/\s+/);
-            if (rel.includes("stylesheet") && nd.sheet) {
+            if (rel.includes("stylesheet") && nd.sheet && !nd.sheet.disabled) {
               if (typeof nd.sheet._syncFromOwner === "function") nd.sheet._syncFromOwner();
               if (nd.sheet._cascadeCssText) texts.push(nd.sheet._cascadeCssText);
             }
@@ -63368,6 +64526,13 @@
     get is2D() {
       return matrixState(this).is2D;
     }
+    get isIdentity() {
+      const v = matrixState(this).values;
+      return v[0] === 1 && v[1] === 0 && v[2] === 0 && v[3] === 0 &&
+             v[4] === 0 && v[5] === 1 && v[6] === 0 && v[7] === 0 &&
+             v[8] === 0 && v[9] === 0 && v[10] === 1 && v[11] === 0 &&
+             v[12] === 0 && v[13] === 0 && v[14] === 0 && v[15] === 1;
+    }
     multiply(other) {
       if (!(other instanceof DOMMatrixReadOnly))
         throw new TypeError("Matrix required");
@@ -63429,6 +64594,11 @@
     toString() {
       const stored = matrixState(this).values;
       const values = this.is2D ? twoDimensionalValues(stored) : stored;
+      for (let i = 0; i < values.length; i++) {
+        if (!Number.isFinite(values[i])) {
+          throw new DOMException("Failed to execute 'toString' on 'DOMMatrixReadOnly': Matrix contains non-finite values.", "InvalidStateError");
+        }
+      }
       return `${this.is2D ? "matrix" : "matrix3d"}(${values.join(", ")})`;
     }
   }
@@ -68536,7 +69706,10 @@
       if (typeof window !== "undefined") window.reportError = reportErrorFn;
       for (let i = 0; i < WINDOW_EVENT_HANDLER_NAMES.length; i++) {
         const prop = WINDOW_EVENT_HANDLER_NAMES[i];
-        if (Object.prototype.hasOwnProperty.call(winTarget, prop)) continue;
+        if (Object.prototype.hasOwnProperty.call(winTarget, prop)) {
+          const existingVal = winTarget[prop];
+          if (existingVal !== null && existingVal !== undefined) continue;
+        }
         const getter = function () {
           if (Object.prototype.hasOwnProperty.call(_windowEventHandlers, prop)) {
             return _windowEventHandlers[prop];
@@ -68572,8 +69745,11 @@
         };
         try {
           Object.defineProperty(winTarget, prop, desc);
-          if (typeof window !== "undefined" && window !== winTarget && !Object.prototype.hasOwnProperty.call(window, prop)) {
-            Object.defineProperty(window, prop, desc);
+          if (typeof window !== "undefined" && window !== winTarget) {
+            const wVal = window[prop];
+            if (!Object.prototype.hasOwnProperty.call(window, prop) || wVal === null || wVal === undefined) {
+              Object.defineProperty(window, prop, desc);
+            }
           }
         } catch (e) {}
       }
@@ -69826,7 +71002,36 @@
     FontFaceSet.prototype.load = function (font, text) {
       const self = this;
       return this.ready.then(function () {
-        return Array.from(self._set);
+        const GENERIC = new Set(["serif", "sans-serif", "monospace", "cursive", "fantasy", "system-ui", "ui-serif", "ui-sans-serif", "ui-monospace", "ui-rounded", "emoji", "math", "fangsong"]);
+        let str = String(font || "").trim();
+        const sizeMatch = /\d+(?:\.\d+)?(?:px|pt|em|rem|ex|ch|vw|vh|vmin|vmax|cm|mm|in|pc|%)(?:\s*\/\s*[\d.]+(?:px|pt|em|rem|%)?)?\s+(.+)$/i.exec(str);
+        const famStr = sizeMatch ? sizeMatch[1] : str;
+        const rawFams = famStr.split(",");
+        const out = [];
+        const seen = new Set();
+        if (!self._standInFaces) self._standInFaces = new Map();
+        for (let i = 0; i < rawFams.length; i++) {
+          const fam = rawFams[i].trim().replace(/^["']|["']$/g, "");
+          if (!fam) continue;
+          const lower = fam.toLowerCase();
+          if (GENERIC.has(lower) || seen.has(lower)) continue;
+          seen.add(lower);
+          let matched = null;
+          self._set.forEach(function (f) {
+            if (!matched && f && String(f.family || "").toLowerCase() === lower) {
+              matched = f;
+            }
+          });
+          if (!matched) {
+            matched = self._standInFaces.get(lower);
+            if (!matched) {
+              matched = new FontFace(fam, "");
+              self._standInFaces.set(lower, matched);
+            }
+          }
+          out.push(matched);
+        }
+        return out;
       });
     };
 
@@ -70125,12 +71330,19 @@
     }
 
     let constructed = true;
+    if (typeof globalThis !== "undefined") {
+      globalThis.__capsurf_throwOnDynamicMarkupInsertionDepth = (globalThis.__capsurf_throwOnDynamicMarkupInsertionDepth || 0) + 1;
+    }
     try {
       new customElementConstructor();
     } catch (err) {
       constructed = false;
       element._customElementState = "failed";
-      if (typeof window !== "undefined" && typeof window.onerror === "function") {
+      if (typeof reportError === "function") {
+        try {
+          reportError(err);
+        } catch (_) {}
+      } else if (typeof window !== "undefined" && typeof window.onerror === "function") {
         try {
           window.onerror(err && err.message ? err.message : String(err), "", 0, 0, err);
         } catch (_) {}
@@ -70138,6 +71350,9 @@
         console.warn("[capsurf] custom-element constructor for " + tagName + " threw:", err);
       }
     } finally {
+      if (typeof globalThis !== "undefined") {
+        globalThis.__capsurf_throwOnDynamicMarkupInsertionDepth = Math.max(0, (globalThis.__capsurf_throwOnDynamicMarkupInsertionDepth || 1) - 1);
+      }
       if (stack) {
         const sIdx = stack.indexOf(element);
         if (sIdx !== -1) stack.splice(sIdx, 1);
@@ -70547,8 +71762,7 @@
   markNative(CustomElementRegistry.prototype.upgrade, "upgrade");
   markNative(CustomElementRegistry, "CustomElementRegistry");
 
-  if (typeof HTMLElement !== "undefined" && HTMLElement.prototype && !HTMLElement.prototype.attachInternals) {
-    HTMLElement.prototype.attachInternals = markNative(function () {
+  const attachInternalsFn = markNative(function () {
       if (!this || this.nodeType !== 1) {
         throw new TypeError("Illegal invocation");
       }
@@ -70569,6 +71783,10 @@
       elementInternalsMap.set(this, internals);
       return internals;
     }, "attachInternals");
+  global.__capsurf_attachInternalsFn = attachInternalsFn;
+  if (typeof globalThis !== "undefined") globalThis.__capsurf_attachInternalsFn = attachInternalsFn;
+  if (typeof HTMLElement !== "undefined" && HTMLElement.prototype && !HTMLElement.prototype.attachInternals) {
+    HTMLElement.prototype.attachInternals = attachInternalsFn;
   }
 
   const customElementsInstance = new CustomElementRegistry();
@@ -70980,6 +72198,8 @@
       const DocumentCtor = function Document() {
         this._children = [];
         try {
+          if (this.nodeType !== 9) Object.defineProperty(this, "nodeType", { value: 9, writable: true, configurable: true });
+          if (this.nodeName !== "#document") Object.defineProperty(this, "nodeName", { value: "#document", writable: true, configurable: true });
           if (this.URL === undefined) Object.defineProperty(this, "URL", { value: "about:blank", writable: true, configurable: true });
           if (this.readyState === undefined) Object.defineProperty(this, "readyState", { value: "complete", writable: true, configurable: true });
         } catch (e) {}
@@ -71014,6 +72234,93 @@
     if (global.Element) {
       installElementExtensions(global.Element.prototype);
       installHtmlElementExtensions(global.Element.prototype);
+      try {
+        const elProto = global.Element.prototype;
+        const origElTagDesc = Object.getOwnPropertyDescriptor(elProto, "tagName");
+        if (origElTagDesc && origElTagDesc.get && origElTagDesc.configurable) {
+          const origElTagGet = origElTagDesc.get;
+          Object.defineProperty(elProto, "tagName", {
+            get: function () {
+              if (this.nodeType !== 1) return undefined;
+              return origElTagGet.call(this);
+            },
+            configurable: true,
+          });
+        }
+        if (global.Text && global.Text.prototype) {
+          const wtDesc = Object.getOwnPropertyDescriptor(global.Text.prototype, "wholeText");
+          if (wtDesc && !Object.getOwnPropertyDescriptor(elProto, "wholeText")) {
+            Object.defineProperty(elProto, "wholeText", wtDesc);
+          }
+          if (typeof elProto.splitText !== "function" && typeof global.Text.prototype.splitText === "function") {
+            elProto.splitText = global.Text.prototype.splitText;
+          }
+        }
+        if (global.CharacterData && global.CharacterData.prototype) {
+          if (!Object.getOwnPropertyDescriptor(elProto, "data")) {
+            Object.defineProperty(elProto, "data", {
+              get: function () {
+                if (this.nodeType === 3 || this.nodeType === 4 || this.nodeType === 8) {
+                  if (this._data !== undefined) return this._data;
+                  const nv = this.nodeValue;
+                  if (typeof nv === "string") return nv;
+                  const tc = this.textContent;
+                  return typeof tc === "string" ? tc : "";
+                }
+                return undefined;
+              },
+              set: function (v) {
+                if (this.nodeType === 3 || this.nodeType === 4 || this.nodeType === 8) {
+                  const s = v === null ? "" : String(v);
+                  this._data = s;
+                  this.nodeValue = s;
+                }
+              },
+              configurable: true,
+            });
+          }
+          if (!Object.getOwnPropertyDescriptor(elProto, "length")) {
+            Object.defineProperty(elProto, "length", {
+              get: function () {
+                if (this.nodeType === 3 || this.nodeType === 4 || this.nodeType === 8) {
+                  const d = this.data;
+                  return typeof d === "string" ? d.length : 0;
+                }
+                return undefined;
+              },
+              configurable: true,
+            });
+          }
+          for (const cdMethod of ["substringData", "appendData", "insertData", "deleteData", "replaceData"]) {
+            if (typeof elProto[cdMethod] !== "function" && typeof global.CharacterData.prototype[cdMethod] === "function") {
+              elProto[cdMethod] = global.CharacterData.prototype[cdMethod];
+            }
+          }
+          const origElNvDesc = Object.getOwnPropertyDescriptor(elProto, "nodeValue");
+          if (origElNvDesc && origElNvDesc.get && origElNvDesc.configurable) {
+            const origElNvGet = origElNvDesc.get;
+            const origElNvSet = origElNvDesc.set;
+            Object.defineProperty(elProto, "nodeValue", {
+              get: function () {
+                const v = origElNvGet.call(this);
+                if (v === null && (this.nodeType === 3 || this.nodeType === 4 || this.nodeType === 8)) {
+                  if (this._data !== undefined) return this._data;
+                  const tc = this.textContent;
+                  return typeof tc === "string" ? tc : "";
+                }
+                return v;
+              },
+              set: function (v) {
+                if (origElNvSet) origElNvSet.call(this, v);
+                if (this.nodeType === 3 || this.nodeType === 4 || this.nodeType === 8) {
+                  this._data = v === null ? "" : String(v);
+                }
+              },
+              configurable: true,
+            });
+          }
+        }
+      } catch (e) {}
 
       function copyCloneFormState(src, dst, deep) {
         if (!src || !dst) return dst;
@@ -71037,6 +72344,27 @@
           }
         }
         if (deep) {
+          if (tag === "template" && src.content && dst.content) {
+            while (dst.content.firstChild) dst.content.removeChild(dst.content.firstChild);
+            const tKids = src.content.childNodes || src.content._children || [];
+            for (let ti = 0; ti < tKids.length; ti++) {
+              dst.content.appendChild(tKids[ti].cloneNode(true));
+            }
+          }
+          if (src._shadowRoot && src._shadowRoot.clonable && !dst._shadowRoot && typeof dst.attachShadow === "function") {
+            const sr = src._shadowRoot;
+            const clonedSr = dst.attachShadow({
+              mode: sr.mode || "open",
+              clonable: true,
+              delegatesFocus: Boolean(sr.delegatesFocus),
+              serializable: Boolean(sr.serializable),
+              slotAssignment: sr.slotAssignment || "named",
+            });
+            const srKids = sr.childNodes || sr._children || [];
+            for (let si = 0; si < srKids.length; si++) {
+              clonedSr.appendChild(srKids[si].cloneNode(true));
+            }
+          }
           const sk = src.children || src._children || [];
           const dk = dst.children || dst._children || [];
           const len = sk.length < dk.length ? sk.length : dk.length;
@@ -71074,10 +72402,34 @@
         Object.defineProperty(global.Element.prototype, "outerHTML", {
           get: function () {
             let raw = origOuterGet.call(this);
+            const ns = this._namespaceURI !== undefined ? this._namespaceURI : this.namespaceURI;
+            const isHtml = !ns || ns === "http://www.w3.org/1999/xhtml";
+            const tag = String(this.localName || this.tagName || "").toLowerCase();
             if (typeof raw === "string") {
-              const ns = this._namespaceURI !== undefined ? this._namespaceURI : this.namespaceURI;
-              const isHtml = !ns || ns === "http://www.w3.org/1999/xhtml";
-              const tag = String(this.localName || this.tagName || "").toLowerCase();
+              if (ns === "http://www.w3.org/2000/svg") {
+                if (!this._attrs && typeof this._syncAttrs === "function") this._syncAttrs();
+                if (this._attrList && this._attrList.length > 0) {
+                  const gt = raw.indexOf(">");
+                  const closeIdx = raw.lastIndexOf("</");
+                  if (gt !== -1) {
+                    const tagName = this.localName || this.tagName || tag;
+                    let open = "<" + tagName;
+                    for (let ai = 0; ai < this._attrList.length; ai++) {
+                      const a = this._attrList[ai];
+                      if (a && a.name) {
+                        const esc = String(a.value || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+                        open += " " + a.name + '="' + esc + '"';
+                      }
+                    }
+                    open += ">";
+                    if (closeIdx > gt) {
+                      const inner = (this._children && this._children.length > 0) ? (this.innerHTML || "") : raw.slice(gt + 1, closeIdx);
+                      return open + inner + "</" + tagName + ">";
+                    }
+                    return open + raw.slice(gt + 1);
+                  }
+                }
+              }
               if (isHtml && VOID_OUTER_TAGS.has(tag)) {
                 const closeSuffix = "</" + tag + ">";
                 if (raw.toLowerCase().endsWith(closeSuffix)) {
@@ -71086,7 +72438,7 @@
                 return raw;
               }
             }
-            if (this._children && this._children.length > 0 && typeof raw === "string") {
+            if (((this._children && this._children.length > 0) || (isHtml && tag === "template")) && typeof raw === "string") {
               const gt = raw.indexOf(">");
               const closeIdx = raw.lastIndexOf("</");
               if (gt !== -1 && closeIdx > gt) {
@@ -71100,9 +72452,14 @@
             if (!parent) return;
             const doc = this.ownerDocument || global.document || (typeof document !== "undefined" ? document : null);
             const nativeCreate = global.__capsurf_native_createElement;
+            let ctxTag = "div";
+            if (parent.nodeType === 1) {
+              const pTag = String(parent.localName || parent.tagName || "").toLowerCase();
+              if (pTag && pTag !== "html" && pTag !== "head") ctxTag = pTag;
+            }
             const temp = (doc && typeof nativeCreate === "function")
-              ? nativeCreate.call(doc, "div")
-              : (doc ? doc.createElement("div") : null);
+              ? nativeCreate.call(doc, ctxTag)
+              : (doc ? doc.createElement(ctxTag) : null);
             if (!temp) return;
             temp.innerHTML = String(val == null ? "" : val);
             while (temp.firstChild) {
@@ -71115,6 +72472,10 @@
           configurable: true,
           enumerable: true,
         });
+      }
+
+      if (global.HTMLElement && global.HTMLElement.prototype && !global.HTMLElement.prototype.attachInternals && typeof global.__capsurf_attachInternalsFn === "function") {
+        global.HTMLElement.prototype.attachInternals = global.__capsurf_attachInternalsFn;
       }
 
       global.Element.prototype.animate = markNative(function (keyframes, options) {
@@ -71213,9 +72574,12 @@
       }, "getElementsByClassName");
 
       global.Element.prototype.toDataURL = markNative(function (type) {
+        const w = this.width !== undefined ? Number(this.width) : Number(this.getAttribute("width") ?? 300);
+        const h = this.height !== undefined ? Number(this.height) : Number(this.getAttribute("height") ?? 150);
+        if (w === 0 || h === 0) {
+          return "data:,";
+        }
         if (this._ctx2d) {
-          const w = Number(this.getAttribute("width") || this.width || 300);
-          const h = Number(this.getAttribute("height") || this.height || 150);
           const bm = ensureBitmap(this._ctx2d);
           if (typeof encodePngBase64 === "function") {
             return encodePngBase64(w, h, bm);
@@ -71223,6 +72587,28 @@
         }
         return VALID_PNG_BASE64;
       }, "toDataURL");
+
+      global.Element.prototype.toBlob = markNative(function (callback, type, quality) {
+        if (typeof callback !== "function") {
+          throw new TypeError("Failed to execute 'toBlob' on 'HTMLCanvasElement': parameter 1 is not of type 'Function'.");
+        }
+        const w = this.width !== undefined ? Number(this.width) : Number(this.getAttribute("width") ?? 300);
+        const h = this.height !== undefined ? Number(this.height) : Number(this.getAttribute("height") ?? 150);
+        const dataUrl = (w === 0 || h === 0) ? "data:," : this.toDataURL(type, quality);
+        const schedule = typeof setTimeout === "function" ? setTimeout : function (fn) { Promise.resolve().then(fn); };
+        schedule(function () {
+          if (dataUrl === "data:," || w === 0 || h === 0) {
+            callback(null);
+            return;
+          }
+          const comma = dataUrl.indexOf(",");
+          const b64 = comma >= 0 ? dataUrl.slice(comma + 1) : "";
+          const bin = typeof atob === "function" ? atob(b64) : "";
+          const u8 = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+          callback(new Blob([u8], { type: "image/png" }));
+        }, 0);
+      }, "toBlob");
     }
 
     // 11. Install specialized elements and forms
@@ -71775,11 +73161,60 @@
                 if (typeof nativeTextProto.splitText !== "function" && typeof global.Text.prototype.splitText === "function") {
                   nativeTextProto.splitText = global.Text.prototype.splitText;
                 }
-                Object.defineProperty(nativeTextProto, "tagName", {
-                  get: function () { return undefined; },
-                  configurable: true,
-                });
+                const origTagDesc = Object.getOwnPropertyDescriptor(nativeTextProto, "tagName");
+                if (origTagDesc && origTagDesc.get) {
+                  const origTagGet = origTagDesc.get;
+                  Object.defineProperty(nativeTextProto, "tagName", {
+                    get: function () {
+                      if (this.nodeType !== 1) return undefined;
+                      return origTagGet.call(this);
+                    },
+                    configurable: true,
+                  });
+                } else {
+                  Object.defineProperty(nativeTextProto, "tagName", {
+                    get: function () { return undefined; },
+                    configurable: true,
+                  });
+                }
                 if (global.CharacterData && global.CharacterData.prototype) {
+                  if (!Object.getOwnPropertyDescriptor(nativeTextProto, "data")) {
+                    Object.defineProperty(nativeTextProto, "data", {
+                      get: function () {
+                        if (this.nodeType === 3 || this.nodeType === 4 || this.nodeType === 8) {
+                          const nv = this.nodeValue;
+                          if (typeof nv === "string") return nv;
+                          const tc = this.textContent;
+                          return typeof tc === "string" ? tc : "";
+                        }
+                        return undefined;
+                      },
+                      set: function (v) {
+                        if (this.nodeType === 3 || this.nodeType === 4 || this.nodeType === 8) {
+                          const s = v === null ? "" : String(v);
+                          this.nodeValue = s;
+                        }
+                      },
+                      configurable: true,
+                    });
+                  }
+                  if (!Object.getOwnPropertyDescriptor(nativeTextProto, "length")) {
+                    Object.defineProperty(nativeTextProto, "length", {
+                      get: function () {
+                        if (this.nodeType === 3 || this.nodeType === 4 || this.nodeType === 8) {
+                          const d = this.data;
+                          return typeof d === "string" ? d.length : 0;
+                        }
+                        return undefined;
+                      },
+                      configurable: true,
+                    });
+                  }
+                  for (const cdMethod of ["substringData", "appendData", "insertData", "deleteData", "replaceData"]) {
+                    if (typeof nativeTextProto[cdMethod] !== "function" && typeof global.CharacterData.prototype[cdMethod] === "function") {
+                      nativeTextProto[cdMethod] = global.CharacterData.prototype[cdMethod];
+                    }
+                  }
                   const pesDesc = Object.getOwnPropertyDescriptor(global.CharacterData.prototype, "previousElementSibling");
                   if (pesDesc && !Object.getOwnPropertyDescriptor(nativeTextProto, "previousElementSibling")) {
                     Object.defineProperty(nativeTextProto, "previousElementSibling", pesDesc);
@@ -71881,7 +73316,7 @@
           }
           const t = String(target);
           const d = String(data);
-          if (!/^[A-Za-z_\xC0-\uFFFF][A-Za-z0-9._:-\xC0-\uFFFF]*$/.test(t) || d.includes("?>")) {
+          if (!/^[A-Za-z_\xC0-\uFFFF][A-Za-z0-9._:\xC0-\uFFFF-]*$/.test(t) || d.includes("?>")) {
             throw new DOMException("String contains an invalid character", "InvalidCharacterError");
           }
           const node = new ProcessingInstruction(t, d);
@@ -72142,13 +73577,24 @@
         return new Range(this);
       }, "createRange");
 
-      if (!docProto.open) {
-        docProto.open = markNative(function () {
-          return this;
-        }, "open");
-      }
-      if (!docProto.close) {
-        docProto.close = markNative(function () {}, "close");
+      const origDocOpenFn = docProto.open;
+      docProto.open = markNative(function () {
+        if (typeof globalThis !== "undefined" && globalThis.__capsurf_throwOnDynamicMarkupInsertionDepth > 0) {
+          throw new DOMException("Failed to execute 'open' on 'Document': Cannot call open() during custom element reactions.", "InvalidStateError");
+        }
+        if (origDocOpenFn) return origDocOpenFn.apply(this, arguments);
+        return this;
+      }, "open");
+      const origDocCloseFn = docProto.close;
+      docProto.close = markNative(function () {
+        if (typeof globalThis !== "undefined" && globalThis.__capsurf_throwOnDynamicMarkupInsertionDepth > 0) {
+          throw new DOMException("Failed to execute 'close' on 'Document': Cannot call close() during custom element reactions.", "InvalidStateError");
+        }
+        if (origDocCloseFn) return origDocCloseFn.apply(this, arguments);
+      }, "close");
+      if (global.document) {
+        global.document.open = docProto.open;
+        global.document.close = docProto.close;
       }
       if (!docProto.write) {
         const writtenQueue = [];
@@ -72269,6 +73715,9 @@
         }
 
         docProto.write = markNative(function () {
+          if (typeof globalThis !== "undefined" && globalThis.__capsurf_throwOnDynamicMarkupInsertionDepth > 0) {
+            throw new DOMException("Failed to execute 'write' on 'Document': Cannot call write() during custom element reactions.", "InvalidStateError");
+          }
           let markup = "";
           for (let i = 0; i < arguments.length; i++) {
             markup += String(arguments[i]);
@@ -72295,6 +73744,17 @@
               }
             }
           }
+        }, "write");
+        if (global.document) {
+          global.document.write = docProto.write;
+        }
+      } else {
+        const origDocWriteFn = docProto.write;
+        docProto.write = markNative(function () {
+          if (typeof globalThis !== "undefined" && globalThis.__capsurf_throwOnDynamicMarkupInsertionDepth > 0) {
+            throw new DOMException("Failed to execute 'write' on 'Document': Cannot call write() during custom element reactions.", "InvalidStateError");
+          }
+          return origDocWriteFn.apply(this, arguments);
         }, "write");
         if (global.document) {
           global.document.write = docProto.write;

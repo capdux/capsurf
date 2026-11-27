@@ -744,6 +744,8 @@ Object.defineProperty(ParsedElement.prototype, "innerHTML", {
 
 ParsedElement.prototype.lookupNamespaceURI = function (prefix) {
   const p = prefix === "" || prefix === undefined ? null : String(prefix);
+  if (p === "xml") return "http://www.w3.org/XML/1998/namespace";
+  if (p === "xmlns") return "http://www.w3.org/2000/xmlns/";
   let n = this;
   while (n && n.nodeType === ELEMENT_NODE) {
     if (p === null) {
@@ -780,6 +782,12 @@ ParsedElement.prototype.dispatchEvent = function (event) {
     return EventTarget.prototype.dispatchEvent.call(this, event);
   }
   return true;
+};
+ParsedElement.prototype.attachInternals = function () {
+  if (typeof HTMLElement !== "undefined" && HTMLElement.prototype && typeof HTMLElement.prototype.attachInternals === "function") {
+    return HTMLElement.prototype.attachInternals.call(this);
+  }
+  throw new DOMException("Failed to execute 'attachInternals' on 'HTMLElement': The target element is not a custom element.", "NotSupportedError");
 };
 
 Object.defineProperty(ParsedElement.prototype, "isConnected", {
@@ -1460,7 +1468,12 @@ function applyAttributes(el, attrStr) {
 function DOMParser() {}
 
 DOMParser.prototype.parseFromString = function (str, mimeType) {
-  return parseDocument(str, mimeType);
+  const doc = parseDocument(str, mimeType);
+  if (doc && typeof location !== "undefined" && location && location.href && location.href !== "about:blank") {
+    doc.URL = String(location.href);
+    doc.documentURI = String(location.href);
+  }
+  return doc;
 };
 
 markNative(DOMParser, "DOMParser");

@@ -72,6 +72,8 @@ function installWindow(global) {
   const ActiveWindow = global.Window;
   if (!ActiveWindow.prototype || ActiveWindow.prototype === Object.prototype) {
     ActiveWindow.prototype = Object.create(EventTarget.prototype);
+  } else if (typeof EventTarget === "function" && EventTarget.prototype && Object.getPrototypeOf(ActiveWindow.prototype) === Object.prototype) {
+    try { Object.setPrototypeOf(ActiveWindow.prototype, EventTarget.prototype); } catch (e) {}
   }
   Object.defineProperty(ActiveWindow.prototype, "constructor", {
     value: ActiveWindow,
@@ -85,15 +87,18 @@ function installWindow(global) {
       configurable: true,
     });
   } catch (e) {}
-  try {
-    Object.setPrototypeOf(global, ActiveWindow.prototype);
-    if (Object.prototype.hasOwnProperty.call(global, "constructor")) {
-      delete global.constructor;
-    }
-    if (Object.prototype.hasOwnProperty.call(global, Symbol.toStringTag)) {
-      delete global[Symbol.toStringTag];
-    }
-  } catch (e) {}
+  for (const _wt of [global, typeof window !== "undefined" ? window : null, typeof globalThis !== "undefined" ? globalThis : null]) {
+    if (!_wt || typeof _wt !== "object") continue;
+    try {
+      Object.setPrototypeOf(_wt, ActiveWindow.prototype);
+      if (Object.prototype.hasOwnProperty.call(_wt, "constructor")) {
+        delete _wt.constructor;
+      }
+      if (Object.prototype.hasOwnProperty.call(_wt, Symbol.toStringTag)) {
+        delete _wt[Symbol.toStringTag];
+      }
+    } catch (e) {}
+  }
   if (typeof window !== "undefined" && !window.Window) {
     window.Window = Window;
   }
@@ -108,6 +113,31 @@ function installWindow(global) {
   if (!global.frames) global.frames = global;
   if (typeof global.opener === "undefined") global.opener = null;
   if (typeof global.frameElement === "undefined") global.frameElement = null;
+  if (typeof global.isSecureContext === "undefined") {
+    const isSecDesc = {
+      get: function () {
+        try {
+          const loc = global.location;
+          if (!loc) return true;
+          const proto = String(loc.protocol || "").toLowerCase();
+          if (proto === "https:" || proto === "file:") return true;
+          const host = String(loc.hostname || "").toLowerCase();
+          return host === "127.0.0.1" || host === "localhost" || host === "[::1]" || host.endsWith(".localhost");
+        } catch (e) {
+          return true;
+        }
+      },
+      configurable: true,
+      enumerable: true,
+    };
+    Object.defineProperty(global, "isSecureContext", isSecDesc);
+    if (typeof window !== "undefined" && window !== global) {
+      try { Object.defineProperty(window, "isSecureContext", isSecDesc); } catch (e) {}
+    }
+    if (typeof globalThis !== "undefined" && globalThis !== global) {
+      try { Object.defineProperty(globalThis, "isSecureContext", isSecDesc); } catch (e) {}
+    }
+  }
   if (typeof window !== "undefined") {
     if (!window.parent) window.parent = window;
     if (!window.top) window.top = window;
@@ -2098,14 +2128,26 @@ function installWindow(global) {
     const opts = (typeof nameOrOptions === "object" && nameOrOptions !== null)
       ? nameOrOptions
       : { name: String(nameOrOptions), value: String(value !== undefined ? value : "") };
+    if (opts.maxAge !== undefined && opts.maxAge !== null && opts.expires !== undefined && opts.expires !== null) {
+      return Promise.reject(new TypeError("Failed to execute 'set' on 'CookieStore': Cannot specify both 'maxAge' and 'expires'."));
+    }
     const name = String(opts.name || "");
     const val = String(opts.value !== undefined ? opts.value : "");
+    let expiresVal = opts.expires != null ? Number(opts.expires) : null;
+    if (opts.maxAge !== undefined && opts.maxAge !== null) {
+      const ma = Number(opts.maxAge);
+      if (!Number.isFinite(ma) || ma <= 0) {
+        this._store.delete(name);
+        return Promise.resolve();
+      }
+      expiresVal = Date.now() + ma * 1000;
+    }
     const item = {
       name: name,
       value: val,
       domain: opts.domain != null ? String(opts.domain) : null,
       path: opts.path != null ? String(opts.path) : "/",
-      expires: opts.expires != null ? Number(opts.expires) : null,
+      expires: expiresVal,
       sameSite: opts.sameSite != null ? String(opts.sameSite) : "strict",
       partitioned: Boolean(opts.partitioned),
       secure: opts.secure !== undefined ? Boolean(opts.secure) : Boolean(global.isSecureContext),
@@ -6221,6 +6263,7 @@ function installWindow(global) {
     this._records = [];
     this._types = new Set();
     this._scheduled = false;
+    this._observeMode = null;
   }
   Object.defineProperty(PerformanceObserver, "supportedEntryTypes", {
     get: function () { return SUPPORTED_PERF_TYPES; },
@@ -6239,6 +6282,11 @@ function installWindow(global) {
     if (hasEntryTypes && hasType) {
       throw new TypeError("Failed to execute 'observe' on 'PerformanceObserver': Cannot specify both 'entryTypes' and 'type'.");
     }
+    const mode = hasEntryTypes ? "entryTypes" : "type";
+    if (this._observeMode !== null && this._observeMode !== mode) {
+      throw new DOMException("Failed to execute 'observe' on 'PerformanceObserver': An observer cannot switch between 'entryTypes' and 'type'.", "InvalidModificationError");
+    }
+    this._observeMode = mode;
     this._types.clear();
     if (hasEntryTypes) {
       const list = Array.from(options.entryTypes || []);
@@ -7031,22 +7079,46 @@ function installWindow(global) {
     const val = (m[2] || "").trim();
 
     if (feat === "min-width" || feat === "max-width" || feat === "width") {
-      const numM = val.match(/^([0-9.]+)\s*(px)?$/);
+      const numM = val.match(/^([0-9.]+)\s*(px|em|rem)?$/);
       if (!numM) return false;
-      const px = parseFloat(numM[1]);
+      const unit = numM[2] || "px";
+      const px = parseFloat(numM[1]) * (unit === "em" || unit === "rem" ? 16 : 1);
       if (isNaN(px)) return false;
       if (feat === "min-width") return w >= px;
       if (feat === "max-width") return w <= px;
       return w === px;
     }
     if (feat === "min-height" || feat === "max-height" || feat === "height") {
-      const numM = val.match(/^([0-9.]+)\s*(px)?$/);
+      const numM = val.match(/^([0-9.]+)\s*(px|em|rem)?$/);
       if (!numM) return false;
-      const px = parseFloat(numM[1]);
+      const unit = numM[2] || "px";
+      const px = parseFloat(numM[1]) * (unit === "em" || unit === "rem" ? 16 : 1);
       if (isNaN(px)) return false;
       if (feat === "min-height") return h >= px;
       if (feat === "max-height") return h <= px;
       return h === px;
+    }
+    if (feat === "min-device-width" || feat === "max-device-width" || feat === "device-width") {
+      const numM = val.match(/^([0-9.]+)\s*(px|em|rem)?$/);
+      if (!numM) return false;
+      const unit = numM[2] || "px";
+      const px = parseFloat(numM[1]) * (unit === "em" || unit === "rem" ? 16 : 1);
+      if (isNaN(px)) return false;
+      const dw = (typeof screen !== "undefined" && screen.width) || w;
+      if (feat === "min-device-width") return dw >= px;
+      if (feat === "max-device-width") return dw <= px;
+      return dw === px;
+    }
+    if (feat === "min-device-height" || feat === "max-device-height" || feat === "device-height") {
+      const numM = val.match(/^([0-9.]+)\s*(px|em|rem)?$/);
+      if (!numM) return false;
+      const unit = numM[2] || "px";
+      const px = parseFloat(numM[1]) * (unit === "em" || unit === "rem" ? 16 : 1);
+      if (isNaN(px)) return false;
+      const dh = (typeof screen !== "undefined" && screen.height) || h;
+      if (feat === "min-device-height") return dh >= px;
+      if (feat === "max-device-height") return dh <= px;
+      return dh === px;
     }
     if (feat === "orientation") {
       if (val === "landscape") return w >= h;
@@ -7055,10 +7127,10 @@ function installWindow(global) {
     }
     const ef = (typeof globalThis !== "undefined" && globalThis.__capsurf_emulated_features) || {};
     if (feat === "prefers-color-scheme") {
-      return val === (ef["prefers-color-scheme"] || "light");
+      return ef["prefers-color-scheme"] ? val === ef["prefers-color-scheme"] : false;
     }
     if (feat === "prefers-reduced-motion") {
-      return val === (ef["prefers-reduced-motion"] || "no-preference");
+      return ef["prefers-reduced-motion"] ? val === ef["prefers-reduced-motion"] : false;
     }
     if (feat === "forced-colors") {
       return val === (ef["forced-colors"] || "none");
@@ -7067,7 +7139,7 @@ function installWindow(global) {
       return val === (ef["prefers-contrast"] || "no-preference");
     }
     if (feat === "hover") {
-      return val === "hover";
+      return ef["hover"] ? val === ef["hover"] : false;
     }
     if (feat === "pointer") {
       return val === "fine";
@@ -7094,13 +7166,15 @@ function installWindow(global) {
 
   function evaluateMediaQuery(query) {
     if (!query || !String(query).trim()) return true;
-    const raw = String(query).toLowerCase().trim();
+    const raw = String(query).replace(/\/\*[\s\S]*?\*\//g, "").toLowerCase().trim();
+    if (!raw) return true;
     const w = (global.innerWidth || (typeof window !== "undefined" ? window.innerWidth : 1280)) || 1280;
     const h = (global.innerHeight || (typeof window !== "undefined" ? window.innerHeight : 720)) || 720;
     const dpr = (global.devicePixelRatio || (typeof window !== "undefined" ? window.devicePixelRatio : 1)) || 1;
     const curMedia = ((typeof globalThis !== "undefined" && globalThis.__capsurf_emulated_media) || "screen").toLowerCase();
     if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_eval_media_query === "function" &&
-        raw.indexOf("device-pixel-ratio") === -1 && raw.indexOf("resolution") === -1 && raw.indexOf("aspect-ratio") === -1 && raw.indexOf("prefers-") === -1) {
+        raw.indexOf("device-") === -1 && raw.indexOf("resolution") === -1 && raw.indexOf("aspect-ratio") === -1 &&
+        raw.indexOf("prefers-") === -1 && raw.indexOf("hover") === -1 && raw.indexOf("em") === -1 && !/\d\.\d/.test(raw)) {
       const nativeRes = globalThis.__capsurf_eval_media_query(raw, w, h, curMedia);
       if (typeof nativeRes === "boolean") return nativeRes;
     }
@@ -8583,13 +8657,17 @@ function installWindow(global) {
       let text = "";
       if (snTag === "link") {
         const sheet = sn.sheet;
-        if (sheet) {
+        if (sheet && !sheet.disabled) {
           if (typeof sheet._syncFromOwner === "function") sheet._syncFromOwner();
           text = sheet._cascadeCssText || "";
         }
       } else {
-        if (sn._sheet && typeof sn._sheet._syncFromOwner === "function") sn._sheet._syncFromOwner();
-        text = (sn._sheet && typeof sn._sheet._cascadeCssText === "string") ? sn._sheet._cascadeCssText : (sn.textContent || "");
+        if (sn._sheet && sn._sheet.disabled) {
+          text = "";
+        } else {
+          if (sn._sheet && typeof sn._sheet._syncFromOwner === "function") sn._sheet._syncFromOwner();
+          text = (sn._sheet && typeof sn._sheet._cascadeCssText === "string") ? sn._sheet._cascadeCssText : (sn.textContent || "");
+        }
       }
       if (text) {
         if (!collectRawComputedMap._sheetTexts) collectRawComputedMap._sheetTexts = [];
@@ -8615,12 +8693,14 @@ function installWindow(global) {
         if (!nd) return;
         const tg = nd.tagName ? String(nd.tagName).toLowerCase() : "";
         if (tg === "style") {
-          if (nd._sheet && typeof nd._sheet._syncFromOwner === "function") nd._sheet._syncFromOwner();
-          const t = (nd._sheet && typeof nd._sheet._cascadeCssText === "string") ? nd._sheet._cascadeCssText : (nd.textContent || "");
-          if (t) texts.push(t);
+          if (!nd._sheet || !nd._sheet.disabled) {
+            if (nd._sheet && typeof nd._sheet._syncFromOwner === "function") nd._sheet._syncFromOwner();
+            const t = (nd._sheet && typeof nd._sheet._cascadeCssText === "string") ? nd._sheet._cascadeCssText : (nd.textContent || "");
+            if (t) texts.push(t);
+          }
         } else if (tg === "link") {
           const rel = String((nd.getAttribute && nd.getAttribute("rel")) || "").trim().toLowerCase().split(/\s+/);
-          if (rel.includes("stylesheet") && nd.sheet) {
+          if (rel.includes("stylesheet") && nd.sheet && !nd.sheet.disabled) {
             if (typeof nd.sheet._syncFromOwner === "function") nd.sheet._syncFromOwner();
             if (nd.sheet._cascadeCssText) texts.push(nd.sheet._cascadeCssText);
           }
@@ -16357,6 +16437,13 @@ class DOMMatrixReadOnly {
   get is2D() {
     return matrixState(this).is2D;
   }
+  get isIdentity() {
+    const v = matrixState(this).values;
+    return v[0] === 1 && v[1] === 0 && v[2] === 0 && v[3] === 0 &&
+           v[4] === 0 && v[5] === 1 && v[6] === 0 && v[7] === 0 &&
+           v[8] === 0 && v[9] === 0 && v[10] === 1 && v[11] === 0 &&
+           v[12] === 0 && v[13] === 0 && v[14] === 0 && v[15] === 1;
+  }
   multiply(other) {
     if (!(other instanceof DOMMatrixReadOnly))
       throw new TypeError("Matrix required");
@@ -16418,6 +16505,11 @@ class DOMMatrixReadOnly {
   toString() {
     const stored = matrixState(this).values;
     const values = this.is2D ? twoDimensionalValues(stored) : stored;
+    for (let i = 0; i < values.length; i++) {
+      if (!Number.isFinite(values[i])) {
+        throw new DOMException("Failed to execute 'toString' on 'DOMMatrixReadOnly': Matrix contains non-finite values.", "InvalidStateError");
+      }
+    }
     return `${this.is2D ? "matrix" : "matrix3d"}(${values.join(", ")})`;
   }
 }
@@ -21525,7 +21617,10 @@ const CSS_TYPED_OM_GLOBALS = {
     if (typeof window !== "undefined") window.reportError = reportErrorFn;
     for (let i = 0; i < WINDOW_EVENT_HANDLER_NAMES.length; i++) {
       const prop = WINDOW_EVENT_HANDLER_NAMES[i];
-      if (Object.prototype.hasOwnProperty.call(winTarget, prop)) continue;
+      if (Object.prototype.hasOwnProperty.call(winTarget, prop)) {
+        const existingVal = winTarget[prop];
+        if (existingVal !== null && existingVal !== undefined) continue;
+      }
       const getter = function () {
         if (Object.prototype.hasOwnProperty.call(_windowEventHandlers, prop)) {
           return _windowEventHandlers[prop];
@@ -21561,8 +21656,11 @@ const CSS_TYPED_OM_GLOBALS = {
       };
       try {
         Object.defineProperty(winTarget, prop, desc);
-        if (typeof window !== "undefined" && window !== winTarget && !Object.prototype.hasOwnProperty.call(window, prop)) {
-          Object.defineProperty(window, prop, desc);
+        if (typeof window !== "undefined" && window !== winTarget) {
+          const wVal = window[prop];
+          if (!Object.prototype.hasOwnProperty.call(window, prop) || wVal === null || wVal === undefined) {
+            Object.defineProperty(window, prop, desc);
+          }
         }
       } catch (e) {}
     }

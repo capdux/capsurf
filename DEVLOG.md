@@ -3744,3 +3744,7 @@
 ## Phase 969 — Panda 突破 204/517 与多 Spec 端口隔离固化
 - **Panda Web API / Form / File / Dialog 批量突破**：通过 `panda_pass13`（`-j 16`）进一步补齐 `dialog`/`form`/`form-data`/`file`/`canvas2d`/`node` 等共性缺口，`test/panda/` 净增 +16 突破 200 大关达到 **204/517**。
 - **端口段步长 10 硬隔离**：实测发现 `pw-run.mjs --filter` 匹配多 spec 时按 `--port + i` 递增占用端口，固化主控 `9930..9939`、子智能体 1 `9940..9949`、子智能体 2 `9950..9959`、Panda `19954..19979` 分段规则彻底消除 `BindFailed`。
+
+## Phase 970 — `page-set-content` / `frame-evaluate` / `elementhandle-misc` 全绿 & Panda 224/517
+- **JS 中断片调优与子帧隔离世界生命周期**：`reduction_slice` 从 1000000 降至 40000 使无限循环在 1s 超时与 30s teardown 之间优雅中断；`pollReopenLoadEvents` 销毁子帧 `isolated_worlds` 并配合 `doc.open` `_navSeq` 取消占位微任务，打通 `page-set-content` (16/16) 与 `frame-evaluate` (8/8)；同步 `tab_session` `dom_ctx.frame_id_buf` 与 preflight Title-Case 推高 `page-event-request` 至 9/13，`elementhandle-misc` 达成 10/10。
+- **Web Streams & DOM/Canvas 批量对齐**：新增 `src/js/shim/streams.js` 并批量补齐 `Canvas2D`、`CookieStore`、`PerformanceObserver`、`FontFace`、`Window->EventTarget` 等规范接口，`test/panda/` 跃升至 **224/517 PASS**。因配额暂停后续测试并完成收口提交。

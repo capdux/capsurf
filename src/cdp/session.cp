@@ -2164,7 +2164,7 @@ pub struct CdpPageSession {
         let ptr = std.heap.c_allocator.create(CdpPageSession) catch return error.AllocFailed;
         const document = Document.init(allocator) catch return error.DocInitFailed;
         const layout_tree = LayoutTree.init(allocator, 1280.0, 720.0) catch return error.LayoutInitFailed;
-        const js_rt = JsRuntime.init(512 * 1024 * 1024, 1000000) catch return error.JsRuntimeFailed;
+        const js_rt = JsRuntime.init(512 * 1024 * 1024, 40000) catch return error.JsRuntimeFailed;
         const jar = CookieJar.init(allocator);
 
         @memset(std.mem.asBytes(ptr), 0);
@@ -3296,12 +3296,18 @@ pub struct CdpPageSession {
             terminateWorkersForRuntime(_.rt.raw_rt);
             _.ctx.deinit();
             _.rt.deinit();
-            _.rt = JsRuntime.init(512 * 1024 * 1024, 1000000) catch return error.JsRuntimeFailed;
+            _.rt = JsRuntime.init(512 * 1024 * 1024, 40000) catch return error.JsRuntimeFailed;
             _.ctx = _.rt.createContext() catch return error.JsContextFailed;
             JS_SetModuleLoaderFunc2(_.rt.raw_rt, sessionModuleNormalize, sessionModuleLoader, sessionModuleCheckAttrs, unsafe { @ptrCast(_) });
         } else {
             _.rt.runGC();
             JS_SetModuleLoaderFunc2(_.rt.raw_rt, sessionModuleNormalize, sessionModuleLoader, sessionModuleCheckAttrs, unsafe { @ptrCast(_) });
+        }
+        {
+            const loc_prep = _.ctx.eval(
+                "(function(){if(!Object.defineProperty.__ks_loc_wrapped){var _odp=Object.defineProperty;var _w=function(obj,prop,desc){if((prop==='pathname'||prop==='search')&&desc&&!desc.set&&typeof desc.get==='function'&&obj&&typeof obj.assign==='function'&&typeof obj.reload==='function'){desc={get:desc.get,enumerable:!!desc.enumerable,configurable:true};}return _odp.call(Object,obj,prop,desc);};_w.__ks_loc_wrapped=true;Object.defineProperty=_w;}})()",
+            );
+            _.ctx.freeValue(loc_prep);
         }
         const active_jar = _.getActiveCookieJar();
         const m = mountDom(&_.ctx, &_.doc, &_.layout, active_jar, _.extra_headers) catch return error.MountDomFailed;
@@ -6569,6 +6575,33 @@ pub struct CdpPageSession {
                 emitted += 1;
             }
             kf.exec_context_id = 0;
+            const det_fid = kf.frame_id_buf[0..kf.frame_id_len];
+            if (det_fid.len > 0) {
+                let iwi: usize = 0;
+                while (iwi < _.isolated_world_count) : (iwi += 1) {
+                    let iw = &_.isolated_worlds[iwi];
+                    if (!iw.active) continue;
+                    if (!std.mem.eql(u8, iw.frameId(), det_fid)) continue;
+                    const old_iw_cid = iw.context_id;
+                    iw.active = false;
+                    iw.context_id = 0;
+                    if (old_iw_cid > 0) {
+                        if (_.retired_isolated_world_count < _.retired_isolated_world_ids.len) {
+                            _.retired_isolated_world_ids[_.retired_isolated_world_count] = old_iw_cid;
+                            _.retired_isolated_world_count += 1;
+                        }
+                        if (_.runtime_enabled && emitted < out_events.len) {
+                            const iw_des_json = std.fmt.allocPrint(
+                                _.allocator,
+                                "{{\"executionContextId\":{d}}}",
+                                .{ old_iw_cid },
+                            ) catch "{}";
+                            out_events[emitted] = CdpEvent.create("Runtime.executionContextDestroyed", iw_des_json);
+                            emitted += 1;
+                        }
+                    }
+                }
+            }
             kf.active = false;
         }
         _.known_child_frame_count = 0;
@@ -7734,6 +7767,31 @@ pub struct CdpPageSession {
         let esc_url_buf: [2048]u8 = [0; 2048];
         const esc_url = escapeJsonString(url, &esc_url_buf);
         const hdr_obj = if (headers_json.len >= 2 && headers_json[0] == '{') headers_json else "{}";
+        const is_preflight_req = std.ascii.eqlIgnoreCase(method, "OPTIONS") &&
+            (std.mem.indexOf(u8, hdr_obj, "\"access-control-request-method\"") != null ||
+             std.mem.indexOf(u8, hdr_obj, "\"Access-Control-Request-Method\"") != null);
+        let pf_hdr_buf: [4096]u8 = [0; 4096];
+        let pause_hdr_obj = hdr_obj;
+        if (is_preflight_req && hdr_obj.len <= pf_hdr_buf.len) {
+            @memcpy(pf_hdr_buf[0..hdr_obj.len], hdr_obj);
+            let p_i: usize = 0;
+            while (p_i < hdr_obj.len) : (p_i += 1) {
+                if (p_i + 8 <= hdr_obj.len && std.mem.eql(u8, pf_hdr_buf[p_i .. p_i + 8], "\"origin\"")) {
+                    pf_hdr_buf[p_i + 1] = 'O';
+                } else if (p_i + 31 <= hdr_obj.len && std.mem.eql(u8, pf_hdr_buf[p_i .. p_i + 31], "\"access-control-request-method\"")) {
+                    pf_hdr_buf[p_i + 1] = 'A';
+                    pf_hdr_buf[p_i + 8] = 'C';
+                    pf_hdr_buf[p_i + 16] = 'R';
+                    pf_hdr_buf[p_i + 24] = 'M';
+                } else if (p_i + 32 <= hdr_obj.len && std.mem.eql(u8, pf_hdr_buf[p_i .. p_i + 32], "\"access-control-request-headers\"")) {
+                    pf_hdr_buf[p_i + 1] = 'A';
+                    pf_hdr_buf[p_i + 8] = 'C';
+                    pf_hdr_buf[p_i + 16] = 'R';
+                    pf_hdr_buf[p_i + 24] = 'H';
+                }
+            }
+            pause_hdr_obj = pf_hdr_buf[0..hdr_obj.len];
+        }
 
         if (_.network_enabled) {
             let esc_doc_buf: [2048]u8 = [0; 2048];
@@ -7801,7 +7859,7 @@ pub struct CdpPageSession {
         defer {
             if (d := fev_dyn) std.heap.c_allocator.free(d);
         }
-        if (fev := FetchHandler.buildRequestPausedEventWithHeadersAndPost(req_id, esc_url, method, rtype, _.frame_id, net_id, hdr_obj, post_data, &fev_buf, std.heap.c_allocator, &fev_dyn)) {
+        if (fev := FetchHandler.buildRequestPausedEventWithHeadersAndPost(req_id, esc_url, method, rtype, _.frame_id, net_id, pause_hdr_obj, post_data, &fev_buf, std.heap.c_allocator, &fev_dyn)) {
             * = _.addPendingFetchEvent(fev.method, fev.params_json);
         }
 

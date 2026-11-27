@@ -73,7 +73,11 @@ function utf8ToString(bytes) {
   return str;
 }
 
-function processBlobParts(blobParts) {
+function normalizeNativeEndings(str) {
+  return str.replace(/\r\n?/g, "\n");
+}
+
+function processBlobParts(blobParts, endings) {
   if (blobParts === undefined || blobParts === null) {
     return new Uint8Array(0);
   }
@@ -92,6 +96,7 @@ function processBlobParts(blobParts) {
     throw new TypeError("Failed to construct 'Blob': The provided value cannot be converted to a sequence.");
   }
 
+  const isNativeEndings = endings === "native";
   const chunks = [];
   let totalLength = 0;
 
@@ -99,7 +104,7 @@ function processBlobParts(blobParts) {
     const part = list[i];
     let u8;
     if (typeof part === "string") {
-      u8 = stringToUtf8(part);
+      u8 = stringToUtf8(isNativeEndings ? normalizeNativeEndings(part) : part);
     } else if (part instanceof ArrayBuffer) {
       u8 = new Uint8Array(part.slice(0));
     } else if (ArrayBuffer.isView(part)) {
@@ -107,7 +112,8 @@ function processBlobParts(blobParts) {
     } else if (part && part._bytes instanceof Uint8Array) {
       u8 = part._bytes;
     } else {
-      u8 = stringToUtf8(String(part));
+      const s = String(part);
+      u8 = stringToUtf8(isNativeEndings ? normalizeNativeEndings(s) : s);
     }
     chunks.push(u8);
     totalLength += u8.length;
@@ -130,6 +136,10 @@ function Blob(blobParts, options) {
     throw new TypeError("Failed to construct 'Blob': parameter 2 is not an object.");
   }
   options = options || {};
+  const endings = options.endings !== undefined ? String(options.endings) : "transparent";
+  if (endings !== "transparent" && endings !== "native") {
+    throw new TypeError("Failed to construct 'Blob': The provided value '" + endings + "' is not a valid enum value of type EndingType.");
+  }
 
   if (options._rawType != null) {
     this._type = String(options._rawType);
@@ -137,7 +147,7 @@ function Blob(blobParts, options) {
     this._type = normalizeBlobType(options.type);
   }
 
-  this._bytes = processBlobParts(blobParts);
+  this._bytes = processBlobParts(blobParts, endings);
 }
 
 Object.defineProperty(Blob.prototype, "size", {
@@ -703,15 +713,21 @@ Request.prototype.blob = function () {
 };
 
 Request.prototype.text = function () {
-  return Promise.resolve(String(this._body));
+  if (this._body === null || this._body === undefined) return Promise.resolve("");
+  return readBodyAsUint8Array(this._body).then(function (u8) {
+    return decodeUtf8Bytes(u8);
+  });
 };
 
 Request.prototype.json = function () {
-  return Promise.resolve(JSON.parse(String(this._body)));
+  return this.text().then(function (t) { return JSON.parse(t); });
 };
 
 Request.prototype.arrayBuffer = function () {
-  return Promise.resolve(stringToUtf8(String(this._body)).buffer);
+  if (this._body === null || this._body === undefined) return Promise.resolve(new ArrayBuffer(0));
+  return readBodyAsUint8Array(this._body).then(function (u8) {
+    return u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
+  });
 };
 
 markNative(Request, "Request");
@@ -758,7 +774,8 @@ function readBodyAsUint8Array(body) {
   if (body === null || body === undefined) {
     return Promise.resolve(new Uint8Array(0));
   }
-  if (typeof ReadableStream === "function" && body instanceof ReadableStream) {
+  if ((typeof ReadableStream === "function" && body instanceof ReadableStream) ||
+      (body && typeof body === "object" && typeof body.getReader === "function" && typeof body.tee === "function")) {
     const reader = body.getReader();
     const chunks = [];
     let totalLen = 0;
@@ -880,7 +897,8 @@ function Response(body, init) {
       copy.set(view);
       this._body = copy;
     }
-  } else if (typeof ReadableStream === "function" && body instanceof ReadableStream) {
+  } else if ((typeof ReadableStream === "function" && body instanceof ReadableStream) ||
+             (body && typeof body === "object" && typeof body.getReader === "function" && typeof body.tee === "function")) {
     this._body = body;
     this._bodyStream = body;
   } else {

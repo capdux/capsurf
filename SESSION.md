@@ -8405,6 +8405,10 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   - **Panda 黑盒集 (`test/panda/`)**：通过 `ErrorEvent('error')` 消除 22 项超时暴露真错并完成多轮高扇出 DOM/Web API 修复，总通过数跃升至 **160/517**（`tmp/panda_pass9.json`）。
   - **`bin_dev/main` 合批构建**：编译通过（12.74s），`smoke.e2e.test.ts` **2/2 PASS**。
 - **[2026-11-27 13:48] `[cp_agy 广播]`**: 收到 `syntax-sema-20261127-6-false-positives-fixed`（Release `cpc` 修复 6 类 Sema 类型推断假阳性：二元运算左侧整数字面量吸收右侧类型、`IfExpr` 分支整数字面量目标类型传播、`string` 切片推断、重赋值不覆盖显式类型、`@Vector` 拓宽、`??`/浮点/`@as`/函数指针/常量数组长度；已同步更新 `CP_PITFALLS.md` 并 `ack`）。
+- [Phase 970] Playwright 再添 3 个 100% PASS 并锁定，Panda 跃升至 224/517：
+  - **Playwright (`test/pw/`) 新增 3 个 100% PASS 并锁定**：`page-set-content` (**16/16**)、`frame-evaluate` (**8/8**)、`elementhandle-misc` (**10/10**，至此 `elementhandle-*` 10 个 spec 全部 100% PASS)；`page-event-request` 升至 **9/13**（余 4 项 ServiceWorker）；`page-goto` 2 项并发导航 `--grep` 复测 PASS。
+  - **Panda 黑盒集 (`test/panda/`)**：连续两轮批量修复（`204→212→224`），达到 **224 PASS / 212 FAIL / 81 TIMEOUT**（`tmp/panda_pass20.json`），新增 `src/js/shim/streams.js` 与 `Canvas2D`/`CookieStore`/`PerformanceObserver`/`FontFace`/`ShadowRoot` 等补强。
+- [User] `所有测试详细结果写入 test/stats.md / 2. 更新文档, 所有文件 git 提交 / 3. 子智能体收回, 停止后续测试 / 配额不足, 暂停测试` -> [Agent] 已立即 `kill_all` 收回全部子智能体并停止后续测试，完成 `bin_dev/main` 静态门禁与编译校验，更新 `test/stats.md`、`SESSION.md`、`CHANGELOG.md`、`DEVLOG.md` 并执行原子提交与推送。
 - [Phase 968] Playwright 6 套件新晋 100% PASS 并锁定，Panda 跃升至 188/517：
   - **Playwright (`test/pw/`) 新增 6 个 100% PASS 并锁定**：`page-network-idle` (**10/10**)、`page-network-request` (**26/26+1 SKIP**)、`page-wait-for-navigation` (**12/12**)、`page-wait-for-url` (**9/9**)、`page-wait-for-load-state` (**10/10**)、`page-emulate-media` (**12/12**)。
   - **Panda 黑盒集 (`test/panda/`)**：连续 3 批高扇出修复（`160→167→181→188`），达到 **188 PASS / 254 FAIL / 75 TIMEOUT**（`tmp/panda_pass12.json`）。

@@ -391,7 +391,7 @@ function internalDispatch(target, event, trusted) {
     }
 
     function invoke(entry, phase) {
-      const retargeted = retargetEventTarget(target, entry);
+      const retargeted = retargetEventTarget(eventTarget, entry);
       if (eventState) {
         eventState.target = retargeted;
         eventState.currentTarget = entry;

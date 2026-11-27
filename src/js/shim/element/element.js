@@ -1360,7 +1360,8 @@ function installElementExtensions(proto) {
           for (let i = 0; i < raw.length; i++) {
             const item = raw[i];
             if (item && item.name) {
-              const adjName = (SVG_ATTR_CASE && SVG_ATTR_CASE[item.name]) ? SVG_ATTR_CASE[item.name] : item.name;
+              const lowerItemName = SVG_ATTR_CASE ? item.name.toLowerCase() : item.name;
+              const adjName = (SVG_ATTR_CASE && SVG_ATTR_CASE[lowerItemName]) ? SVG_ATTR_CASE[lowerItemName] : item.name;
               const colon = adjName.indexOf(":");
               const prefix = colon !== -1 ? adjName.slice(0, colon) : null;
               const localName = colon !== -1 ? adjName.slice(colon + 1) : adjName;
@@ -1550,6 +1551,9 @@ function installElementExtensions(proto) {
     if ((key === "class" || key === "style") && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_notifyCssStyleChange === "function") {
       globalThis.__capsurf_notifyCssStyleChange(this);
     }
+    if (key === "slot" && this.parentNode && this.parentNode._shadowRoot && typeof global.__capsurf_scheduleSlotChange === "function") {
+      global.__capsurf_scheduleSlotChange(this.parentNode);
+    }
   };
   markNative(proto.setAttribute, "setAttribute");
 
@@ -1585,6 +1589,10 @@ function installElementExtensions(proto) {
     }
     if (key.toLowerCase() === "id") {
       this.id = "";
+    } else if (key.toLowerCase() === "slot") {
+      if (this.parentNode && this.parentNode._shadowRoot && typeof global.__capsurf_scheduleSlotChange === "function") {
+        global.__capsurf_scheduleSlotChange(this.parentNode);
+      }
     } else if (key.toLowerCase() === "style") {
       this._displayNone = false;
     } else if (key.toLowerCase() === "class" && typeof this.className === "string") {
@@ -3759,6 +3767,17 @@ function installElementExtensions(proto) {
       }
       return null;
     },
+    configurable: true,
+  });
+
+  Object.defineProperty(proto, "slot", {
+    get: function () {
+      return this.getAttribute("slot") || "";
+    },
+    set: function (v) {
+      this.setAttribute("slot", String(v));
+    },
+    enumerable: true,
     configurable: true,
   });
 

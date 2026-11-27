@@ -381,6 +381,9 @@ Range.prototype.deleteContents = function () {
       const next = txt.slice(0, so) + txt.slice(eo);
       if (typeof sc.data === "string") sc.data = next;
       else sc.textContent = next;
+      this.setStart(sc, so);
+      this.setEnd(sc, so);
+      return;
     } else if (sc.childNodes && sc.removeChild) {
       for (let i = eo - 1; i >= so; i--) {
         const ch = sc.childNodes[i];

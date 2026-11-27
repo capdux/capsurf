@@ -147,7 +147,36 @@
   FontFaceSet.prototype.load = function (font, text) {
     const self = this;
     return this.ready.then(function () {
-      return Array.from(self._set);
+      const GENERIC = new Set(["serif", "sans-serif", "monospace", "cursive", "fantasy", "system-ui", "ui-serif", "ui-sans-serif", "ui-monospace", "ui-rounded", "emoji", "math", "fangsong"]);
+      let str = String(font || "").trim();
+      const sizeMatch = /\d+(?:\.\d+)?(?:px|pt|em|rem|ex|ch|vw|vh|vmin|vmax|cm|mm|in|pc|%)(?:\s*\/\s*[\d.]+(?:px|pt|em|rem|%)?)?\s+(.+)$/i.exec(str);
+      const famStr = sizeMatch ? sizeMatch[1] : str;
+      const rawFams = famStr.split(",");
+      const out = [];
+      const seen = new Set();
+      if (!self._standInFaces) self._standInFaces = new Map();
+      for (let i = 0; i < rawFams.length; i++) {
+        const fam = rawFams[i].trim().replace(/^["']|["']$/g, "");
+        if (!fam) continue;
+        const lower = fam.toLowerCase();
+        if (GENERIC.has(lower) || seen.has(lower)) continue;
+        seen.add(lower);
+        let matched = null;
+        self._set.forEach(function (f) {
+          if (!matched && f && String(f.family || "").toLowerCase() === lower) {
+            matched = f;
+          }
+        });
+        if (!matched) {
+          matched = self._standInFaces.get(lower);
+          if (!matched) {
+            matched = new FontFace(fam, "");
+            self._standInFaces.set(lower, matched);
+          }
+        }
+        out.push(matched);
+      }
+      return out;
     });
   };
 

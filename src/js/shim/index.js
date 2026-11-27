@@ -352,6 +352,8 @@ function installShim(global) {
     const DocumentCtor = function Document() {
       this._children = [];
       try {
+        if (this.nodeType !== 9) Object.defineProperty(this, "nodeType", { value: 9, writable: true, configurable: true });
+        if (this.nodeName !== "#document") Object.defineProperty(this, "nodeName", { value: "#document", writable: true, configurable: true });
         if (this.URL === undefined) Object.defineProperty(this, "URL", { value: "about:blank", writable: true, configurable: true });
         if (this.readyState === undefined) Object.defineProperty(this, "readyState", { value: "complete", writable: true, configurable: true });
       } catch (e) {}
@@ -386,6 +388,93 @@ function installShim(global) {
   if (global.Element) {
     installElementExtensions(global.Element.prototype);
     installHtmlElementExtensions(global.Element.prototype);
+    try {
+      const elProto = global.Element.prototype;
+      const origElTagDesc = Object.getOwnPropertyDescriptor(elProto, "tagName");
+      if (origElTagDesc && origElTagDesc.get && origElTagDesc.configurable) {
+        const origElTagGet = origElTagDesc.get;
+        Object.defineProperty(elProto, "tagName", {
+          get: function () {
+            if (this.nodeType !== 1) return undefined;
+            return origElTagGet.call(this);
+          },
+          configurable: true,
+        });
+      }
+      if (global.Text && global.Text.prototype) {
+        const wtDesc = Object.getOwnPropertyDescriptor(global.Text.prototype, "wholeText");
+        if (wtDesc && !Object.getOwnPropertyDescriptor(elProto, "wholeText")) {
+          Object.defineProperty(elProto, "wholeText", wtDesc);
+        }
+        if (typeof elProto.splitText !== "function" && typeof global.Text.prototype.splitText === "function") {
+          elProto.splitText = global.Text.prototype.splitText;
+        }
+      }
+      if (global.CharacterData && global.CharacterData.prototype) {
+        if (!Object.getOwnPropertyDescriptor(elProto, "data")) {
+          Object.defineProperty(elProto, "data", {
+            get: function () {
+              if (this.nodeType === 3 || this.nodeType === 4 || this.nodeType === 8) {
+                if (this._data !== undefined) return this._data;
+                const nv = this.nodeValue;
+                if (typeof nv === "string") return nv;
+                const tc = this.textContent;
+                return typeof tc === "string" ? tc : "";
+              }
+              return undefined;
+            },
+            set: function (v) {
+              if (this.nodeType === 3 || this.nodeType === 4 || this.nodeType === 8) {
+                const s = v === null ? "" : String(v);
+                this._data = s;
+                this.nodeValue = s;
+              }
+            },
+            configurable: true,
+          });
+        }
+        if (!Object.getOwnPropertyDescriptor(elProto, "length")) {
+          Object.defineProperty(elProto, "length", {
+            get: function () {
+              if (this.nodeType === 3 || this.nodeType === 4 || this.nodeType === 8) {
+                const d = this.data;
+                return typeof d === "string" ? d.length : 0;
+              }
+              return undefined;
+            },
+            configurable: true,
+          });
+        }
+        for (const cdMethod of ["substringData", "appendData", "insertData", "deleteData", "replaceData"]) {
+          if (typeof elProto[cdMethod] !== "function" && typeof global.CharacterData.prototype[cdMethod] === "function") {
+            elProto[cdMethod] = global.CharacterData.prototype[cdMethod];
+          }
+        }
+        const origElNvDesc = Object.getOwnPropertyDescriptor(elProto, "nodeValue");
+        if (origElNvDesc && origElNvDesc.get && origElNvDesc.configurable) {
+          const origElNvGet = origElNvDesc.get;
+          const origElNvSet = origElNvDesc.set;
+          Object.defineProperty(elProto, "nodeValue", {
+            get: function () {
+              const v = origElNvGet.call(this);
+              if (v === null && (this.nodeType === 3 || this.nodeType === 4 || this.nodeType === 8)) {
+                if (this._data !== undefined) return this._data;
+                const tc = this.textContent;
+                return typeof tc === "string" ? tc : "";
+              }
+              return v;
+            },
+            set: function (v) {
+              if (origElNvSet) origElNvSet.call(this, v);
+              if (this.nodeType === 3 || this.nodeType === 4 || this.nodeType === 8) {
+                this._data = v === null ? "" : String(v);
+              }
+            },
+            configurable: true,
+          });
+        }
+      }
+    } catch (e) {}
 
     function copyCloneFormState(src, dst, deep) {
       if (!src || !dst) return dst;
@@ -409,6 +498,27 @@ function installShim(global) {
         }
       }
       if (deep) {
+        if (tag === "template" && src.content && dst.content) {
+          while (dst.content.firstChild) dst.content.removeChild(dst.content.firstChild);
+          const tKids = src.content.childNodes || src.content._children || [];
+          for (let ti = 0; ti < tKids.length; ti++) {
+            dst.content.appendChild(tKids[ti].cloneNode(true));
+          }
+        }
+        if (src._shadowRoot && src._shadowRoot.clonable && !dst._shadowRoot && typeof dst.attachShadow === "function") {
+          const sr = src._shadowRoot;
+          const clonedSr = dst.attachShadow({
+            mode: sr.mode || "open",
+            clonable: true,
+            delegatesFocus: Boolean(sr.delegatesFocus),
+            serializable: Boolean(sr.serializable),
+            slotAssignment: sr.slotAssignment || "named",
+          });
+          const srKids = sr.childNodes || sr._children || [];
+          for (let si = 0; si < srKids.length; si++) {
+            clonedSr.appendChild(srKids[si].cloneNode(true));
+          }
+        }
         const sk = src.children || src._children || [];
         const dk = dst.children || dst._children || [];
         const len = sk.length < dk.length ? sk.length : dk.length;
@@ -446,10 +556,34 @@ function installShim(global) {
       Object.defineProperty(global.Element.prototype, "outerHTML", {
         get: function () {
           let raw = origOuterGet.call(this);
+          const ns = this._namespaceURI !== undefined ? this._namespaceURI : this.namespaceURI;
+          const isHtml = !ns || ns === "http://www.w3.org/1999/xhtml";
+          const tag = String(this.localName || this.tagName || "").toLowerCase();
           if (typeof raw === "string") {
-            const ns = this._namespaceURI !== undefined ? this._namespaceURI : this.namespaceURI;
-            const isHtml = !ns || ns === "http://www.w3.org/1999/xhtml";
-            const tag = String(this.localName || this.tagName || "").toLowerCase();
+            if (ns === "http://www.w3.org/2000/svg") {
+              if (!this._attrs && typeof this._syncAttrs === "function") this._syncAttrs();
+              if (this._attrList && this._attrList.length > 0) {
+                const gt = raw.indexOf(">");
+                const closeIdx = raw.lastIndexOf("</");
+                if (gt !== -1) {
+                  const tagName = this.localName || this.tagName || tag;
+                  let open = "<" + tagName;
+                  for (let ai = 0; ai < this._attrList.length; ai++) {
+                    const a = this._attrList[ai];
+                    if (a && a.name) {
+                      const esc = String(a.value || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+                      open += " " + a.name + '="' + esc + '"';
+                    }
+                  }
+                  open += ">";
+                  if (closeIdx > gt) {
+                    const inner = (this._children && this._children.length > 0) ? (this.innerHTML || "") : raw.slice(gt + 1, closeIdx);
+                    return open + inner + "</" + tagName + ">";
+                  }
+                  return open + raw.slice(gt + 1);
+                }
+              }
+            }
             if (isHtml && VOID_OUTER_TAGS.has(tag)) {
               const closeSuffix = "</" + tag + ">";
               if (raw.toLowerCase().endsWith(closeSuffix)) {
@@ -458,7 +592,7 @@ function installShim(global) {
               return raw;
             }
           }
-          if (this._children && this._children.length > 0 && typeof raw === "string") {
+          if (((this._children && this._children.length > 0) || (isHtml && tag === "template")) && typeof raw === "string") {
             const gt = raw.indexOf(">");
             const closeIdx = raw.lastIndexOf("</");
             if (gt !== -1 && closeIdx > gt) {
@@ -472,9 +606,14 @@ function installShim(global) {
           if (!parent) return;
           const doc = this.ownerDocument || global.document || (typeof document !== "undefined" ? document : null);
           const nativeCreate = global.__capsurf_native_createElement;
+          let ctxTag = "div";
+          if (parent.nodeType === 1) {
+            const pTag = String(parent.localName || parent.tagName || "").toLowerCase();
+            if (pTag && pTag !== "html" && pTag !== "head") ctxTag = pTag;
+          }
           const temp = (doc && typeof nativeCreate === "function")
-            ? nativeCreate.call(doc, "div")
-            : (doc ? doc.createElement("div") : null);
+            ? nativeCreate.call(doc, ctxTag)
+            : (doc ? doc.createElement(ctxTag) : null);
           if (!temp) return;
           temp.innerHTML = String(val == null ? "" : val);
           while (temp.firstChild) {
@@ -487,6 +626,10 @@ function installShim(global) {
         configurable: true,
         enumerable: true,
       });
+    }
+
+    if (global.HTMLElement && global.HTMLElement.prototype && !global.HTMLElement.prototype.attachInternals && typeof global.__capsurf_attachInternalsFn === "function") {
+      global.HTMLElement.prototype.attachInternals = global.__capsurf_attachInternalsFn;
     }
 
     global.Element.prototype.animate = markNative(function (keyframes, options) {
@@ -585,9 +728,12 @@ function installShim(global) {
     }, "getElementsByClassName");
 
     global.Element.prototype.toDataURL = markNative(function (type) {
+      const w = this.width !== undefined ? Number(this.width) : Number(this.getAttribute("width") ?? 300);
+      const h = this.height !== undefined ? Number(this.height) : Number(this.getAttribute("height") ?? 150);
+      if (w === 0 || h === 0) {
+        return "data:,";
+      }
       if (this._ctx2d) {
-        const w = Number(this.getAttribute("width") || this.width || 300);
-        const h = Number(this.getAttribute("height") || this.height || 150);
         const bm = ensureBitmap(this._ctx2d);
         if (typeof encodePngBase64 === "function") {
           return encodePngBase64(w, h, bm);
@@ -595,6 +741,28 @@ function installShim(global) {
       }
       return VALID_PNG_BASE64;
     }, "toDataURL");
+
+    global.Element.prototype.toBlob = markNative(function (callback, type, quality) {
+      if (typeof callback !== "function") {
+        throw new TypeError("Failed to execute 'toBlob' on 'HTMLCanvasElement': parameter 1 is not of type 'Function'.");
+      }
+      const w = this.width !== undefined ? Number(this.width) : Number(this.getAttribute("width") ?? 300);
+      const h = this.height !== undefined ? Number(this.height) : Number(this.getAttribute("height") ?? 150);
+      const dataUrl = (w === 0 || h === 0) ? "data:," : this.toDataURL(type, quality);
+      const schedule = typeof setTimeout === "function" ? setTimeout : function (fn) { Promise.resolve().then(fn); };
+      schedule(function () {
+        if (dataUrl === "data:," || w === 0 || h === 0) {
+          callback(null);
+          return;
+        }
+        const comma = dataUrl.indexOf(",");
+        const b64 = comma >= 0 ? dataUrl.slice(comma + 1) : "";
+        const bin = typeof atob === "function" ? atob(b64) : "";
+        const u8 = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+        callback(new Blob([u8], { type: "image/png" }));
+      }, 0);
+    }, "toBlob");
   }
 
   // 11. Install specialized elements and forms
@@ -1147,11 +1315,60 @@ function installShim(global) {
               if (typeof nativeTextProto.splitText !== "function" && typeof global.Text.prototype.splitText === "function") {
                 nativeTextProto.splitText = global.Text.prototype.splitText;
               }
-              Object.defineProperty(nativeTextProto, "tagName", {
-                get: function () { return undefined; },
-                configurable: true,
-              });
+              const origTagDesc = Object.getOwnPropertyDescriptor(nativeTextProto, "tagName");
+              if (origTagDesc && origTagDesc.get) {
+                const origTagGet = origTagDesc.get;
+                Object.defineProperty(nativeTextProto, "tagName", {
+                  get: function () {
+                    if (this.nodeType !== 1) return undefined;
+                    return origTagGet.call(this);
+                  },
+                  configurable: true,
+                });
+              } else {
+                Object.defineProperty(nativeTextProto, "tagName", {
+                  get: function () { return undefined; },
+                  configurable: true,
+                });
+              }
               if (global.CharacterData && global.CharacterData.prototype) {
+                if (!Object.getOwnPropertyDescriptor(nativeTextProto, "data")) {
+                  Object.defineProperty(nativeTextProto, "data", {
+                    get: function () {
+                      if (this.nodeType === 3 || this.nodeType === 4 || this.nodeType === 8) {
+                        const nv = this.nodeValue;
+                        if (typeof nv === "string") return nv;
+                        const tc = this.textContent;
+                        return typeof tc === "string" ? tc : "";
+                      }
+                      return undefined;
+                    },
+                    set: function (v) {
+                      if (this.nodeType === 3 || this.nodeType === 4 || this.nodeType === 8) {
+                        const s = v === null ? "" : String(v);
+                        this.nodeValue = s;
+                      }
+                    },
+                    configurable: true,
+                  });
+                }
+                if (!Object.getOwnPropertyDescriptor(nativeTextProto, "length")) {
+                  Object.defineProperty(nativeTextProto, "length", {
+                    get: function () {
+                      if (this.nodeType === 3 || this.nodeType === 4 || this.nodeType === 8) {
+                        const d = this.data;
+                        return typeof d === "string" ? d.length : 0;
+                      }
+                      return undefined;
+                    },
+                    configurable: true,
+                  });
+                }
+                for (const cdMethod of ["substringData", "appendData", "insertData", "deleteData", "replaceData"]) {
+                  if (typeof nativeTextProto[cdMethod] !== "function" && typeof global.CharacterData.prototype[cdMethod] === "function") {
+                    nativeTextProto[cdMethod] = global.CharacterData.prototype[cdMethod];
+                  }
+                }
                 const pesDesc = Object.getOwnPropertyDescriptor(global.CharacterData.prototype, "previousElementSibling");
                 if (pesDesc && !Object.getOwnPropertyDescriptor(nativeTextProto, "previousElementSibling")) {
                   Object.defineProperty(nativeTextProto, "previousElementSibling", pesDesc);
@@ -1253,7 +1470,7 @@ function installShim(global) {
         }
         const t = String(target);
         const d = String(data);
-        if (!/^[A-Za-z_\xC0-\uFFFF][A-Za-z0-9._:-\xC0-\uFFFF]*$/.test(t) || d.includes("?>")) {
+        if (!/^[A-Za-z_\xC0-\uFFFF][A-Za-z0-9._:\xC0-\uFFFF-]*$/.test(t) || d.includes("?>")) {
           throw new DOMException("String contains an invalid character", "InvalidCharacterError");
         }
         const node = new ProcessingInstruction(t, d);
@@ -1514,13 +1731,24 @@ function installShim(global) {
       return new Range(this);
     }, "createRange");
 
-    if (!docProto.open) {
-      docProto.open = markNative(function () {
-        return this;
-      }, "open");
-    }
-    if (!docProto.close) {
-      docProto.close = markNative(function () {}, "close");
+    const origDocOpenFn = docProto.open;
+    docProto.open = markNative(function () {
+      if (typeof globalThis !== "undefined" && globalThis.__capsurf_throwOnDynamicMarkupInsertionDepth > 0) {
+        throw new DOMException("Failed to execute 'open' on 'Document': Cannot call open() during custom element reactions.", "InvalidStateError");
+      }
+      if (origDocOpenFn) return origDocOpenFn.apply(this, arguments);
+      return this;
+    }, "open");
+    const origDocCloseFn = docProto.close;
+    docProto.close = markNative(function () {
+      if (typeof globalThis !== "undefined" && globalThis.__capsurf_throwOnDynamicMarkupInsertionDepth > 0) {
+        throw new DOMException("Failed to execute 'close' on 'Document': Cannot call close() during custom element reactions.", "InvalidStateError");
+      }
+      if (origDocCloseFn) return origDocCloseFn.apply(this, arguments);
+    }, "close");
+    if (global.document) {
+      global.document.open = docProto.open;
+      global.document.close = docProto.close;
     }
     if (!docProto.write) {
       const writtenQueue = [];
@@ -1641,6 +1869,9 @@ function installShim(global) {
       }
 
       docProto.write = markNative(function () {
+        if (typeof globalThis !== "undefined" && globalThis.__capsurf_throwOnDynamicMarkupInsertionDepth > 0) {
+          throw new DOMException("Failed to execute 'write' on 'Document': Cannot call write() during custom element reactions.", "InvalidStateError");
+        }
         let markup = "";
         for (let i = 0; i < arguments.length; i++) {
           markup += String(arguments[i]);
@@ -1667,6 +1898,17 @@ function installShim(global) {
             }
           }
         }
+      }, "write");
+      if (global.document) {
+        global.document.write = docProto.write;
+      }
+    } else {
+      const origDocWriteFn = docProto.write;
+      docProto.write = markNative(function () {
+        if (typeof globalThis !== "undefined" && globalThis.__capsurf_throwOnDynamicMarkupInsertionDepth > 0) {
+          throw new DOMException("Failed to execute 'write' on 'Document': Cannot call write() during custom element reactions.", "InvalidStateError");
+        }
+        return origDocWriteFn.apply(this, arguments);
       }, "write");
       if (global.document) {
         global.document.write = docProto.write;

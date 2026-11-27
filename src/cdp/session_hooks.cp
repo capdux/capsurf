@@ -3091,6 +3091,30 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "      }\n" ++
     "    };\n" ++
     "  }\n" ++
+    "  if (typeof g.HTMLIFrameElement === 'function' && g.HTMLIFrameElement.prototype && !g.HTMLIFrameElement.prototype.__capsurf_open_nav_cancel) {\n" ++
+    "    g.HTMLIFrameElement.prototype.__capsurf_open_nav_cancel = true;\n" ++
+    "    var _cdDesc = Object.getOwnPropertyDescriptor(g.HTMLIFrameElement.prototype, 'contentDocument');\n" ++
+    "    if (_cdDesc && typeof _cdDesc.get === 'function') {\n" ++
+    "      var _origCdGet = _cdDesc.get;\n" ++
+    "      Object.defineProperty(g.HTMLIFrameElement.prototype, 'contentDocument', {\n" ++
+    "        get: function() {\n" ++
+    "          var doc = _origCdGet.call(this);\n" ++
+    "          var iframeEl = this;\n" ++
+    "          if (doc && typeof doc.open === 'function' && !doc.__capsurf_open_nav_cancel) {\n" ++
+    "            doc.__capsurf_open_nav_cancel = true;\n" ++
+    "            var _origDocOpen = doc.open;\n" ++
+    "            doc.open = function() {\n" ++
+    "              iframeEl._navSeq = (iframeEl._navSeq || 0) + 1;\n" ++
+    "              return _origDocOpen.apply(this, arguments);\n" ++
+    "            };\n" ++
+    "          }\n" ++
+    "          return doc;\n" ++
+    "        },\n" ++
+    "        configurable: true,\n" ++
+    "        enumerable: _cdDesc.enumerable !== false\n" ++
+    "      });\n" ++
+    "    }\n" ++
+    "  }\n" ++
     "  function resolveUrlAbs(raw, base) {\n" ++
     "    try { return new URL(raw, base || (g.location ? g.location.href : 'http://127.0.0.1:8787/')).href; } catch (e) { return raw; }\n" ++
     "  }\n" ++
@@ -3751,6 +3775,47 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "      }\n" ++
     "    }, 350);\n" ++
     "  })();\n" ++
+    "  try {\n" ++
+    "    var _loc = g.location;\n" ++
+    "    if (_loc) {\n" ++
+    "      var _pnDesc = Object.getOwnPropertyDescriptor(_loc, 'pathname');\n" ++
+    "      if (_pnDesc && !_pnDesc.set && _pnDesc.configurable !== false) {\n" ++
+    "        Object.defineProperty(_loc, 'pathname', {\n" ++
+    "          configurable: true,\n" ++
+    "          enumerable: true,\n" ++
+    "          get: _pnDesc.get,\n" ++
+    "          set: function(v) {\n" ++
+    "            var s = String(v);\n" ++
+    "            if (s && s[0] !== '/') s = '/' + s;\n" ++
+    "            var orig = _loc.origin;\n" ++
+    "            if (orig && orig !== 'null') {\n" ++
+    "              _loc.href = orig + s + (_loc.search || '') + (_loc.hash || '');\n" ++
+    "            } else {\n" ++
+    "              _loc.href = s;\n" ++
+    "            }\n" ++
+    "          }\n" ++
+    "        });\n" ++
+    "      }\n" ++
+    "      var _srDesc = Object.getOwnPropertyDescriptor(_loc, 'search');\n" ++
+    "      if (_srDesc && !_srDesc.set && _srDesc.configurable !== false) {\n" ++
+    "        Object.defineProperty(_loc, 'search', {\n" ++
+    "          configurable: true,\n" ++
+    "          enumerable: true,\n" ++
+    "          get: _srDesc.get,\n" ++
+    "          set: function(v) {\n" ++
+    "            var s = String(v);\n" ++
+    "            if (s && s[0] !== '?') s = '?' + s;\n" ++
+    "            var orig = _loc.origin;\n" ++
+    "            if (orig && orig !== 'null') {\n" ++
+    "              _loc.href = orig + (_loc.pathname || '/') + s + (_loc.hash || '');\n" ++
+    "            } else {\n" ++
+    "              _loc.href = (_loc.pathname || '/') + s;\n" ++
+    "            }\n" ++
+    "          }\n" ++
+    "        });\n" ++
+    "      }\n" ++
+    "    }\n" ++
+    "  } catch (e) {}\n" ++
     "})();";
 
 pub const PAGE_INSERTED_SCRIPT_HOOKS_JS: []const u8 =

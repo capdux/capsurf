@@ -171,12 +171,19 @@ function upgradeCustomElement(element, customElementConstructor, options) {
   }
 
   let constructed = true;
+  if (typeof globalThis !== "undefined") {
+    globalThis.__capsurf_throwOnDynamicMarkupInsertionDepth = (globalThis.__capsurf_throwOnDynamicMarkupInsertionDepth || 0) + 1;
+  }
   try {
     new customElementConstructor();
   } catch (err) {
     constructed = false;
     element._customElementState = "failed";
-    if (typeof window !== "undefined" && typeof window.onerror === "function") {
+    if (typeof reportError === "function") {
+      try {
+        reportError(err);
+      } catch (_) {}
+    } else if (typeof window !== "undefined" && typeof window.onerror === "function") {
       try {
         window.onerror(err && err.message ? err.message : String(err), "", 0, 0, err);
       } catch (_) {}
@@ -184,6 +191,9 @@ function upgradeCustomElement(element, customElementConstructor, options) {
       console.warn("[capsurf] custom-element constructor for " + tagName + " threw:", err);
     }
   } finally {
+    if (typeof globalThis !== "undefined") {
+      globalThis.__capsurf_throwOnDynamicMarkupInsertionDepth = Math.max(0, (globalThis.__capsurf_throwOnDynamicMarkupInsertionDepth || 1) - 1);
+    }
     if (stack) {
       const sIdx = stack.indexOf(element);
       if (sIdx !== -1) stack.splice(sIdx, 1);
@@ -593,8 +603,7 @@ markNative(CustomElementRegistry.prototype.whenDefined, "whenDefined");
 markNative(CustomElementRegistry.prototype.upgrade, "upgrade");
 markNative(CustomElementRegistry, "CustomElementRegistry");
 
-if (typeof HTMLElement !== "undefined" && HTMLElement.prototype && !HTMLElement.prototype.attachInternals) {
-  HTMLElement.prototype.attachInternals = markNative(function () {
+const attachInternalsFn = markNative(function () {
     if (!this || this.nodeType !== 1) {
       throw new TypeError("Illegal invocation");
     }
@@ -615,6 +624,10 @@ if (typeof HTMLElement !== "undefined" && HTMLElement.prototype && !HTMLElement.
     elementInternalsMap.set(this, internals);
     return internals;
   }, "attachInternals");
+global.__capsurf_attachInternalsFn = attachInternalsFn;
+if (typeof globalThis !== "undefined") globalThis.__capsurf_attachInternalsFn = attachInternalsFn;
+if (typeof HTMLElement !== "undefined" && HTMLElement.prototype && !HTMLElement.prototype.attachInternals) {
+  HTMLElement.prototype.attachInternals = attachInternalsFn;
 }
 
 const customElementsInstance = new CustomElementRegistry();

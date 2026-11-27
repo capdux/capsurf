@@ -4768,3 +4768,8 @@
 - `src/cdp/frames.cp`, `src/cdp/session.cp`: 子帧导航异常/上下文边界修复，推进 `page-set-content` (14→15/16)、`frame-evaluate` (5→6/8) 与 `page-event-request` (5→6/13)。
 - `src/js/shim/*` (`window.js`, `index.js`, `node-base.js`, `parser.js`, `file.js`, `form-data.js`, `range.js`, `collections.js`, `cssom.js`, `canvas2d.js`, `element/*`, `events/*`, `mutations/*`): 批量补齐 DOM/Form/Dialog/File/FormData/Canvas/Event 接口与规范校验，推动 `test/panda/` 突破 200 大关达到 **204/517**。
 - `GEMINI.md`, `test/stats.md`, `SESSION.md`, `CHANGELOG.md`, `DEVLOG.md`: 固化 11.18 多 Spec 端口段步长 10 隔离并同步 Phase 969 统计。
+
+## Phase 970: `page-set-content` / `frame-evaluate` / `elementhandle-misc` 100% 全绿 & Panda 224/517
+- `src/cdp/frames.cp`, `src/cdp/page.cp`, `src/cdp/server.cp`, `src/cdp/session.cp`, `src/cdp/session_hooks.cp`: `reduction_slice` 调至 `40000` 避免 `while (true)` 阻塞 teardown；`writeFrameJson` 空 `url` 修复；`pollReopenLoadEvents` 销毁子帧 `isolated_worlds`；`doc.open` 递增 `_navSeq` 取消微任务覆盖；`getOrCreateTabSession` 同步刷新 `dom_ctx.frame_id_buf`；`enqueueSubresourceFetchPause` preflight `OPTIONS` 头 Title-Case 规范化。
+- `scripts/bundle_runtime.py`, `src/js/shim/streams.js`, `src/js/shim/*` (`canvas2d.js`, `cssom.js`, `element/*`, `events/dispatch.js`, `file.js`, `fonts.js`, `index.js`, `node-base.js`, `parser.js`, `range.js`, `window.js`): 新增 `streams.js` Web Streams shim；补齐 `OffscreenCanvasRenderingContext2D`、`Path2D.roundRect`、`CookieStore`、`PerformanceObserver`、`FontFaceSet.load`、`HTMLStyleElement.sheet`、`HTMLSlotElement.assign`、`Window` 继承 `EventTarget`、`isSecureContext`、`Text`/`Comment` 原型隔离及 `lookupNamespaceURI` `xml`/`xmlns` 前缀，推动 `test/panda/` 升至 **224/517**。
+- `test/stats.md`, `SESSION.md`, `CHANGELOG.md`, `DEVLOG.md`: 汇总更新全部实测结果并暂停后续测试。

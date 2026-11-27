@@ -726,16 +726,25 @@ function installHtmlClasses(global) {
     if (typeof globalThis !== "undefined") {
       globalThis.__capsurf_domMutationEpoch = (globalThis.__capsurf_domMutationEpoch || 0) + 1;
     }
-    if (_pendingSlotChangeHosts.has(host)) return;
-    _pendingSlotChangeHosts.add(host);
     const root = host._shadowRoot;
     const slots = collectSlotsInShadowRoot(root);
     for (let i = 0; i < slots.length; i++) {
       const s = slots[i];
       if (!s._lastAssignedNodes) {
-        s._lastAssignedNodes = computeAssignedNodesForSlot(s);
+        s._lastAssignedNodes = [];
       }
+      const cur = computeAssignedNodesForSlot(s);
+      const prev = s._lastAssignedNodes;
+      let diff = prev.length !== cur.length;
+      if (!diff) {
+        for (let j = 0; j < cur.length; j++) {
+          if (prev[j] !== cur[j]) { diff = true; break; }
+        }
+      }
+      if (diff) s._slotchangeDirty = true;
     }
+    if (_pendingSlotChangeHosts.has(host)) return;
+    _pendingSlotChangeHosts.add(host);
     Promise.resolve().then(function () {
       _pendingSlotChangeHosts.delete(host);
       if (!host._shadowRoot) return;
@@ -744,7 +753,7 @@ function installHtmlClasses(global) {
         const s = currentSlots[i];
         const prev = s._lastAssignedNodes || [];
         const next = computeAssignedNodesForSlot(s);
-        let changed = prev.length !== next.length;
+        let changed = Boolean(s._slotchangeDirty) || prev.length !== next.length;
         if (!changed) {
           for (let j = 0; j < next.length; j++) {
             if (prev[j] !== next[j]) {
@@ -753,6 +762,7 @@ function installHtmlClasses(global) {
             }
           }
         }
+        s._slotchangeDirty = false;
         s._lastAssignedNodes = next;
         if (changed && typeof s.dispatchEvent === "function") {
           try {
@@ -781,6 +791,12 @@ function installHtmlClasses(global) {
     configurable: true,
   });
   HTMLSlotElement.prototype.assign = function (...nodes) {
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      if (!n || typeof n !== "object" || (n.nodeType !== 1 && n.nodeType !== 3)) {
+        throw new TypeError("Failed to execute 'assign' on 'HTMLSlotElement': parameter " + (i + 1) + " is not of type '(Element or Text)'.");
+      }
+    }
     const root = typeof this.getRootNode === "function" ? this.getRootNode() : null;
     if (!root || root.slotAssignment !== "manual") return;
     const prev = this._manualAssignedNodes || [];
@@ -1009,6 +1025,18 @@ function installHtmlClasses(global) {
   });
 
   function getSheetForElement(el) {
+    if (!el || !el.isConnected) {
+      if (el) el._sheet = null;
+      return null;
+    }
+    const rawType = el.getAttribute ? el.getAttribute("type") : null;
+    if (rawType !== null && rawType !== undefined) {
+      const trimmedType = String(rawType).trim().toLowerCase();
+      if (trimmedType !== "" && trimmedType !== "text/css") {
+        el._sheet = null;
+        return null;
+      }
+    }
     if (!el._sheet) {
       if (typeof globalThis.getOrCreateStyleSheet === "function") {
         el._sheet = globalThis.getOrCreateStyleSheet(el);
@@ -1020,12 +1048,47 @@ function installHtmlClasses(global) {
         el._sheet = new globalThis.CSSStyleSheet(el);
       }
     }
-    return el._sheet;
+    return el._sheet || null;
   }
 
   Object.defineProperty(HTMLStyleElement.prototype, "sheet", {
     get: function () {
       return getSheetForElement(this);
+    },
+    configurable: true,
+  });
+  Object.defineProperty(HTMLStyleElement.prototype, "type", {
+    get: function () { return this.getAttribute ? (this.getAttribute("type") || "") : ""; },
+    set: function (v) { if (this.setAttribute) this.setAttribute("type", String(v)); },
+    configurable: true,
+  });
+  Object.defineProperty(HTMLStyleElement.prototype, "media", {
+    get: function () { return this.getAttribute ? (this.getAttribute("media") || "") : ""; },
+    set: function (v) { if (this.setAttribute) this.setAttribute("media", String(v)); },
+    configurable: true,
+  });
+  Object.defineProperty(HTMLStyleElement.prototype, "disabled", {
+    get: function () {
+      const s = this.sheet;
+      return s ? Boolean(s.disabled) : false;
+    },
+    set: function (v) {
+      const s = this.sheet;
+      if (s) s.disabled = Boolean(v);
+    },
+    configurable: true,
+  });
+  Object.defineProperty(HTMLStyleElement.prototype, "blocking", {
+    get: function () {
+      if (!this._blockingList && typeof DOMTokenList === "function") {
+        const list = new DOMTokenList(this, "blocking");
+        list.supports = function (tok) { return String(tok) === "render"; };
+        this._blockingList = list;
+      }
+      return this._blockingList;
+    },
+    set: function (v) {
+      if (this.setAttribute) this.setAttribute("blocking", String(v));
     },
     configurable: true,
   });
@@ -4156,7 +4219,14 @@ function installHtmlClasses(global) {
   ];
   for (let i = 0; i < SIMPLE_HTML_CLASSES.length; i++) {
     const clsName = SIMPLE_HTML_CLASSES[i];
-    const Ctor = function () {};
+    const Ctor = function () {
+      if (!new.target || new.target === Ctor) {
+        throw new TypeError("Illegal constructor");
+      }
+      if (typeof HTMLElement === "function") {
+        return Reflect.construct(HTMLElement, [], new.target);
+      }
+    };
     Ctor.prototype = Object.create(HTMLElementProto);
     Ctor.prototype.constructor = Ctor;
     Object.defineProperty(Ctor.prototype, Symbol.toStringTag, {
@@ -4895,6 +4965,7 @@ function installHtmlClasses(global) {
         const doc = this.ownerDocument || global.document || (typeof document !== "undefined" ? document : null);
         const temp = doc ? doc.createElement("div") : null;
         if (temp) {
+          temp._skipTableUnwrap = true;
           temp.innerHTML = val;
           while (temp.firstChild) {
             content.appendChild(temp.firstChild);

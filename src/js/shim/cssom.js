@@ -11135,12 +11135,22 @@
   CSSStyleSheet.prototype = Object.create(StyleSheet.prototype);
   CSSStyleSheet.prototype.constructor = CSSStyleSheet;
 
-  ["ownerNode", "ownerRule", "parentStyleSheet", "media", "disabled", "_rules", "_lastParsedText", "_loadedHref", "_originClean", "_cascadeCssText"].forEach(function (prop) {
+  ["ownerNode", "ownerRule", "parentStyleSheet", "media", "_rules", "_lastParsedText", "_loadedHref", "_originClean", "_cascadeCssText"].forEach(function (prop) {
     Object.defineProperty(CSSStyleSheet.prototype, prop, {
       get: function () { return getSheetSt(this)[prop]; },
       set: function (v) { getSheetSt(this)[prop] = v; },
       configurable: true,
     });
+  });
+
+  Object.defineProperty(CSSStyleSheet.prototype, "disabled", {
+    get: function () { return Boolean(getSheetSt(this).disabled); },
+    set: function (v) {
+      const st = getSheetSt(this);
+      st.disabled = Boolean(v);
+      syncAdoptedAndInvalidate(st.ownerNode ? (st.ownerNode.ownerDocument || null) : null);
+    },
+    configurable: true,
   });
 
   Object.defineProperty(CSSStyleSheet.prototype, "title", {
@@ -11302,6 +11312,13 @@
   };
 
   CSSStyleSheet.prototype._reparseText = function (text) {
+    for (let i = 0; i < this._rules.length; i++) {
+      const r = this._rules[i];
+      if (r) {
+        r.parentStyleSheet = null;
+        r.parentRule = null;
+      }
+    }
     this._rules.length = 0;
     const chunks = splitStylesheetRules(text);
     for (let i = 0; i < chunks.length; i++) {
@@ -11418,7 +11435,11 @@
     if (idx >= this._rules.length) {
       throw new DOMException("Index out of bounds", "IndexSizeError");
     }
-    this._rules.splice(idx, 1);
+    const removed = this._rules.splice(idx, 1)[0];
+    if (removed) {
+      removed.parentStyleSheet = null;
+      removed.parentRule = null;
+    }
     this._remirror();
   };
 

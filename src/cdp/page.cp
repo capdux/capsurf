@@ -1891,449 +1891,16 @@ pub struct PageHandler {
                 return CdpResponse.err(req.id, -32000, "Navigation failed");
             };
 
-            const doc_req_id = session.loader_id;
-
-            const kind = documentKind(fetch_res.content_type, fetch_res.content_disposition);
-            if (kind == DocumentKind.blocked || fetch_res.status_code == 204 || fetch_res.status_code == 205) {
-                let is_download = false;
-                if (kind == DocumentKind.blocked) {
-                    is_download = executeDownload(
-                        session.allocator,
-                        getDownloadConfigStore(),
-                        session.currentBrowserContextId(),
-                        session.frame_id,
-                        fetch_res.final_url,
-                        fetch_res.content_disposition ?? "",
-                        "",
-                        u16(@min(fetch_res.status_code, 65535)),
-                        fetch_res.html,
-                        out_events,
-                        event_count,
-                    );
-                }
-                if (session.network_enabled && !std.ascii.eqlIgnoreCase(fetch_res.final_url, "about:blank") && event_count.* < out_events.len) {
-                    const fail_json = std.fmt.allocPrint(
-                        session.allocator,
-                        "{{\"requestId\":\"{s}\",\"timestamp\":1700000000.0,\"type\":\"Document\",\"errorText\":\"net::ERR_ABORTED\",\"canceled\":false}}",
-                        .{ doc_req_id },
-                    ) catch "{}";
-                    out_events[event_count.*] = CdpEvent.create("Network.loadingFailed", fail_json);
-                    event_count.* += 1;
-                }
-                const is_dl_str: []const u8 = if (is_download) "true" else "false";
-                const abort_res = std.fmt.bufPrint(
-                    out_buf,
-                    "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"isDownload\":{s},\"errorText\":\"net::ERR_ABORTED\"}}",
-                    .{ session.frame_id, session.loader_id, is_dl_str },
-                ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
-                return CdpResponse.ok(req.id, abort_res);
-            }
-
-            let synth_buf: ([]u8)? = null;
-            defer if (synth_buf != null) session.allocator.free(synth_buf.?);
-            let alloc_b64: ([]u8)? = null;
-            defer if (alloc_b64 != null) session.allocator.free(alloc_b64.?);
-            let eff_status: u32 = fetch_res.status_code;
-            let eff_status_text: []const u8 = fetch_res.status_text;
-            let eff_raw_headers: []const u8 = fetch_res.raw_headers;
-            let eff_content_type: []const u8 = fetch_res.content_type;
-            let eff_raw_body: []const u8 = fetch_res.raw_body;
-            let eff_raw_body_b64: bool = fetch_res.raw_body_base64;
-            let eff_html: []const u8 = fetch_res.html;
-            if (fetch_res.status_code == 200) {
-                recordCachedDoc(fetch_res.final_url, fetch_res.raw_headers, fetch_res.content_type, fetch_res.raw_body, fetch_res.raw_body_base64, fetch_res.html);
-            } else if (fetch_res.status_code == 304) {
-                if (cached := findCachedDoc(fetch_res.final_url)) {
-                    eff_status = 200;
-                    eff_status_text = "OK";
-                    if (cached.raw_headers.len > 0) eff_raw_headers = cached.raw_headers;
-                    if (cached.content_type_len > 0) eff_content_type = cached.content_type_buf[0..cached.content_type_len];
-                    eff_raw_body = cached.raw_body;
-                    eff_raw_body_b64 = cached.raw_body_base64;
-                    eff_html = cached.html;
-                }
-            }
-
-            let b64_str: []const u8 = eff_raw_body;
-            let nav_html: []const u8 = eff_html;
-
-            clearDocResponseBodies();
-            if (kind == DocumentKind.image) {
-                if (!eff_raw_body_b64) {
-                    alloc_b64 = Base64.encodeAlloc(session.allocator, eff_html) catch return CdpResponse.err(req.id, -32000, "Base64 encoding failed");
-                    b64_str = alloc_b64.?;
-                }
-                recordResponseBody(doc_req_id, b64_str, true);
-                const needed = b64_str.len + 4096;
-                synth_buf = session.allocator.alloc(u8, needed) catch return CdpResponse.err(req.id, -32000, "Out of memory");
-                nav_html = imageDocumentHtml(eff_html, b64_str, eff_content_type, fetch_res.final_url, synth_buf.?);
-            } else if (kind == DocumentKind.text) {
-                recordResponseBody(doc_req_id, eff_raw_body, eff_raw_body_b64);
-                const needed = eff_html.len * 6 + fetch_res.final_url.len * 6 + 1024;
-                synth_buf = session.allocator.alloc(u8, needed) catch return CdpResponse.err(req.id, -32000, "Out of memory");
-                nav_html = textDocumentHtml(eff_html, fetch_res.final_url, synth_buf.?);
-            } else if (kind == DocumentKind.json) {
-                recordResponseBody(doc_req_id, eff_raw_body, eff_raw_body_b64);
-                const needed = eff_html.len * 16 + fetch_res.final_url.len * 6 + 16384;
-                synth_buf = session.allocator.alloc(u8, needed) catch return CdpResponse.err(req.id, -32000, "Out of memory");
-                nav_html = jsonViewerHtml(eff_html, fetch_res.final_url, synth_buf.?);
-            } else {
-                recordResponseBody(doc_req_id, eff_raw_body, eff_raw_body_b64);
-            }
-
-            let effective_referrer: []const u8 = referrer;
-            let ref_origin_buf_a: [1024]u8 = undefined;
-            let ref_origin_buf_b: [1024]u8 = undefined;
-            if (fetch_res.redirect_count > 0 && effective_referrer.len > 0) {
-                let hi: usize = 0;
-                while (hi < fetch_res.redirect_count) : (hi += 1) {
-                    if (fetch_res.redirect_urls[hi].len > 0) {
-                        if (hi + 1 < fetch_res.redirect_count && fetch_res.redirect_urls[hi + 1].len > 0) {
-                            if ((hi % 2) == 0) {
-                                effective_referrer = computeNextReferrer(effective_referrer, fetch_res.redirect_urls[hi], fetch_res.redirect_urls[hi + 1], &ref_origin_buf_a);
-                            } else {
-                                effective_referrer = computeNextReferrer(effective_referrer, fetch_res.redirect_urls[hi], fetch_res.redirect_urls[hi + 1], &ref_origin_buf_b);
-                            }
-                        } else {
-                            if ((hi % 2) == 0) {
-                                effective_referrer = computeNextReferrer(effective_referrer, fetch_res.redirect_urls[hi], fetch_res.final_url, &ref_origin_buf_a);
-                            } else {
-                                effective_referrer = computeNextReferrer(effective_referrer, fetch_res.redirect_urls[hi], fetch_res.final_url, &ref_origin_buf_b);
-                            }
-                        }
-                    }
-                }
-            }
-
-            emitDetachAllChildFrames(session, out_events, event_count);
-            session.known_child_frame_count = 0;
-            session.emitted_child_frame_count = 0;
-            session.pending_http_csp = fetch_res.content_security_policy;
-            session.pending_http_referrer_policy = fetch_res.referrer_policy;
-            session.navigate(nav_html, fetch_res.final_url, effective_referrer) catch return CdpResponse.err(req.id, -32000, "HTML parsing failed");
-            if (isXmlOrXhtml(fetch_res.content_type, fetch_res.final_url)) {
-                session.doc.in_quirks_mode = false;
-            }
-            syncIframeTargets(session, true);
-
-            if (event_count.* < out_events.len) {
-                const start_json = std.fmt.allocPrint(
-                    session.allocator,
-                    "{{\"frameId\":\"{s}\"}}",
-                    .{ session.frame_id },
-                ) catch "{}";
-                out_events[event_count.*] = CdpEvent.create("Page.frameStartedLoading", start_json);
-                event_count.* += 1;
-            }
-
-            if (session.network_enabled && !std.ascii.eqlIgnoreCase(fetch_res.final_url, "about:blank") && event_count.* < out_events.len) {
-                let req_hdrs_obj: []const u8 = "{}";
-                if (fetch_res.req_headers_text.len > 0) {
-                    if (crlf := std.mem.indexOf(u8, fetch_res.req_headers_text, "\r\n")) {
-                        req_hdrs_obj = formatHttpHeadersJson(fetch_res.req_headers_text[crlf + 2 ..], session.allocator);
-                    }
-                }
-                if (std.mem.eql(u8, req_hdrs_obj, "{}")) {
-                    let ua_esc_buf: [512]u8 = [0; 512];
-                    const ua_val = if (session.user_agent.len > 0) session.user_agent else DEFAULT_HTTP_USER_AGENT;
-                    const esc_ua = escapeJsonString(ua_val, &ua_esc_buf);
-                    req_hdrs_obj = std.fmt.allocPrint(session.allocator, "{{\"user-agent\":\"{s}\"}}", .{esc_ua}) catch "{}";
-                }
-                if (fetch_res.redirect_count == 0) {
-                    if (!skip_first_request_will_be_sent) {
-                        let esc_u_buf: [2048]u8 = [0; 2048];
-                        const esc_u = escapeJsonString(fetch_res.final_url, &esc_u_buf);
-                        const req_json = std.fmt.allocPrint(
-                            session.allocator,
-                            "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{s}}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"other\"}},\"type\":\"Document\",\"frameId\":\"{s}\"}}",
-                            .{ doc_req_id, session.loader_id, esc_u, esc_u, req_hdrs_obj, session.frame_id },
-                        ) catch "{}";
-                        out_events[event_count.*] = CdpEvent.create("Network.requestWillBeSent", req_json);
-                        event_count.* += 1;
-                    }
-                } else {
-                    if (!skip_first_request_will_be_sent) {
-                        let esc_u0_buf: [2048]u8 = [0; 2048];
-                        const esc_u0 = escapeJsonString(fetch_res.redirect_urls[0], &esc_u0_buf);
-                        let hop0_req_hdrs = req_hdrs_obj;
-                        if (fetch_res.redirect_hops[0].req_headers_text.len > 0) {
-                            if (crlf0 := std.mem.indexOf(u8, fetch_res.redirect_hops[0].req_headers_text, "\r\n")) {
-                                hop0_req_hdrs = formatHttpHeadersJson(fetch_res.redirect_hops[0].req_headers_text[crlf0 + 2 ..], session.allocator);
-                            }
-                        }
-                        const req0_json = std.fmt.allocPrint(
-                            session.allocator,
-                            "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{s}}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"other\"}},\"type\":\"Document\",\"frameId\":\"{s}\"}}",
-                            .{ doc_req_id, session.loader_id, esc_u0, esc_u0, hop0_req_hdrs, session.frame_id },
-                        ) catch "{}";
-                        out_events[event_count.*] = CdpEvent.create("Network.requestWillBeSent", req0_json);
-                        event_count.* += 1;
-                    }
-                    if (!session.redirect_live_emitted) {
-                        let hi: usize = 1;
-                        while (hi <= fetch_res.redirect_count && event_count.* < out_events.len) : (hi += 1) {
-                            const hop_u = if (hi < fetch_res.redirect_count) fetch_res.redirect_urls[hi] else fetch_res.final_url;
-                            let esc_u_buf: [2048]u8 = [0; 2048];
-                            const esc_u = escapeJsonString(hop_u, &esc_u_buf);
-                            const prev_u = fetch_res.redirect_urls[hi - 1];
-                            let esc_prev_buf: [2048]u8 = [0; 2048];
-                            const esc_prev = escapeJsonString(prev_u, &esc_prev_buf);
-                            const prev_hop = &fetch_res.redirect_hops[hi - 1];
-                            const prev_status: u32 = if (prev_hop.status_code > 0) prev_hop.status_code else 302;
-                            const prev_st = if (prev_hop.status_text.len > 0) prev_hop.status_text else "Found";
-                            let prev_st_buf: [128]u8 = [0; 128];
-                            const esc_prev_st = escapeJsonString(prev_st, &prev_st_buf);
-                            const prev_hdrs_json = if (prev_hop.raw_headers.len > 0) formatHttpHeadersJson(prev_hop.raw_headers, session.allocator) else "{}";
-                            const prev_mime: []const u8 = "text/html";
-                            let hop_req_hdrs = req_hdrs_obj;
-                            if (hi < fetch_res.redirect_hops.len && fetch_res.redirect_hops[hi].req_headers_text.len > 0) {
-                                if (crlf_h := std.mem.indexOf(u8, fetch_res.redirect_hops[hi].req_headers_text, "\r\n")) {
-                                    hop_req_hdrs = formatHttpHeadersJson(fetch_res.redirect_hops[hi].req_headers_text[crlf_h + 2 ..], session.allocator);
-                                }
-                            }
-                            if (event_count.* < out_events.len) {
-                                const req_json = std.fmt.allocPrint(
-                                    session.allocator,
-                                    "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{s}}},\"redirectResponse\":{{\"url\":\"{s}\",\"status\":{d},\"statusText\":\"{s}\",\"headers\":{s},\"mimeType\":\"{s}\"}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"other\"}},\"type\":\"Document\",\"frameId\":\"{s}\"}}",
-                                    .{ doc_req_id, session.loader_id, esc_u, esc_u, hop_req_hdrs, esc_prev, prev_status, esc_prev_st, prev_hdrs_json, prev_mime, session.frame_id },
-                                ) catch "{}";
-                                out_events[event_count.*] = CdpEvent.create("Network.requestWillBeSent", req_json);
-                                event_count.* += 1;
-                            }
-                        }
-                    }
-                }
-                if (fetch_res.req_headers_text.len > 0 && event_count.* < out_events.len) {
-                    let req_ht_buf: [8192]u8 = undefined;
-                    const req_ht_esc = escapeJsonString(fetch_res.req_headers_text, &req_ht_buf);
-                    const req_extra_json = std.fmt.allocPrint(
-                        session.allocator,
-                        "{{\"requestId\":\"{s}\",\"associatedCookies\":[],\"headers\":{s},\"headersText\":\"{s}\"}}",
-                        .{ doc_req_id, req_hdrs_obj, req_ht_esc },
-                    ) catch "{}";
-                    out_events[event_count.*] = CdpEvent.create("Network.requestWillBeSentExtraInfo", req_extra_json);
-                    event_count.* += 1;
-                }
-            }
-
-            if (session.network_enabled && !std.ascii.eqlIgnoreCase(fetch_res.final_url, "about:blank") && event_count.* < out_events.len) {
-                let esc_u_buf: [2048]u8 = [0; 2048];
-                const esc_u = escapeJsonString(fetch_res.final_url, &esc_u_buf);
-                let st_esc_buf: [256]u8 = [0; 256];
-                const st_esc = escapeJsonString(eff_status_text, &st_esc_buf);
-                const hdrs_json = formatHttpHeadersJson(eff_raw_headers, session.allocator);
-                const mime_raw = mimeEssence(eff_content_type);
-                const mime_out = if (mime_raw.len > 0) mime_raw else "text/html";
-                const has_extra_kv = if (fetch_res.resp_headers_text.len > 0) ",\"hasExtraInfo\":true" else "";
-                const resp_json = std.fmt.allocPrint(
-                    session.allocator,
-                    "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"timestamp\":1700000000.0,\"type\":\"Document\",\"response\":{{\"url\":\"{s}\",\"status\":{d},\"statusText\":\"{s}\",\"headers\":{s},\"mimeType\":\"{s}\"}},\"frameId\":\"{s}\"{s}}}",
-                    .{ doc_req_id, session.loader_id, esc_u, eff_status, st_esc, hdrs_json, mime_out, session.frame_id, has_extra_kv },
-                ) catch "{}";
-                out_events[event_count.*] = CdpEvent.create("Network.responseReceived", resp_json);
-                event_count.* += 1;
-                if (fetch_res.resp_headers_text.len > 0 && event_count.* < out_events.len) {
-                    let resp_ht_buf: [8192]u8 = undefined;
-                    const resp_ht_esc = escapeJsonString(fetch_res.resp_headers_text, &resp_ht_buf);
-                    const resp_extra_json = std.fmt.allocPrint(
-                        session.allocator,
-                        "{{\"requestId\":\"{s}\",\"blockedCookies\":[],\"headers\":{s},\"headersText\":\"{s}\",\"statusCode\":{d}}}",
-                        .{ doc_req_id, hdrs_json, resp_ht_esc, fetch_res.status_code },
-                    ) catch "{}";
-                    out_events[event_count.*] = CdpEvent.create("Network.responseReceivedExtraInfo", resp_extra_json);
-                    event_count.* += 1;
-                }
-            }
-
-            if (session.network_enabled && !std.ascii.eqlIgnoreCase(fetch_res.final_url, "about:blank") && event_count.* < out_events.len) {
-                const wire_total = fetch_res.wire_headers_len + fetch_res.wire_body_len;
-                const enc_len = if (wire_total > 0) wire_total else fetch_res.raw_body.len;
-                const fin_json = std.fmt.allocPrint(
-                    session.allocator,
-                    "{{\"requestId\":\"{s}\",\"timestamp\":1700000000.0,\"encodedDataLength\":{d}}}",
-                    .{ doc_req_id, enc_len },
-                ) catch "{}";
-                out_events[event_count.*] = CdpEvent.create("Network.loadingFinished", fin_json);
-                event_count.* += 1;
-            }
-
-            // Format dynamic Page.frameNavigated event
-            const fn_json = session.formatFrameNavigatedEvent(fetch_res.final_url);
-
-            if (event_count.* < out_events.len) {
-                out_events[event_count.*] = CdpEvent.create("Page.frameNavigated", fn_json);
-                event_count.* += 1;
-            }
-            emitMainAndIsolatedExecutionContexts(session, fetch_res.final_url, out_events, event_count);
-
-            // Emit child/grandchild frame execution context and frameStoppedLoading events
-            const nav_frames = session.allocator.alloc(FrameState, 48) catch null;
-            const nav_urls = session.allocator.alloc(u8, 48 * 512) catch null;
-            const nav_ids = session.allocator.alloc(u8, 48 * 32) catch null;
-            defer if (nav_frames != null) session.allocator.free(nav_frames.?);
-            defer if (nav_urls != null) session.allocator.free(nav_urls.?);
-            defer if (nav_ids != null) session.allocator.free(nav_ids.?);
-            if (nav_frames != null && nav_urls != null && nav_ids != null) {
-                const nav_slice = nav_frames.?;
-                const nav_frame_count = collectFrameStates(session, nav_slice, nav_urls.?, nav_ids.?);
-                let frame_info_buf: [2048]u8 = [0; 2048];
-                let fi: usize = 1;
-                while (fi < nav_frame_count && event_count.* < out_events.len) : (fi += 1) {
-                    let cf = &nav_slice[fi];
-                    const parent_fid = cf.parent_frame_id ?? session.frame_id;
-                    if (event_count.* < out_events.len) {
-                        const att_json = std.fmt.allocPrint(
-                            session.allocator,
-                            "{{\"frameId\":\"{s}\",\"parentFrameId\":\"{s}\"}}",
-                            .{ cf.frame_id, parent_fid },
-                        ) catch "{}";
-                        out_events[event_count.*] = CdpEvent.create("Page.frameAttached", att_json);
-                        event_count.* += 1;
-                    }
-                    if (event_count.* < out_events.len) {
-                        const start_json = std.fmt.allocPrint(
-                            session.allocator,
-                            "{{\"frameId\":\"{s}\"}}",
-                            .{ cf.frame_id },
-                        ) catch "{}";
-                        out_events[event_count.*] = CdpEvent.create("Page.frameStartedLoading", start_json);
-                        event_count.* += 1;
-                    }
-                    emitChildFrameNetworkEvents(session, cf, out_events, event_count);
-                    if (event_count.* < out_events.len) {
-                        const frame_info = makeFrameInfoWithFrames(cf, nav_slice[0..nav_frame_count], &frame_info_buf);
-                        const nav_json = std.fmt.allocPrint(
-                            session.allocator,
-                            "{{\"frame\":{s},\"type\":\"Navigation\"}}",
-                            .{ frame_info },
-                        ) catch "{}";
-                        out_events[event_count.*] = CdpEvent.create("Page.frameNavigated", nav_json);
-                        event_count.* += 1;
-                    }
-                    if (event_count.* < out_events.len) {
-                        const lc_json = std.fmt.allocPrint(
-                            session.allocator,
-                            "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"name\":\"init\",\"timestamp\":1700000000.0}}",
-                            .{ cf.frame_id, cf.loader_id },
-                        ) catch "{}";
-                        out_events[event_count.*] = CdpEvent.create("Page.lifecycleEvent", lc_json);
-                        event_count.* += 1;
-                    }
-                    if (session.runtime_enabled && !isRefusedKindFrameUrl(cf.url) && event_count.* < out_events.len) {
-                        const allow_nav_ctx = !cf.is_cross_origin || countActiveOopifContexts(session) < MAX_CONCURRENT_OOPIF;
-                        if (allow_nav_ctx) {
-                            const ctx_id = session.next_context_id;
-                            session.next_context_id += 1;
-                            cf.exec_context_id = ctx_id;
-                            const cf_origin = originOf(cf.url);
-                            let esc_orig_buf: [256]u8 = [0; 256];
-                            const esc_orig = escapeJsonString(cf_origin, &esc_orig_buf);
-                            const ctx_json = std.fmt.allocPrint(
-                                session.allocator,
-                                "{{\"context\":{{\"id\":{d},\"origin\":\"{s}\",\"name\":\"\",\"auxData\":{{\"isDefault\":true,\"type\":\"default\",\"frameId\":\"{s}\"}}}}}}",
-                                .{ ctx_id, esc_orig, cf.frame_id },
-                            ) catch "{}";
-                            out_events[event_count.*] = CdpEvent.create("Runtime.executionContextCreated", ctx_json);
-                            event_count.* += 1;
-                            emitChildFrameIsolatedWorlds(session, cf.frame_id, cf.url, !cf.sandbox.same_origin, out_events, event_count);
-                            if (cf.is_cross_origin) {
-                                // Record immediately so subsequent iterations in this loop see the active OOPIF slot
-                                recordAttachedChildFrames(session, nav_slice[0..nav_frame_count]);
-                            }
-                        }
-                    }
-                    if (event_count.* < out_events.len) {
-                        const dcl_json = std.fmt.allocPrint(
-                            session.allocator,
-                            "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"name\":\"DOMContentLoaded\",\"timestamp\":1700000000.05}}",
-                            .{ cf.frame_id, cf.loader_id },
-                        ) catch "{}";
-                        out_events[event_count.*] = CdpEvent.create("Page.lifecycleEvent", dcl_json);
-                        event_count.* += 1;
-                    }
-                    if (event_count.* < out_events.len) {
-                        const load_json = std.fmt.allocPrint(
-                            session.allocator,
-                            "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"name\":\"load\",\"timestamp\":1700000000.1}}",
-                            .{ cf.frame_id, cf.loader_id },
-                        ) catch "{}";
-                        out_events[event_count.*] = CdpEvent.create("Page.lifecycleEvent", load_json);
-                        event_count.* += 1;
-                    }
-                    if (event_count.* < out_events.len) {
-                        const stop_json = std.fmt.allocPrint(
-                            session.allocator,
-                            "{{\"frameId\":\"{s}\"}}",
-                            .{ cf.frame_id },
-                        ) catch "{}";
-                        out_events[event_count.*] = CdpEvent.create("Page.frameStoppedLoading", stop_json);
-                        event_count.* += 1;
-                    }
-                }
-                session.emitted_child_frame_count = if (nav_frame_count > 1) nav_frame_count - 1 else 0;
-                recordAttachedChildFrames(session, nav_slice[0..nav_frame_count]);
-            }
-            if (session.runtime_enabled) {
-                let polled_con_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
-                const polled_con_count = session.pollConsoleEvents(&polled_con_evts);
-                let con_i: usize = 0;
-                while (con_i < polled_con_count && event_count.* < out_events.len) : (con_i += 1) {
-                    out_events[event_count.*] = polled_con_evts[con_i];
-                    event_count.* += 1;
-                }
-            }
-
-            if (session.lifecycle_events_enabled && session.activeAsyncFetchCount() > 0) {
-                session.pending_main_load_deferred = true;
-                emitMainFrameDomContentLoadedEvents(session, out_events, event_count);
-            } else {
-                emitMainFrameLifecycleEvents(session, out_events, event_count);
-            }
-
-            if (session.css_enabled) {
-                let polled_css_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
-                const polled_css_count = session.pollCssEvents(&polled_css_evts);
-                let css_i: usize = 0;
-                while (css_i < polled_css_count && event_count.* < out_events.len) : (css_i += 1) {
-                    out_events[event_count.*] = polled_css_evts[css_i];
-                    event_count.* += 1;
-                }
-            }
-
-            if (session.network_enabled) {
-                let polled_net_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
-                const polled_net_count = session.pollNetworkEvents(&polled_net_evts);
-                let net_i: usize = 0;
-                while (net_i < polled_net_count && event_count.* < out_events.len) : (net_i += 1) {
-                    out_events[event_count.*] = polled_net_evts[net_i];
-                    event_count.* += 1;
-                }
-            }
-
-            if (session.webmcp_enabled) {
-                let polled_wm_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
-                const polled_wm_count = session.pollWebMcpEvents(&polled_wm_evts);
-                let wm_i: usize = 0;
-                while (wm_i < polled_wm_count && event_count.* < out_events.len) : (wm_i += 1) {
-                    out_events[event_count.*] = polled_wm_evts[wm_i];
-                    event_count.* += 1;
-                }
-            }
-
-            if (session.navigation_aborted || session.checkWindowStopped()) {
-                const err_res = std.fmt.bufPrint(
-                    out_buf,
-                    "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"errorText\":\"net::ERR_ABORTED\",\"isDownload\":false}}",
-                    .{ session.frame_id, session.loader_id },
-                ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
-                return CdpResponse.ok(req.id, err_res);
-            }
-            const res = std.fmt.bufPrint(
+            return completePageNavigationFromResult(
+                session,
+                req.id,
                 out_buf,
-                "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"isDownload\":false}}",
-                .{ session.frame_id, session.loader_id },
-            ) catch return CdpResponse.err(req.id, -32000, "Buffer overflow");
-            return CdpResponse.ok(req.id, res);
+                out_events,
+                event_count,
+                referrer,
+                skip_first_request_will_be_sent,
+                fetch_res,
+            );
         }
 
         if (std.mem.eql(u8, req.method, "Page.getLayoutMetrics")) {
@@ -3955,4 +3522,767 @@ pub fn navigatePendingPopupUrl(
         emitMainAndIsolatedExecutionContexts(session, fetch_res.final_url, out_events, event_count);
     }
     emitMainFrameLifecycleEvents(session, out_events, event_count);
+}
+
+pub fn canUseAsyncHttpNav(session: *CdpPageSession, url: []const u8): bool {
+    if (!std.mem.startsWith(u8, url, "http://")) return false;
+    if (MockFixtures.isFixtureUrl(url)) return false;
+    if (std.mem.indexOf(u8, url, "/__fixtures/") != null) return false;
+    if (HttpLoader.isPublicHttpUrl(session.url) && HttpLoader.isLoopbackUrl(url)) return false;
+    if (parsed := HttpLoader.parseHttpUrl(url)) {
+        if (parsed.secure) return false;
+        if (HttpLoader.parseIpv4(parsed.host) != null) return true;
+    }
+    return false;
+}
+
+pub fn buildAsyncNavHttpRequest(
+    session: *CdpPageSession,
+    url: []const u8,
+    referrer: []const u8,
+    out_buf: []u8,
+    out_ip: *u32,
+    out_port: *u16,
+): usize {
+    const parsed = HttpLoader.parseHttpUrl(url) orelse return 0;
+    if (parsed.secure) return 0;
+    const ip = HttpLoader.parseIpv4(parsed.host) orelse return 0;
+    out_ip.* = ip;
+    out_port.* = parsed.port;
+
+    const ua_val = if (session.user_agent.len > 0) session.user_agent else DEFAULT_HTTP_USER_AGENT;
+    let host_buf: [512]u8 = [0; 512];
+    const host_hdr = if (parsed.port != 80)
+        std.fmt.bufPrint(&host_buf, "{s}:{d}", .{ parsed.host, parsed.port }) catch parsed.host
+    else
+        parsed.host;
+
+    let ref_line_buf: [2200]u8 = [0; 2200];
+    let ref_line: []const u8 = "";
+    if (referrer.len > 0) {
+        ref_line = std.fmt.bufPrint(&ref_line_buf, "Referer: {s}\r\n", .{referrer}) catch "";
+    }
+
+    let cookie_line_buf: [2200]u8 = [0; 2200];
+    let cookie_line: []const u8 = "";
+    const cookie_hdr = session.getActiveCookieJar().cookieHeaderForUrl(url, null, session.allocator);
+    if (cookie_hdr != null) {
+        defer session.allocator.free(cookie_hdr.?);
+        if (cookie_hdr.?.len > 0) {
+            cookie_line = std.fmt.bufPrint(&cookie_line_buf, "Cookie: {s}\r\n", .{cookie_hdr.?}) catch "";
+        }
+    }
+
+    const req_slice = std.fmt.bufPrint(
+        out_buf,
+        "GET {s} HTTP/1.1\r\nHost: {s}\r\nUser-Agent: {s}\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r\n{s}{s}Connection: close\r\n\r\n",
+        .{ parsed.path, host_hdr, ua_val, ref_line, cookie_line },
+    ) catch return 0;
+    return req_slice.len;
+}
+
+fn findHeaderValueRange(raw_headers: []const u8, name: []const u8): ([]const u8)? {
+    let pos: usize = 0;
+    while (pos < raw_headers.len) {
+        const line_end = std.mem.indexOfPos(u8, raw_headers, pos, "\r\n") orelse raw_headers.len;
+        const line = raw_headers[pos..line_end];
+        if (colon := std.mem.indexOfScalar(u8, line, ':')) {
+            const hname = std.mem.trim(u8, line[0..colon], " \t");
+            if (std.ascii.eqlIgnoreCase(hname, name)) {
+                return std.mem.trim(u8, line[colon + 1 ..], " \t");
+            }
+        }
+        if (line_end >= raw_headers.len) break;
+        pos = line_end + 2;
+    }
+    return null;
+}
+
+pub fn parseRawHttpToLoaderResult(
+    raw_resp: []u8,
+    final_url: []const u8,
+    req_headers_text: []const u8,
+): HttpLoaderResult? {
+    const hdr_end = std.mem.indexOf(u8, raw_resp, "\r\n\r\n") orelse return null;
+    const head = raw_resp[0..hdr_end];
+    const body_raw = raw_resp[hdr_end + 4 ..];
+
+    const first_crlf = std.mem.indexOf(u8, head, "\r\n") orelse head.len;
+    const status_line = head[0..first_crlf];
+    if (!std.mem.startsWith(u8, status_line, "HTTP/")) return null;
+    const sp1 = std.mem.indexOfScalar(u8, status_line, ' ') orelse return null;
+    const after_sp1 = std.mem.trim(u8, status_line[sp1 + 1 ..], " ");
+    let code_end: usize = 0;
+    while (code_end < after_sp1.len && after_sp1[code_end] >= '0' && after_sp1[code_end] <= '9') : (code_end += 1) {}
+    if (code_end == 0) return null;
+    const status_code = std.fmt.parseInt(u32, after_sp1[0..code_end], 10) catch return null;
+    const status_text = if (code_end < after_sp1.len) std.mem.trim(u8, after_sp1[code_end..], " \t") else "";
+
+    // Let synchronous HttpLoader handle redirects (301/302/303/307/308)
+    if (status_code == 301 || status_code == 302 || status_code == 303 || status_code == 307 || status_code == 308) {
+        if (findHeaderValueRange(head, "Location") != null) return null;
+    }
+
+    const raw_headers = if (first_crlf + 2 <= head.len) head[first_crlf + 2 ..] else "";
+    // Let synchronous HttpLoader handle compressed responses
+    if (ce := findHeaderValueRange(raw_headers, "Content-Encoding")) {
+        if (ce.len > 0 && !std.ascii.eqlIgnoreCase(ce, "identity")) return null;
+    }
+
+    let body = body_raw;
+    if (te := findHeaderValueRange(raw_headers, "Transfer-Encoding")) {
+        if (HttpLoader.containsIgnoreCase(te, "chunked")) {
+            const dec_len = HttpLoader.decodeChunkedInPlace(body_raw);
+            body = body_raw[0..dec_len];
+        }
+    }
+
+    const content_type = findHeaderValueRange(raw_headers, "Content-Type") ?? "";
+    const content_disposition = findHeaderValueRange(raw_headers, "Content-Disposition");
+    const csp = findHeaderValueRange(raw_headers, "Content-Security-Policy") ?? "";
+    const ref_pol = findHeaderValueRange(raw_headers, "Referrer-Policy") ?? "";
+
+    return HttpLoaderResult{
+        status_code: status_code,
+        status_text: status_text,
+        final_url: final_url,
+        html: body,
+        content_type: content_type,
+        content_disposition: content_disposition,
+        content_security_policy: csp,
+        referrer_policy: ref_pol,
+        raw_headers: raw_headers,
+        req_headers_text: req_headers_text,
+        resp_headers_text: head,
+        wire_headers_len: hdr_end + 4,
+        wire_body_len: body_raw.len,
+        raw_body: body,
+        raw_body_base64: false,
+    };
+}
+
+pub fn takePendingJsNavUrl(session: *CdpPageSession, out_url_buf: []u8): usize {
+    if (!session.has_document) return 0;
+    const has_p = session.ctx.eval(
+        "((globalThis.__capsurf_pending_navigation || '') && !(globalThis.__capsurf_pending_navigation_post && globalThis.__capsurf_pending_navigation_post.url) && !(globalThis.__capsurf_pending_download || '')) ? 1 : 0",
+    );
+    const ready = !jsIsException(has_p) && (session.ctx.toInt64(has_p) catch 0) != 0;
+    session.ctx.freeValue(has_p);
+    if (!ready) return 0;
+
+    const val = session.ctx.eval("String(globalThis.__capsurf_pending_navigation || '')");
+    if (jsIsException(val)) {
+        session.ctx.freeValue(val);
+        return 0;
+    }
+    defer session.ctx.freeValue(val);
+    const pending_raw = session.ctx.toCString(val);
+    if (pending_raw.len == 0) return 0;
+    if (std.ascii.startsWithIgnoreCase(pending_raw, "javascript:")) return 0;
+
+    let resolved_buf: [2048]u8 = [0; 2048];
+    const target_url = HttpLoader.resolveRelativeUrl(session.url, pending_raw, &resolved_buf);
+    if (target_url.len == 0 || target_url.len > out_url_buf.len) return 0;
+    if (!canUseAsyncHttpNav(session, target_url)) return 0;
+
+    // Do not treat an iframe's src navigation as a top-level page navigation
+    let ni: usize = 0;
+    while (ni < session.doc.nodes.items.len) : (ni += 1) {
+        const node = &session.doc.nodes.items[ni];
+        if (node.isElement() && (node.hasTag("iframe") || node.hasTag("frame"))) {
+            if (isrc := session.doc.getAttribute(node.id, "src")) {
+                if (std.mem.eql(u8, isrc, pending_raw) || std.mem.eql(u8, isrc, target_url)) {
+                    return 0;
+                }
+            }
+        }
+    }
+
+    const clr = session.ctx.eval("globalThis.__capsurf_pending_navigation = '';");
+    session.ctx.freeValue(clr);
+    @memcpy(out_url_buf[0..target_url.len], target_url);
+    return target_url.len;
+}
+
+pub fn completePendingNavigationFromResult(
+    session: *CdpPageSession,
+    out_events: *[MAX_CDP_EVENTS]CdpEvent,
+    event_count: *usize,
+    fetch_res: HttpLoaderResult,
+): bool {
+    event_count.* = 0;
+    const kind = documentKind(fetch_res.content_type, fetch_res.content_disposition);
+    if (kind == DocumentKind.blocked) {
+        if (executeDownload(
+            session.allocator,
+            getDownloadConfigStore(),
+            session.currentBrowserContextId(),
+            session.frame_id,
+            fetch_res.final_url,
+            fetch_res.content_disposition ?? "",
+            "",
+            u16(@min(fetch_res.status_code, 65535)),
+            fetch_res.html,
+            out_events,
+            event_count,
+        )) {
+            return true;
+        }
+        return false;
+    }
+
+    session.nextLoaderId();
+    const doc_req_id = session.loader_id;
+
+    let synth_buf: ([]u8)? = null;
+    defer if (synth_buf != null) session.allocator.free(synth_buf.?);
+    let alloc_b64: ([]u8)? = null;
+    defer if (alloc_b64 != null) session.allocator.free(alloc_b64.?);
+    let b64_str: []const u8 = fetch_res.raw_body;
+    let nav_html: []const u8 = fetch_res.html;
+
+    clearDocResponseBodies();
+    if (kind == DocumentKind.image) {
+        if (!fetch_res.raw_body_base64) {
+            alloc_b64 = Base64.encodeAlloc(session.allocator, fetch_res.html) catch return false;
+            b64_str = alloc_b64.?;
+        }
+        recordResponseBody(doc_req_id, b64_str, true);
+        const needed = b64_str.len + 4096;
+        synth_buf = session.allocator.alloc(u8, needed) catch return false;
+        nav_html = imageDocumentHtml(fetch_res.html, b64_str, fetch_res.content_type, fetch_res.final_url, synth_buf.?);
+    } else if (kind == DocumentKind.text) {
+        recordResponseBody(doc_req_id, fetch_res.raw_body, fetch_res.raw_body_base64);
+        const needed = fetch_res.html.len * 6 + fetch_res.final_url.len * 6 + 1024;
+        synth_buf = session.allocator.alloc(u8, needed) catch return false;
+        nav_html = textDocumentHtml(fetch_res.html, fetch_res.final_url, synth_buf.?);
+    } else if (kind == DocumentKind.json) {
+        recordResponseBody(doc_req_id, fetch_res.raw_body, fetch_res.raw_body_base64);
+        const needed = fetch_res.html.len * 16 + fetch_res.final_url.len * 6 + 16384;
+        synth_buf = session.allocator.alloc(u8, needed) catch return false;
+        nav_html = jsonViewerHtml(fetch_res.html, fetch_res.final_url, synth_buf.?);
+    } else {
+        recordResponseBody(doc_req_id, fetch_res.raw_body, fetch_res.raw_body_base64);
+    }
+
+    session.nav_tty_stripped = false;
+    session.navigate(nav_html, fetch_res.final_url, "") catch return false;
+    if (isXmlOrXhtml(fetch_res.content_type, fetch_res.final_url)) {
+        session.doc.in_quirks_mode = false;
+    }
+
+    if (event_count.* < out_events.len) {
+        const start_json = std.fmt.allocPrint(
+            session.allocator,
+            "{{\"frameId\":\"{s}\"}}",
+            .{ session.frame_id },
+        ) catch "{}";
+        out_events[event_count.*] = CdpEvent.create("Page.frameStartedLoading", start_json);
+        event_count.* += 1;
+    }
+
+    if (session.network_enabled && event_count.* < out_events.len) {
+        let esc_u_buf: [2048]u8 = [0; 2048];
+        const esc_u = escapeJsonString(fetch_res.final_url, &esc_u_buf);
+        const req_evt = std.fmt.allocPrint(
+            session.allocator,
+            "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{{}},\"initialPriority\":\"VeryHigh\",\"referrerPolicy\":\"strict-origin-when-cross-origin\"}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"other\"}},\"type\":\"Document\",\"frameId\":\"{s}\"}}",
+            .{ doc_req_id, session.loader_id, esc_u, esc_u, session.frame_id },
+        ) catch "{}";
+        out_events[event_count.*] = CdpEvent.create("Network.requestWillBeSent", req_evt);
+        event_count.* += 1;
+        if (event_count.* < out_events.len) {
+            const mime_raw = mimeEssence(fetch_res.content_type);
+            const mime_out = if (mime_raw.len > 0) mime_raw else "text/html";
+            const resp_json = std.fmt.allocPrint(
+                session.allocator,
+                "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"timestamp\":1700000000.0,\"type\":\"Document\",\"response\":{{\"url\":\"{s}\",\"status\":{d},\"statusText\":\"OK\",\"headers\":{{}},\"mimeType\":\"{s}\"}},\"frameId\":\"{s}\"}}",
+                .{ doc_req_id, session.loader_id, esc_u, fetch_res.status_code, mime_out, session.frame_id },
+            ) catch "{}";
+            out_events[event_count.*] = CdpEvent.create("Network.responseReceived", resp_json);
+            event_count.* += 1;
+        }
+        if (event_count.* < out_events.len) {
+            const wire_total = fetch_res.wire_headers_len + fetch_res.wire_body_len;
+            const enc_len = if (wire_total > 0) wire_total else fetch_res.raw_body.len;
+            const fin_json = std.fmt.allocPrint(
+                session.allocator,
+                "{{\"requestId\":\"{s}\",\"timestamp\":1700000000.01,\"encodedDataLength\":{d}}}",
+                .{ doc_req_id, enc_len },
+            ) catch "{}";
+            out_events[event_count.*] = CdpEvent.create("Network.loadingFinished", fin_json);
+            event_count.* += 1;
+        }
+    }
+
+    const fn_json = session.formatFrameNavigatedEvent(fetch_res.final_url);
+    if (event_count.* < out_events.len) {
+        out_events[event_count.*] = CdpEvent.create("Page.frameNavigated", fn_json);
+        event_count.* += 1;
+    }
+    if (session.runtime_enabled) {
+        emitMainAndIsolatedExecutionContexts(session, fetch_res.final_url, out_events, event_count);
+    }
+    emitMainFrameLifecycleEvents(session, out_events, event_count);
+    if (session.runtime_enabled) {
+        let polled_con_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+        const polled_con_count = session.pollConsoleEvents(&polled_con_evts);
+        let con_i: usize = 0;
+        while (con_i < polled_con_count && event_count.* < out_events.len) : (con_i += 1) {
+            out_events[event_count.*] = polled_con_evts[con_i];
+            event_count.* += 1;
+        }
+    }
+    return true;
+}
+
+pub fn completePageNavigationFromResult(
+    session: *CdpPageSession,
+    req_id: i64,
+    out_buf: []u8,
+    out_events: *[MAX_CDP_EVENTS]CdpEvent,
+    event_count: *usize,
+    referrer: []const u8,
+    skip_first_request_will_be_sent: bool,
+    fetch_res: HttpLoaderResult,
+): CdpResponse {
+    const doc_req_id = session.loader_id;
+
+    const kind = documentKind(fetch_res.content_type, fetch_res.content_disposition);
+    if (kind == DocumentKind.blocked || fetch_res.status_code == 204 || fetch_res.status_code == 205) {
+        let is_download = false;
+        if (kind == DocumentKind.blocked) {
+            is_download = executeDownload(
+                session.allocator,
+                getDownloadConfigStore(),
+                session.currentBrowserContextId(),
+                session.frame_id,
+                fetch_res.final_url,
+                fetch_res.content_disposition ?? "",
+                "",
+                u16(@min(fetch_res.status_code, 65535)),
+                fetch_res.html,
+                out_events,
+                event_count,
+            );
+        }
+        if (session.network_enabled && !std.ascii.eqlIgnoreCase(fetch_res.final_url, "about:blank") && event_count.* < out_events.len) {
+            const fail_json = std.fmt.allocPrint(
+                session.allocator,
+                "{{\"requestId\":\"{s}\",\"timestamp\":1700000000.0,\"type\":\"Document\",\"errorText\":\"net::ERR_ABORTED\",\"canceled\":false}}",
+                .{ doc_req_id },
+            ) catch "{}";
+            out_events[event_count.*] = CdpEvent.create("Network.loadingFailed", fail_json);
+            event_count.* += 1;
+        }
+        const is_dl_str: []const u8 = if (is_download) "true" else "false";
+        const abort_res = std.fmt.bufPrint(
+            out_buf,
+            "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"isDownload\":{s},\"errorText\":\"net::ERR_ABORTED\"}}",
+            .{ session.frame_id, session.loader_id, is_dl_str },
+        ) catch return CdpResponse.err(req_id, -32000, "Buffer overflow");
+        return CdpResponse.ok(req_id, abort_res);
+    }
+
+    let synth_buf: ([]u8)? = null;
+    defer if (synth_buf != null) session.allocator.free(synth_buf.?);
+    let alloc_b64: ([]u8)? = null;
+    defer if (alloc_b64 != null) session.allocator.free(alloc_b64.?);
+    let eff_status: u32 = fetch_res.status_code;
+    let eff_status_text: []const u8 = fetch_res.status_text;
+    let eff_raw_headers: []const u8 = fetch_res.raw_headers;
+    let eff_content_type: []const u8 = fetch_res.content_type;
+    let eff_raw_body: []const u8 = fetch_res.raw_body;
+    let eff_raw_body_b64: bool = fetch_res.raw_body_base64;
+    let eff_html: []const u8 = fetch_res.html;
+    if (fetch_res.status_code == 200) {
+        recordCachedDoc(fetch_res.final_url, fetch_res.raw_headers, fetch_res.content_type, fetch_res.raw_body, fetch_res.raw_body_base64, fetch_res.html);
+    } else if (fetch_res.status_code == 304) {
+        if (cached := findCachedDoc(fetch_res.final_url)) {
+            eff_status = 200;
+            eff_status_text = "OK";
+            if (cached.raw_headers.len > 0) eff_raw_headers = cached.raw_headers;
+            if (cached.content_type_len > 0) eff_content_type = cached.content_type_buf[0..cached.content_type_len];
+            eff_raw_body = cached.raw_body;
+            eff_raw_body_b64 = cached.raw_body_base64;
+            eff_html = cached.html;
+        }
+    }
+
+    let b64_str: []const u8 = eff_raw_body;
+    let nav_html: []const u8 = eff_html;
+
+    clearDocResponseBodies();
+    if (kind == DocumentKind.image) {
+        if (!eff_raw_body_b64) {
+            alloc_b64 = Base64.encodeAlloc(session.allocator, eff_html) catch return CdpResponse.err(req_id, -32000, "Base64 encoding failed");
+            b64_str = alloc_b64.?;
+        }
+        recordResponseBody(doc_req_id, b64_str, true);
+        const needed = b64_str.len + 4096;
+        synth_buf = session.allocator.alloc(u8, needed) catch return CdpResponse.err(req_id, -32000, "Out of memory");
+        nav_html = imageDocumentHtml(eff_html, b64_str, eff_content_type, fetch_res.final_url, synth_buf.?);
+    } else if (kind == DocumentKind.text) {
+        recordResponseBody(doc_req_id, eff_raw_body, eff_raw_body_b64);
+        const needed = eff_html.len * 6 + fetch_res.final_url.len * 6 + 1024;
+        synth_buf = session.allocator.alloc(u8, needed) catch return CdpResponse.err(req_id, -32000, "Out of memory");
+        nav_html = textDocumentHtml(eff_html, fetch_res.final_url, synth_buf.?);
+    } else if (kind == DocumentKind.json) {
+        recordResponseBody(doc_req_id, eff_raw_body, eff_raw_body_b64);
+        const needed = eff_html.len * 16 + fetch_res.final_url.len * 6 + 16384;
+        synth_buf = session.allocator.alloc(u8, needed) catch return CdpResponse.err(req_id, -32000, "Out of memory");
+        nav_html = jsonViewerHtml(eff_html, fetch_res.final_url, synth_buf.?);
+    } else {
+        recordResponseBody(doc_req_id, eff_raw_body, eff_raw_body_b64);
+    }
+
+    let effective_referrer: []const u8 = referrer;
+    let ref_origin_buf_a: [1024]u8 = undefined;
+    let ref_origin_buf_b: [1024]u8 = undefined;
+    if (fetch_res.redirect_count > 0 && effective_referrer.len > 0) {
+        let hi: usize = 0;
+        while (hi < fetch_res.redirect_count) : (hi += 1) {
+            if (fetch_res.redirect_urls[hi].len > 0) {
+                if (hi + 1 < fetch_res.redirect_count && fetch_res.redirect_urls[hi + 1].len > 0) {
+                    if ((hi % 2) == 0) {
+                        effective_referrer = computeNextReferrer(effective_referrer, fetch_res.redirect_urls[hi], fetch_res.redirect_urls[hi + 1], &ref_origin_buf_a);
+                    } else {
+                        effective_referrer = computeNextReferrer(effective_referrer, fetch_res.redirect_urls[hi], fetch_res.redirect_urls[hi + 1], &ref_origin_buf_b);
+                    }
+                } else {
+                    if ((hi % 2) == 0) {
+                        effective_referrer = computeNextReferrer(effective_referrer, fetch_res.redirect_urls[hi], fetch_res.final_url, &ref_origin_buf_a);
+                    } else {
+                        effective_referrer = computeNextReferrer(effective_referrer, fetch_res.redirect_urls[hi], fetch_res.final_url, &ref_origin_buf_b);
+                    }
+                }
+            }
+        }
+    }
+
+    emitDetachAllChildFrames(session, out_events, event_count);
+    session.known_child_frame_count = 0;
+    session.emitted_child_frame_count = 0;
+    session.pending_http_csp = fetch_res.content_security_policy;
+    session.pending_http_referrer_policy = fetch_res.referrer_policy;
+    session.navigate(nav_html, fetch_res.final_url, effective_referrer) catch return CdpResponse.err(req_id, -32000, "HTML parsing failed");
+    if (isXmlOrXhtml(fetch_res.content_type, fetch_res.final_url)) {
+        session.doc.in_quirks_mode = false;
+    }
+    syncIframeTargets(session, true);
+
+    if (event_count.* < out_events.len) {
+        const start_json = std.fmt.allocPrint(
+            session.allocator,
+            "{{\"frameId\":\"{s}\"}}",
+            .{ session.frame_id },
+        ) catch "{}";
+        out_events[event_count.*] = CdpEvent.create("Page.frameStartedLoading", start_json);
+        event_count.* += 1;
+    }
+
+    if (session.network_enabled && !std.ascii.eqlIgnoreCase(fetch_res.final_url, "about:blank") && event_count.* < out_events.len) {
+        let req_hdrs_obj: []const u8 = "{}";
+        if (fetch_res.req_headers_text.len > 0) {
+            if (crlf := std.mem.indexOf(u8, fetch_res.req_headers_text, "\r\n")) {
+                req_hdrs_obj = formatHttpHeadersJson(fetch_res.req_headers_text[crlf + 2 ..], session.allocator);
+            }
+        }
+        if (std.mem.eql(u8, req_hdrs_obj, "{}")) {
+            let ua_esc_buf: [512]u8 = [0; 512];
+            const ua_val = if (session.user_agent.len > 0) session.user_agent else DEFAULT_HTTP_USER_AGENT;
+            const esc_ua = escapeJsonString(ua_val, &ua_esc_buf);
+            req_hdrs_obj = std.fmt.allocPrint(session.allocator, "{{\"user-agent\":\"{s}\"}}", .{esc_ua}) catch "{}";
+        }
+        if (fetch_res.redirect_count == 0) {
+            if (!skip_first_request_will_be_sent) {
+                let esc_u_buf: [2048]u8 = [0; 2048];
+                const esc_u = escapeJsonString(fetch_res.final_url, &esc_u_buf);
+                const req_json = std.fmt.allocPrint(
+                    session.allocator,
+                    "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{s}}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"other\"}},\"type\":\"Document\",\"frameId\":\"{s}\"}}",
+                    .{ doc_req_id, session.loader_id, esc_u, esc_u, req_hdrs_obj, session.frame_id },
+                ) catch "{}";
+                out_events[event_count.*] = CdpEvent.create("Network.requestWillBeSent", req_json);
+                event_count.* += 1;
+            }
+        } else {
+            if (!skip_first_request_will_be_sent) {
+                let esc_u0_buf: [2048]u8 = [0; 2048];
+                const esc_u0 = escapeJsonString(fetch_res.redirect_urls[0], &esc_u0_buf);
+                let hop0_req_hdrs = req_hdrs_obj;
+                if (fetch_res.redirect_hops[0].req_headers_text.len > 0) {
+                    if (crlf0 := std.mem.indexOf(u8, fetch_res.redirect_hops[0].req_headers_text, "\r\n")) {
+                        hop0_req_hdrs = formatHttpHeadersJson(fetch_res.redirect_hops[0].req_headers_text[crlf0 + 2 ..], session.allocator);
+                    }
+                }
+                const req0_json = std.fmt.allocPrint(
+                    session.allocator,
+                    "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{s}}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"other\"}},\"type\":\"Document\",\"frameId\":\"{s}\"}}",
+                    .{ doc_req_id, session.loader_id, esc_u0, esc_u0, hop0_req_hdrs, session.frame_id },
+                ) catch "{}";
+                out_events[event_count.*] = CdpEvent.create("Network.requestWillBeSent", req0_json);
+                event_count.* += 1;
+            }
+            if (!session.redirect_live_emitted) {
+                let hi: usize = 1;
+                while (hi <= fetch_res.redirect_count && event_count.* < out_events.len) : (hi += 1) {
+                    const hop_u = if (hi < fetch_res.redirect_count) fetch_res.redirect_urls[hi] else fetch_res.final_url;
+                    let esc_u_buf: [2048]u8 = [0; 2048];
+                    const esc_u = escapeJsonString(hop_u, &esc_u_buf);
+                    const prev_u = fetch_res.redirect_urls[hi - 1];
+                    let esc_prev_buf: [2048]u8 = [0; 2048];
+                    const esc_prev = escapeJsonString(prev_u, &esc_prev_buf);
+                    const prev_hop = &fetch_res.redirect_hops[hi - 1];
+                    const prev_status: u32 = if (prev_hop.status_code > 0) prev_hop.status_code else 302;
+                    const prev_st = if (prev_hop.status_text.len > 0) prev_hop.status_text else "Found";
+                    let prev_st_buf: [128]u8 = [0; 128];
+                    const esc_prev_st = escapeJsonString(prev_st, &prev_st_buf);
+                    const prev_hdrs_json = if (prev_hop.raw_headers.len > 0) formatHttpHeadersJson(prev_hop.raw_headers, session.allocator) else "{}";
+                    const prev_mime: []const u8 = "text/html";
+                    let hop_req_hdrs = req_hdrs_obj;
+                    if (hi < fetch_res.redirect_hops.len && fetch_res.redirect_hops[hi].req_headers_text.len > 0) {
+                        if (crlf_h := std.mem.indexOf(u8, fetch_res.redirect_hops[hi].req_headers_text, "\r\n")) {
+                            hop_req_hdrs = formatHttpHeadersJson(fetch_res.redirect_hops[hi].req_headers_text[crlf_h + 2 ..], session.allocator);
+                        }
+                    }
+                    if (event_count.* < out_events.len) {
+                        const req_json = std.fmt.allocPrint(
+                            session.allocator,
+                            "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{s}}},\"redirectResponse\":{{\"url\":\"{s}\",\"status\":{d},\"statusText\":\"{s}\",\"headers\":{s},\"mimeType\":\"{s}\"}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"other\"}},\"type\":\"Document\",\"frameId\":\"{s}\"}}",
+                            .{ doc_req_id, session.loader_id, esc_u, esc_u, hop_req_hdrs, esc_prev, prev_status, esc_prev_st, prev_hdrs_json, prev_mime, session.frame_id },
+                        ) catch "{}";
+                        out_events[event_count.*] = CdpEvent.create("Network.requestWillBeSent", req_json);
+                        event_count.* += 1;
+                    }
+                }
+            }
+        }
+        if (fetch_res.req_headers_text.len > 0 && event_count.* < out_events.len) {
+            let req_ht_buf: [8192]u8 = undefined;
+            const req_ht_esc = escapeJsonString(fetch_res.req_headers_text, &req_ht_buf);
+            const req_extra_json = std.fmt.allocPrint(
+                session.allocator,
+                "{{\"requestId\":\"{s}\",\"associatedCookies\":[],\"headers\":{s},\"headersText\":\"{s}\"}}",
+                .{ doc_req_id, req_hdrs_obj, req_ht_esc },
+            ) catch "{}";
+            out_events[event_count.*] = CdpEvent.create("Network.requestWillBeSentExtraInfo", req_extra_json);
+            event_count.* += 1;
+        }
+    }
+
+    if (session.network_enabled && !std.ascii.eqlIgnoreCase(fetch_res.final_url, "about:blank") && event_count.* < out_events.len) {
+        let esc_u_buf: [2048]u8 = [0; 2048];
+        const esc_u = escapeJsonString(fetch_res.final_url, &esc_u_buf);
+        let st_esc_buf: [256]u8 = [0; 256];
+        const st_esc = escapeJsonString(eff_status_text, &st_esc_buf);
+        const hdrs_json = formatHttpHeadersJson(eff_raw_headers, session.allocator);
+        const mime_raw = mimeEssence(eff_content_type);
+        const mime_out = if (mime_raw.len > 0) mime_raw else "text/html";
+        const has_extra_kv = if (fetch_res.resp_headers_text.len > 0) ",\"hasExtraInfo\":true" else "";
+        const resp_json = std.fmt.allocPrint(
+            session.allocator,
+            "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"timestamp\":1700000000.0,\"type\":\"Document\",\"response\":{{\"url\":\"{s}\",\"status\":{d},\"statusText\":\"{s}\",\"headers\":{s},\"mimeType\":\"{s}\"}},\"frameId\":\"{s}\"{s}}}",
+            .{ doc_req_id, session.loader_id, esc_u, eff_status, st_esc, hdrs_json, mime_out, session.frame_id, has_extra_kv },
+        ) catch "{}";
+        out_events[event_count.*] = CdpEvent.create("Network.responseReceived", resp_json);
+        event_count.* += 1;
+        if (fetch_res.resp_headers_text.len > 0 && event_count.* < out_events.len) {
+            let resp_ht_buf: [8192]u8 = undefined;
+            const resp_ht_esc = escapeJsonString(fetch_res.resp_headers_text, &resp_ht_buf);
+            const resp_extra_json = std.fmt.allocPrint(
+                session.allocator,
+                "{{\"requestId\":\"{s}\",\"blockedCookies\":[],\"headers\":{s},\"headersText\":\"{s}\",\"statusCode\":{d}}}",
+                .{ doc_req_id, hdrs_json, resp_ht_esc, fetch_res.status_code },
+            ) catch "{}";
+            out_events[event_count.*] = CdpEvent.create("Network.responseReceivedExtraInfo", resp_extra_json);
+            event_count.* += 1;
+        }
+    }
+
+    if (session.network_enabled && !std.ascii.eqlIgnoreCase(fetch_res.final_url, "about:blank") && event_count.* < out_events.len) {
+        const wire_total = fetch_res.wire_headers_len + fetch_res.wire_body_len;
+        const enc_len = if (wire_total > 0) wire_total else fetch_res.raw_body.len;
+        const fin_json = std.fmt.allocPrint(
+            session.allocator,
+            "{{\"requestId\":\"{s}\",\"timestamp\":1700000000.0,\"encodedDataLength\":{d}}}",
+            .{ doc_req_id, enc_len },
+        ) catch "{}";
+        out_events[event_count.*] = CdpEvent.create("Network.loadingFinished", fin_json);
+        event_count.* += 1;
+    }
+
+    const fn_json = session.formatFrameNavigatedEvent(fetch_res.final_url);
+    if (event_count.* < out_events.len) {
+        out_events[event_count.*] = CdpEvent.create("Page.frameNavigated", fn_json);
+        event_count.* += 1;
+    }
+    emitMainAndIsolatedExecutionContexts(session, fetch_res.final_url, out_events, event_count);
+
+    const nav_frames = session.allocator.alloc(FrameState, 48) catch null;
+    const nav_urls = session.allocator.alloc(u8, 48 * 512) catch null;
+    const nav_ids = session.allocator.alloc(u8, 48 * 32) catch null;
+    defer if (nav_frames != null) session.allocator.free(nav_frames.?);
+    defer if (nav_urls != null) session.allocator.free(nav_urls.?);
+    defer if (nav_ids != null) session.allocator.free(nav_ids.?);
+    if (nav_frames != null && nav_urls != null && nav_ids != null) {
+        const nav_slice = nav_frames.?;
+        const nav_frame_count = collectFrameStates(session, nav_slice, nav_urls.?, nav_ids.?);
+        let frame_info_buf: [2048]u8 = [0; 2048];
+        let fi: usize = 1;
+        while (fi < nav_frame_count && event_count.* < out_events.len) : (fi += 1) {
+            let cf = &nav_slice[fi];
+            const parent_fid = cf.parent_frame_id ?? session.frame_id;
+            if (event_count.* < out_events.len) {
+                const att_json = std.fmt.allocPrint(
+                    session.allocator,
+                    "{{\"frameId\":\"{s}\",\"parentFrameId\":\"{s}\"}}",
+                    .{ cf.frame_id, parent_fid },
+                ) catch "{}";
+                out_events[event_count.*] = CdpEvent.create("Page.frameAttached", att_json);
+                event_count.* += 1;
+            }
+            if (event_count.* < out_events.len) {
+                const start_json = std.fmt.allocPrint(
+                    session.allocator,
+                    "{{\"frameId\":\"{s}\"}}",
+                    .{ cf.frame_id },
+                ) catch "{}";
+                out_events[event_count.*] = CdpEvent.create("Page.frameStartedLoading", start_json);
+                event_count.* += 1;
+            }
+            emitChildFrameNetworkEvents(session, cf, out_events, event_count);
+            if (event_count.* < out_events.len) {
+                const frame_info = makeFrameInfoWithFrames(cf, nav_slice[0..nav_frame_count], &frame_info_buf);
+                const nav_json = std.fmt.allocPrint(
+                    session.allocator,
+                    "{{\"frame\":{s},\"type\":\"Navigation\"}}",
+                    .{ frame_info },
+                ) catch "{}";
+                out_events[event_count.*] = CdpEvent.create("Page.frameNavigated", nav_json);
+                event_count.* += 1;
+            }
+            if (event_count.* < out_events.len) {
+                const lc_json = std.fmt.allocPrint(
+                    session.allocator,
+                    "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"name\":\"init\",\"timestamp\":1700000000.0}}",
+                    .{ cf.frame_id, cf.loader_id },
+                ) catch "{}";
+                out_events[event_count.*] = CdpEvent.create("Page.lifecycleEvent", lc_json);
+                event_count.* += 1;
+            }
+            if (session.runtime_enabled && !isRefusedKindFrameUrl(cf.url) && event_count.* < out_events.len) {
+                const allow_nav_ctx = !cf.is_cross_origin || countActiveOopifContexts(session) < MAX_CONCURRENT_OOPIF;
+                if (allow_nav_ctx) {
+                    const ctx_id = session.next_context_id;
+                    session.next_context_id += 1;
+                    cf.exec_context_id = ctx_id;
+                    const cf_origin = originOf(cf.url);
+                    let esc_orig_buf: [256]u8 = [0; 256];
+                    const esc_orig = escapeJsonString(cf_origin, &esc_orig_buf);
+                    const ctx_json = std.fmt.allocPrint(
+                        session.allocator,
+                        "{{\"context\":{{\"id\":{d},\"origin\":\"{s}\",\"name\":\"\",\"auxData\":{{\"isDefault\":true,\"type\":\"default\",\"frameId\":\"{s}\"}}}}}}",
+                        .{ ctx_id, esc_orig, cf.frame_id },
+                    ) catch "{}";
+                    out_events[event_count.*] = CdpEvent.create("Runtime.executionContextCreated", ctx_json);
+                    event_count.* += 1;
+                    emitChildFrameIsolatedWorlds(session, cf.frame_id, cf.url, !cf.sandbox.same_origin, out_events, event_count);
+                    if (cf.is_cross_origin) {
+                        recordAttachedChildFrames(session, nav_slice[0..nav_frame_count]);
+                    }
+                }
+            }
+            if (event_count.* < out_events.len) {
+                const dcl_json = std.fmt.allocPrint(
+                    session.allocator,
+                    "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"name\":\"DOMContentLoaded\",\"timestamp\":1700000000.05}}",
+                    .{ cf.frame_id, cf.loader_id },
+                ) catch "{}";
+                out_events[event_count.*] = CdpEvent.create("Page.lifecycleEvent", dcl_json);
+                event_count.* += 1;
+            }
+            if (event_count.* < out_events.len) {
+                const load_json = std.fmt.allocPrint(
+                    session.allocator,
+                    "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"name\":\"load\",\"timestamp\":1700000000.1}}",
+                    .{ cf.frame_id, cf.loader_id },
+                ) catch "{}";
+                out_events[event_count.*] = CdpEvent.create("Page.lifecycleEvent", load_json);
+                event_count.* += 1;
+            }
+            if (event_count.* < out_events.len) {
+                const stop_json = std.fmt.allocPrint(
+                    session.allocator,
+                    "{{\"frameId\":\"{s}\"}}",
+                    .{ cf.frame_id },
+                ) catch "{}";
+                out_events[event_count.*] = CdpEvent.create("Page.frameStoppedLoading", stop_json);
+                event_count.* += 1;
+            }
+        }
+        session.emitted_child_frame_count = if (nav_frame_count > 1) nav_frame_count - 1 else 0;
+        recordAttachedChildFrames(session, nav_slice[0..nav_frame_count]);
+    }
+    if (session.runtime_enabled) {
+        let polled_con_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+        const polled_con_count = session.pollConsoleEvents(&polled_con_evts);
+        let con_i: usize = 0;
+        while (con_i < polled_con_count && event_count.* < out_events.len) : (con_i += 1) {
+            out_events[event_count.*] = polled_con_evts[con_i];
+            event_count.* += 1;
+        }
+    }
+
+    if (session.lifecycle_events_enabled && session.activeAsyncFetchCount() > 0) {
+        session.pending_main_load_deferred = true;
+        emitMainFrameDomContentLoadedEvents(session, out_events, event_count);
+    } else {
+        emitMainFrameLifecycleEvents(session, out_events, event_count);
+    }
+
+    if (session.css_enabled) {
+        let polled_css_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+        const polled_css_count = session.pollCssEvents(&polled_css_evts);
+        let css_i: usize = 0;
+        while (css_i < polled_css_count && event_count.* < out_events.len) : (css_i += 1) {
+            out_events[event_count.*] = polled_css_evts[css_i];
+            event_count.* += 1;
+        }
+    }
+
+    if (session.network_enabled) {
+        let polled_net_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+        const polled_net_count = session.pollNetworkEvents(&polled_net_evts);
+        let net_i: usize = 0;
+        while (net_i < polled_net_count && event_count.* < out_events.len) : (net_i += 1) {
+            out_events[event_count.*] = polled_net_evts[net_i];
+            event_count.* += 1;
+        }
+    }
+
+    if (session.webmcp_enabled) {
+        let polled_wm_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+        const polled_wm_count = session.pollWebMcpEvents(&polled_wm_evts);
+        let wm_i: usize = 0;
+        while (wm_i < polled_wm_count && event_count.* < out_events.len) : (wm_i += 1) {
+            out_events[event_count.*] = polled_wm_evts[wm_i];
+            event_count.* += 1;
+        }
+    }
+
+    if (session.navigation_aborted || session.checkWindowStopped()) {
+        const err_res = std.fmt.bufPrint(
+            out_buf,
+            "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"errorText\":\"net::ERR_ABORTED\",\"isDownload\":false}}",
+            .{ session.frame_id, session.loader_id },
+        ) catch return CdpResponse.err(req_id, -32000, "Buffer overflow");
+        return CdpResponse.ok(req_id, err_res);
+    }
+    const res = std.fmt.bufPrint(
+        out_buf,
+        "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"isDownload\":false}}",
+        .{ session.frame_id, session.loader_id },
+    ) catch return CdpResponse.err(req_id, -32000, "Buffer overflow");
+    return CdpResponse.ok(req_id, res);
 }
