@@ -5,7 +5,7 @@
 import { CdpRequest, CdpResponse, CdpEvent, MAX_CDP_EVENTS } from "./types.cp";
 import { CdpPageSession } from "./session.cp";
 import { DomHandler } from "./dom.cp";
-import { PageHandler, syncIframeTargets, emitNewChildFrameEvents } from "./page.cp";
+import { PageHandler, syncIframeTargets, emitNewChildFrameEvents, navigatePendingPopupUrl } from "./page.cp";
 import { RuntimeHandler } from "./runtime.cp";
 import { TargetHandler } from "./target.cp";
 import { InputHandler } from "./input.cp";
@@ -168,7 +168,11 @@ pub struct CdpDispatcher {
 
         if (std.mem.startsWith(u8, req.method, "Network.") ||
             std.mem.startsWith(u8, req.method, "Storage.")) {
-            return NetworkHandler.handle(session, req, out_buf);
+            const net_resp = NetworkHandler.handle(session, req, out_buf);
+            if (session.network_enabled && session.pending_popup_nav_url_len > 0) {
+                navigatePendingPopupUrl(session, out_events, event_count);
+            }
+            return net_resp;
         }
 
         if (std.mem.startsWith(u8, req.method, "Emulation.")) {

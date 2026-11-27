@@ -546,7 +546,11 @@ function installInputElement(global) {
     if (!this.willValidate) return true;
     if (!this.validity.valid) {
       const evt = new Event("invalid", { bubbles: false, cancelable: true });
-      this.dispatchEvent(evt);
+      if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_dispatchTrustedEvent === "function") {
+        globalThis.__capsurf_dispatchTrustedEvent(this, evt);
+      } else {
+        this.dispatchEvent(evt);
+      }
       return false;
     }
     return true;

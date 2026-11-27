@@ -867,6 +867,7 @@ function installElementExtensions(proto) {
   proto.appendChild = Node.prototype.appendChild;
   proto.insertBefore = Node.prototype.insertBefore;
   proto.removeChild = Node.prototype.removeChild;
+  proto.isSameNode = Node.prototype.isSameNode;
 
   if (proto.nodeType === undefined) {
     Object.defineProperty(proto, "nodeType", {
@@ -3974,6 +3975,7 @@ function installElementExtensions(proto) {
     if (!this.willValidate) return true;
     if (this.validity && !this.validity.valid) {
       const evt = new Event("invalid", { bubbles: false, cancelable: true });
+      try { evt._isTrusted = true; } catch (e) {}
       this.dispatchEvent(evt);
       return false;
     }

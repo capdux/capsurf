@@ -48,8 +48,17 @@ const PHASE_CAPTURING = 1;
 const PHASE_AT_TARGET = 2;
 const PHASE_BUBBLING = 3;
 
+function _isValidEventTargetReceiver(t) {
+  if (!t || typeof t !== "object") return false;
+  if (t instanceof EventTarget) return true;
+  if (t === global || (typeof window !== "undefined" && t === window) || (typeof globalThis !== "undefined" && t === globalThis)) return true;
+  if (t.nodeType === 1 || t.nodeType === 9 || t.nodeType === 11 || t._isEventTarget) return true;
+  if (typeof t.window === "object" && t.window === t) return true;
+  return false;
+}
+
 EventTarget.prototype.addEventListener = function addEventListener(type, callback) {
-  if (!this || (!(this instanceof EventTarget) && this !== global && (typeof window !== "undefined" && this !== window) && (typeof globalThis !== "undefined" && this !== globalThis))) {
+  if (!_isValidEventTargetReceiver(this)) {
     throw new TypeError("Failed to execute 'addEventListener' on 'EventTarget': Illegal invocation");
   }
   const options = arguments[2];
@@ -102,7 +111,7 @@ EventTarget.prototype.addEventListener = function addEventListener(type, callbac
 };
 
 EventTarget.prototype.removeEventListener = function removeEventListener(type, callback) {
-  if (!this || (!(this instanceof EventTarget) && this !== global && (typeof window !== "undefined" && this !== window) && (typeof globalThis !== "undefined" && this !== globalThis))) {
+  if (!_isValidEventTargetReceiver(this)) {
     throw new TypeError("Failed to execute 'removeEventListener' on 'EventTarget': Illegal invocation");
   }
   const options = arguments[2];
@@ -447,7 +456,9 @@ function internalDispatch(target, event, trusted) {
             const attrVal = entry.getAttribute(propName);
             if (typeof attrVal === "string" && attrVal && entry[propName] == null) {
               try {
-                entry[propName] = new Function("event", attrVal);
+                entry[propName] = propName === "onerror"
+                  ? new Function("event", "source", "lineno", "colno", "error", attrVal)
+                  : new Function("event", attrVal);
               } catch (e) {}
             }
           } else if (
@@ -470,13 +481,16 @@ function internalDispatch(target, event, trusted) {
               const bodyAttr = document.body.getAttribute(propName);
               if (typeof bodyAttr === "string" && bodyAttr && entry[propName] === undefined) {
                 try {
-                  entry[propName] = new Function("event", bodyAttr);
+                  entry[propName] = propName === "onerror"
+                    ? new Function("event", "source", "lineno", "colno", "error", bodyAttr)
+                    : new Function("event", bodyAttr);
                 } catch (e) {}
               }
             }
           }
         }
-        const fn = entry[propName];
+        const skipWinOnerror = propName === "onerror" && (entry === global || (typeof window !== "undefined" && entry === window));
+        const fn = skipWinOnerror ? null : entry[propName];
         if (typeof fn === "function" && !isImmediateStopped()) {
           try {
             const ret = fn.call(entry, event);
@@ -493,7 +507,8 @@ function internalDispatch(target, event, trusted) {
               event.preventDefault();
             }
           } catch (e) {
-            if (typeof console !== "undefined" && console.error) console.error(e);
+            if (typeof reportError === "function") reportError(e);
+            else if (typeof console !== "undefined" && console.error) console.error(e);
           }
         }
       }

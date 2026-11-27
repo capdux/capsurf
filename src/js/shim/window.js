@@ -80,9 +80,18 @@ function installWindow(global) {
     configurable: true,
   });
   try {
+    Object.defineProperty(ActiveWindow.prototype, Symbol.toStringTag, {
+      value: "Window",
+      configurable: true,
+    });
+  } catch (e) {}
+  try {
     Object.setPrototypeOf(global, ActiveWindow.prototype);
     if (Object.prototype.hasOwnProperty.call(global, "constructor")) {
       delete global.constructor;
+    }
+    if (Object.prototype.hasOwnProperty.call(global, Symbol.toStringTag)) {
+      delete global[Symbol.toStringTag];
     }
   } catch (e) {}
   if (typeof window !== "undefined" && !window.Window) {
@@ -1139,7 +1148,16 @@ function installWindow(global) {
     return this._data.has(k) ? this._data.get(k) : null;
   };
   Storage.prototype.setItem = function (key, val) {
-    this._data.set(String(key), String(val));
+    const k = String(key);
+    const v = String(val);
+    let total = v.length;
+    this._data.forEach(function (ev, ek) {
+      if (ek !== k) total += ev.length;
+    });
+    if (total > 5 * 1024 * 1024) {
+      throw new DOMException("Failed to execute 'setItem' on 'Storage': Setting the value of '" + k + "' exceeded the quota.", "QuotaExceededError");
+    }
+    this._data.set(k, v);
   };
   Storage.prototype.removeItem = function (key) {
     this._data.delete(String(key));
@@ -1166,8 +1184,53 @@ function installWindow(global) {
   global.Storage = Storage;
   if (typeof window !== "undefined") window.Storage = Storage;
   if (typeof globalThis !== "undefined") globalThis.Storage = Storage;
-  global.localStorage = new Storage();
-  global.sessionStorage = new Storage();
+  function wrapStorageProxy(st) {
+    return new Proxy(st, {
+      get: function (target, prop, receiver) {
+        if (typeof prop === "symbol" || prop in Storage.prototype || prop === "_data") {
+          const val = Reflect.get(target, prop, target);
+          return typeof val === "function" ? val.bind(target) : val;
+        }
+        const k = String(prop);
+        return target._data.has(k) ? target._data.get(k) : undefined;
+      },
+      set: function (target, prop, value) {
+        if (typeof prop === "symbol" || prop === "_data") {
+          return Reflect.set(target, prop, value);
+        }
+        target.setItem(String(prop), value);
+        return true;
+      },
+      deleteProperty: function (target, prop) {
+        if (typeof prop === "symbol" || prop === "_data") {
+          return Reflect.deleteProperty(target, prop);
+        }
+        target.removeItem(String(prop));
+        return true;
+      },
+      has: function (target, prop) {
+        if (typeof prop === "symbol") return Reflect.has(target, prop);
+        if (prop in Storage.prototype) return true;
+        return target._data.has(String(prop));
+      },
+      ownKeys: function (target) {
+        return Array.from(target._data.keys());
+      },
+      getOwnPropertyDescriptor: function (target, prop) {
+        if (typeof prop === "string" && target._data.has(prop)) {
+          return {
+            value: target._data.get(prop),
+            writable: true,
+            enumerable: true,
+            configurable: true,
+          };
+        }
+        return undefined;
+      },
+    });
+  }
+  global.localStorage = wrapStorageProxy(new Storage());
+  global.sessionStorage = wrapStorageProxy(new Storage());
 
   // 1b. In-memory IndexedDB shim
   (function installIndexedDB() {
@@ -1962,9 +2025,8 @@ function installWindow(global) {
   }
   try {
     Object.defineProperty(global, "navigator", {
-      value: navigatorObj,
-      configurable: true,
-      writable: true,
+      get: function () { return navigatorObj; },
+      configurable: false,
       enumerable: true,
     });
   } catch (e) {
@@ -1976,6 +2038,49 @@ function installWindow(global) {
       }
     } catch (e2) {}
   }
+
+  // Clipboard API (W3C Clipboard API & Events)
+  (function () {
+    const _clipToken = Symbol("ClipboardInternal");
+    function Clipboard(token) {
+      if (token !== _clipToken) {
+        throw new TypeError("Illegal constructor");
+      }
+      if (typeof EventTarget === "function") {
+        try { EventTarget.call(this); } catch (e) {}
+      }
+    }
+    Clipboard.prototype = Object.create(typeof EventTarget !== "undefined" ? EventTarget.prototype : Object.prototype);
+    Clipboard.prototype.constructor = Clipboard;
+    Object.defineProperty(Clipboard.prototype, Symbol.toStringTag, { value: "Clipboard", configurable: true });
+    Clipboard.prototype.readText = markNative(function () {
+      const msg = "Read permission denied.";
+      const err = typeof DOMException === "function"
+        ? new DOMException(msg, "NotAllowedError")
+        : Object.assign(new Error(msg), { name: "NotAllowedError" });
+      return Promise.reject(err);
+    }, "readText");
+    Clipboard.prototype.writeText = markNative(function (data) {
+      if (arguments.length < 1) {
+        return Promise.reject(new TypeError("Failed to execute 'writeText' on 'Clipboard': 1 argument required, but only 0 present."));
+      }
+      try {
+        if (typeof globalThis !== "undefined") globalThis.__capsurf_clipboard_text = String(data);
+      } catch (e) {}
+      return Promise.resolve(undefined);
+    }, "writeText");
+    markNative(Clipboard, "Clipboard");
+    global.Clipboard = Clipboard;
+    if (typeof window !== "undefined") window.Clipboard = Clipboard;
+    if (typeof globalThis !== "undefined") globalThis.Clipboard = Clipboard;
+
+    const clipboardInstance = new Clipboard(_clipToken);
+    Object.defineProperty(navigatorObj, "clipboard", {
+      get: function () { return clipboardInstance; },
+      configurable: true,
+      enumerable: true,
+    });
+  })();
 
   // 3. Location & History
   let currentHref = "about:blank";
@@ -2104,17 +2209,22 @@ function installWindow(global) {
     },
     set hash(val) {
       let h = String(val);
-      if (h && !h.startsWith("#")) h = "#" + h;
+      if (h === "" || !h.startsWith("#")) h = "#" + h;
       const base = currentHref.split("#")[0];
       const newUrl = base + h;
       if (newUrl !== currentHref) {
+        const prevHref = currentHref;
         currentHref = newUrl;
+        const newUrlSnapshot = currentHref;
         historyIdx++;
         historyStack.splice(historyIdx, historyStack.length - historyIdx, { state: null, url: currentHref });
         if (!global.__capsurf_same_doc_nav) global.__capsurf_same_doc_nav = [];
         global.__capsurf_same_doc_nav.push({ url: currentHref, type: "fragment" });
         setTimeout(() => {
-          try { global.dispatchEvent(new NativeEvent("hashchange")); } catch (e) {}
+          try {
+            const Ev = typeof HashChangeEvent === "function" ? HashChangeEvent : NativeEvent;
+            global.dispatchEvent(new Ev("hashchange", { oldURL: prevHref, newURL: newUrlSnapshot }));
+          } catch (e) {}
         }, 0);
       }
     },
@@ -2407,15 +2517,79 @@ function installWindow(global) {
     if (globalThis.onpopstate === undefined) globalThis.onpopstate = null;
   }
 
-  // 4. Screen
-  global.screen = {
-    width: 1920,
-    height: 1080,
-    availWidth: 1920,
-    availHeight: 1080,
-    colorDepth: 24,
-    pixelDepth: 24,
-  };
+  // 4. Screen & ScreenOrientation
+  function ScreenOrientation() {
+    throw new TypeError("Illegal constructor");
+  }
+  ScreenOrientation.prototype = Object.create(typeof EventTarget !== "undefined" ? EventTarget.prototype : Object.prototype);
+  ScreenOrientation.prototype.constructor = ScreenOrientation;
+  Object.defineProperty(ScreenOrientation.prototype, Symbol.toStringTag, {
+    value: "ScreenOrientation",
+    configurable: true,
+  });
+  const _validOrientations = new Set([
+    "any", "natural", "landscape", "portrait",
+    "portrait-primary", "portrait-secondary",
+    "landscape-primary", "landscape-secondary",
+  ]);
+  const _screenOrientationInstance = Object.create(ScreenOrientation.prototype);
+  let _orientationOnchange = null;
+  Object.defineProperty(ScreenOrientation.prototype, "angle", {
+    get: function () {
+      if (this !== _screenOrientationInstance) throw new TypeError("Illegal invocation");
+      return 0;
+    },
+    configurable: true,
+    enumerable: true,
+  });
+  Object.defineProperty(ScreenOrientation.prototype, "type", {
+    get: function () {
+      if (this !== _screenOrientationInstance) throw new TypeError("Illegal invocation");
+      return "landscape-primary";
+    },
+    configurable: true,
+    enumerable: true,
+  });
+  Object.defineProperty(ScreenOrientation.prototype, "onchange", {
+    get: function () {
+      if (this !== _screenOrientationInstance) throw new TypeError("Illegal invocation");
+      return _orientationOnchange;
+    },
+    set: function (v) {
+      if (this !== _screenOrientationInstance) throw new TypeError("Illegal invocation");
+      _orientationOnchange = typeof v === "function" ? v : null;
+    },
+    configurable: true,
+    enumerable: true,
+  });
+  ScreenOrientation.prototype.lock = markNative(function (orientation) {
+    if (this !== _screenOrientationInstance) {
+      return Promise.reject(new TypeError("Illegal invocation"));
+    }
+    if (arguments.length < 1 || typeof orientation !== "string" || !_validOrientations.has(orientation)) {
+      return Promise.reject(new TypeError("Failed to execute 'lock' on 'ScreenOrientation': invalid orientation."));
+    }
+    const DOMEx = typeof DOMException !== "undefined" ? DOMException : Error;
+    return Promise.reject(new DOMEx("screen.orientation.lock() is not available on this device.", "NotSupportedError"));
+  }, "lock");
+  ScreenOrientation.prototype.unlock = markNative(function () {
+    if (this !== _screenOrientationInstance) throw new TypeError("Illegal invocation");
+    return undefined;
+  }, "unlock");
+  markNative(ScreenOrientation, "ScreenOrientation");
+  global.ScreenOrientation = ScreenOrientation;
+  if (typeof window !== "undefined") window.ScreenOrientation = ScreenOrientation;
+  if (typeof globalThis !== "undefined") globalThis.ScreenOrientation = ScreenOrientation;
+
+  const _screenObj = Object.create(typeof EventTarget !== "undefined" ? EventTarget.prototype : Object.prototype);
+  _screenObj.width = 1920;
+  _screenObj.height = 1080;
+  _screenObj.availWidth = 1920;
+  _screenObj.availHeight = 1080;
+  _screenObj.colorDepth = 24;
+  _screenObj.pixelDepth = 24;
+  _screenObj.orientation = _screenOrientationInstance;
+  global.screen = _screenObj;
 
   // 5. Performance & Timers
   const nativeDateNow = (typeof Date !== "undefined" && typeof Date.now === "function")
@@ -2697,7 +2871,14 @@ function installWindow(global) {
     }
   }, "clearTimeout");
 
+  const activeIntervals = new Set();
   global.setInterval = markNative(function (cb, ms) {
+    if (!global.__capsurf_in_internal_interval && activeIntervals.size >= 2049) {
+      if (typeof DOMException === "function") {
+        throw new DOMException("Too many active intervals (limit 2048)", "QuotaExceededError");
+      }
+      throw new RangeError("Too many active intervals (limit 2048)");
+    }
     const id = nextTimerId();
     const curNesting = global.__capsurf_timer_nesting || 0;
     const rawDelay = Math.max(0, Number(ms) || 0);
@@ -2715,13 +2896,16 @@ function installWindow(global) {
       nestingLevel: curNesting,
     };
     activeTimers.set(id, true);
+    if (!global.__capsurf_in_internal_interval) activeIntervals.add(id);
     insertTimerTask(item);
     scheduleTaskDrain();
     return id;
   }, "setInterval");
 
   global.clearInterval = markNative(function (id) {
-    activeTimers.delete(Number(id));
+    const numId = Number(id);
+    activeTimers.delete(numId);
+    activeIntervals.delete(numId);
   }, "clearInterval");
 
   if (typeof window !== "undefined") {
@@ -8703,10 +8887,12 @@ function installWindow(global) {
       if (unit === "cm") return num * (96 / 2.54);
       if (unit === "mm") return num * (96 / 25.4);
       if (unit === "q") return num * (96 / 101.6);
-      if (unit === "vw") return (num / 100) * 800;
-      if (unit === "vh") return (num / 100) * 600;
-      if (unit === "vmin") return (num / 100) * 600;
-      if (unit === "vmax") return (num / 100) * 800;
+      const _vw = (typeof global.innerWidth === "number" && global.innerWidth > 0) ? global.innerWidth : 800;
+      const _vh = (typeof global.innerHeight === "number" && global.innerHeight > 0) ? global.innerHeight : 600;
+      if (unit === "vw") return (num / 100) * _vw;
+      if (unit === "vh") return (num / 100) * _vh;
+      if (unit === "vmin") return (num / 100) * Math.min(_vw, _vh);
+      if (unit === "vmax") return (num / 100) * Math.max(_vw, _vh);
       if (unit === "ex") return num * (fontSizePx || 16) * 0.8;
       if (unit === "cqw" || unit === "cqi" || unit === "cqh" || unit === "cqb") return num;
       if (unit === "ch") {
@@ -8921,7 +9107,8 @@ function installWindow(global) {
   }
 
   function computeElementUsedHeightPx(element, depth) {
-    if (!element || element.nodeType !== 1 || depth > 24) return 600;
+    const _vh = (typeof global.innerHeight === "number" && global.innerHeight > 0) ? global.innerHeight : 600;
+    if (!element || element.nodeType !== 1 || depth > 24) return _vh;
     const rawMap = collectRawComputedMap(element, "");
     const fontSize = evalCssLengthExpr(rawMap.get("font-size") || "16px", 16, 16) || 16;
     const bs = (rawMap.get("block-size") || "").trim().toLowerCase();
@@ -8929,7 +9116,7 @@ function installWindow(global) {
     if (hRaw === "initial" || hRaw === "unset" || hRaw === "revert" || hRaw === "revert-layer") hRaw = "auto";
     if (hRaw && hRaw !== "auto" && hRaw !== "min-content" && hRaw !== "max-content") {
       const parentEl = element.parentElement || element.parentNode;
-      const cbH = (parentEl && parentEl.nodeType === 1) ? computeElementUsedHeightPx(parentEl, depth + 1) : 600;
+      const cbH = (parentEl && parentEl.nodeType === 1) ? computeElementUsedHeightPx(parentEl, depth + 1) : _vh;
       const h = evalCssLengthExpr(hRaw, cbH, fontSize);
       if (h !== null) return Math.max(0, h);
     }
@@ -9957,7 +10144,8 @@ function installWindow(global) {
       // Resolve block-size, inline-size, min/max logical sizes
       let _cbH = null;
       const getCbH = () => {
-        if (_cbH === null) _cbH = (parentEl && parentEl.nodeType === 1) ? computeElementUsedHeightPx(parentEl, 0) : 600;
+        const _vh = (typeof global.innerHeight === "number" && global.innerHeight > 0) ? global.innerHeight : 600;
+        if (_cbH === null) _cbH = (parentEl && parentEl.nodeType === 1) ? computeElementUsedHeightPx(parentEl, 0) : _vh;
         return _cbH;
       };
       const bsRaw = (computedMap.get("block-size") || "").trim().toLowerCase();
@@ -10022,7 +10210,8 @@ function installWindow(global) {
           const hRawA = (computedMap.get("height") || "auto").trim().toLowerCase();
           const wRawA = (computedMap.get("width") || "auto").trim().toLowerCase();
           if ((mTop === "auto" || mBot === "auto") && topRaw !== "auto" && botRaw !== "auto" && hRawA !== "auto") {
-            const cbH = (cbEl && cbEl.nodeType === 1) ? computeElementUsedHeightPx(cbEl, 0) : 600;
+            const _vh = (typeof global.innerHeight === "number" && global.innerHeight > 0) ? global.innerHeight : 600;
+            const cbH = (cbEl && cbEl.nodeType === 1) ? computeElementUsedHeightPx(cbEl, 0) : _vh;
             const topPx = evalCssLengthExpr(topRaw, cbH, fontSize);
             const botPx = evalCssLengthExpr(botRaw, cbH, fontSize);
             const hPx = evalCssLengthExpr(hRawA, cbH, fontSize);
@@ -17203,6 +17392,16 @@ const CSS_TYPED_OM_GLOBALS = {
       }
     } catch (e) {}
     try {
+      if (global.document && global.document.body && typeof global.document.body.getAttribute === "function") {
+        const bodyOnloadAttr = global.document.body.getAttribute("onload");
+        if (typeof bodyOnloadAttr === "string" && bodyOnloadAttr.length > 0 && typeof global.onload !== "function") {
+          try {
+            global.onload = new Function("event", bodyOnloadAttr);
+          } catch (e) {}
+        }
+      }
+    } catch (e) {}
+    try {
       if (global.dispatchEvent) {
         const loadEv = new NativeEvent("load", { bubbles: false, cancelable: false });
         if (global.document) loadEv._overrideTarget = global.document;
@@ -17271,6 +17470,7 @@ const CSS_TYPED_OM_GLOBALS = {
   }
 
   // Window scroll methods
+  let windowScrollTimer = null;
   let windowScrollendTimer = null;
   function triggerWindowScrollEvents() {
     const Ev = (typeof Event !== "undefined")
@@ -17294,13 +17494,18 @@ const CSS_TYPED_OM_GLOBALS = {
       }
     };
 
-    if (doc) {
-      const docScrollEv = new Ev("scroll", { bubbles: false, cancelable: false });
-      dispatch(doc, docScrollEv);
-    }
-    if (win) {
-      const winScrollEv = new Ev("scroll", { bubbles: false, cancelable: false });
-      dispatch(win, winScrollEv);
+    if (!windowScrollTimer) {
+      windowScrollTimer = setTimeout(function () {
+        windowScrollTimer = null;
+        if (doc) {
+          const docScrollEv = new Ev("scroll", { bubbles: false, cancelable: false });
+          dispatch(doc, docScrollEv);
+        }
+        if (win) {
+          const winScrollEv = new Ev("scroll", { bubbles: false, cancelable: false });
+          dispatch(win, winScrollEv);
+        }
+      }, 0);
     }
 
     if (windowScrollendTimer) {
@@ -18207,9 +18412,15 @@ const CSS_TYPED_OM_GLOBALS = {
     });
   }
 
-  // fullscreenEnabled, fullscreenElement, exitFullscreen
+  // fullscreenEnabled, fullscreen, fullscreenElement, exitFullscreen, requestFullscreen
   if (!Object.getOwnPropertyDescriptor(docProto, "fullscreenEnabled")) {
     Object.defineProperty(docProto, "fullscreenEnabled", {
+      get: function () { return false; },
+      configurable: true,
+    });
+  }
+  if (!Object.getOwnPropertyDescriptor(docProto, "fullscreen")) {
+    Object.defineProperty(docProto, "fullscreen", {
       get: function () { return false; },
       configurable: true,
     });
@@ -18220,10 +18431,13 @@ const CSS_TYPED_OM_GLOBALS = {
       configurable: true,
     });
   }
-  if (!docProto.exitFullscreen) {
-    docProto.exitFullscreen = markNative(function () {
-      return Promise.resolve();
-    }, "exitFullscreen");
+  docProto.exitFullscreen = markNative(function () {
+    return Promise.reject(new TypeError("Document not active"));
+  }, "exitFullscreen");
+  if (typeof Element !== "undefined" && Element.prototype && !Element.prototype.requestFullscreen) {
+    Element.prototype.requestFullscreen = markNative(function () {
+      return Promise.reject(new TypeError("Fullscreen is not supported"));
+    }, "requestFullscreen");
   }
 
   // legacy members: clear, captureEvents, releaseEvents
@@ -20871,6 +21085,14 @@ const CSS_TYPED_OM_GLOBALS = {
         }
       }
       if (win && typeof win.dispatchEvent === "function" && typeof ErrorEvent === "function") {
+        let canceledByOnerror = false;
+        if (typeof win.onerror === "function") {
+          try {
+            if (win.onerror.call(win, msg, filename, lineno, colno, err) === true) {
+              canceledByOnerror = true;
+            }
+          } catch (_e2) {}
+        }
         const errEvt = new ErrorEvent("error", {
           message: msg,
           filename: filename,
@@ -20880,10 +21102,10 @@ const CSS_TYPED_OM_GLOBALS = {
           cancelable: true,
           bubbles: false,
         });
-        const notCanceled = win.dispatchEvent(errEvt);
-        if (notCanceled && typeof win.onerror === "function") {
-          try { win.onerror.call(win, msg, filename, lineno, colno, err); } catch (_e2) {}
+        if (canceledByOnerror) {
+          try { errEvt.preventDefault(); } catch (_e3) {}
         }
+        win.dispatchEvent(errEvt);
       }
     }, "reportError");
     global.reportError = reportErrorFn;
@@ -20903,7 +21125,9 @@ const CSS_TYPED_OM_GLOBALS = {
             const attr = body.getAttribute(prop);
             if (typeof attr === "string") {
               try {
-                const fn = new Function("event", attr);
+                const fn = prop === "onerror"
+                  ? new Function("event", "source", "lineno", "colno", "error", attr)
+                  : new Function("event", attr);
                 _windowEventHandlers[prop] = fn;
                 return fn;
               } catch (e) {}
@@ -20913,7 +21137,7 @@ const CSS_TYPED_OM_GLOBALS = {
         return null;
       };
       const setter = function (v) {
-        _windowEventHandlers[prop] = (v !== null && (typeof v === "object" || typeof v === "function")) ? v : null;
+        _windowEventHandlers[prop] = typeof v === "function" ? v : null;
       };
       Object.defineProperty(getter, "name", { value: "get " + prop, configurable: true });
       Object.defineProperty(setter, "name", { value: "set " + prop, configurable: true });
@@ -21695,9 +21919,75 @@ const CSS_TYPED_OM_GLOBALS = {
     });
   })();
 
+  // Minimal Intl.DateTimeFormat fallback if QuickJS built without Intl
+  if (typeof global.Intl === "undefined") {
+    function DateTimeFormat(locales, options) {
+      if (!(this instanceof DateTimeFormat)) return new DateTimeFormat(locales, options);
+      this._locales = locales;
+      this._options = options || {};
+    }
+    Object.defineProperty(DateTimeFormat.prototype, Symbol.toStringTag, { value: "Intl.DateTimeFormat", configurable: true });
+    DateTimeFormat.prototype.format = function (d) { return new Date(d === undefined ? Date.now() : d).toUTCString(); };
+    DateTimeFormat.prototype.resolvedOptions = function () { return { locale: "en-US", calendar: "gregory", numberingSystem: "latn", timeZone: "UTC" }; };
+    DateTimeFormat.supportedLocalesOf = function () { return []; };
+    const IntlObj = { DateTimeFormat: DateTimeFormat };
+    global.Intl = IntlObj;
+    if (typeof window !== "undefined") window.Intl = IntlObj;
+    if (typeof globalThis !== "undefined") globalThis.Intl = IntlObj;
+  }
+
+  // Notification API
+  (function () {
+    function Notification(title, options) {
+      if (!(this instanceof Notification)) {
+        throw new TypeError("Failed to construct 'Notification': Please use the 'new' operator, this DOM object constructor cannot be called as a function.");
+      }
+      if (arguments.length < 1) {
+        throw new TypeError("Failed to construct 'Notification': 1 argument required, but only 0 present.");
+      }
+      if (typeof EventTarget === "function") {
+        try { EventTarget.call(this); } catch (e) {}
+      }
+      const opts = (options !== null && typeof options === "object") ? options : {};
+      this.title = String(title);
+      this.body = opts.body !== undefined ? String(opts.body) : "";
+      this.icon = opts.icon !== undefined ? String(opts.icon) : "";
+      this.tag = opts.tag !== undefined ? String(opts.tag) : "";
+      this.lang = opts.lang !== undefined ? String(opts.lang) : "";
+      this.dir = opts.dir !== undefined ? String(opts.dir) : "auto";
+      this.silent = Boolean(opts.silent);
+      this.requireInteraction = Boolean(opts.requireInteraction);
+      this.data = opts.data !== undefined ? opts.data : null;
+    }
+    Notification.prototype = Object.create(typeof EventTarget !== "undefined" ? EventTarget.prototype : Object.prototype);
+    Notification.prototype.constructor = Notification;
+    Object.defineProperty(Notification.prototype, Symbol.toStringTag, { value: "Notification", configurable: true });
+    Notification.prototype.close = markNative(function () {}, "close");
+    Object.defineProperty(Notification, "permission", { get: function () { return "default"; }, configurable: true, enumerable: true });
+    Object.defineProperty(Notification, "maxActions", { get: function () { return 2; }, configurable: true, enumerable: true });
+    Notification.requestPermission = markNative(function (cb) {
+      const res = "default";
+      if (typeof cb === "function") { try { cb(res); } catch (e) {} }
+      return Promise.resolve(res);
+    }, "requestPermission");
+    markNative(Notification, "Notification");
+    try {
+      Object.defineProperty(global, "Notification", { value: Notification, writable: true, configurable: true, enumerable: true });
+    } catch (e) { global.Notification = Notification; }
+    if (typeof window !== "undefined") {
+      try { Object.defineProperty(window, "Notification", { value: Notification, writable: true, configurable: true, enumerable: true }); } catch (e) { window.Notification = Notification; }
+    }
+    if (typeof globalThis !== "undefined") {
+      try { Object.defineProperty(globalThis, "Notification", { value: Notification, writable: true, configurable: true, enumerable: true }); } catch (e) { globalThis.Notification = Notification; }
+    }
+  })();
+
   // Complete console.* API methods backed by native console.log/warn/error
   if (typeof global.console === "object" && global.console) {
     const c = global.console;
+    try {
+      Object.defineProperty(c, Symbol.toStringTag, { value: "console", configurable: true });
+    } catch (e) {}
     const timers = new Map();
     const counters = new Map();
     if (typeof c.time !== "function") {
@@ -21737,17 +22027,22 @@ const CSS_TYPED_OM_GLOBALS = {
         counters.set(k, 0);
       };
     }
-    if (typeof c.assert !== "function") {
-      c.assert = function (cond) {
+    if (typeof c.log === "function" && c.log.length !== 0) {
+      const origLog = c.log;
+      c.log = function () { return origLog.apply(c, arguments); };
+    }
+    if (typeof c.assert !== "function" || c.assert.length !== 0) {
+      c.assert = function () {
+        const cond = arguments[0];
         if (!cond) {
           const rest = Array.prototype.slice.call(arguments, 1);
           c.error.apply(c, rest.length > 0 ? ["Assertion failed:"].concat(rest) : ["Assertion failed"]);
         }
       };
     }
-    if (typeof c.dir !== "function") c.dir = function (obj) { c.log(obj); };
+    if (typeof c.dir !== "function" || c.dir.length !== 0) c.dir = function () { if (arguments.length) c.log(arguments[0]); };
     if (typeof c.dirxml !== "function") c.dirxml = function () { c.log.apply(c, arguments); };
-    if (typeof c.table !== "function") c.table = function (data) { c.log(data); };
+    if (typeof c.table !== "function" || c.table.length !== 0) c.table = function () { if (arguments.length) c.log(arguments[0]); };
     if (typeof c.trace !== "function") c.trace = function () { c.log.apply(c, arguments.length ? arguments : ["console.trace"]); };
     if (typeof c.group !== "function") c.group = function () { if (arguments.length) c.log.apply(c, arguments); };
     if (typeof c.groupCollapsed !== "function") c.groupCollapsed = function () { if (arguments.length) c.log.apply(c, arguments); };

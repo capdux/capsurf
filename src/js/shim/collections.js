@@ -674,6 +674,118 @@ Object.defineProperty(HTMLOptionsCollection.prototype, Symbol.toStringTag, {
   value: "HTMLOptionsCollection",
   configurable: true,
 });
+
+function HTMLAllCollection() {
+  throw new TypeError("Illegal constructor");
+}
+Object.defineProperty(HTMLAllCollection.prototype, Symbol.toStringTag, {
+  value: "HTMLAllCollection",
+  configurable: true,
+});
+markNative(HTMLAllCollection, "HTMLAllCollection");
+if (typeof global !== "undefined") global.HTMLAllCollection = HTMLAllCollection;
+if (typeof window !== "undefined") window.HTMLAllCollection = HTMLAllCollection;
+if (typeof globalThis !== "undefined") globalThis.HTMLAllCollection = HTMLAllCollection;
+
+const ALL_NAMED_TAGS = new Set(["a", "applet", "area", "embed", "form", "frame", "frameset", "iframe", "img", "object"]);
+
+function makeHtmlAllCollection(doc) {
+  function collectAll() {
+    const out = [];
+    const up = typeof upgradeElement === "function" ? upgradeElement : (typeof globalThis !== "undefined" && globalThis.upgradeElement);
+    function walk(node) {
+      if (!node) return;
+      let ch = node.firstChild;
+      while (ch) {
+        if (ch.nodeType === 1) {
+          out.push(up ? up(ch) : ch);
+          walk(ch);
+        }
+        ch = ch.nextSibling;
+      }
+    }
+    walk(doc);
+    return out;
+  }
+  function resolveNamed(name) {
+    const key = String(name);
+    if (!key) return null;
+    const list = collectAll();
+    const matches = [];
+    for (let i = 0; i < list.length; i++) {
+      const el = list[i];
+      const id = el.getAttribute ? el.getAttribute("id") : el.id;
+      if (id === key) {
+        matches.push(el);
+        continue;
+      }
+      const tag = String(el.localName || el.tagName || "").toLowerCase();
+      if (ALL_NAMED_TAGS.has(tag)) {
+        const nm = el.getAttribute ? el.getAttribute("name") : null;
+        if (nm === key) matches.push(el);
+      }
+    }
+    if (matches.length === 0) return null;
+    if (matches.length === 1) return matches[0];
+    return makeHtmlCollection(function () { return matches; });
+  }
+  function resolveItem(indexOrName) {
+    if (arguments.length === 0) return null;
+    if (typeof indexOrName === "number" || /^\d+$/.test(String(indexOrName))) {
+      const idx = Number(indexOrName) | 0;
+      const list = collectAll();
+      return idx >= 0 && idx < list.length ? list[idx] : null;
+    }
+    return resolveNamed(indexOrName);
+  }
+  const fn = function (nameOrIndex) {
+    if (arguments.length === 0) return null;
+    return resolveItem(nameOrIndex);
+  };
+  Object.setPrototypeOf(fn, HTMLAllCollection.prototype);
+  return new Proxy(fn, {
+    get: function (target, prop, receiver) {
+      if (prop === "length") return collectAll().length;
+      if (prop === "item") return function (idxOrName) {
+        if (arguments.length === 0) return null;
+        return resolveItem(idxOrName);
+      };
+      if (prop === "namedItem") return function (name) {
+        return resolveNamed(name);
+      };
+      if (prop === Symbol.iterator) {
+        return function () {
+          const list = collectAll();
+          let idx = 0;
+          return {
+            next: function () {
+              return idx < list.length ? { value: list[idx++], done: false } : { value: undefined, done: true };
+            },
+          };
+        };
+      }
+      if (typeof prop === "string" && /^\d+$/.test(prop)) {
+        const idx = Number(prop);
+        const list = collectAll();
+        return idx >= 0 && idx < list.length ? list[idx] : undefined;
+      }
+      if (typeof prop === "string" && !(prop in HTMLAllCollection.prototype) && prop !== "constructor") {
+        const res = resolveNamed(prop);
+        if (res !== null) return res;
+        return undefined;
+      }
+      return Reflect.get(target, prop, receiver);
+    },
+    has: function (target, prop) {
+      if (prop === "length" || prop === "item" || prop === "namedItem") return true;
+      if (typeof prop === "string" && /^\d+$/.test(prop)) {
+        return Number(prop) < collectAll().length;
+      }
+      if (typeof prop === "string" && resolveNamed(prop) !== null) return true;
+      return Reflect.has(target, prop);
+    },
+  });
+}
 markNative(HTMLOptionsCollection, "HTMLOptionsCollection");
 
 Object.defineProperty(HTMLOptionsCollection.prototype, "length", {

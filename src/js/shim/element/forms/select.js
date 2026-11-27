@@ -480,7 +480,14 @@ function installSelectElement(global) {
     if (!this.willValidate) return true;
     if (!this.validity.valid) {
       const Ev = typeof Event === "function" ? Event : _OrigSelectEvent;
-      if (Ev) this.dispatchEvent(new Ev("invalid", { bubbles: false, cancelable: true }));
+      if (Ev) {
+        const evt = new Ev("invalid", { bubbles: false, cancelable: true });
+        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_dispatchTrustedEvent === "function") {
+          globalThis.__capsurf_dispatchTrustedEvent(this, evt);
+        } else {
+          this.dispatchEvent(evt);
+        }
+      }
       return false;
     }
     return true;

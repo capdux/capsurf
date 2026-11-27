@@ -5,7 +5,7 @@
 import { CdpRequest, CdpResponse, CdpEvent, extractJsonString, extractJsonInt, extractJsonFloat, extractJsonBool, unescapeJsonString, MAX_CDP_EVENTS } from "./types.cp";
 import { CdpPageSession, escapeJsonString, DEFAULT_HTTP_USER_AGENT } from "./session.cp";
 import { TtyNavState, applyTtyNavParams } from "../tty/nav_params.cp";
-import { jsIsException, JS_SetPropertyStr, JS_GetUint8Array, JS_TAG_OBJECT, JS_GetException, JS_FreeValue } from "../js/qjs_engine.cp";
+import { jsIsException, JS_SetPropertyStr, JS_GetUint8Array, JS_TAG_OBJECT, JS_GetException, JS_FreeValue, JS_ToInt32 } from "../js/qjs_engine.cp";
 import { HttpLoader, HttpLoaderResult } from "../net/http_loader.cp";
 import { MockFixtures } from "../net/mock_fixtures.cp";
 import { computeNextReferrer } from "../net/redirect_walk.cp";
@@ -23,9 +23,13 @@ import {
     textDocumentHtml,
     jsonViewerHtml,
 } from "./document_kind.cp";
-import { nextDocRequestId, recordResponseBody, clearDocResponseBodies, formatHttpHeadersJson } from "./network.cp";
+import { nextDocRequestId, recordResponseBody, clearDocResponseBodies, formatHttpHeadersJson, recordCachedDoc, findCachedDoc } from "./network.cp";
 import { executeDownload } from "./download.cp";
 import { getDownloadConfigStore } from "./browser.cp";
+
+@c {
+    fn usleep(usec: u32): i32;
+}
 
 let g_fetch_nav_pre_announced_id_buf: [64]u8 = [0; 64];
 let g_fetch_nav_pre_announced_id_len: usize = 0;
@@ -72,7 +76,7 @@ fn emitChildFrameNetworkEvents(
         const req_json = std.fmt.allocPrint(
             session.allocator,
             "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{{}}}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"other\"}},\"type\":\"Document\",\"frameId\":\"{s}\"}}",
-            .{ cf_req_id, cf.loader_id, esc_u, esc_u, cf.frame_id },
+            .{ cf_req_id, cf_req_id, esc_u, esc_u, cf.frame_id },
         ) catch "{}";
         out_events[event_count.*] = CdpEvent.create("Network.requestWillBeSent", req_json);
         event_count.* += 1;
@@ -81,7 +85,7 @@ fn emitChildFrameNetworkEvents(
         const resp_json = std.fmt.allocPrint(
             session.allocator,
             "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"timestamp\":1700000000.0,\"type\":\"Document\",\"response\":{{\"url\":\"{s}\",\"status\":200,\"statusText\":\"OK\",\"headers\":{{}},\"mimeType\":\"{s}\"}},\"frameId\":\"{s}\"}}",
-            .{ cf_req_id, cf.loader_id, esc_u, mime_out, cf.frame_id },
+            .{ cf_req_id, cf_req_id, esc_u, mime_out, cf.frame_id },
         ) catch "{}";
         out_events[event_count.*] = CdpEvent.create("Network.responseReceived", resp_json);
         event_count.* += 1;
@@ -129,7 +133,7 @@ fn emitMainAndIsolatedExecutionContexts(session: *CdpPageSession, doc_url: []con
     }
 }
 
-fn emitMainFrameLifecycleEvents(session: *CdpPageSession, out_events: *[]CdpEvent, event_count: *usize) {
+fn emitMainFrameDomContentLoadedEvents(session: *CdpPageSession, out_events: *[]CdpEvent, event_count: *usize) {
     if (session.navigation_aborted || session.checkWindowStopped()) {
         return;
     }
@@ -155,6 +159,12 @@ fn emitMainFrameLifecycleEvents(session: *CdpPageSession, out_events: *[]CdpEven
         out_events[event_count.*] = CdpEvent.create("Page.lifecycleEvent", lc_dcl);
         event_count.* += 1;
     }
+}
+
+fn emitMainFrameLoadEvents(session: *CdpPageSession, out_events: *[]CdpEvent, event_count: *usize) {
+    if (session.navigation_aborted || session.checkWindowStopped()) {
+        return;
+    }
     if (event_count.* < out_events.len) {
         out_events[event_count.*] = CdpEvent.create("Page.loadEventFired", "{\"timestamp\":1700000000.1}");
         event_count.* += 1;
@@ -177,6 +187,11 @@ fn emitMainFrameLifecycleEvents(session: *CdpPageSession, out_events: *[]CdpEven
         out_events[event_count.*] = CdpEvent.create("Page.frameStoppedLoading", main_stop_json);
         event_count.* += 1;
     }
+}
+
+fn emitMainFrameLifecycleEvents(session: *CdpPageSession, out_events: *[]CdpEvent, event_count: *usize) {
+    emitMainFrameDomContentLoadedEvents(session, out_events, event_count);
+    emitMainFrameLoadEvents(session, out_events, event_count);
 }
 
 fn isXmlOrXhtml(content_type: []const u8, url: []const u8): bool {
@@ -620,6 +635,16 @@ fn recordAttachedChildFrames(session: *CdpPageSession, frames: []const FrameStat
             @memcpy(k.parent_frame_id_buf[0..pfl], pf[0..pfl]);
             k.parent_frame_id_len = pfl;
             k.is_cross_origin = cf.is_cross_origin;
+            k.doc_net_emitted = session.network_enabled &&
+                cf.url.len > 0 &&
+                !isRefusedKindFrameUrl(cf.url) &&
+                !cf.request_blocked &&
+                !cf.frame_policy_blocked &&
+                !std.ascii.eqlIgnoreCase(cf.url, "about:blank") &&
+                !std.mem.startsWith(u8, cf.url, "about:blank?") &&
+                !std.mem.startsWith(u8, cf.url, "about:blank#") &&
+                !std.mem.startsWith(u8, cf.url, "about:srcdoc") &&
+                !std.mem.startsWith(u8, cf.url, "data:");
             session.known_child_frame_count += 1;
         }
     }
@@ -1132,14 +1157,30 @@ pub struct PageHandler {
         if (std.mem.eql(u8, req.method, "Page.setLifecycleEventsEnabled")) {
             const enabled = std.mem.indexOf(u8, req.params_raw, "\"enabled\":false") == null;
             session.lifecycle_events_enabled = enabled;
-            if (enabled && session.is_about_blank_popup && !session.initial_blank_lifecycle_emitted && !session.has_document && std.mem.eql(u8, session.url, "about:blank")) {
+            let is_blank_popup = session.is_about_blank_popup;
+            if (!is_blank_popup) {
+                if (oreg := session.owner_target_registry) {
+                    if (ti := oreg.findTargetIndex(session.target_id)) {
+                        if (oreg.targets[ti].opener_id_len > 0 && std.mem.eql(u8, oreg.targets[ti].url(), "about:blank")) {
+                            is_blank_popup = true;
+                            session.is_about_blank_popup = true;
+                        }
+                    }
+                }
+            }
+            if (enabled && is_blank_popup && !session.initial_blank_lifecycle_emitted && std.mem.eql(u8, session.url, "about:blank")) {
                 session.initial_blank_lifecycle_emitted = true;
                 if (event_count.* < out_events.len) {
                     const fn_json = session.formatFrameNavigatedEvent("about:blank");
                     out_events[event_count.*] = CdpEvent.create("Page.frameNavigated", fn_json);
                     event_count.* += 1;
                 }
+                if (session.lifecycle_events_enabled && session.activeAsyncFetchCount() > 0) {
+                session.pending_main_load_deferred = true;
+                emitMainFrameDomContentLoadedEvents(session, out_events, event_count);
+            } else {
                 emitMainFrameLifecycleEvents(session, out_events, event_count);
+            }
             }
             return CdpResponse.ok(req.id, "{}");
         }
@@ -1345,7 +1386,12 @@ pub struct PageHandler {
                 }
             }
 
-            emitMainFrameLifecycleEvents(session, out_events, event_count);
+            if (session.lifecycle_events_enabled && session.activeAsyncFetchCount() > 0) {
+                session.pending_main_load_deferred = true;
+                emitMainFrameDomContentLoadedEvents(session, out_events, event_count);
+            } else {
+                emitMainFrameLifecycleEvents(session, out_events, event_count);
+            }
 
             return CdpResponse.ok(req.id, "{}");
         }
@@ -1887,31 +1933,52 @@ pub struct PageHandler {
             defer if (synth_buf != null) session.allocator.free(synth_buf.?);
             let alloc_b64: ([]u8)? = null;
             defer if (alloc_b64 != null) session.allocator.free(alloc_b64.?);
-            let b64_str: []const u8 = fetch_res.raw_body;
-            let nav_html: []const u8 = fetch_res.html;
+            let eff_status: u32 = fetch_res.status_code;
+            let eff_status_text: []const u8 = fetch_res.status_text;
+            let eff_raw_headers: []const u8 = fetch_res.raw_headers;
+            let eff_content_type: []const u8 = fetch_res.content_type;
+            let eff_raw_body: []const u8 = fetch_res.raw_body;
+            let eff_raw_body_b64: bool = fetch_res.raw_body_base64;
+            let eff_html: []const u8 = fetch_res.html;
+            if (fetch_res.status_code == 200) {
+                recordCachedDoc(fetch_res.final_url, fetch_res.raw_headers, fetch_res.content_type, fetch_res.raw_body, fetch_res.raw_body_base64, fetch_res.html);
+            } else if (fetch_res.status_code == 304) {
+                if (cached := findCachedDoc(fetch_res.final_url)) {
+                    eff_status = 200;
+                    eff_status_text = "OK";
+                    if (cached.raw_headers.len > 0) eff_raw_headers = cached.raw_headers;
+                    if (cached.content_type_len > 0) eff_content_type = cached.content_type_buf[0..cached.content_type_len];
+                    eff_raw_body = cached.raw_body;
+                    eff_raw_body_b64 = cached.raw_body_base64;
+                    eff_html = cached.html;
+                }
+            }
+
+            let b64_str: []const u8 = eff_raw_body;
+            let nav_html: []const u8 = eff_html;
 
             clearDocResponseBodies();
             if (kind == DocumentKind.image) {
-                if (!fetch_res.raw_body_base64) {
-                    alloc_b64 = Base64.encodeAlloc(session.allocator, fetch_res.html) catch return CdpResponse.err(req.id, -32000, "Base64 encoding failed");
+                if (!eff_raw_body_b64) {
+                    alloc_b64 = Base64.encodeAlloc(session.allocator, eff_html) catch return CdpResponse.err(req.id, -32000, "Base64 encoding failed");
                     b64_str = alloc_b64.?;
                 }
                 recordResponseBody(doc_req_id, b64_str, true);
                 const needed = b64_str.len + 4096;
                 synth_buf = session.allocator.alloc(u8, needed) catch return CdpResponse.err(req.id, -32000, "Out of memory");
-                nav_html = imageDocumentHtml(fetch_res.html, b64_str, fetch_res.content_type, fetch_res.final_url, synth_buf.?);
+                nav_html = imageDocumentHtml(eff_html, b64_str, eff_content_type, fetch_res.final_url, synth_buf.?);
             } else if (kind == DocumentKind.text) {
-                recordResponseBody(doc_req_id, fetch_res.raw_body, fetch_res.raw_body_base64);
-                const needed = fetch_res.html.len * 6 + fetch_res.final_url.len * 6 + 1024;
+                recordResponseBody(doc_req_id, eff_raw_body, eff_raw_body_b64);
+                const needed = eff_html.len * 6 + fetch_res.final_url.len * 6 + 1024;
                 synth_buf = session.allocator.alloc(u8, needed) catch return CdpResponse.err(req.id, -32000, "Out of memory");
-                nav_html = textDocumentHtml(fetch_res.html, fetch_res.final_url, synth_buf.?);
+                nav_html = textDocumentHtml(eff_html, fetch_res.final_url, synth_buf.?);
             } else if (kind == DocumentKind.json) {
-                recordResponseBody(doc_req_id, fetch_res.raw_body, fetch_res.raw_body_base64);
-                const needed = fetch_res.html.len * 16 + fetch_res.final_url.len * 6 + 16384;
+                recordResponseBody(doc_req_id, eff_raw_body, eff_raw_body_b64);
+                const needed = eff_html.len * 16 + fetch_res.final_url.len * 6 + 16384;
                 synth_buf = session.allocator.alloc(u8, needed) catch return CdpResponse.err(req.id, -32000, "Out of memory");
-                nav_html = jsonViewerHtml(fetch_res.html, fetch_res.final_url, synth_buf.?);
+                nav_html = jsonViewerHtml(eff_html, fetch_res.final_url, synth_buf.?);
             } else {
-                recordResponseBody(doc_req_id, fetch_res.raw_body, fetch_res.raw_body_base64);
+                recordResponseBody(doc_req_id, eff_raw_body, eff_raw_body_b64);
             }
 
             let effective_referrer: []const u8 = referrer;
@@ -2053,15 +2120,15 @@ pub struct PageHandler {
                 let esc_u_buf: [2048]u8 = [0; 2048];
                 const esc_u = escapeJsonString(fetch_res.final_url, &esc_u_buf);
                 let st_esc_buf: [256]u8 = [0; 256];
-                const st_esc = escapeJsonString(fetch_res.status_text, &st_esc_buf);
-                const hdrs_json = formatHttpHeadersJson(fetch_res.raw_headers, session.allocator);
-                const mime_raw = mimeEssence(fetch_res.content_type);
+                const st_esc = escapeJsonString(eff_status_text, &st_esc_buf);
+                const hdrs_json = formatHttpHeadersJson(eff_raw_headers, session.allocator);
+                const mime_raw = mimeEssence(eff_content_type);
                 const mime_out = if (mime_raw.len > 0) mime_raw else "text/html";
                 const has_extra_kv = if (fetch_res.resp_headers_text.len > 0) ",\"hasExtraInfo\":true" else "";
                 const resp_json = std.fmt.allocPrint(
                     session.allocator,
                     "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"timestamp\":1700000000.0,\"type\":\"Document\",\"response\":{{\"url\":\"{s}\",\"status\":{d},\"statusText\":\"{s}\",\"headers\":{s},\"mimeType\":\"{s}\"}},\"frameId\":\"{s}\"{s}}}",
-                    .{ doc_req_id, session.loader_id, esc_u, fetch_res.status_code, st_esc, hdrs_json, mime_out, session.frame_id, has_extra_kv },
+                    .{ doc_req_id, session.loader_id, esc_u, eff_status, st_esc, hdrs_json, mime_out, session.frame_id, has_extra_kv },
                 ) catch "{}";
                 out_events[event_count.*] = CdpEvent.create("Network.responseReceived", resp_json);
                 event_count.* += 1;
@@ -2216,7 +2283,12 @@ pub struct PageHandler {
                 }
             }
 
-            emitMainFrameLifecycleEvents(session, out_events, event_count);
+            if (session.lifecycle_events_enabled && session.activeAsyncFetchCount() > 0) {
+                session.pending_main_load_deferred = true;
+                emitMainFrameDomContentLoadedEvents(session, out_events, event_count);
+            } else {
+                emitMainFrameLifecycleEvents(session, out_events, event_count);
+            }
 
             if (session.css_enabled) {
                 let polled_css_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
@@ -2548,7 +2620,12 @@ pub struct PageHandler {
             if (session.runtime_enabled) {
                 emitMainAndIsolatedExecutionContexts(session, final_url, out_events, event_count);
             }
-            emitMainFrameLifecycleEvents(session, out_events, event_count);
+            if (session.lifecycle_events_enabled && session.activeAsyncFetchCount() > 0) {
+                session.pending_main_load_deferred = true;
+                emitMainFrameDomContentLoadedEvents(session, out_events, event_count);
+            } else {
+                emitMainFrameLifecycleEvents(session, out_events, event_count);
+            }
             if (session.runtime_enabled) {
                 let polled_con_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
                 const polled_con_count = session.pollConsoleEvents(&polled_con_evts);
@@ -2658,14 +2735,17 @@ fn setChildFrameDocumentContent(
             "if(typeof globalThis.__capsurf_getOrCreateIframeWindow==='function'){" ++
             "globalThis.__capsurf_getOrCreateIframeWindow(el,{skipInitialNavigation:true});" ++
             "}" ++
-            "if(typeof globalThis.__capsurf_apply_iframe_html==='function'){" ++
-            "globalThis.__capsurf_apply_iframe_html(el,url,html);" ++
-            "}" ++
-            "if(typeof globalThis.__capsurf_fire_iframe_load==='function'){" ++
-            "globalThis.__capsurf_fire_iframe_load(el);" ++
-            "}" ++
+            "globalThis.__capsurf_nav_iframe_done=false;" ++
+            "var p=(typeof globalThis.__capsurf_apply_iframe_html==='function')?globalThis.__capsurf_apply_iframe_html(el,url,html):null;" ++
+            "Promise.resolve(p).then(function(){" ++
+            "try{if(typeof globalThis.__capsurf_fire_iframe_load==='function')globalThis.__capsurf_fire_iframe_load(el);}catch(e){}" ++
+            "globalThis.__capsurf_nav_iframe_done=true;" ++
+            "},function(){" ++
+            "try{if(typeof globalThis.__capsurf_fire_iframe_load==='function')globalThis.__capsurf_fire_iframe_load(el);}catch(e){}" ++
+            "globalThis.__capsurf_nav_iframe_done=true;" ++
+            "});" ++
             "return true;" ++
-            "}catch(e){return false;}finally{" ++
+            "}catch(e){globalThis.__capsurf_nav_iframe_done=true;return false;}finally{" ++
             "delete globalThis.__capsurf_nav_owner_id;" ++
             "delete globalThis.__capsurf_nav_frame_id;" ++
             "delete globalThis.__capsurf_nav_url;" ++
@@ -2674,6 +2754,21 @@ fn setChildFrameDocumentContent(
         const apply_val = session.ctx.eval(js_apply);
         session.ctx.freeValue(apply_val);
         session.ctx.drainJobs();
+
+        let wait_iter: usize = 0;
+        while (wait_iter < 200) : (wait_iter += 1) {
+            session.pumpFetchVerdicts();
+            session.pumpAsyncHttpFetches();
+            session.ctx.drainJobs();
+            const done_v = session.ctx.eval("globalThis.__capsurf_nav_iframe_done ? 1 : 0");
+            let is_done: i32 = 0;
+            * = JS_ToInt32(session.ctx.raw_ctx, &is_done, done_v);
+            session.ctx.freeValue(done_v);
+            if (is_done != 0) break;
+            * = usleep(5000);
+        }
+        const clr_v = session.ctx.eval("delete globalThis.__capsurf_nav_iframe_done;");
+        session.ctx.freeValue(clr_v);
     }
 
     session.loader_seq += 1;
@@ -2948,16 +3043,35 @@ fn navigateChildFrame(
             "if(typeof globalThis.__capsurf_getOrCreateIframeWindow==='function'){" ++
             "globalThis.__capsurf_getOrCreateIframeWindow(el,{skipInitialNavigation:true});" ++
             "}" ++
+            "if(el._contentWindow){" ++
+            "el._contentWindow.__capsurf_frame_id=fid;" ++
+            "if(!el._contentWindow._capsurf_base_fetch_patched){" ++
+            "var iWin=el._contentWindow;" ++
+            "var origFetch=iWin.fetch||globalThis.fetch;" ++
+            "if(typeof origFetch==='function'){" ++
+            "iWin.fetch=function(input,init){" ++
+            "try{if(typeof input==='string'&&iWin.location&&iWin.location.href){input=new URL(input,iWin.location.href).toString();}}catch(e){}" ++
+            "var nextInit=init?Object.assign({},init):{};" ++
+            "if(!nextInit._frameId&&iWin.__capsurf_frame_id)nextInit._frameId=iWin.__capsurf_frame_id;" ++
+            "return origFetch.call(this,input,nextInit);" ++
+            "};" ++
+            "iWin._capsurf_base_fetch_patched=true;" ++
+            "}" ++
+            "}" ++
+            "}" ++
             "el._suppressSetAttrNav=true;" ++
             "try{if(typeof el.setAttribute==='function')el.setAttribute('src',url);}finally{el._suppressSetAttrNav=false;}" ++
-            "if(typeof globalThis.__capsurf_apply_iframe_html==='function'){" ++
-            "globalThis.__capsurf_apply_iframe_html(el,url,html);" ++
-            "}" ++
-            "if(typeof globalThis.__capsurf_fire_iframe_load==='function'){" ++
-            "globalThis.__capsurf_fire_iframe_load(el);" ++
-            "}" ++
+            "globalThis.__capsurf_nav_iframe_done=false;" ++
+            "var p=(typeof globalThis.__capsurf_apply_iframe_html==='function')?globalThis.__capsurf_apply_iframe_html(el,url,html):null;" ++
+            "Promise.resolve(p).then(function(){" ++
+            "try{if(typeof globalThis.__capsurf_fire_iframe_load==='function')globalThis.__capsurf_fire_iframe_load(el);}catch(e){}" ++
+            "globalThis.__capsurf_nav_iframe_done=true;" ++
+            "},function(){" ++
+            "try{if(typeof globalThis.__capsurf_fire_iframe_load==='function')globalThis.__capsurf_fire_iframe_load(el);}catch(e){}" ++
+            "globalThis.__capsurf_nav_iframe_done=true;" ++
+            "});" ++
             "return true;" ++
-            "}catch(e){return false;}finally{" ++
+            "}catch(e){globalThis.__capsurf_nav_iframe_done=true;return false;}finally{" ++
             "delete globalThis.__capsurf_nav_owner_id;" ++
             "delete globalThis.__capsurf_nav_frame_id;" ++
             "delete globalThis.__capsurf_nav_url;" ++
@@ -2966,6 +3080,21 @@ fn navigateChildFrame(
         const apply_val = session.ctx.eval(js_apply);
         session.ctx.freeValue(apply_val);
         session.ctx.drainJobs();
+
+        let wait_iter: usize = 0;
+        while (wait_iter < 200) : (wait_iter += 1) {
+            session.pumpFetchVerdicts();
+            session.pumpAsyncHttpFetches();
+            session.ctx.drainJobs();
+            const done_v = session.ctx.eval("globalThis.__capsurf_nav_iframe_done ? 1 : 0");
+            let is_done: i32 = 0;
+            * = JS_ToInt32(session.ctx.raw_ctx, &is_done, done_v);
+            session.ctx.freeValue(done_v);
+            if (is_done != 0) break;
+            * = usleep(5000);
+        }
+        const clr_v = session.ctx.eval("delete globalThis.__capsurf_nav_iframe_done;");
+        session.ctx.freeValue(clr_v);
     }
 
     const is_blank_or_data = is_about_blank ||
@@ -3161,24 +3290,34 @@ fn navigateChildFrame(
         event_count.* += 1;
     }
 
-    if (event_count.* < out_events.len) {
-        const load_json = std.fmt.allocPrint(
-            session.allocator,
-            "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"name\":\"load\",\"timestamp\":1700000000.1}}",
-            .{ req_frame_id, child_loader_id },
-        ) catch "{}";
-        out_events[event_count.*] = CdpEvent.create("Page.lifecycleEvent", load_json);
-        event_count.* += 1;
-    }
+    if (session.lifecycle_events_enabled && session.activeAsyncFetchCount() > 0) {
+        session.pending_child_load_deferred = true;
+        const cfid_len = @min(req_frame_id.len, session.pending_child_load_frame_id_buf.len);
+        @memcpy(session.pending_child_load_frame_id_buf[0..cfid_len], req_frame_id[0..cfid_len]);
+        session.pending_child_load_frame_id_len = cfid_len;
+        const clid_len = @min(child_loader_id.len, session.pending_child_load_loader_id_buf.len);
+        @memcpy(session.pending_child_load_loader_id_buf[0..clid_len], child_loader_id[0..clid_len]);
+        session.pending_child_load_loader_id_len = clid_len;
+    } else {
+        if (event_count.* < out_events.len) {
+            const load_json = std.fmt.allocPrint(
+                session.allocator,
+                "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"name\":\"load\",\"timestamp\":1700000000.1}}",
+                .{ req_frame_id, child_loader_id },
+            ) catch "{}";
+            out_events[event_count.*] = CdpEvent.create("Page.lifecycleEvent", load_json);
+            event_count.* += 1;
+        }
 
-    if (event_count.* < out_events.len) {
-        const stop_json = std.fmt.allocPrint(
-            session.allocator,
-            "{{\"frameId\":\"{s}\"}}",
-            .{ req_frame_id },
-        ) catch "{}";
-        out_events[event_count.*] = CdpEvent.create("Page.frameStoppedLoading", stop_json);
-        event_count.* += 1;
+        if (event_count.* < out_events.len) {
+            const stop_json = std.fmt.allocPrint(
+                session.allocator,
+                "{{\"frameId\":\"{s}\"}}",
+                .{ req_frame_id },
+            ) catch "{}";
+            out_events[event_count.*] = CdpEvent.create("Page.frameStoppedLoading", stop_json);
+            event_count.* += 1;
+        }
     }
 
     const res = std.fmt.bufPrint(
@@ -3594,10 +3733,34 @@ pub fn performPendingNavigation(
     if (session.network_enabled && event_count.* < out_events.len) {
         let esc_u_buf: [2048]u8 = [0; 2048];
         const esc_u = escapeJsonString(fetch_res.final_url, &esc_u_buf);
+        let req_hdrs_buf: [1024]u8 = [0; 1024];
+        let req_hdrs_json: []const u8 = "{}";
+        if (has_post && post_ctype.len > 0) {
+            let ct_esc_buf: [512]u8 = [0; 512];
+            const ct_esc = escapeJsonString(post_ctype, &ct_esc_buf);
+            req_hdrs_json = std.fmt.bufPrint(&req_hdrs_buf, "{{\"content-type\":\"{s}\"}}", .{ct_esc}) catch "{}";
+        }
+        let pd_kv_buf: [8192]u8 = [0; 8192];
+        let pd_kv_dyn: ([]u8)? = null;
+        defer if (pd_kv_dyn != null) session.allocator.free(pd_kv_dyn.?);
+        let pd_kv: []const u8 = "";
+        if (has_post && post_body.len > 0) {
+            const pd_b64 = Base64.encodeAlloc(session.allocator, post_body) catch "";
+            defer if (pd_b64.len > 0) session.allocator.free(pd_b64);
+            let pd_esc_buf: [2048]u8 = [0; 2048];
+            const pd_esc = escapeJsonString(post_body, &pd_esc_buf);
+            pd_kv = std.fmt.bufPrint(&pd_kv_buf, ",\"hasPostData\":true,\"postData\":\"{s}\",\"postDataEntries\":[{{\"bytes\":\"{s}\"}}]", .{ pd_esc, pd_b64 }) catch blk: {
+                if (dyn_buf := std.fmt.allocPrint(session.allocator, ",\"hasPostData\":true,\"postData\":\"{s}\",\"postDataEntries\":[{{\"bytes\":\"{s}\"}}]", .{ pd_esc, pd_b64 }) catch null) {
+                    pd_kv_dyn = dyn_buf;
+                    break :blk dyn_buf;
+                }
+                break :blk "";
+            };
+        }
         const req_evt = std.fmt.allocPrint(
             session.allocator,
-            "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"{s}\",\"headers\":{{}},\"initialPriority\":\"VeryHigh\",\"referrerPolicy\":\"strict-origin-when-cross-origin\"}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"other\"}},\"type\":\"Document\",\"frameId\":\"{s}\"}}",
-            .{ doc_req_id, session.loader_id, esc_u, esc_u, req_method, session.frame_id },
+            "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"{s}\",\"headers\":{s},\"initialPriority\":\"VeryHigh\",\"referrerPolicy\":\"strict-origin-when-cross-origin\"{s}}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"other\"}},\"type\":\"Document\",\"frameId\":\"{s}\"}}",
+            .{ doc_req_id, session.loader_id, esc_u, esc_u, req_method, req_hdrs_json, pd_kv, session.frame_id },
         ) catch "{}";
         out_events[event_count.*] = CdpEvent.create("Network.requestWillBeSent", req_evt);
         event_count.* += 1;
@@ -3696,4 +3859,100 @@ fn applyCssPageSize(css: []const u8, opts: *PdfOptions) {
         }
         pos = cb + 1;
     }
+}
+
+pub fn navigatePendingPopupUrl(
+    session: *CdpPageSession,
+    out_events: *[MAX_CDP_EVENTS]CdpEvent,
+    event_count: *usize,
+) {
+    if (session.pending_popup_nav_url_len == 0) return;
+    let url_buf: [2048]u8 = [0; 2048];
+    const ulen = @min(session.pending_popup_nav_url_len, url_buf.len);
+    @memcpy(url_buf[0..ulen], session.pending_popup_nav_url_buf[0..ulen]);
+    session.pending_popup_nav_url_len = 0;
+    const nav_url = url_buf[0..ulen];
+
+    session.nextLoaderId();
+    const doc_req_id = session.loader_id;
+
+    let esc_u_buf: [2048]u8 = [0; 2048];
+    const esc_u = escapeJsonString(nav_url, &esc_u_buf);
+
+    if (event_count.* < out_events.len) {
+        const start_json = std.fmt.allocPrint(
+            session.allocator,
+            "{{\"frameId\":\"{s}\"}}",
+            .{session.frame_id},
+        ) catch "{}";
+        out_events[event_count.*] = CdpEvent.create("Page.frameStartedLoading", start_json);
+        event_count.* += 1;
+    }
+
+    if (session.network_enabled && event_count.* < out_events.len) {
+        const req_json = std.fmt.allocPrint(
+            session.allocator,
+            "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"GET\",\"headers\":{{}},\"initialPriority\":\"VeryHigh\",\"referrerPolicy\":\"strict-origin-when-cross-origin\"}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"other\"}},\"type\":\"Document\",\"frameId\":\"{s}\"}}",
+            .{ doc_req_id, session.loader_id, esc_u, esc_u, session.frame_id },
+        ) catch "{}";
+        out_events[event_count.*] = CdpEvent.create("Network.requestWillBeSent", req_json);
+        event_count.* += 1;
+    }
+
+    let fetch_buf = session.allocator.alloc(u8, 2097152) catch return;
+    defer session.allocator.free(fetch_buf);
+    const fetch_res = HttpLoader.fetchDocument(session, nav_url, fetch_buf, 0) catch {
+        if (session.network_enabled && event_count.* < out_events.len) {
+            const fail_json = std.fmt.allocPrint(
+                session.allocator,
+                "{{\"requestId\":\"{s}\",\"timestamp\":1700000000.01,\"type\":\"Document\",\"errorText\":\"net::ERR_FAILED\",\"canceled\":false}}",
+                .{doc_req_id},
+            ) catch "{}";
+            out_events[event_count.*] = CdpEvent.create("Network.loadingFailed", fail_json);
+            event_count.* += 1;
+        }
+        return;
+    };
+
+    clearDocResponseBodies();
+    recordResponseBody(doc_req_id, fetch_res.raw_body, fetch_res.raw_body_base64);
+    session.navigate(fetch_res.html, fetch_res.final_url, "") catch return;
+
+    if (session.network_enabled && event_count.* < out_events.len) {
+        let esc_fu_buf: [2048]u8 = [0; 2048];
+        const esc_fu = escapeJsonString(fetch_res.final_url, &esc_fu_buf);
+        let st_esc_buf: [256]u8 = [0; 256];
+        const st_esc = escapeJsonString(fetch_res.status_text, &st_esc_buf);
+        const hdrs_json = formatHttpHeadersJson(fetch_res.raw_headers, session.allocator);
+        const mime_raw = mimeEssence(fetch_res.content_type);
+        const mime_out = if (mime_raw.len > 0) mime_raw else "text/html";
+        const resp_json = std.fmt.allocPrint(
+            session.allocator,
+            "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"timestamp\":1700000000.01,\"type\":\"Document\",\"response\":{{\"url\":\"{s}\",\"status\":{d},\"statusText\":\"{s}\",\"headers\":{s},\"mimeType\":\"{s}\"}},\"frameId\":\"{s}\"}}",
+            .{ doc_req_id, session.loader_id, esc_fu, fetch_res.status_code, st_esc, hdrs_json, mime_out, session.frame_id },
+        ) catch "{}";
+        out_events[event_count.*] = CdpEvent.create("Network.responseReceived", resp_json);
+        event_count.* += 1;
+        if (event_count.* < out_events.len) {
+            const wire_total = fetch_res.wire_headers_len + fetch_res.wire_body_len;
+            const enc_len = if (wire_total > 0) wire_total else fetch_res.raw_body.len;
+            const fin_json = std.fmt.allocPrint(
+                session.allocator,
+                "{{\"requestId\":\"{s}\",\"timestamp\":1700000000.02,\"encodedDataLength\":{d}}}",
+                .{ doc_req_id, enc_len },
+            ) catch "{}";
+            out_events[event_count.*] = CdpEvent.create("Network.loadingFinished", fin_json);
+            event_count.* += 1;
+        }
+    }
+
+    if (event_count.* < out_events.len) {
+        const fn_json = session.formatFrameNavigatedEvent(fetch_res.final_url);
+        out_events[event_count.*] = CdpEvent.create("Page.frameNavigated", fn_json);
+        event_count.* += 1;
+    }
+    if (session.runtime_enabled) {
+        emitMainAndIsolatedExecutionContexts(session, fetch_res.final_url, out_events, event_count);
+    }
+    emitMainFrameLifecycleEvents(session, out_events, event_count);
 }

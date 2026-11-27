@@ -8662,6 +8662,9 @@
   if (typeof CSS.elementSources === "undefined") {
     CSS.elementSources = new Map();
   }
+  try {
+    Object.defineProperty(CSS, Symbol.toStringTag, { value: "CSS", configurable: true });
+  } catch (e) {}
   global.CSS = CSS;
   if (typeof globalThis !== "undefined") globalThis.CSS = CSS;
   if (typeof window !== "undefined") window.CSS = CSS;

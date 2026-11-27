@@ -538,6 +538,8 @@ pub struct PendingAsyncHttpSlot {
     fd: i32 = -1,
     net_id_buf: [64]u8 = [0; 64],
     net_id_len: usize = 0,
+    frame_id_buf: [64]u8 = [0; 64],
+    frame_id_len: usize = 0,
     url_buf: [2048]u8 = [0; 2048],
     url_len: usize = 0,
     recv_buf: ([]u8)? = null,
@@ -562,6 +564,10 @@ pub struct PendingAsyncHttpSlot {
 
     fn netId(): []const u8 {
         return _.net_id_buf[0.._.net_id_len];
+    }
+
+    fn frameId(): []const u8 {
+        return _.frame_id_buf[0.._.frame_id_len];
     }
 
     fn url(): []const u8 {
@@ -655,6 +661,7 @@ fn sessionHttpRequestAsyncHook(
     method: []const u8,
     headers_json: []const u8,
     post_data: []const u8,
+    frame_id: []const u8,
     resolve_fn: JSValue,
     reject_fn: JSValue,
 ): bool {
@@ -739,24 +746,43 @@ fn sessionHttpRequestAsyncHook(
             while (hp < trimmed_hj.len && trimmed_hj[hp] != '"') : (hp += 1) {
                 if (trimmed_hj[hp] == '\\' && hp + 1 < trimmed_hj.len) hp += 1;
             }
-            const h_val = trimmed_hj[v_start..hp];
+            const h_val_raw = trimmed_hj[v_start..hp];
             if (hp < trimmed_hj.len && trimmed_hj[hp] == '"') hp += 1;
             if (h_key.len == 0) continue;
-            if (std.ascii.eqlIgnoreCase(h_key, "host") || std.ascii.eqlIgnoreCase(h_key, "connection")) continue;
-            if (std.ascii.eqlIgnoreCase(h_key, "user-agent")) {
+            let eff_key = h_key;
+            let eff_val = h_val_raw;
+            let is_num_key = h_key.len > 0;
+            let nki: usize = 0;
+            while (nki < h_key.len) : (nki += 1) {
+                if (h_key[nki] < '0' || h_key[nki] > '9') {
+                    is_num_key = false;
+                    break;
+                }
+            }
+            if (is_num_key) {
+                if (comma_pos := std.mem.indexOfScalar(u8, h_val_raw, ',')) {
+                    const cand_k = std.mem.trim(u8, h_val_raw[0..comma_pos], " \t");
+                    if (cand_k.len > 0 && std.mem.indexOfAny(u8, cand_k, " :\r\n") == null) {
+                        eff_key = cand_k;
+                        eff_val = std.mem.trim(u8, h_val_raw[comma_pos + 1 ..], " \t");
+                    }
+                }
+            }
+            if (std.ascii.eqlIgnoreCase(eff_key, "host") || std.ascii.eqlIgnoreCase(eff_key, "connection")) continue;
+            if (std.ascii.eqlIgnoreCase(eff_key, "user-agent")) {
                 if (has_custom_ua) continue;
                 has_custom_ua = true;
-            } else if (std.ascii.eqlIgnoreCase(h_key, "accept")) {
+            } else if (std.ascii.eqlIgnoreCase(eff_key, "accept")) {
                 if (has_custom_accept) continue;
                 has_custom_accept = true;
-            } else if (std.ascii.eqlIgnoreCase(h_key, "referer")) {
+            } else if (std.ascii.eqlIgnoreCase(eff_key, "referer")) {
                 if (has_custom_referer) continue;
                 has_custom_referer = true;
-            } else if (std.ascii.eqlIgnoreCase(h_key, "content-length")) {
+            } else if (std.ascii.eqlIgnoreCase(eff_key, "content-length")) {
                 has_custom_cl = true;
             }
-            if (rpos + h_key.len + h_val.len + 4 < req_buf.len) {
-                const kh = std.fmt.bufPrint(req_buf[rpos..], "{s}: {s}\r\n", .{ h_key, h_val }) catch break;
+            if (rpos + eff_key.len + eff_val.len + 4 < req_buf.len) {
+                const kh = std.fmt.bufPrint(req_buf[rpos..], "{s}: {s}\r\n", .{ eff_key, eff_val }) catch break;
                 rpos += kh.len;
             }
         }
@@ -874,15 +900,16 @@ fn sessionHttpRequestAsyncHook(
         defer {
             if (d := nev_dyn) std.heap.c_allocator.free(d);
         }
+        const eff_frame_id = if (frame_id.len > 0) frame_id else sess.frame_id;
         const req_json = std.fmt.bufPrint(
             &nev_buf,
             "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"{s}\",\"headers\":{s},\"initialPriority\":\"High\",\"referrerPolicy\":\"no-referrer\"{s}}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"script\"}},\"type\":\"{s}\",\"frameId\":\"{s}\"}}",
-            .{ net_id, sess.loader_id, esc_doc, esc_url, method, req_hdrs_json, pd_kv, req_type_str, sess.frame_id },
+            .{ net_id, sess.loader_id, esc_doc, esc_url, method, req_hdrs_json, pd_kv, req_type_str, eff_frame_id },
         ) catch blk: {
             if (dyn_buf := std.fmt.allocPrint(
                 std.heap.c_allocator,
                 "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"documentURL\":\"{s}\",\"request\":{{\"url\":\"{s}\",\"method\":\"{s}\",\"headers\":{s},\"initialPriority\":\"High\",\"referrerPolicy\":\"no-referrer\"{s}}},\"timestamp\":1700000000.0,\"wallTime\":1700000000.0,\"initiator\":{{\"type\":\"script\"}},\"type\":\"{s}\",\"frameId\":\"{s}\"}}",
-                .{ net_id, sess.loader_id, esc_doc, esc_url, method, req_hdrs_json, pd_kv, req_type_str, sess.frame_id },
+                .{ net_id, sess.loader_id, esc_doc, esc_url, method, req_hdrs_json, pd_kv, req_type_str, eff_frame_id },
             ) catch null) {
                 nev_dyn = dyn_buf;
                 break :blk dyn_buf;
@@ -891,6 +918,23 @@ fn sessionHttpRequestAsyncHook(
         };
         if (req_json.len > 0) {
             * = sess.addPendingFetchEvent("Network.requestWillBeSent", req_json);
+        }
+        const req_ht_full = req_buf[0..rpos];
+        if (crlf_r := std.mem.indexOf(u8, req_ht_full, "\r\n")) {
+            const req_hdr_lines = if (rpos >= crlf_r + 4) req_ht_full[crlf_r + 2 .. rpos - 2] else "";
+            const extra_req_hdrs = formatHttpHeadersExtraInfoJson(req_hdr_lines, sess.allocator);
+            defer if (extra_req_hdrs.len > 2) sess.allocator.free(extra_req_hdrs);
+            let req_ht_esc_buf: [8192]u8 = undefined;
+            const req_ht_esc = escapeJsonString(req_ht_full, &req_ht_esc_buf);
+            let extra_req_buf: [8192]u8 = undefined;
+            const extra_req_json = std.fmt.bufPrint(
+                &extra_req_buf,
+                "{{\"requestId\":\"{s}\",\"associatedCookies\":[],\"headers\":{s},\"headersText\":\"{s}\"}}",
+                .{ net_id, extra_req_hdrs, req_ht_esc },
+            ) catch "";
+            if (extra_req_json.len > 0) {
+                * = sess.addPendingFetchEvent("Network.requestWillBeSentExtraInfo", extra_req_json);
+            }
         }
     }
 
@@ -901,6 +945,9 @@ fn sessionHttpRequestAsyncHook(
     const nid_n = @min(net_id.len, slot.net_id_buf.len);
     @memcpy(slot.net_id_buf[0..nid_n], net_id[0..nid_n]);
     slot.net_id_len = nid_n;
+    const fid_n = @min(frame_id.len, slot.frame_id_buf.len);
+    if (fid_n > 0) @memcpy(slot.frame_id_buf[0..fid_n], frame_id[0..fid_n]);
+    slot.frame_id_len = fid_n;
     const u_n = @min(url.len, slot.url_buf.len);
     @memcpy(slot.url_buf[0..u_n], url[0..u_n]);
     slot.url_len = u_n;
@@ -1792,6 +1839,7 @@ fn resolveSubresourceUrl(base_url: []const u8, rel: []const u8, out_buf: []u8): 
 pub struct KnownChildFrame {
     active: bool = false,
     detached: bool = false,
+    doc_net_emitted: bool = false,
     exec_context_id: i64 = 0,
     frame_id_buf: [32]u8 = [0; 32],
     frame_id_len: usize = 0,
@@ -1902,9 +1950,17 @@ pub struct CdpPageSession {
     target_id: []const u8 = "capsurf-target-001",
     has_opener: bool = false,
     is_about_blank_popup: bool = false,
+    pending_popup_nav_url_buf: [2048]u8 = [0; 2048],
+    pending_popup_nav_url_len: usize = 0,
     lifecycle_events_enabled: bool = false,
     navigation_aborted: bool = false,
     initial_blank_lifecycle_emitted: bool = false,
+    pending_main_load_deferred: bool = false,
+    pending_child_load_deferred: bool = false,
+    pending_child_load_frame_id_buf: [64]u8 = [0; 64],
+    pending_child_load_frame_id_len: usize = 0,
+    pending_child_load_loader_id_buf: [64]u8 = [0; 64],
+    pending_child_load_loader_id_len: usize = 0,
     skip_record_nav: bool = false,
     has_document: bool = false,
     raw_html: []const u8 = "",
@@ -2126,6 +2182,10 @@ pub struct CdpPageSession {
         ptr.lifecycle_events_enabled = false;
         ptr.navigation_aborted = false;
         ptr.initial_blank_lifecycle_emitted = false;
+        ptr.pending_main_load_deferred = false;
+        ptr.pending_child_load_deferred = false;
+        ptr.pending_child_load_frame_id_len = 0;
+        ptr.pending_child_load_loader_id_len = 0;
         ptr.intercept_file_chooser = false;
         ptr.raw_html = "";
         ptr.paint_prepares = 0;
@@ -3099,6 +3159,9 @@ pub struct CdpPageSession {
         let ext_link_offs: [16]usize = [0; 16];
         let ext_link_lens: [16]usize = [0; 16];
         let ext_link_count: usize = 0;
+        let async_css_urls: [16][1024]u8 = undefined;
+        let async_css_url_lens: [16]usize = [0; 16];
+        let async_css_count: usize = 0;
         let has_http_ext_css = false;
         if (css_buf != null) {
             const base_css = "";
@@ -3490,6 +3553,17 @@ pub struct CdpPageSession {
                 let u_buf: [1024]u8 = undefined;
                 const full_u = resolveSubresourceUrl(nav_url, href_a, &u_buf);
                 const is_http_css = (std.mem.startsWith(u8, full_u, "http://") || std.mem.startsWith(u8, full_u, "https://")) && !_.isOutboundUrlRejected(full_u);
+                const use_async_css = _.lifecycle_events_enabled && is_http_css &&
+                    !MockFixtures.isFixtureUrl(full_u) && !MockFixtures.isFixtureUrl(href_a);
+                if (use_async_css) {
+                    if (async_css_count < async_css_urls.len) {
+                        const acu_len = @min(full_u.len, async_css_urls[async_css_count].len);
+                        @memcpy(async_css_urls[async_css_count][0..acu_len], full_u[0..acu_len]);
+                        async_css_url_lens[async_css_count] = acu_len;
+                        async_css_count += 1;
+                    }
+                    continue;
+                }
                 const sync_fetch_will_intercept = is_http_css &&
                     !MockFixtures.isFixtureUrl(full_u) && !MockFixtures.isFixtureUrl(href_a) &&
                     (_.fetch_enabled || _.fetch_state.enabled) &&
@@ -3829,6 +3903,23 @@ pub struct CdpPageSession {
         _.restoreOriginStorage(nav_url);
         if (_.outbound_reject_pattern_count > 0) {
             _.syncOutboundRejectPatternsToJs();
+        }
+        if (async_css_count > 0) {
+            let aci: usize = 0;
+            while (aci < async_css_count) : (aci += 1) {
+                const acu = async_css_urls[aci][0..async_css_url_lens[aci]];
+                if (acu.len > 0) {
+                    const u_js = JS_NewStringLen(_.ctx.raw_ctx, acu.ptr, acu.len);
+                    const g_obj = _.ctx.getGlobal();
+                    * = JS_SetPropertyStr(_.ctx.raw_ctx, g_obj, "__capsurf_async_css_url", u_js);
+                    _.ctx.freeValue(g_obj);
+                    const css_eval = _.ctx.eval(
+                        "(function(){try{var u=globalThis.__capsurf_async_css_url;delete globalThis.__capsurf_async_css_url;if(u&&typeof fetch==='function')fetch(u,{mode:'no-cors',_resourceType:'stylesheet'}).catch(function(){});}catch(e){}})()",
+                    );
+                    _.ctx.freeValue(css_eval);
+                    _.ctx.drainJobs();
+                }
+            }
         }
         if (ext_css_buf != null && ext_css_len > 0) {
             if (ext_link_count > 0) {
@@ -4941,6 +5032,10 @@ pub struct CdpPageSession {
     }
 
     pub fn onBeforeNavigate(*_) {
+        _.pending_main_load_deferred = false;
+        _.pending_child_load_deferred = false;
+        _.pending_child_load_frame_id_len = 0;
+        _.pending_child_load_loader_id_len = 0;
         let ahi: usize = 0;
         while (ahi < _.pending_async_http.len) : (ahi += 1) {
             if (_.pending_async_http[ahi].active) {
@@ -8124,11 +8219,12 @@ pub struct CdpPageSession {
                 let mime_esc_buf: [128]u8 = [0; 128];
                 const mime_esc = escapeJsonString(mime_type, &mime_esc_buf);
                 const has_extra_kv = if (extra_hdrs_json.len > 2) ",\"hasExtraInfo\":true" else "";
+                const eff_frame_id = if (slot.frameId().len > 0) slot.frameId() else _.frame_id;
                 let nev_buf: [4096]u8 = [0; 4096];
                 const resp_json = std.fmt.bufPrint(
                     &nev_buf,
                     "{{\"requestId\":\"{s}\",\"loaderId\":\"{s}\",\"timestamp\":1700000000.1,\"type\":\"{s}\",\"response\":{{\"url\":\"{s}\",\"status\":{d},\"statusText\":\"{s}\",\"headers\":{s},\"mimeType\":\"{s}\"}},\"frameId\":\"{s}\"{s}}}",
-                    .{ net_id, _.loader_id, slot_rtype, esc_url, status_code, st_esc, hdrs_json, mime_esc, _.frame_id, has_extra_kv },
+                    .{ net_id, _.loader_id, slot_rtype, esc_url, status_code, st_esc, hdrs_json, mime_esc, eff_frame_id, has_extra_kv },
                 ) catch "";
                 if (resp_json.len > 0) {
                     * = _.addPendingFetchEvent("Network.responseReceived", resp_json);
@@ -8227,12 +8323,17 @@ pub struct CdpPageSession {
                 }
                 const fetch_mime = rec.getMimeType();
                 let fid = if (rec.getFrameId().len > 0) rec.getFrameId() else _.frame_id;
+                let skip_child_doc_dup = false;
                 if (std.mem.eql(u8, fid, _.frame_id)) {
                     let kfi: usize = 0;
                     while (kfi < _.known_child_frame_count) : (kfi += 1) {
-                        const kf = &_.known_child_frames[kfi];
+                        let kf = &_.known_child_frames[kfi];
                         if (kf.active && !kf.detached && kf.url_len > 0 && std.mem.eql(u8, kf.url_buf[0..kf.url_len], fetch_url)) {
                             fid = kf.frame_id_buf[0..kf.frame_id_len];
+                            if (kf.doc_net_emitted && std.ascii.eqlIgnoreCase(rec.getMethod(), "GET")) {
+                                kf.doc_net_emitted = false;
+                                skip_child_doc_dup = true;
+                            }
                             break;
                         }
                     }
@@ -8240,6 +8341,27 @@ pub struct CdpPageSession {
                 const lid = if (rec.getLoaderId().len > 0) rec.getLoaderId() else _.loader_id;
 
                 const pending = consumePendingFetchBody(fetch_url);
+                if (skip_child_doc_dup) {
+                    if (pending.found) {
+                        if (pending.body.len > 0) std.heap.c_allocator.free(pending.body);
+                        if (pending.raw_headers.len > 0) std.heap.c_allocator.free(pending.raw_headers);
+                        if (pending.req_headers_text.len > 0 && pending.redirect_count == 0) std.heap.c_allocator.free(pending.req_headers_text);
+                        if (pending.resp_headers_text.len > 0) std.heap.c_allocator.free(pending.resp_headers_text);
+                        if (pending.redirect_count > 0) {
+                            let fhi_s: usize = 0;
+                            while (fhi_s < 6) : (fhi_s += 1) {
+                                const fhop_s = &pending.redirect_hops[fhi_s];
+                                if (fhop_s.url.len > 0) std.heap.c_allocator.free(fhop_s.url);
+                                if (fhop_s.method.len > 0) std.heap.c_allocator.free(fhop_s.method);
+                                if (fhop_s.status_text.len > 0) std.heap.c_allocator.free(fhop_s.status_text);
+                                if (fhop_s.raw_headers.len > 0) std.heap.c_allocator.free(fhop_s.raw_headers);
+                                if (fhop_s.req_headers_text.len > 0) std.heap.c_allocator.free(fhop_s.req_headers_text);
+                                if (fhop_s.resp_headers_text.len > 0) std.heap.c_allocator.free(fhop_s.resp_headers_text);
+                            }
+                        }
+                    }
+                    continue;
+                }
                 let resp_status: u32 = 200;
                 let resp_status_text: []const u8 = "OK";
                 let resp_headers_json: []const u8 = "{}";

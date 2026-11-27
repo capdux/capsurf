@@ -214,6 +214,7 @@ pub type HttpRequestAsyncHookFn = *const fn (
     method: []const u8,
     headers_json: []const u8,
     post_data: []const u8,
+    frame_id: []const u8,
     resolve_fn: JSValue,
     reject_fn: JSValue,
 ): bool;
@@ -569,6 +570,20 @@ pub fn registerFetchPauseHook(session_ptr: *void, hook: FetchPauseHookFn) {
     }
     defer if (post_ptr != null) JS_FreeCString(ctx, post_ptr);
 
+    let frame_id: []const u8 = "";
+    let fid_ptr: ([*c]const u8)? = null;
+    if (argc >= 5) {
+        const arg4 = unsafe { argv[4] };
+        if (!jsIsNull(arg4) && !jsIsUndefined(arg4)) {
+            let fid_len: usize = 0;
+            fid_ptr = JS_ToCStringLen2(ctx, &fid_len, arg4, 0);
+            if (fid_ptr != null && fid_len > 0) {
+                frame_id = unsafe { fid_ptr.?[0..fid_len] };
+            }
+        }
+    }
+    defer if (fid_ptr != null) JS_FreeCString(ctx, fid_ptr);
+
     if (hook := g_http_req_async_hook) {
         const resolved_sess_ptr = lookupSessionByCtx(ctx) ?? g_http_session_ptr;
         if (sess_ptr := resolved_sess_ptr) {
@@ -577,7 +592,7 @@ pub fn registerFetchPauseHook(session_ptr: *void, hook: FetchPauseHookFn) {
             if (jsIsException(promise)) {
                 return promise;
             }
-            const ok = hook(sess_ptr, url, method, headers_json, post_data, resolving_funcs[0], resolving_funcs[1]);
+            const ok = hook(sess_ptr, url, method, headers_json, post_data, frame_id, resolving_funcs[0], resolving_funcs[1]);
             if (!ok) {
                 JS_FreeValue(ctx, resolving_funcs[0]);
                 JS_FreeValue(ctx, resolving_funcs[1]);
@@ -3318,8 +3333,39 @@ pub const PAGE_RUNTIME_HOOKS_JS: []const u8 =
     "          json: function(){ return Promise.resolve(JSON.parse(txt)); }\n" ++
     "        });\n" ++
     "      }\n" ++
-    "      if (typeof g.__capsurf_http_request_async === 'function' && typeof input === 'string' && absCheck.indexOf('http://') === 0 && !isRedirFixture && absCheck.indexOf('/__fixtures/') === -1) {\n        var sameOriginAsync = false; try { sameOriginAsync = (pageOrigin !== 'null' && new URL(absCheck).origin.toLowerCase() === pageOrigin.toLowerCase()); } catch (e) {}\n        var interceptAsync = (typeof g.__capsurf_should_intercept_fetch === 'function' && g.__capsurf_should_intercept_fetch(absCheck, 'Fetch'));\n        var simpleOptsAsync = (!init || ((!init.mode || init.mode === 'cors' || init.mode === 'same-origin' || init.mode === 'no-cors') && (!init.redirect || init.redirect === 'follow') && !init.signal && (init.body === undefined || init.body === null || typeof init.body === 'string')));\n        if (sameOriginAsync && !interceptAsync && simpleOptsAsync) {\n          var aMethod = (init && init.method) ? String(init.method).toUpperCase() : 'GET'; var aHeaders = {};\n          if (init && init.headers) { try { if (typeof init.headers.forEach === 'function') { init.headers.forEach(function(v, k) { aHeaders[String(k).toLowerCase()] = String(v); }); } else if (typeof init.headers === 'object') { var ahk = Object.keys(init.headers); for (var ahi = 0; ahi < ahk.length; ahi++) aHeaders[String(ahk[ahi]).toLowerCase()] = String(init.headers[ahk[ahi]]); } } catch (e) {} }\n          var aBody = (init && init.body !== undefined && init.body !== null) ? String(init.body) : '';\n          var asyncP = g.__capsurf_http_request_async(absCheck, aMethod, JSON.stringify(aHeaders), aBody);\n          if (asyncP && typeof asyncP.then === 'function') {\n            return asyncP.then(function(resObj) {\n              if (!resObj || resObj.error) return Promise.reject(new TypeError('Failed to fetch'));\n              var b64 = resObj.bodyBase64 || ''; var bin = b64 ? atob(b64) : ''; var u8 = new Uint8Array(bin.length); for (var bi = 0; bi < bin.length; bi++) u8[bi] = bin.charCodeAt(bi) & 255;\n              var hdrsObj = {}; try { hdrsObj = JSON.parse(resObj.headersJson || '{}'); } catch (e) {}\n              var hdrPairs = []; var hks = Object.keys(hdrsObj);\n              for (var hi2 = 0; hi2 < hks.length; hi2++) { var hk2 = hks[hi2]; var hv2 = String(hdrsObj[hk2]); if (hv2.indexOf('\\n') !== -1) { var parts2 = hv2.split('\\n'); for (var pi2 = 0; pi2 < parts2.length; pi2++) hdrPairs.push([hk2, parts2[pi2]]); } else { hdrPairs.push([hk2, hv2]); } }\n              return new Response(u8, { status: resObj.status, statusText: resObj.statusText || '', url: resObj.url || absCheck, headers: hdrPairs, _allowAnyStatus: true, _immutableHeaders: true });\n            });\n          }\n        }\n      }\n" ++
+    "      if (typeof g.__capsurf_http_request_async === 'function' && typeof input === 'string' && absCheck.indexOf('http://') === 0 && !isRedirFixture && absCheck.indexOf('/__fixtures/') === -1) {\n        var sameOriginAsync = false; try { sameOriginAsync = (pageOrigin !== 'null' && new URL(absCheck).origin.toLowerCase() === pageOrigin.toLowerCase()); } catch (e) {}\n        var interceptAsync = (typeof g.__capsurf_should_intercept_fetch === 'function' && g.__capsurf_should_intercept_fetch(absCheck, 'Fetch'));\n        var simpleOptsAsync = (!init || ((!init.mode || init.mode === 'cors' || init.mode === 'same-origin' || init.mode === 'no-cors') && (!init.redirect || init.redirect === 'follow') && !init.signal && (init.body === undefined || init.body === null || typeof init.body === 'string')));\n        if (sameOriginAsync && !interceptAsync && simpleOptsAsync) {\n          var aMethod = (init && init.method) ? String(init.method).toUpperCase() : 'GET'; var aHeaders = {};\n          if (init && init.headers) { try { if (typeof init.headers.forEach === 'function') { init.headers.forEach(function(v, k) { aHeaders[String(k).toLowerCase()] = String(v); }); } else if (typeof init.headers === 'object') { var ahk = Object.keys(init.headers); for (var ahi = 0; ahi < ahk.length; ahi++) aHeaders[String(ahk[ahi]).toLowerCase()] = String(init.headers[ahk[ahi]]); } } catch (e) {} }\n          var aBody = (init && init.body !== undefined && init.body !== null) ? String(init.body) : '';\n          var reqFrameId = (init && init._frameId) ? String(init._frameId) : '';\n          var asyncP = g.__capsurf_http_request_async(absCheck, aMethod, JSON.stringify(aHeaders), aBody, reqFrameId);\n          if (asyncP && typeof asyncP.then === 'function') {\n            return asyncP.then(function(resObj) {\n              if (!resObj || resObj.error) return Promise.reject(new TypeError('Failed to fetch'));\n              var b64 = resObj.bodyBase64 || ''; var bin = b64 ? atob(b64) : ''; var u8 = new Uint8Array(bin.length); for (var bi = 0; bi < bin.length; bi++) u8[bi] = bin.charCodeAt(bi) & 255;\n              var hdrsObj = {}; try { hdrsObj = JSON.parse(resObj.headersJson || '{}'); } catch (e) {}\n              var hdrPairs = []; var hks = Object.keys(hdrsObj);\n              for (var hi2 = 0; hi2 < hks.length; hi2++) { var hk2 = hks[hi2]; var hv2 = String(hdrsObj[hk2]); if (hv2.indexOf('\\n') !== -1) { var parts2 = hv2.split('\\n'); for (var pi2 = 0; pi2 < parts2.length; pi2++) hdrPairs.push([hk2, parts2[pi2]]); } else { hdrPairs.push([hk2, hv2]); } }\n              return new Response(u8, { status: resObj.status, statusText: resObj.statusText || '', url: resObj.url || absCheck, headers: hdrPairs, _allowAnyStatus: true, _immutableHeaders: true });\n            });\n          }\n        }\n      }\n" ++
     "      return OrigFetch.apply(this, arguments).catch(function(err) { if (err && err.name === 'TypeError' && typeof err.message === 'string' && err.message.indexOf('CORS header') !== -1 && (isRedirFixture || (init && init._redirected))) { return Promise.reject(new TypeError('Failed to fetch')); } return Promise.reject(err); });\n    };\n    g.fetch = wrappedFetch; if (typeof window !== 'undefined') window.fetch = wrappedFetch;\n  }\n" ++
+    "  if (typeof EventTarget === 'function' && EventTarget.prototype && typeof EventTarget.prototype.dispatchEvent === 'function' && !EventTarget.prototype.dispatchEvent.__capsurf_iframe_css_wrapped) {\n" ++
+    "    var origETDispatch = EventTarget.prototype.dispatchEvent;\n" ++
+    "    var wrappedETDispatch = function(ev) {\n" ++
+    "      try {\n" ++
+    "        if (ev && ev.type === 'load' && this && this.nodeType === 1) {\n" ++
+    "          var tn = String(this.localName || this.tagName || '').toLowerCase();\n" ++
+    "          if ((tn === 'iframe' || tn === 'frame') && this._contentDocument && typeof this._contentDocument.querySelectorAll === 'function') {\n" ++
+    "            var cdoc = this._contentDocument;\n" ++
+    "            var base = cdoc.baseURI || cdoc.URL || (this._contentWindow && this._contentWindow.location && this._contentWindow.location.href) || '';\n" ++
+    "            var links = cdoc.querySelectorAll('link[href]');\n" ++
+    "            for (var li = 0; li < links.length; li++) {\n" ++
+    "              var lk = links[li];\n" ++
+    "              if (!lk || lk._capsurf_iframe_css_fetched) continue;\n" ++
+    "              var rel = String((lk.getAttribute && lk.getAttribute('rel')) || lk.rel || '').trim().toLowerCase();\n" ++
+    "              if (rel.split(/\\\\s+/).indexOf('stylesheet') === -1) continue;\n" ++
+    "              var href = (lk.getAttribute && lk.getAttribute('href')) || lk.href || '';\n" ++
+    "              if (!href) continue;\n" ++
+    "              lk._capsurf_iframe_css_fetched = true;\n" ++
+    "              var absCss = resolveUrlAbs(href, base);\n" ++
+    "              if (typeof g.fetch === 'function') {\n" ++
+    "                g.fetch(absCss, { mode: 'no-cors', _resourceType: 'stylesheet' }).catch(function() {});\n" ++
+    "              }\n" ++
+    "            }\n" ++
+    "          }\n" ++
+    "        }\n" ++
+    "      } catch (e) {}\n" ++
+    "      return origETDispatch.apply(this, arguments);\n" ++
+    "    };\n" ++
+    "    wrappedETDispatch.__capsurf_iframe_css_wrapped = true;\n" ++
+    "    EventTarget.prototype.dispatchEvent = wrappedETDispatch;\n" ++
+    "  }\n" ++
     "  if (typeof g.CanvasRenderingContext2D === 'function' && g.CanvasRenderingContext2D.prototype && typeof g.CanvasRenderingContext2D.prototype.drawImage === 'function' && !g.CanvasRenderingContext2D.prototype.drawImage.__capsurf_withheld_wrapped) {\n" ++
     "    var origDrawImage = g.CanvasRenderingContext2D.prototype.drawImage;\n" ++
     "    var wrappedDrawImage = function(image) {\n" ++

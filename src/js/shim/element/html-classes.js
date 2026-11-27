@@ -132,7 +132,9 @@ function installHtmlClasses(global) {
         const attr = this.getAttribute(prop);
         if (typeof attr === "string") {
           try {
-            const fn = new Function("event", attr);
+            const fn = prop === "onerror"
+              ? new Function("event", "source", "lineno", "colno", "error", attr)
+              : new Function("event", attr);
             let map = m;
             if (!map) {
               map = Object.create(null);
@@ -327,7 +329,6 @@ function installHtmlClasses(global) {
     function applyTextTransform(str, tt) {
       if (tt === "uppercase") return str.toUpperCase();
       if (tt === "lowercase") return str.toLowerCase();
-      if (tt === "capitalize") return str.replace(/\b\w/g, function (c) { return c.toUpperCase(); });
       return str;
     }
 
@@ -1018,6 +1019,41 @@ function installHtmlClasses(global) {
   if (typeof globalThis !== "undefined") globalThis.HTMLStyleElement = HTMLStyleElement;
   if (typeof window !== "undefined") window.HTMLStyleElement = HTMLStyleElement;
 
+  // 1.055 HTMLFontElement
+  function HTMLFontElement() {
+    if (HTMLElement._upgradeTarget) {
+      const target = HTMLElement._upgradeTarget;
+      HTMLElement._upgradeTarget = null;
+      return target;
+    }
+    throw new TypeError("Illegal constructor");
+  }
+  HTMLFontElement.prototype = Object.create(HTMLElementProto);
+  HTMLFontElement.prototype.constructor = HTMLFontElement;
+  Object.defineProperty(HTMLFontElement.prototype, Symbol.toStringTag, {
+    value: "HTMLFontElement",
+    configurable: true,
+  });
+  Object.defineProperty(HTMLFontElement.prototype, "color", {
+    get: function () { return this.getAttribute("color") || ""; },
+    set: function (v) { this.setAttribute("color", v === null ? "" : String(v)); },
+    configurable: true,
+  });
+  Object.defineProperty(HTMLFontElement.prototype, "face", {
+    get: function () { return this.getAttribute("face") || ""; },
+    set: function (v) { this.setAttribute("face", String(v)); },
+    configurable: true,
+  });
+  Object.defineProperty(HTMLFontElement.prototype, "size", {
+    get: function () { return this.getAttribute("size") || ""; },
+    set: function (v) { this.setAttribute("size", String(v)); },
+    configurable: true,
+  });
+  markNative(HTMLFontElement, "HTMLFontElement");
+  global.HTMLFontElement = HTMLFontElement;
+  if (typeof globalThis !== "undefined") globalThis.HTMLFontElement = HTMLFontElement;
+  if (typeof window !== "undefined") window.HTMLFontElement = HTMLFontElement;
+
   function defineAttrTokenList(proto, propName, attrName, supportedSet) {
     const slot = "_dtl_" + propName;
     Object.defineProperty(proto, propName, {
@@ -1055,9 +1091,25 @@ function installHtmlClasses(global) {
     configurable: true,
   });
   defineAttrTokenList(HTMLLinkElement.prototype, "sizes", "sizes", null);
-  Object.defineProperty(HTMLLinkElement.prototype, "href", {
-    get: function () { return this.getAttribute("href") || ""; },
-    set: function (v) { this.setAttribute("href", String(v)); },
+  Object.defineProperty(HTMLLinkElement.prototype, "as", {
+    get: function () { return this.getAttribute("as") || ""; },
+    set: function (v) { this.setAttribute("as", String(v)); },
+    configurable: true,
+  });
+  Object.defineProperty(HTMLLinkElement.prototype, "crossOrigin", {
+    get: function () {
+      const v = this.getAttribute("crossorigin");
+      if (v === null) return null;
+      const lower = String(v).toLowerCase();
+      return lower === "use-credentials" ? "use-credentials" : "anonymous";
+    },
+    set: function (v) {
+      if (v === null || v === undefined) {
+        this.removeAttribute("crossorigin");
+      } else {
+        this.setAttribute("crossorigin", String(v));
+      }
+    },
     configurable: true,
   });
   Object.defineProperty(HTMLLinkElement.prototype, "media", {
@@ -1463,6 +1515,10 @@ function installHtmlClasses(global) {
     if (!img) return;
     const str = String(rawSrc || "");
     if (!str) return;
+    if (img.ownerDocument && typeof document !== "undefined" && img.ownerDocument !== document && !img.ownerDocument.defaultView && !img.isConnected) {
+      img._pendingFramelessLoad = str;
+      return;
+    }
     img._imgLoadStarted = true;
     if (str.startsWith("data:")) {
       const self = img;
@@ -1818,6 +1874,8 @@ function installHtmlClasses(global) {
   markNative(HTMLImageElement.prototype.getBoundingClientRect, "getBoundingClientRect");
 
   markNative(HTMLImageElement, "HTMLImageElement");
+  global.__capsurf_triggerImageLoad = triggerImageLoad;
+  if (typeof globalThis !== "undefined") globalThis.__capsurf_triggerImageLoad = triggerImageLoad;
   global.HTMLImageElement = HTMLImageElement;
   if (typeof globalThis !== "undefined") globalThis.HTMLImageElement = HTMLImageElement;
   if (typeof window !== "undefined") window.HTMLImageElement = HTMLImageElement;
@@ -3702,10 +3760,12 @@ function installHtmlClasses(global) {
   });
   Object.defineProperty(TextTrack.prototype, "kind", {
     get: function () {
-      const raw = this._trackEl && typeof this._trackEl.getAttribute === "function"
-        ? String(this._trackEl.getAttribute("kind") || "").toLowerCase()
-        : "";
-      return VALID_TRACK_KINDS[raw] ? raw : "subtitles";
+      const attr = this._trackEl && typeof this._trackEl.getAttribute === "function"
+        ? this._trackEl.getAttribute("kind")
+        : null;
+      if (attr === null) return "subtitles";
+      const raw = String(attr).toLowerCase();
+      return VALID_TRACK_KINDS[raw] ? raw : "metadata";
     },
     configurable: true,
   });
@@ -3868,6 +3928,14 @@ function installHtmlClasses(global) {
     get: function () { return getOrCreateTrackObject(this); },
     configurable: true,
   });
+  Object.defineProperty(HTMLTrackElement.prototype, "readyState", {
+    get: function () { return typeof this._readyState === "number" ? this._readyState : 0; },
+    configurable: true,
+  });
+  HTMLTrackElement.NONE = HTMLTrackElement.prototype.NONE = 0;
+  HTMLTrackElement.LOADING = HTMLTrackElement.prototype.LOADING = 1;
+  HTMLTrackElement.LOADED = HTMLTrackElement.prototype.LOADED = 2;
+  HTMLTrackElement.ERROR = HTMLTrackElement.prototype.ERROR = 3;
   markNative(HTMLTrackElement, "HTMLTrackElement");
   global.HTMLTrackElement = HTMLTrackElement;
   if (typeof globalThis !== "undefined") globalThis.HTMLTrackElement = HTMLTrackElement;
@@ -4447,6 +4515,40 @@ function installHtmlClasses(global) {
       },
       configurable: true,
     });
+    Object.defineProperty(cellProto, "colSpan", {
+      get: function () {
+        const raw = nativeGetAttribute.call(this, "colspan");
+        if (raw == null) return 1;
+        const n = parseInt(String(raw).trim(), 10);
+        if (!Number.isFinite(n) || n < 1) return 1;
+        return n > 1000 ? 1000 : n;
+      },
+      set: function (v) {
+        let n = Number(v) | 0;
+        if (n < 1) n = 1;
+        if (n > 1000) n = 1000;
+        nativeSetAttribute.call(this, "colspan", String(n));
+      },
+      enumerable: true,
+      configurable: true,
+    });
+    Object.defineProperty(cellProto, "rowSpan", {
+      get: function () {
+        const raw = nativeGetAttribute.call(this, "rowspan");
+        if (raw == null) return 1;
+        const n = parseInt(String(raw).trim(), 10);
+        if (!Number.isFinite(n) || n < 0) return 1;
+        return n > 65534 ? 65534 : n;
+      },
+      set: function (v) {
+        let n = Number(v) | 0;
+        if (n < 0) n = 1;
+        if (n > 65534) n = 65534;
+        nativeSetAttribute.call(this, "rowspan", String(n));
+      },
+      enumerable: true,
+      configurable: true,
+    });
   })();
 
   if (typeof global.HTMLFrameSetElement === "function") {
@@ -4517,7 +4619,10 @@ function installHtmlClasses(global) {
           const win = typeof window !== "undefined" ? window : global;
           if (win) {
             try {
-              win[lower] = new Function("event", String(val == null ? "" : val));
+              const codeStr = String(val == null ? "" : val);
+              win[lower] = lower === "onerror"
+                ? new Function("event", "source", "lineno", "colno", "error", codeStr)
+                : new Function("event", codeStr);
             } catch (e) {
               win[lower] = null;
             }
@@ -4567,7 +4672,17 @@ function installHtmlClasses(global) {
 
   Object.defineProperty(HTMLTemplateElement.prototype, "innerHTML", {
     get: function () {
-      return this.content ? this.content.innerHTML || "" : "";
+      const content = this.content;
+      if (!content) return "";
+      const kids = content.childNodes || content._children || [];
+      let html = "";
+      for (let i = 0; i < kids.length; i++) {
+        const k = kids[i];
+        if (k.nodeType === 1) html += k.outerHTML || "";
+        else if (k.nodeType === 3) html += k.textContent || "";
+        else if (k.nodeType === 8) html += "<!--" + (k.data || "") + "-->";
+      }
+      return html;
     },
     set: function (val) {
       const content = this.content;
@@ -4619,6 +4734,18 @@ function installHtmlClasses(global) {
     },
     configurable: true,
   });
+  Object.defineProperty(HTMLDetailsElement.prototype, "name", {
+    get: function () {
+      const v = typeof this.getAttribute === "function" ? this.getAttribute("name") : this._name;
+      return v == null ? "" : String(v);
+    },
+    set: function (v) {
+      const str = v == null ? "" : String(v);
+      this._name = str;
+      if (typeof this.setAttribute === "function") this.setAttribute("name", str);
+    },
+    configurable: true,
+  });
   markNative(HTMLDetailsElement, "HTMLDetailsElement");
   global.HTMLDetailsElement = HTMLDetailsElement;
   if (typeof globalThis !== "undefined") {
@@ -4632,17 +4759,46 @@ function installHtmlClasses(global) {
   function SVGAnimatedString() {
     throw new TypeError("Illegal constructor");
   }
+  const XLINK_NS = "http://www.w3.org/1999/xlink";
   Object.defineProperty(SVGAnimatedString.prototype, "baseVal", {
     get: function () {
       if (this._element && typeof this._element.getAttribute === "function") {
-        return this._element.getAttribute("class") || "";
+        const attr = this._attrName || "class";
+        if (attr === "href") {
+          if (this._element.hasAttribute("href")) {
+            return this._element.getAttribute("href") || "";
+          }
+          if (typeof this._element.hasAttributeNS === "function" && this._element.hasAttributeNS(XLINK_NS, "href")) {
+            return this._element.getAttributeNS(XLINK_NS, "href") || "";
+          }
+          if (this._element.hasAttribute("xlink:href")) {
+            return this._element.getAttribute("xlink:href") || "";
+          }
+          return "";
+        }
+        return this._element.getAttribute(attr) || "";
       }
       return this._baseVal || "";
     },
     set: function (v) {
       const str = String(v);
       if (this._element && typeof this._element.setAttribute === "function") {
-        this._element.setAttribute("class", str);
+        const attr = this._attrName || "class";
+        if (attr === "href") {
+          if (!this._element.hasAttribute("href") &&
+              ((typeof this._element.hasAttributeNS === "function" && this._element.hasAttributeNS(XLINK_NS, "href")) ||
+               this._element.hasAttribute("xlink:href"))) {
+            if (typeof this._element.setAttributeNS === "function") {
+              this._element.setAttributeNS(XLINK_NS, "xlink:href", str);
+            } else {
+              this._element.setAttribute("xlink:href", str);
+            }
+          } else {
+            this._element.setAttribute("href", str);
+          }
+        } else {
+          this._element.setAttribute(attr, str);
+        }
       } else {
         this._baseVal = str;
       }
@@ -4727,6 +4883,7 @@ function installHtmlClasses(global) {
   }
 
   for (const animName of [
+    "SVGNumber",
     "SVGAnimatedEnumeration",
     "SVGAnimatedLength",
     "SVGAnimatedNumber",
@@ -4778,6 +4935,7 @@ function installHtmlClasses(global) {
   const SVGGElement = defSvgSub("SVGGElement", SVGGraphicsElement);
   const SVGDefsElement = defSvgSub("SVGDefsElement", SVGGraphicsElement);
   const SVGSymbolElement = defSvgSub("SVGSymbolElement", SVGGraphicsElement);
+  const SVGAElement = defSvgSub("SVGAElement", SVGGraphicsElement);
   const SVGUseElement = defSvgSub("SVGUseElement", SVGGraphicsElement);
   const SVGSwitchElement = defSvgSub("SVGSwitchElement", SVGGraphicsElement);
   const SVGForeignObjectElement = defSvgSub("SVGForeignObjectElement", SVGGraphicsElement);
@@ -4832,6 +4990,29 @@ function installHtmlClasses(global) {
   defSvgSub("SVGTitleElement", SVGElement);
   defSvgSub("SVGDescElement", SVGElement);
   defSvgSub("SVGMetadataElement", SVGElement);
+
+  const _svgHrefDesc = {
+    get: function () {
+      if (!this._svgHref) {
+        const animStr = Object.create(SVGAnimatedString.prototype);
+        animStr._element = this;
+        animStr._attrName = "href";
+        this._svgHref = animStr;
+      }
+      return this._svgHref;
+    },
+    configurable: true,
+    enumerable: true,
+  };
+  for (const hrefCls of [
+    "SVGUseElement", "SVGAElement", "SVGImageElement",
+    "SVGLinearGradientElement", "SVGRadialGradientElement",
+    "SVGPatternElement", "SVGTextPathElement",
+  ]) {
+    if (global[hrefCls] && global[hrefCls].prototype) {
+      Object.defineProperty(global[hrefCls].prototype, "href", _svgHrefDesc);
+    }
+  }
 
   const SVG_GEOMETRY_LOCALS = new Set([
     "circle",

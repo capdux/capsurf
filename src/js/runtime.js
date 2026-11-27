@@ -923,11 +923,16 @@
     _mouseEventState.set(this, s);
     const es = _eventState.get(this);
     if (es) es.relatedTarget = relatedTarget;
+    if (opts.which === undefined) {
+      const us = _uiEventState.get(this);
+      if (us) us.which = s.button + 1;
+    }
   }
   MouseEvent.prototype = Object.create(UIEvent.prototype);
   MouseEvent.prototype.constructor = MouseEvent;
   markNative(MouseEvent, "MouseEvent");
 
+  const _flooredMouseProps = new Set(["screenX", "screenY", "clientX", "clientY", "pageX", "pageY"]);
   ["screenX", "screenY", "clientX", "clientY", "pageX", "pageY", "offsetX", "offsetY", "movementX", "movementY", "button", "buttons", "ctrlKey", "shiftKey", "altKey", "metaKey", "relatedTarget"].forEach(function (prop) {
     Object.defineProperty(MouseEvent.prototype, prop, {
       get: function () {
@@ -941,7 +946,11 @@
           const rect = this.target.getBoundingClientRect();
           return s.clientY - ((rect ? rect.top : 0) + (Number(this.target.clientTop) || 0));
         }
-        return s[prop];
+        const val = s[prop];
+        if (_flooredMouseProps.has(prop) && !(typeof PointerEvent === "function" && this instanceof PointerEvent)) {
+          return Math.floor(val);
+        }
+        return val;
       },
       enumerable: false,
       configurable: true,
@@ -952,7 +961,7 @@
     get: function () {
       const s = _mouseEventState.get(this);
       if (!s) throw new TypeError("Illegal invocation");
-      return s.clientX;
+      return (typeof PointerEvent === "function" && this instanceof PointerEvent) ? s.clientX : Math.floor(s.clientX);
     },
     enumerable: false,
     configurable: true,
@@ -962,7 +971,27 @@
     get: function () {
       const s = _mouseEventState.get(this);
       if (!s) throw new TypeError("Illegal invocation");
-      return s.clientY;
+      return (typeof PointerEvent === "function" && this instanceof PointerEvent) ? s.clientY : Math.floor(s.clientY);
+    },
+    enumerable: false,
+    configurable: true,
+  });
+
+  Object.defineProperty(MouseEvent.prototype, "layerX", {
+    get: function () {
+      const s = _mouseEventState.get(this);
+      if (!s) throw new TypeError("Illegal invocation");
+      return (typeof PointerEvent === "function" && this instanceof PointerEvent) ? s.clientX : Math.floor(s.clientX);
+    },
+    enumerable: false,
+    configurable: true,
+  });
+
+  Object.defineProperty(MouseEvent.prototype, "layerY", {
+    get: function () {
+      const s = _mouseEventState.get(this);
+      if (!s) throw new TypeError("Illegal invocation");
+      return (typeof PointerEvent === "function" && this instanceof PointerEvent) ? s.clientY : Math.floor(s.clientY);
     },
     enumerable: false,
     configurable: true,
@@ -2216,8 +2245,17 @@
   const PHASE_AT_TARGET = 2;
   const PHASE_BUBBLING = 3;
 
+  function _isValidEventTargetReceiver(t) {
+    if (!t || typeof t !== "object") return false;
+    if (t instanceof EventTarget) return true;
+    if (t === global || (typeof window !== "undefined" && t === window) || (typeof globalThis !== "undefined" && t === globalThis)) return true;
+    if (t.nodeType === 1 || t.nodeType === 9 || t.nodeType === 11 || t._isEventTarget) return true;
+    if (typeof t.window === "object" && t.window === t) return true;
+    return false;
+  }
+
   EventTarget.prototype.addEventListener = function addEventListener(type, callback) {
-    if (!this || (!(this instanceof EventTarget) && this !== global && (typeof window !== "undefined" && this !== window) && (typeof globalThis !== "undefined" && this !== globalThis))) {
+    if (!_isValidEventTargetReceiver(this)) {
       throw new TypeError("Failed to execute 'addEventListener' on 'EventTarget': Illegal invocation");
     }
     const options = arguments[2];
@@ -2270,7 +2308,7 @@
   };
 
   EventTarget.prototype.removeEventListener = function removeEventListener(type, callback) {
-    if (!this || (!(this instanceof EventTarget) && this !== global && (typeof window !== "undefined" && this !== window) && (typeof globalThis !== "undefined" && this !== globalThis))) {
+    if (!_isValidEventTargetReceiver(this)) {
       throw new TypeError("Failed to execute 'removeEventListener' on 'EventTarget': Illegal invocation");
     }
     const options = arguments[2];
@@ -2615,7 +2653,9 @@
               const attrVal = entry.getAttribute(propName);
               if (typeof attrVal === "string" && attrVal && entry[propName] == null) {
                 try {
-                  entry[propName] = new Function("event", attrVal);
+                  entry[propName] = propName === "onerror"
+                    ? new Function("event", "source", "lineno", "colno", "error", attrVal)
+                    : new Function("event", attrVal);
                 } catch (e) {}
               }
             } else if (
@@ -2638,13 +2678,16 @@
                 const bodyAttr = document.body.getAttribute(propName);
                 if (typeof bodyAttr === "string" && bodyAttr && entry[propName] === undefined) {
                   try {
-                    entry[propName] = new Function("event", bodyAttr);
+                    entry[propName] = propName === "onerror"
+                      ? new Function("event", "source", "lineno", "colno", "error", bodyAttr)
+                      : new Function("event", bodyAttr);
                   } catch (e) {}
                 }
               }
             }
           }
-          const fn = entry[propName];
+          const skipWinOnerror = propName === "onerror" && (entry === global || (typeof window !== "undefined" && entry === window));
+          const fn = skipWinOnerror ? null : entry[propName];
           if (typeof fn === "function" && !isImmediateStopped()) {
             try {
               const ret = fn.call(entry, event);
@@ -2661,7 +2704,8 @@
                 event.preventDefault();
               }
             } catch (e) {
-              if (typeof console !== "undefined" && console.error) console.error(e);
+              if (typeof reportError === "function") reportError(e);
+              else if (typeof console !== "undefined" && console.error) console.error(e);
             }
           }
         }
@@ -2842,7 +2886,8 @@
             try {
               st.callback.call(obs, batch, obs);
             } catch (e) {
-              if (typeof console !== "undefined" && console.error) console.error(e);
+              if (typeof reportError === "function") reportError(e);
+              else if (typeof console !== "undefined" && console.error) console.error(e);
             }
           }
         }
@@ -3644,6 +3689,118 @@
     value: "HTMLOptionsCollection",
     configurable: true,
   });
+
+  function HTMLAllCollection() {
+    throw new TypeError("Illegal constructor");
+  }
+  Object.defineProperty(HTMLAllCollection.prototype, Symbol.toStringTag, {
+    value: "HTMLAllCollection",
+    configurable: true,
+  });
+  markNative(HTMLAllCollection, "HTMLAllCollection");
+  if (typeof global !== "undefined") global.HTMLAllCollection = HTMLAllCollection;
+  if (typeof window !== "undefined") window.HTMLAllCollection = HTMLAllCollection;
+  if (typeof globalThis !== "undefined") globalThis.HTMLAllCollection = HTMLAllCollection;
+
+  const ALL_NAMED_TAGS = new Set(["a", "applet", "area", "embed", "form", "frame", "frameset", "iframe", "img", "object"]);
+
+  function makeHtmlAllCollection(doc) {
+    function collectAll() {
+      const out = [];
+      const up = typeof upgradeElement === "function" ? upgradeElement : (typeof globalThis !== "undefined" && globalThis.upgradeElement);
+      function walk(node) {
+        if (!node) return;
+        let ch = node.firstChild;
+        while (ch) {
+          if (ch.nodeType === 1) {
+            out.push(up ? up(ch) : ch);
+            walk(ch);
+          }
+          ch = ch.nextSibling;
+        }
+      }
+      walk(doc);
+      return out;
+    }
+    function resolveNamed(name) {
+      const key = String(name);
+      if (!key) return null;
+      const list = collectAll();
+      const matches = [];
+      for (let i = 0; i < list.length; i++) {
+        const el = list[i];
+        const id = el.getAttribute ? el.getAttribute("id") : el.id;
+        if (id === key) {
+          matches.push(el);
+          continue;
+        }
+        const tag = String(el.localName || el.tagName || "").toLowerCase();
+        if (ALL_NAMED_TAGS.has(tag)) {
+          const nm = el.getAttribute ? el.getAttribute("name") : null;
+          if (nm === key) matches.push(el);
+        }
+      }
+      if (matches.length === 0) return null;
+      if (matches.length === 1) return matches[0];
+      return makeHtmlCollection(function () { return matches; });
+    }
+    function resolveItem(indexOrName) {
+      if (arguments.length === 0) return null;
+      if (typeof indexOrName === "number" || /^\d+$/.test(String(indexOrName))) {
+        const idx = Number(indexOrName) | 0;
+        const list = collectAll();
+        return idx >= 0 && idx < list.length ? list[idx] : null;
+      }
+      return resolveNamed(indexOrName);
+    }
+    const fn = function (nameOrIndex) {
+      if (arguments.length === 0) return null;
+      return resolveItem(nameOrIndex);
+    };
+    Object.setPrototypeOf(fn, HTMLAllCollection.prototype);
+    return new Proxy(fn, {
+      get: function (target, prop, receiver) {
+        if (prop === "length") return collectAll().length;
+        if (prop === "item") return function (idxOrName) {
+          if (arguments.length === 0) return null;
+          return resolveItem(idxOrName);
+        };
+        if (prop === "namedItem") return function (name) {
+          return resolveNamed(name);
+        };
+        if (prop === Symbol.iterator) {
+          return function () {
+            const list = collectAll();
+            let idx = 0;
+            return {
+              next: function () {
+                return idx < list.length ? { value: list[idx++], done: false } : { value: undefined, done: true };
+              },
+            };
+          };
+        }
+        if (typeof prop === "string" && /^\d+$/.test(prop)) {
+          const idx = Number(prop);
+          const list = collectAll();
+          return idx >= 0 && idx < list.length ? list[idx] : undefined;
+        }
+        if (typeof prop === "string" && !(prop in HTMLAllCollection.prototype) && prop !== "constructor") {
+          const res = resolveNamed(prop);
+          if (res !== null) return res;
+          return undefined;
+        }
+        return Reflect.get(target, prop, receiver);
+      },
+      has: function (target, prop) {
+        if (prop === "length" || prop === "item" || prop === "namedItem") return true;
+        if (typeof prop === "string" && /^\d+$/.test(prop)) {
+          return Number(prop) < collectAll().length;
+        }
+        if (typeof prop === "string" && resolveNamed(prop) !== null) return true;
+        return Reflect.has(target, prop);
+      },
+    });
+  }
   markNative(HTMLOptionsCollection, "HTMLOptionsCollection");
 
   Object.defineProperty(HTMLOptionsCollection.prototype, "length", {
@@ -12976,6 +13133,9 @@
     if (typeof CSS.elementSources === "undefined") {
       CSS.elementSources = new Map();
     }
+    try {
+      Object.defineProperty(CSS, Symbol.toStringTag, { value: "CSS", configurable: true });
+    } catch (e) {}
     global.CSS = CSS;
     if (typeof globalThis !== "undefined") globalThis.CSS = CSS;
     if (typeof window !== "undefined") window.CSS = CSS;
@@ -17700,10 +17860,19 @@
 
   Node.prototype.cloneNode = function (deep) {
     if (this.nodeType === TEXT_NODE) {
-      return new Text(this.textContent);
+      const t = new Text(this.textContent);
+      t.ownerDocument = this.ownerDocument;
+      return t;
+    }
+    if (this.nodeType === CDATA_SECTION_NODE) {
+      const c = new CDATASection(this.data);
+      c.ownerDocument = this.ownerDocument;
+      return c;
     }
     if (this.nodeType === COMMENT_NODE) {
-      return new Comment(this.textContent);
+      const c = new Comment(this.textContent);
+      c.ownerDocument = this.ownerDocument;
+      return c;
     }
     if (this.nodeType === DOCUMENT_FRAGMENT_NODE) {
       const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
@@ -17785,6 +17954,7 @@
   function isGenuineNode(obj) {
     if (!obj || typeof obj !== "object") return false;
     if (_NodeCtor && obj instanceof _NodeCtor) return true;
+    if (typeof global !== "undefined" && global.Node && obj instanceof global.Node) return true;
     if (isParsedNode(obj)) return true;
     return false;
   }
@@ -17839,6 +18009,11 @@
     if (!node || typeof node !== "object") return;
     if (!node.isConnected) return;
     const tag = String(node.localName || node.tagName || "").toLowerCase();
+    if (tag === "img" && node._pendingFramelessLoad && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_triggerImageLoad === "function") {
+      const pSrc = node._pendingFramelessLoad;
+      delete node._pendingFramelessLoad;
+      globalThis.__capsurf_triggerImageLoad(node, pSrc, true);
+    }
     if (tag === "script" && node._alreadyStarted) {
       if (!node._capsurfPendingScriptCheck) {
         node._capsurfPendingScriptCheck = true;
@@ -18134,6 +18309,10 @@
     if (parent._shadowRoot && typeof global.__capsurf_scheduleSlotChange === "function") {
       global.__capsurf_scheduleSlotChange(parent);
     }
+    if (parent) {
+      const pDoc = parent.nodeType === DOCUMENT_NODE ? parent : (parent.ownerDocument || null);
+      if (pDoc) { try { pDoc._capsurfIdDirty = true; } catch (e) {} }
+    }
     if (parent.isConnected && typeof global !== "undefined" && typeof global.__capsurf_syncNamedGlobals === "function") {
       const mayHaveNamed = child && child.nodeType === 1 && (
         (typeof child.hasAttribute === "function" && (child.hasAttribute("id") || child.hasAttribute("name"))) ||
@@ -18249,6 +18428,7 @@
         global.__capsurf_on_iframe_connected(child);
       }
     }
+    { const _idDoc = this.nodeType === DOCUMENT_NODE ? this : (this.ownerDocument || null); if (_idDoc) { try { _idDoc._capsurfIdDirty = true; } catch (e) {} } }
     if (this.isConnected && typeof global !== "undefined" && typeof global.__capsurf_syncNamedGlobals === "function") {
       const mayHaveNamed = child && child.nodeType === 1 && (
         (typeof child.hasAttribute === "function" && (child.hasAttribute("id") || child.hasAttribute("name"))) ||
@@ -18374,6 +18554,7 @@
         global.__capsurf_on_iframe_connected(newChild);
       }
     }
+    { const _idDoc = this.nodeType === DOCUMENT_NODE ? this : (this.ownerDocument || null); if (_idDoc) { try { _idDoc._capsurfIdDirty = true; } catch (e) {} } }
     if (this.isConnected && typeof global !== "undefined" && typeof global.__capsurf_syncNamedGlobals === "function") {
       const mayHaveNamed = newChild && newChild.nodeType === 1 && (
         (typeof newChild.hasAttribute === "function" && (newChild.hasAttribute("id") || newChild.hasAttribute("name"))) ||
@@ -18437,6 +18618,7 @@
     if (this._shadowRoot && typeof global.__capsurf_scheduleSlotChange === "function") {
       global.__capsurf_scheduleSlotChange(this);
     }
+    { const _idDoc = this.nodeType === DOCUMENT_NODE ? this : (this.ownerDocument || null); if (_idDoc) { try { _idDoc._capsurfIdDirty = true; } catch (e) {} } }
     if (this.isConnected && typeof global !== "undefined" && typeof global.__capsurf_syncNamedGlobals === "function") {
       const mayHaveNamed = child && child.nodeType === 1 && (
         (typeof child.hasAttribute === "function" && (child.hasAttribute("id") || child.hasAttribute("name"))) ||
@@ -18642,6 +18824,111 @@
     Element.prototype.insertBefore = Node.prototype.insertBefore;
     Element.prototype.removeChild = Node.prototype.removeChild;
     Element.prototype.replaceChild = Node.prototype.replaceChild;
+
+    const moveBeforeFn = markNative(function moveBefore(node, child) {
+      if (!this || typeof this !== "object") {
+        throw new TypeError("Illegal invocation");
+      }
+      if (arguments.length < 2) {
+        throw new TypeError("Failed to execute 'moveBefore': 2 arguments required, but only " + arguments.length + " present.");
+      }
+      if (!node || typeof node !== "object" || !isGenuineNode(node)) {
+        throw new TypeError("Failed to execute 'moveBefore': parameter 1 is not of type 'Node'.");
+      }
+      const DOMEx = typeof DOMException !== "undefined" ? DOMException : Error;
+      if (node.nodeType !== 1 && node.nodeType !== 3 && node.nodeType !== 8 && node.nodeType !== 4 && node.nodeType !== 7) {
+        throw new DOMEx("Failed to execute 'moveBefore': The node provided cannot be moved.", "HierarchyRequestError");
+      }
+      let anc = this;
+      while (anc) {
+        if (anc === node) {
+          throw new DOMEx("Failed to execute 'moveBefore': The new child element contains the parent.", "HierarchyRequestError");
+        }
+        anc = anc.parentNode;
+      }
+      function getShadowIncludingRoot(n) {
+        let cur = n;
+        while (cur) {
+          if (cur.parentNode) { cur = cur.parentNode; continue; }
+          if (cur.host) { cur = cur.host; continue; }
+          break;
+        }
+        return cur;
+      }
+      if (getShadowIncludingRoot(this) !== getShadowIncludingRoot(node)) {
+        throw new DOMEx("Failed to execute 'moveBefore': Nodes are not in the same tree.", "HierarchyRequestError");
+      }
+      if (child !== null && child !== undefined) {
+        if (typeof child !== "object" || !isGenuineNode(child)) {
+          throw new TypeError("Failed to execute 'moveBefore': parameter 2 is not of type 'Node'.");
+        }
+        if (child.parentNode !== this) {
+          throw new DOMEx("Failed to execute 'moveBefore': The node before which the new node is to be inserted is not a child of this node.", "NotFoundError");
+        }
+        if (node === child) return;
+      }
+
+      const oldParent = node.parentNode;
+      const oldSibIdx = oldParent ? ensureChildren(oldParent).indexOf(node) : -1;
+      if (oldParent && oldSibIdx !== -1) {
+        oldParent._children.splice(oldSibIdx, 1);
+        if (nativeElementRemoveChild && typeof nativeElementRemoveChild === "function") {
+          try { nativeElementRemoveChild.call(oldParent, node); } catch (e) {}
+        }
+        if (typeof oldParent._nid === "number" && oldParent._nid > 0 && oldParent.nodeType === DOCUMENT_FRAGMENT_NODE && typeof global.__capsurf_node_remove_child === "function") {
+          try { global.__capsurf_node_remove_child(oldParent._nid, node); } catch (e) {}
+        }
+      }
+
+      const children = ensureChildren(this);
+      if (child !== null && child !== undefined) {
+        const idx = children.indexOf(child);
+        if (idx !== -1) children.splice(idx, 0, node);
+        else children.push(node);
+        if (nativeElementInsertBefore && typeof nativeElementInsertBefore === "function") {
+          try { nativeElementInsertBefore.call(this, node, child); } catch (e) {}
+        }
+        if (typeof this._nid === "number" && this._nid > 0 && this.nodeType === DOCUMENT_FRAGMENT_NODE && typeof global.__capsurf_node_insert_before === "function") {
+          try { global.__capsurf_node_insert_before(this._nid, node, child); } catch (e) {}
+        }
+      } else {
+        children.push(node);
+        if (nativeElementAppendChild && typeof nativeElementAppendChild === "function") {
+          try { nativeElementAppendChild.call(this, node); } catch (e) {}
+        }
+        if (typeof this._nid === "number" && this._nid > 0 && this.nodeType === DOCUMENT_FRAGMENT_NODE && typeof global.__capsurf_node_append_child === "function") {
+          try { global.__capsurf_node_append_child(this._nid, node); } catch (e) {}
+        }
+      }
+      if (oldParent && oldParent._children && this === oldParent) {
+        // already removed from oldParent._children above; native side handled
+      }
+      try { node.parentNode = this; } catch (e) {}
+      const newDoc = this.nodeType === DOCUMENT_NODE ? this : (this.ownerDocument || null);
+      if (newDoc) { try { newDoc._capsurfIdDirty = true; } catch (e) {} }
+
+      if (typeof notifyMutation === "function") {
+        if (oldParent) {
+          const recR = new MutationRecord("childList", oldParent);
+          recR.removedNodes = [node];
+          notifyMutation(recR);
+        }
+        const recA = new MutationRecord("childList", this);
+        recA.addedNodes = [node];
+        notifyMutation(recA);
+      }
+
+      if (this.isConnected && typeof node.connectedMoveCallback === "function") {
+        try { node.connectedMoveCallback(); } catch (e) {}
+      }
+    }, "moveBefore");
+    Element.prototype.moveBefore = moveBeforeFn;
+    if (typeof Document !== "undefined" && Document.prototype) {
+      Document.prototype.moveBefore = moveBeforeFn;
+    }
+    if (typeof DocumentFragment !== "undefined" && DocumentFragment.prototype) {
+      DocumentFragment.prototype.moveBefore = moveBeforeFn;
+    }
     for (const _ep of ["childNodes", "firstChild", "lastChild", "nextSibling", "previousSibling"]) {
       const _desc = Object.getOwnPropertyDescriptor(Node.prototype, _ep);
       if (_desc) Object.defineProperty(Element.prototype, _ep, _desc);
@@ -18858,6 +19145,9 @@
   });
 
   Node.prototype.isSameNode = function (otherNode) {
+    if (arguments.length === 0) {
+      throw new TypeError("Failed to execute 'isSameNode' on 'Node': 1 argument required, but only 0 present.");
+    }
     return this === otherNode;
   };
 
@@ -19030,6 +19320,28 @@
       get: function () { return this.data.length; },
       configurable: true,
     });
+    Object.defineProperty(proto, "previousElementSibling", {
+      get: function () {
+        let sib = this.previousSibling;
+        while (sib) {
+          if (sib.nodeType === 1) return sib;
+          sib = sib.previousSibling;
+        }
+        return null;
+      },
+      configurable: true,
+    });
+    Object.defineProperty(proto, "nextElementSibling", {
+      get: function () {
+        let sib = this.nextSibling;
+        while (sib) {
+          if (sib.nodeType === 1) return sib;
+          sib = sib.nextSibling;
+        }
+        return null;
+      },
+      configurable: true,
+    });
     proto.substringData = function (offset, count) {
       const cur = this.data;
       const len = cur.length;
@@ -19101,21 +19413,26 @@
       configurable: true,
     });
   }
-  Object.defineProperty(Text.prototype, "wholeText", {
+  const _wholeTextDesc = {
     get: function () {
+      if (this.nodeType !== TEXT_NODE && this.nodeType !== CDATA_SECTION_NODE) return undefined;
       let cur = this;
-      while (cur.previousSibling && cur.previousSibling.nodeType === TEXT_NODE) {
+      while (cur.previousSibling && (cur.previousSibling.nodeType === TEXT_NODE || cur.previousSibling.nodeType === CDATA_SECTION_NODE)) {
         cur = cur.previousSibling;
       }
       let out = "";
-      while (cur && cur.nodeType === TEXT_NODE) {
+      while (cur && (cur.nodeType === TEXT_NODE || cur.nodeType === CDATA_SECTION_NODE)) {
         out += (cur.data !== undefined ? cur.data : (cur.nodeValue || cur.textContent || ""));
         cur = cur.nextSibling;
       }
       return out;
     },
     configurable: true,
-  });
+  };
+  Object.defineProperty(Text.prototype, "wholeText", _wholeTextDesc);
+  if (!Object.getOwnPropertyDescriptor(Node.prototype, "wholeText")) {
+    Object.defineProperty(Node.prototype, "wholeText", _wholeTextDesc);
+  }
 
   Text.prototype.splitText = function (offset) {
     const cur = this.data;
@@ -19156,6 +19473,9 @@
     return newNode;
   };
   markNative(Text.prototype.splitText, "splitText");
+  if (!Object.getOwnPropertyDescriptor(Node.prototype, "splitText")) {
+    Node.prototype.splitText = Text.prototype.splitText;
+  }
   markNative(Text, "Text");
 
   function Comment(data) {
@@ -19406,12 +19726,38 @@
     if (parent.nodeType === 9) {
       _validateDocumentChildren(converted);
     }
-    const run = function () {
-      while (parent.firstChild) {
-        parent.removeChild(parent.firstChild);
+    const DOMEx = typeof DOMException !== "undefined" ? DOMException : Error;
+    for (let i = 0; i < converted.length; i++) {
+      const n = converted[i];
+      if (n.nodeType === 10 && parent.nodeType !== 9) {
+        throw new DOMEx("DocumentType may not be inserted inside an Element or DocumentFragment.", "HierarchyRequestError");
       }
-      for (let i = 0; i < converted.length; i++) {
-        parent.appendChild(converted[i]);
+      if (n.nodeType === 9) {
+        throw new DOMEx("Document may not be inserted.", "HierarchyRequestError");
+      }
+      let anc = parent;
+      while (anc) {
+        if (anc === n) {
+          throw new DOMEx("The new child element contains the parent.", "HierarchyRequestError");
+        }
+        anc = anc.parentNode;
+      }
+    }
+    const frag = new DocumentFragment();
+    frag.ownerDocument = parent.nodeType === 9 ? parent : parent.ownerDocument;
+    for (let i = 0; i < converted.length; i++) {
+      frag.appendChild(converted[i]);
+    }
+    const remaining = Array.from(parent.childNodes || []);
+    const run = function () {
+      let guard = 0;
+      while (parent.firstChild && guard++ < 10000) {
+        const fc = parent.firstChild;
+        parent.removeChild(fc);
+        if (parent.firstChild === fc) break;
+      }
+      while (frag.firstChild) {
+        parent.appendChild(frag.firstChild);
       }
     };
     if (typeof suppressChildListMutations === "function") {
@@ -19420,9 +19766,9 @@
       run();
     }
     const added = Array.from(parent.childNodes || []);
-    if ((added.length > 0 || existing.length > 0) && typeof notifyMutation === "function" && typeof MutationRecord === "function") {
+    if ((added.length > 0 || remaining.length > 0) && typeof notifyMutation === "function" && typeof MutationRecord === "function") {
       const rec = new MutationRecord("childList", parent);
-      rec.removedNodes = existing;
+      rec.removedNodes = remaining;
       rec.addedNodes = added;
       notifyMutation(rec);
     }
@@ -19510,8 +19856,25 @@
 
   markNative(DocumentFragment, "DocumentFragment");
 
-  Object.defineProperty(DocumentFragment.prototype, "innerHTML", {
+  const shadowRootState = new WeakMap();
+  function ShadowRoot(host, mode) {
+    shadowRootState.set(this, {
+      host: host || null,
+      mode: mode || "open",
+      children: [],
+    });
+  }
+  ShadowRoot.prototype = Object.create(DocumentFragment.prototype);
+  ShadowRoot.prototype.constructor = ShadowRoot;
+  Object.defineProperty(ShadowRoot.prototype, Symbol.toStringTag, {
+    value: "ShadowRoot",
+    configurable: true,
+  });
+  Object.defineProperty(ShadowRoot.prototype, "innerHTML", {
     get: function () {
+      if (!shadowRootState.has(this)) {
+        throw new TypeError("Illegal invocation");
+      }
       const kids = ensureChildren(this);
       let html = "";
       for (let i = 0; i < kids.length; i++) {
@@ -19523,6 +19886,9 @@
       return html;
     },
     set: function (val) {
+      if (!shadowRootState.has(this)) {
+        throw new TypeError("Illegal invocation");
+      }
       while (this.firstChild) {
         this.removeChild(this.firstChild);
       }
@@ -19540,21 +19906,6 @@
         }
       }
     },
-    configurable: true,
-  });
-
-  const shadowRootState = new WeakMap();
-  function ShadowRoot(host, mode) {
-    shadowRootState.set(this, {
-      host: host || null,
-      mode: mode || "open",
-      children: [],
-    });
-  }
-  ShadowRoot.prototype = Object.create(DocumentFragment.prototype);
-  ShadowRoot.prototype.constructor = ShadowRoot;
-  Object.defineProperty(ShadowRoot.prototype, Symbol.toStringTag, {
-    value: "ShadowRoot",
     configurable: true,
   });
   Object.defineProperty(ShadowRoot.prototype, "nodeType", {
@@ -21944,6 +22295,7 @@
     proto.appendChild = Node.prototype.appendChild;
     proto.insertBefore = Node.prototype.insertBefore;
     proto.removeChild = Node.prototype.removeChild;
+    proto.isSameNode = Node.prototype.isSameNode;
 
     if (proto.nodeType === undefined) {
       Object.defineProperty(proto, "nodeType", {
@@ -25051,6 +25403,7 @@
       if (!this.willValidate) return true;
       if (this.validity && !this.validity.valid) {
         const evt = new Event("invalid", { bubbles: false, cancelable: true });
+        try { evt._isTrusted = true; } catch (e) {}
         this.dispatchEvent(evt);
         return false;
       }
@@ -25357,10 +25710,42 @@
     Object.defineProperty(proto, "tabIndex", {
       get: function () {
         const v = this.getAttribute("tabindex");
-        return v !== null && v !== "" ? Number(v) : -1;
+        if (v !== null) {
+          const m = /^[ \t\n\f\r]*([+-]?\d+)/.exec(String(v));
+          if (m) {
+            const n = parseInt(m[1], 10);
+            return Object.is(n, -0) ? 0 : n;
+          }
+        }
+        const tag = String(this.localName || this.tagName || "").toLowerCase();
+        if (tag === "input" || tag === "button" || tag === "a" || tag === "area" || tag === "select" || tag === "textarea" || tag === "iframe") {
+          return 0;
+        }
+        return -1;
       },
       set: function (v) {
-        this.setAttribute("tabindex", String(v));
+        this.setAttribute("tabindex", String(v | 0));
+      },
+      configurable: true,
+    });
+
+    Object.defineProperty(proto, "spellcheck", {
+      get: function () {
+        let cur = this;
+        while (cur && cur.nodeType === 1) {
+          const v = typeof cur.getAttribute === "function" ? cur.getAttribute("spellcheck") : null;
+          if (v !== null) {
+            const lower = String(v).toLowerCase();
+            if (lower === "false") return false;
+            if (lower === "true" || lower === "") return true;
+            break;
+          }
+          cur = cur.parentElement;
+        }
+        return true;
+      },
+      set: function (v) {
+        this.setAttribute("spellcheck", v ? "true" : "false");
       },
       configurable: true,
     });
@@ -25912,7 +26297,9 @@
           const attr = this.getAttribute(prop);
           if (typeof attr === "string") {
             try {
-              const fn = new Function("event", attr);
+              const fn = prop === "onerror"
+                ? new Function("event", "source", "lineno", "colno", "error", attr)
+                : new Function("event", attr);
               let map = m;
               if (!map) {
                 map = Object.create(null);
@@ -26107,7 +26494,6 @@
       function applyTextTransform(str, tt) {
         if (tt === "uppercase") return str.toUpperCase();
         if (tt === "lowercase") return str.toLowerCase();
-        if (tt === "capitalize") return str.replace(/\b\w/g, function (c) { return c.toUpperCase(); });
         return str;
       }
 
@@ -26798,6 +27184,41 @@
     if (typeof globalThis !== "undefined") globalThis.HTMLStyleElement = HTMLStyleElement;
     if (typeof window !== "undefined") window.HTMLStyleElement = HTMLStyleElement;
 
+    // 1.055 HTMLFontElement
+    function HTMLFontElement() {
+      if (HTMLElement._upgradeTarget) {
+        const target = HTMLElement._upgradeTarget;
+        HTMLElement._upgradeTarget = null;
+        return target;
+      }
+      throw new TypeError("Illegal constructor");
+    }
+    HTMLFontElement.prototype = Object.create(HTMLElementProto);
+    HTMLFontElement.prototype.constructor = HTMLFontElement;
+    Object.defineProperty(HTMLFontElement.prototype, Symbol.toStringTag, {
+      value: "HTMLFontElement",
+      configurable: true,
+    });
+    Object.defineProperty(HTMLFontElement.prototype, "color", {
+      get: function () { return this.getAttribute("color") || ""; },
+      set: function (v) { this.setAttribute("color", v === null ? "" : String(v)); },
+      configurable: true,
+    });
+    Object.defineProperty(HTMLFontElement.prototype, "face", {
+      get: function () { return this.getAttribute("face") || ""; },
+      set: function (v) { this.setAttribute("face", String(v)); },
+      configurable: true,
+    });
+    Object.defineProperty(HTMLFontElement.prototype, "size", {
+      get: function () { return this.getAttribute("size") || ""; },
+      set: function (v) { this.setAttribute("size", String(v)); },
+      configurable: true,
+    });
+    markNative(HTMLFontElement, "HTMLFontElement");
+    global.HTMLFontElement = HTMLFontElement;
+    if (typeof globalThis !== "undefined") globalThis.HTMLFontElement = HTMLFontElement;
+    if (typeof window !== "undefined") window.HTMLFontElement = HTMLFontElement;
+
     function defineAttrTokenList(proto, propName, attrName, supportedSet) {
       const slot = "_dtl_" + propName;
       Object.defineProperty(proto, propName, {
@@ -26835,9 +27256,25 @@
       configurable: true,
     });
     defineAttrTokenList(HTMLLinkElement.prototype, "sizes", "sizes", null);
-    Object.defineProperty(HTMLLinkElement.prototype, "href", {
-      get: function () { return this.getAttribute("href") || ""; },
-      set: function (v) { this.setAttribute("href", String(v)); },
+    Object.defineProperty(HTMLLinkElement.prototype, "as", {
+      get: function () { return this.getAttribute("as") || ""; },
+      set: function (v) { this.setAttribute("as", String(v)); },
+      configurable: true,
+    });
+    Object.defineProperty(HTMLLinkElement.prototype, "crossOrigin", {
+      get: function () {
+        const v = this.getAttribute("crossorigin");
+        if (v === null) return null;
+        const lower = String(v).toLowerCase();
+        return lower === "use-credentials" ? "use-credentials" : "anonymous";
+      },
+      set: function (v) {
+        if (v === null || v === undefined) {
+          this.removeAttribute("crossorigin");
+        } else {
+          this.setAttribute("crossorigin", String(v));
+        }
+      },
       configurable: true,
     });
     Object.defineProperty(HTMLLinkElement.prototype, "media", {
@@ -27243,6 +27680,10 @@
       if (!img) return;
       const str = String(rawSrc || "");
       if (!str) return;
+      if (img.ownerDocument && typeof document !== "undefined" && img.ownerDocument !== document && !img.ownerDocument.defaultView && !img.isConnected) {
+        img._pendingFramelessLoad = str;
+        return;
+      }
       img._imgLoadStarted = true;
       if (str.startsWith("data:")) {
         const self = img;
@@ -27598,6 +28039,8 @@
     markNative(HTMLImageElement.prototype.getBoundingClientRect, "getBoundingClientRect");
 
     markNative(HTMLImageElement, "HTMLImageElement");
+    global.__capsurf_triggerImageLoad = triggerImageLoad;
+    if (typeof globalThis !== "undefined") globalThis.__capsurf_triggerImageLoad = triggerImageLoad;
     global.HTMLImageElement = HTMLImageElement;
     if (typeof globalThis !== "undefined") globalThis.HTMLImageElement = HTMLImageElement;
     if (typeof window !== "undefined") window.HTMLImageElement = HTMLImageElement;
@@ -29482,10 +29925,12 @@
     });
     Object.defineProperty(TextTrack.prototype, "kind", {
       get: function () {
-        const raw = this._trackEl && typeof this._trackEl.getAttribute === "function"
-          ? String(this._trackEl.getAttribute("kind") || "").toLowerCase()
-          : "";
-        return VALID_TRACK_KINDS[raw] ? raw : "subtitles";
+        const attr = this._trackEl && typeof this._trackEl.getAttribute === "function"
+          ? this._trackEl.getAttribute("kind")
+          : null;
+        if (attr === null) return "subtitles";
+        const raw = String(attr).toLowerCase();
+        return VALID_TRACK_KINDS[raw] ? raw : "metadata";
       },
       configurable: true,
     });
@@ -29648,6 +30093,14 @@
       get: function () { return getOrCreateTrackObject(this); },
       configurable: true,
     });
+    Object.defineProperty(HTMLTrackElement.prototype, "readyState", {
+      get: function () { return typeof this._readyState === "number" ? this._readyState : 0; },
+      configurable: true,
+    });
+    HTMLTrackElement.NONE = HTMLTrackElement.prototype.NONE = 0;
+    HTMLTrackElement.LOADING = HTMLTrackElement.prototype.LOADING = 1;
+    HTMLTrackElement.LOADED = HTMLTrackElement.prototype.LOADED = 2;
+    HTMLTrackElement.ERROR = HTMLTrackElement.prototype.ERROR = 3;
     markNative(HTMLTrackElement, "HTMLTrackElement");
     global.HTMLTrackElement = HTMLTrackElement;
     if (typeof globalThis !== "undefined") globalThis.HTMLTrackElement = HTMLTrackElement;
@@ -30227,6 +30680,40 @@
         },
         configurable: true,
       });
+      Object.defineProperty(cellProto, "colSpan", {
+        get: function () {
+          const raw = nativeGetAttribute.call(this, "colspan");
+          if (raw == null) return 1;
+          const n = parseInt(String(raw).trim(), 10);
+          if (!Number.isFinite(n) || n < 1) return 1;
+          return n > 1000 ? 1000 : n;
+        },
+        set: function (v) {
+          let n = Number(v) | 0;
+          if (n < 1) n = 1;
+          if (n > 1000) n = 1000;
+          nativeSetAttribute.call(this, "colspan", String(n));
+        },
+        enumerable: true,
+        configurable: true,
+      });
+      Object.defineProperty(cellProto, "rowSpan", {
+        get: function () {
+          const raw = nativeGetAttribute.call(this, "rowspan");
+          if (raw == null) return 1;
+          const n = parseInt(String(raw).trim(), 10);
+          if (!Number.isFinite(n) || n < 0) return 1;
+          return n > 65534 ? 65534 : n;
+        },
+        set: function (v) {
+          let n = Number(v) | 0;
+          if (n < 0) n = 1;
+          if (n > 65534) n = 65534;
+          nativeSetAttribute.call(this, "rowspan", String(n));
+        },
+        enumerable: true,
+        configurable: true,
+      });
     })();
 
     if (typeof global.HTMLFrameSetElement === "function") {
@@ -30297,7 +30784,10 @@
             const win = typeof window !== "undefined" ? window : global;
             if (win) {
               try {
-                win[lower] = new Function("event", String(val == null ? "" : val));
+                const codeStr = String(val == null ? "" : val);
+                win[lower] = lower === "onerror"
+                  ? new Function("event", "source", "lineno", "colno", "error", codeStr)
+                  : new Function("event", codeStr);
               } catch (e) {
                 win[lower] = null;
               }
@@ -30347,7 +30837,17 @@
 
     Object.defineProperty(HTMLTemplateElement.prototype, "innerHTML", {
       get: function () {
-        return this.content ? this.content.innerHTML || "" : "";
+        const content = this.content;
+        if (!content) return "";
+        const kids = content.childNodes || content._children || [];
+        let html = "";
+        for (let i = 0; i < kids.length; i++) {
+          const k = kids[i];
+          if (k.nodeType === 1) html += k.outerHTML || "";
+          else if (k.nodeType === 3) html += k.textContent || "";
+          else if (k.nodeType === 8) html += "<!--" + (k.data || "") + "-->";
+        }
+        return html;
       },
       set: function (val) {
         const content = this.content;
@@ -30399,6 +30899,18 @@
       },
       configurable: true,
     });
+    Object.defineProperty(HTMLDetailsElement.prototype, "name", {
+      get: function () {
+        const v = typeof this.getAttribute === "function" ? this.getAttribute("name") : this._name;
+        return v == null ? "" : String(v);
+      },
+      set: function (v) {
+        const str = v == null ? "" : String(v);
+        this._name = str;
+        if (typeof this.setAttribute === "function") this.setAttribute("name", str);
+      },
+      configurable: true,
+    });
     markNative(HTMLDetailsElement, "HTMLDetailsElement");
     global.HTMLDetailsElement = HTMLDetailsElement;
     if (typeof globalThis !== "undefined") {
@@ -30412,17 +30924,46 @@
     function SVGAnimatedString() {
       throw new TypeError("Illegal constructor");
     }
+    const XLINK_NS = "http://www.w3.org/1999/xlink";
     Object.defineProperty(SVGAnimatedString.prototype, "baseVal", {
       get: function () {
         if (this._element && typeof this._element.getAttribute === "function") {
-          return this._element.getAttribute("class") || "";
+          const attr = this._attrName || "class";
+          if (attr === "href") {
+            if (this._element.hasAttribute("href")) {
+              return this._element.getAttribute("href") || "";
+            }
+            if (typeof this._element.hasAttributeNS === "function" && this._element.hasAttributeNS(XLINK_NS, "href")) {
+              return this._element.getAttributeNS(XLINK_NS, "href") || "";
+            }
+            if (this._element.hasAttribute("xlink:href")) {
+              return this._element.getAttribute("xlink:href") || "";
+            }
+            return "";
+          }
+          return this._element.getAttribute(attr) || "";
         }
         return this._baseVal || "";
       },
       set: function (v) {
         const str = String(v);
         if (this._element && typeof this._element.setAttribute === "function") {
-          this._element.setAttribute("class", str);
+          const attr = this._attrName || "class";
+          if (attr === "href") {
+            if (!this._element.hasAttribute("href") &&
+                ((typeof this._element.hasAttributeNS === "function" && this._element.hasAttributeNS(XLINK_NS, "href")) ||
+                 this._element.hasAttribute("xlink:href"))) {
+              if (typeof this._element.setAttributeNS === "function") {
+                this._element.setAttributeNS(XLINK_NS, "xlink:href", str);
+              } else {
+                this._element.setAttribute("xlink:href", str);
+              }
+            } else {
+              this._element.setAttribute("href", str);
+            }
+          } else {
+            this._element.setAttribute(attr, str);
+          }
         } else {
           this._baseVal = str;
         }
@@ -30507,6 +31048,7 @@
     }
 
     for (const animName of [
+      "SVGNumber",
       "SVGAnimatedEnumeration",
       "SVGAnimatedLength",
       "SVGAnimatedNumber",
@@ -30558,6 +31100,7 @@
     const SVGGElement = defSvgSub("SVGGElement", SVGGraphicsElement);
     const SVGDefsElement = defSvgSub("SVGDefsElement", SVGGraphicsElement);
     const SVGSymbolElement = defSvgSub("SVGSymbolElement", SVGGraphicsElement);
+    const SVGAElement = defSvgSub("SVGAElement", SVGGraphicsElement);
     const SVGUseElement = defSvgSub("SVGUseElement", SVGGraphicsElement);
     const SVGSwitchElement = defSvgSub("SVGSwitchElement", SVGGraphicsElement);
     const SVGForeignObjectElement = defSvgSub("SVGForeignObjectElement", SVGGraphicsElement);
@@ -30612,6 +31155,29 @@
     defSvgSub("SVGTitleElement", SVGElement);
     defSvgSub("SVGDescElement", SVGElement);
     defSvgSub("SVGMetadataElement", SVGElement);
+
+    const _svgHrefDesc = {
+      get: function () {
+        if (!this._svgHref) {
+          const animStr = Object.create(SVGAnimatedString.prototype);
+          animStr._element = this;
+          animStr._attrName = "href";
+          this._svgHref = animStr;
+        }
+        return this._svgHref;
+      },
+      configurable: true,
+      enumerable: true,
+    };
+    for (const hrefCls of [
+      "SVGUseElement", "SVGAElement", "SVGImageElement",
+      "SVGLinearGradientElement", "SVGRadialGradientElement",
+      "SVGPatternElement", "SVGTextPathElement",
+    ]) {
+      if (global[hrefCls] && global[hrefCls].prototype) {
+        Object.defineProperty(global[hrefCls].prototype, "href", _svgHrefDesc);
+      }
+    }
 
     const SVG_GEOMETRY_LOCALS = new Set([
       "circle",
@@ -31615,13 +32181,15 @@
         }
       }
     } else if (tag === "textarea") {
-      const value = control.value || "";
-      if (control.required && !value) flags.valueMissing = true;
-      if (control._userEdited) {
-        const ml = control.maxLength;
-        if (typeof ml === "number" && ml >= 0 && value.length > ml) flags.tooLong = true;
-        const mn = control.minLength;
-        if (typeof mn === "number" && mn >= 0 && value && value.length < mn) flags.tooShort = true;
+      if (!_isControlDisabled(control) && !control.readOnly) {
+        const value = control.value || "";
+        if (control.required && !value) flags.valueMissing = true;
+        if (control._userEdited) {
+          const ml = control.maxLength;
+          if (typeof ml === "number" && ml >= 0 && value.length > ml) flags.tooLong = true;
+          const mn = control.minLength;
+          if (typeof mn === "number" && mn >= 0 && value && value.length < mn) flags.tooShort = true;
+        }
       }
     } else if (tag === "select") {
       if (control.required && (control.value === "" || control.value == null)) {
@@ -32512,7 +33080,11 @@
       if (!this.willValidate) return true;
       if (!this.validity.valid) {
         const evt = new Event("invalid", { bubbles: false, cancelable: true });
-        this.dispatchEvent(evt);
+        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_dispatchTrustedEvent === "function") {
+          globalThis.__capsurf_dispatchTrustedEvent(this, evt);
+        } else {
+          this.dispatchEvent(evt);
+        }
         return false;
       }
       return true;
@@ -32727,7 +33299,11 @@
       if (!this.willValidate) return true;
       if (!this.validity.valid) {
         const evt = new Event("invalid", { bubbles: false, cancelable: true });
-        this.dispatchEvent(evt);
+        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_dispatchTrustedEvent === "function") {
+          globalThis.__capsurf_dispatchTrustedEvent(this, evt);
+        } else {
+          this.dispatchEvent(evt);
+        }
         return false;
       }
       return true;
@@ -33230,7 +33806,14 @@
       if (!this.willValidate) return true;
       if (!this.validity.valid) {
         const Ev = typeof Event === "function" ? Event : _OrigSelectEvent;
-        if (Ev) this.dispatchEvent(new Ev("invalid", { bubbles: false, cancelable: true }));
+        if (Ev) {
+          const evt = new Ev("invalid", { bubbles: false, cancelable: true });
+          if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_dispatchTrustedEvent === "function") {
+            globalThis.__capsurf_dispatchTrustedEvent(this, evt);
+          } else {
+            this.dispatchEvent(evt);
+          }
+        }
         return false;
       }
       return true;
@@ -33635,7 +34218,11 @@
       if (!this.willValidate) return true;
       if (!this.validity.valid) {
         const evt = new Event("invalid", { bubbles: false, cancelable: true });
-        this.dispatchEvent(evt);
+        if (typeof globalThis !== "undefined" && typeof globalThis.__capsurf_dispatchTrustedEvent === "function") {
+          globalThis.__capsurf_dispatchTrustedEvent(this, evt);
+        } else {
+          this.dispatchEvent(evt);
+        }
         return false;
       }
       return true;
@@ -34574,14 +35161,17 @@
 
   function collectLabelsArray(control) {
     if (!isLabelable(control)) return [];
+    const root = typeof control.getRootNode === "function" ? control.getRootNode() : null;
+    if (!root || (root.nodeType !== 9 && root.nodeType !== 11)) return [];
     const matches = [];
     const seen = new Set();
 
     // 1. Explicit label with for="control.id"
     const id = control.id || (typeof control.getAttribute === "function" ? control.getAttribute("id") : "");
     if (id) {
-      const doc = control.ownerDocument || (typeof document !== "undefined" ? document : null);
-      if (doc && typeof doc.querySelectorAll === "function") {
+      const doc = root;
+      const primaryTarget = (doc && typeof doc.getElementById === "function") ? doc.getElementById(id) : control;
+      if (doc && typeof doc.querySelectorAll === "function" && (!primaryTarget || primaryTarget === control)) {
         try {
           const all = doc.querySelectorAll('label[for="' + id + '"]');
           for (let i = 0; i < all.length; i++) {
@@ -34609,6 +35199,7 @@
     }
 
     // 2. Ancestor label(s) (only when label has no `for` attr and this control is its first labelable descendant)
+    const ancLabels = [];
     let p = control.parentElement || control.parentNode;
     while (p) {
       if ((p.tagName || "").toLowerCase() === "label") {
@@ -34616,10 +35207,13 @@
         const hasFor = typeof up.hasAttribute === "function" ? up.hasAttribute("for") : (up.getAttribute && up.getAttribute("for") !== null);
         if (!hasFor && up.control === control && !seen.has(up)) {
           seen.add(up);
-          matches.push(up);
+          ancLabels.push(up);
         }
       }
       p = p.parentElement || p.parentNode;
+    }
+    for (let i = ancLabels.length - 1; i >= 0; i--) {
+      matches.push(ancLabels[i]);
     }
 
     return matches;
@@ -34682,8 +35276,8 @@
           const forId = this.getAttribute("for");
           if (!forId) return null;
           const root = typeof this.getRootNode === "function" ? this.getRootNode() : null;
-          const doc = (root && typeof root.getElementById === "function") ? root : (this.ownerDocument || (typeof document !== "undefined" ? document : null));
-          const el = doc && typeof doc.getElementById === "function" ? doc.getElementById(forId) : null;
+          if (!root || (root.nodeType !== 9 && root.nodeType !== 11)) return null;
+          const el = typeof root.getElementById === "function" ? root.getElementById(forId) : null;
           return (el && isLabelable(el)) ? el : null;
         }
         function findFirst(node) {
@@ -38291,7 +38885,7 @@
     }
     st.range = r;
     r._selection = this;
-    st.direction = "none";
+    st.direction = "forward";
     selScheduleChange(this);
   };
 
@@ -38301,14 +38895,23 @@
     if (!st || !r || !node) return false;
     const doc = st.doc || (typeof document !== "undefined" ? document : null);
     if (!isNodeInDocument(node, doc)) return false;
-    const len = getNodeLength(node);
-    const nodeStartCmp = compareBoundaryPoints(node, 0, r.endContainer, r.endOffset);
-    const nodeEndCmp = compareBoundaryPoints(node, len, r.startContainer, r.startOffset);
-    if (allowPartialContainment) {
-      return nodeStartCmp <= 0 && nodeEndCmp >= 0;
+    const parent = node.parentNode;
+    if (!parent) return false;
+    const kids = parent.childNodes || parent._children || [];
+    let idx = -1;
+    for (let i = 0; i < kids.length; i++) {
+      if (kids[i] === node) { idx = i; break; }
     }
-    return compareBoundaryPoints(node, 0, r.startContainer, r.startOffset) >= 0 &&
-           compareBoundaryPoints(node, len, r.endContainer, r.endOffset) <= 0;
+    if (idx < 0) return false;
+    if (allowPartialContainment) {
+      const startBeforeEnd = compareBoundaryPoints(parent, idx, r.endContainer, r.endOffset) < 0 ||
+        (compareBoundaryPoints(parent, idx, r.endContainer, r.endOffset) === 0 && r.collapsed);
+      const endAfterStart = compareBoundaryPoints(parent, idx + 1, r.startContainer, r.startOffset) > 0 ||
+        (compareBoundaryPoints(parent, idx + 1, r.startContainer, r.startOffset) === 0 && r.collapsed);
+      return startBeforeEnd && endAfterStart;
+    }
+    return compareBoundaryPoints(parent, idx, r.startContainer, r.startOffset) >= 0 &&
+           compareBoundaryPoints(parent, idx + 1, r.endContainer, r.endOffset) <= 0;
   };
 
   Selection.prototype.toString = function () {
@@ -43126,9 +43729,9 @@
         }
       }
     }
-    return true;
+    return false;
   };
-  CanvasRenderingContext2D.prototype.isPointInStroke = function (x, y) { checkCtx(this); return true; };
+  CanvasRenderingContext2D.prototype.isPointInStroke = function (x, y) { checkCtx(this); return false; };
 
   // Text drawing
   CanvasRenderingContext2D.prototype.fillText = function (text, x, y, maxWidth) {
@@ -45779,9 +46382,18 @@
       configurable: true,
     });
     try {
+      Object.defineProperty(ActiveWindow.prototype, Symbol.toStringTag, {
+        value: "Window",
+        configurable: true,
+      });
+    } catch (e) {}
+    try {
       Object.setPrototypeOf(global, ActiveWindow.prototype);
       if (Object.prototype.hasOwnProperty.call(global, "constructor")) {
         delete global.constructor;
+      }
+      if (Object.prototype.hasOwnProperty.call(global, Symbol.toStringTag)) {
+        delete global[Symbol.toStringTag];
       }
     } catch (e) {}
     if (typeof window !== "undefined" && !window.Window) {
@@ -46838,7 +47450,16 @@
       return this._data.has(k) ? this._data.get(k) : null;
     };
     Storage.prototype.setItem = function (key, val) {
-      this._data.set(String(key), String(val));
+      const k = String(key);
+      const v = String(val);
+      let total = v.length;
+      this._data.forEach(function (ev, ek) {
+        if (ek !== k) total += ev.length;
+      });
+      if (total > 5 * 1024 * 1024) {
+        throw new DOMException("Failed to execute 'setItem' on 'Storage': Setting the value of '" + k + "' exceeded the quota.", "QuotaExceededError");
+      }
+      this._data.set(k, v);
     };
     Storage.prototype.removeItem = function (key) {
       this._data.delete(String(key));
@@ -46865,8 +47486,53 @@
     global.Storage = Storage;
     if (typeof window !== "undefined") window.Storage = Storage;
     if (typeof globalThis !== "undefined") globalThis.Storage = Storage;
-    global.localStorage = new Storage();
-    global.sessionStorage = new Storage();
+    function wrapStorageProxy(st) {
+      return new Proxy(st, {
+        get: function (target, prop, receiver) {
+          if (typeof prop === "symbol" || prop in Storage.prototype || prop === "_data") {
+            const val = Reflect.get(target, prop, target);
+            return typeof val === "function" ? val.bind(target) : val;
+          }
+          const k = String(prop);
+          return target._data.has(k) ? target._data.get(k) : undefined;
+        },
+        set: function (target, prop, value) {
+          if (typeof prop === "symbol" || prop === "_data") {
+            return Reflect.set(target, prop, value);
+          }
+          target.setItem(String(prop), value);
+          return true;
+        },
+        deleteProperty: function (target, prop) {
+          if (typeof prop === "symbol" || prop === "_data") {
+            return Reflect.deleteProperty(target, prop);
+          }
+          target.removeItem(String(prop));
+          return true;
+        },
+        has: function (target, prop) {
+          if (typeof prop === "symbol") return Reflect.has(target, prop);
+          if (prop in Storage.prototype) return true;
+          return target._data.has(String(prop));
+        },
+        ownKeys: function (target) {
+          return Array.from(target._data.keys());
+        },
+        getOwnPropertyDescriptor: function (target, prop) {
+          if (typeof prop === "string" && target._data.has(prop)) {
+            return {
+              value: target._data.get(prop),
+              writable: true,
+              enumerable: true,
+              configurable: true,
+            };
+          }
+          return undefined;
+        },
+      });
+    }
+    global.localStorage = wrapStorageProxy(new Storage());
+    global.sessionStorage = wrapStorageProxy(new Storage());
 
     // 1b. In-memory IndexedDB shim
     (function installIndexedDB() {
@@ -47661,9 +48327,8 @@
     }
     try {
       Object.defineProperty(global, "navigator", {
-        value: navigatorObj,
-        configurable: true,
-        writable: true,
+        get: function () { return navigatorObj; },
+        configurable: false,
         enumerable: true,
       });
     } catch (e) {
@@ -47675,6 +48340,49 @@
         }
       } catch (e2) {}
     }
+
+    // Clipboard API (W3C Clipboard API & Events)
+    (function () {
+      const _clipToken = Symbol("ClipboardInternal");
+      function Clipboard(token) {
+        if (token !== _clipToken) {
+          throw new TypeError("Illegal constructor");
+        }
+        if (typeof EventTarget === "function") {
+          try { EventTarget.call(this); } catch (e) {}
+        }
+      }
+      Clipboard.prototype = Object.create(typeof EventTarget !== "undefined" ? EventTarget.prototype : Object.prototype);
+      Clipboard.prototype.constructor = Clipboard;
+      Object.defineProperty(Clipboard.prototype, Symbol.toStringTag, { value: "Clipboard", configurable: true });
+      Clipboard.prototype.readText = markNative(function () {
+        const msg = "Read permission denied.";
+        const err = typeof DOMException === "function"
+          ? new DOMException(msg, "NotAllowedError")
+          : Object.assign(new Error(msg), { name: "NotAllowedError" });
+        return Promise.reject(err);
+      }, "readText");
+      Clipboard.prototype.writeText = markNative(function (data) {
+        if (arguments.length < 1) {
+          return Promise.reject(new TypeError("Failed to execute 'writeText' on 'Clipboard': 1 argument required, but only 0 present."));
+        }
+        try {
+          if (typeof globalThis !== "undefined") globalThis.__capsurf_clipboard_text = String(data);
+        } catch (e) {}
+        return Promise.resolve(undefined);
+      }, "writeText");
+      markNative(Clipboard, "Clipboard");
+      global.Clipboard = Clipboard;
+      if (typeof window !== "undefined") window.Clipboard = Clipboard;
+      if (typeof globalThis !== "undefined") globalThis.Clipboard = Clipboard;
+
+      const clipboardInstance = new Clipboard(_clipToken);
+      Object.defineProperty(navigatorObj, "clipboard", {
+        get: function () { return clipboardInstance; },
+        configurable: true,
+        enumerable: true,
+      });
+    })();
 
     // 3. Location & History
     let currentHref = "about:blank";
@@ -47803,17 +48511,22 @@
       },
       set hash(val) {
         let h = String(val);
-        if (h && !h.startsWith("#")) h = "#" + h;
+        if (h === "" || !h.startsWith("#")) h = "#" + h;
         const base = currentHref.split("#")[0];
         const newUrl = base + h;
         if (newUrl !== currentHref) {
+          const prevHref = currentHref;
           currentHref = newUrl;
+          const newUrlSnapshot = currentHref;
           historyIdx++;
           historyStack.splice(historyIdx, historyStack.length - historyIdx, { state: null, url: currentHref });
           if (!global.__capsurf_same_doc_nav) global.__capsurf_same_doc_nav = [];
           global.__capsurf_same_doc_nav.push({ url: currentHref, type: "fragment" });
           setTimeout(() => {
-            try { global.dispatchEvent(new NativeEvent("hashchange")); } catch (e) {}
+            try {
+              const Ev = typeof HashChangeEvent === "function" ? HashChangeEvent : NativeEvent;
+              global.dispatchEvent(new Ev("hashchange", { oldURL: prevHref, newURL: newUrlSnapshot }));
+            } catch (e) {}
           }, 0);
         }
       },
@@ -48106,15 +48819,79 @@
       if (globalThis.onpopstate === undefined) globalThis.onpopstate = null;
     }
 
-    // 4. Screen
-    global.screen = {
-      width: 1920,
-      height: 1080,
-      availWidth: 1920,
-      availHeight: 1080,
-      colorDepth: 24,
-      pixelDepth: 24,
-    };
+    // 4. Screen & ScreenOrientation
+    function ScreenOrientation() {
+      throw new TypeError("Illegal constructor");
+    }
+    ScreenOrientation.prototype = Object.create(typeof EventTarget !== "undefined" ? EventTarget.prototype : Object.prototype);
+    ScreenOrientation.prototype.constructor = ScreenOrientation;
+    Object.defineProperty(ScreenOrientation.prototype, Symbol.toStringTag, {
+      value: "ScreenOrientation",
+      configurable: true,
+    });
+    const _validOrientations = new Set([
+      "any", "natural", "landscape", "portrait",
+      "portrait-primary", "portrait-secondary",
+      "landscape-primary", "landscape-secondary",
+    ]);
+    const _screenOrientationInstance = Object.create(ScreenOrientation.prototype);
+    let _orientationOnchange = null;
+    Object.defineProperty(ScreenOrientation.prototype, "angle", {
+      get: function () {
+        if (this !== _screenOrientationInstance) throw new TypeError("Illegal invocation");
+        return 0;
+      },
+      configurable: true,
+      enumerable: true,
+    });
+    Object.defineProperty(ScreenOrientation.prototype, "type", {
+      get: function () {
+        if (this !== _screenOrientationInstance) throw new TypeError("Illegal invocation");
+        return "landscape-primary";
+      },
+      configurable: true,
+      enumerable: true,
+    });
+    Object.defineProperty(ScreenOrientation.prototype, "onchange", {
+      get: function () {
+        if (this !== _screenOrientationInstance) throw new TypeError("Illegal invocation");
+        return _orientationOnchange;
+      },
+      set: function (v) {
+        if (this !== _screenOrientationInstance) throw new TypeError("Illegal invocation");
+        _orientationOnchange = typeof v === "function" ? v : null;
+      },
+      configurable: true,
+      enumerable: true,
+    });
+    ScreenOrientation.prototype.lock = markNative(function (orientation) {
+      if (this !== _screenOrientationInstance) {
+        return Promise.reject(new TypeError("Illegal invocation"));
+      }
+      if (arguments.length < 1 || typeof orientation !== "string" || !_validOrientations.has(orientation)) {
+        return Promise.reject(new TypeError("Failed to execute 'lock' on 'ScreenOrientation': invalid orientation."));
+      }
+      const DOMEx = typeof DOMException !== "undefined" ? DOMException : Error;
+      return Promise.reject(new DOMEx("screen.orientation.lock() is not available on this device.", "NotSupportedError"));
+    }, "lock");
+    ScreenOrientation.prototype.unlock = markNative(function () {
+      if (this !== _screenOrientationInstance) throw new TypeError("Illegal invocation");
+      return undefined;
+    }, "unlock");
+    markNative(ScreenOrientation, "ScreenOrientation");
+    global.ScreenOrientation = ScreenOrientation;
+    if (typeof window !== "undefined") window.ScreenOrientation = ScreenOrientation;
+    if (typeof globalThis !== "undefined") globalThis.ScreenOrientation = ScreenOrientation;
+
+    const _screenObj = Object.create(typeof EventTarget !== "undefined" ? EventTarget.prototype : Object.prototype);
+    _screenObj.width = 1920;
+    _screenObj.height = 1080;
+    _screenObj.availWidth = 1920;
+    _screenObj.availHeight = 1080;
+    _screenObj.colorDepth = 24;
+    _screenObj.pixelDepth = 24;
+    _screenObj.orientation = _screenOrientationInstance;
+    global.screen = _screenObj;
 
     // 5. Performance & Timers
     const nativeDateNow = (typeof Date !== "undefined" && typeof Date.now === "function")
@@ -48396,7 +49173,14 @@
       }
     }, "clearTimeout");
 
+    const activeIntervals = new Set();
     global.setInterval = markNative(function (cb, ms) {
+      if (!global.__capsurf_in_internal_interval && activeIntervals.size >= 2049) {
+        if (typeof DOMException === "function") {
+          throw new DOMException("Too many active intervals (limit 2048)", "QuotaExceededError");
+        }
+        throw new RangeError("Too many active intervals (limit 2048)");
+      }
       const id = nextTimerId();
       const curNesting = global.__capsurf_timer_nesting || 0;
       const rawDelay = Math.max(0, Number(ms) || 0);
@@ -48414,13 +49198,16 @@
         nestingLevel: curNesting,
       };
       activeTimers.set(id, true);
+      if (!global.__capsurf_in_internal_interval) activeIntervals.add(id);
       insertTimerTask(item);
       scheduleTaskDrain();
       return id;
     }, "setInterval");
 
     global.clearInterval = markNative(function (id) {
-      activeTimers.delete(Number(id));
+      const numId = Number(id);
+      activeTimers.delete(numId);
+      activeIntervals.delete(numId);
     }, "clearInterval");
 
     if (typeof window !== "undefined") {
@@ -54402,10 +55189,12 @@
         if (unit === "cm") return num * (96 / 2.54);
         if (unit === "mm") return num * (96 / 25.4);
         if (unit === "q") return num * (96 / 101.6);
-        if (unit === "vw") return (num / 100) * 800;
-        if (unit === "vh") return (num / 100) * 600;
-        if (unit === "vmin") return (num / 100) * 600;
-        if (unit === "vmax") return (num / 100) * 800;
+        const _vw = (typeof global.innerWidth === "number" && global.innerWidth > 0) ? global.innerWidth : 800;
+        const _vh = (typeof global.innerHeight === "number" && global.innerHeight > 0) ? global.innerHeight : 600;
+        if (unit === "vw") return (num / 100) * _vw;
+        if (unit === "vh") return (num / 100) * _vh;
+        if (unit === "vmin") return (num / 100) * Math.min(_vw, _vh);
+        if (unit === "vmax") return (num / 100) * Math.max(_vw, _vh);
         if (unit === "ex") return num * (fontSizePx || 16) * 0.8;
         if (unit === "cqw" || unit === "cqi" || unit === "cqh" || unit === "cqb") return num;
         if (unit === "ch") {
@@ -54620,7 +55409,8 @@
     }
 
     function computeElementUsedHeightPx(element, depth) {
-      if (!element || element.nodeType !== 1 || depth > 24) return 600;
+      const _vh = (typeof global.innerHeight === "number" && global.innerHeight > 0) ? global.innerHeight : 600;
+      if (!element || element.nodeType !== 1 || depth > 24) return _vh;
       const rawMap = collectRawComputedMap(element, "");
       const fontSize = evalCssLengthExpr(rawMap.get("font-size") || "16px", 16, 16) || 16;
       const bs = (rawMap.get("block-size") || "").trim().toLowerCase();
@@ -54628,7 +55418,7 @@
       if (hRaw === "initial" || hRaw === "unset" || hRaw === "revert" || hRaw === "revert-layer") hRaw = "auto";
       if (hRaw && hRaw !== "auto" && hRaw !== "min-content" && hRaw !== "max-content") {
         const parentEl = element.parentElement || element.parentNode;
-        const cbH = (parentEl && parentEl.nodeType === 1) ? computeElementUsedHeightPx(parentEl, depth + 1) : 600;
+        const cbH = (parentEl && parentEl.nodeType === 1) ? computeElementUsedHeightPx(parentEl, depth + 1) : _vh;
         const h = evalCssLengthExpr(hRaw, cbH, fontSize);
         if (h !== null) return Math.max(0, h);
       }
@@ -55656,7 +56446,8 @@
         // Resolve block-size, inline-size, min/max logical sizes
         let _cbH = null;
         const getCbH = () => {
-          if (_cbH === null) _cbH = (parentEl && parentEl.nodeType === 1) ? computeElementUsedHeightPx(parentEl, 0) : 600;
+          const _vh = (typeof global.innerHeight === "number" && global.innerHeight > 0) ? global.innerHeight : 600;
+          if (_cbH === null) _cbH = (parentEl && parentEl.nodeType === 1) ? computeElementUsedHeightPx(parentEl, 0) : _vh;
           return _cbH;
         };
         const bsRaw = (computedMap.get("block-size") || "").trim().toLowerCase();
@@ -55721,7 +56512,8 @@
             const hRawA = (computedMap.get("height") || "auto").trim().toLowerCase();
             const wRawA = (computedMap.get("width") || "auto").trim().toLowerCase();
             if ((mTop === "auto" || mBot === "auto") && topRaw !== "auto" && botRaw !== "auto" && hRawA !== "auto") {
-              const cbH = (cbEl && cbEl.nodeType === 1) ? computeElementUsedHeightPx(cbEl, 0) : 600;
+              const _vh = (typeof global.innerHeight === "number" && global.innerHeight > 0) ? global.innerHeight : 600;
+              const cbH = (cbEl && cbEl.nodeType === 1) ? computeElementUsedHeightPx(cbEl, 0) : _vh;
               const topPx = evalCssLengthExpr(topRaw, cbH, fontSize);
               const botPx = evalCssLengthExpr(botRaw, cbH, fontSize);
               const hPx = evalCssLengthExpr(hRawA, cbH, fontSize);
@@ -62902,6 +63694,16 @@
         }
       } catch (e) {}
       try {
+        if (global.document && global.document.body && typeof global.document.body.getAttribute === "function") {
+          const bodyOnloadAttr = global.document.body.getAttribute("onload");
+          if (typeof bodyOnloadAttr === "string" && bodyOnloadAttr.length > 0 && typeof global.onload !== "function") {
+            try {
+              global.onload = new Function("event", bodyOnloadAttr);
+            } catch (e) {}
+          }
+        }
+      } catch (e) {}
+      try {
         if (global.dispatchEvent) {
           const loadEv = new NativeEvent("load", { bubbles: false, cancelable: false });
           if (global.document) loadEv._overrideTarget = global.document;
@@ -62970,6 +63772,7 @@
     }
 
     // Window scroll methods
+    let windowScrollTimer = null;
     let windowScrollendTimer = null;
     function triggerWindowScrollEvents() {
       const Ev = (typeof Event !== "undefined")
@@ -62993,13 +63796,18 @@
         }
       };
 
-      if (doc) {
-        const docScrollEv = new Ev("scroll", { bubbles: false, cancelable: false });
-        dispatch(doc, docScrollEv);
-      }
-      if (win) {
-        const winScrollEv = new Ev("scroll", { bubbles: false, cancelable: false });
-        dispatch(win, winScrollEv);
+      if (!windowScrollTimer) {
+        windowScrollTimer = setTimeout(function () {
+          windowScrollTimer = null;
+          if (doc) {
+            const docScrollEv = new Ev("scroll", { bubbles: false, cancelable: false });
+            dispatch(doc, docScrollEv);
+          }
+          if (win) {
+            const winScrollEv = new Ev("scroll", { bubbles: false, cancelable: false });
+            dispatch(win, winScrollEv);
+          }
+        }, 0);
       }
 
       if (windowScrollendTimer) {
@@ -63906,9 +64714,15 @@
       });
     }
 
-    // fullscreenEnabled, fullscreenElement, exitFullscreen
+    // fullscreenEnabled, fullscreen, fullscreenElement, exitFullscreen, requestFullscreen
     if (!Object.getOwnPropertyDescriptor(docProto, "fullscreenEnabled")) {
       Object.defineProperty(docProto, "fullscreenEnabled", {
+        get: function () { return false; },
+        configurable: true,
+      });
+    }
+    if (!Object.getOwnPropertyDescriptor(docProto, "fullscreen")) {
+      Object.defineProperty(docProto, "fullscreen", {
         get: function () { return false; },
         configurable: true,
       });
@@ -63919,10 +64733,13 @@
         configurable: true,
       });
     }
-    if (!docProto.exitFullscreen) {
-      docProto.exitFullscreen = markNative(function () {
-        return Promise.resolve();
-      }, "exitFullscreen");
+    docProto.exitFullscreen = markNative(function () {
+      return Promise.reject(new TypeError("Document not active"));
+    }, "exitFullscreen");
+    if (typeof Element !== "undefined" && Element.prototype && !Element.prototype.requestFullscreen) {
+      Element.prototype.requestFullscreen = markNative(function () {
+        return Promise.reject(new TypeError("Fullscreen is not supported"));
+      }, "requestFullscreen");
     }
 
     // legacy members: clear, captureEvents, releaseEvents
@@ -66570,6 +67387,14 @@
           }
         }
         if (win && typeof win.dispatchEvent === "function" && typeof ErrorEvent === "function") {
+          let canceledByOnerror = false;
+          if (typeof win.onerror === "function") {
+            try {
+              if (win.onerror.call(win, msg, filename, lineno, colno, err) === true) {
+                canceledByOnerror = true;
+              }
+            } catch (_e2) {}
+          }
           const errEvt = new ErrorEvent("error", {
             message: msg,
             filename: filename,
@@ -66579,10 +67404,10 @@
             cancelable: true,
             bubbles: false,
           });
-          const notCanceled = win.dispatchEvent(errEvt);
-          if (notCanceled && typeof win.onerror === "function") {
-            try { win.onerror.call(win, msg, filename, lineno, colno, err); } catch (_e2) {}
+          if (canceledByOnerror) {
+            try { errEvt.preventDefault(); } catch (_e3) {}
           }
+          win.dispatchEvent(errEvt);
         }
       }, "reportError");
       global.reportError = reportErrorFn;
@@ -66602,7 +67427,9 @@
               const attr = body.getAttribute(prop);
               if (typeof attr === "string") {
                 try {
-                  const fn = new Function("event", attr);
+                  const fn = prop === "onerror"
+                    ? new Function("event", "source", "lineno", "colno", "error", attr)
+                    : new Function("event", attr);
                   _windowEventHandlers[prop] = fn;
                   return fn;
                 } catch (e) {}
@@ -66612,7 +67439,7 @@
           return null;
         };
         const setter = function (v) {
-          _windowEventHandlers[prop] = (v !== null && (typeof v === "object" || typeof v === "function")) ? v : null;
+          _windowEventHandlers[prop] = typeof v === "function" ? v : null;
         };
         Object.defineProperty(getter, "name", { value: "get " + prop, configurable: true });
         Object.defineProperty(setter, "name", { value: "set " + prop, configurable: true });
@@ -67394,9 +68221,75 @@
       });
     })();
 
+    // Minimal Intl.DateTimeFormat fallback if QuickJS built without Intl
+    if (typeof global.Intl === "undefined") {
+      function DateTimeFormat(locales, options) {
+        if (!(this instanceof DateTimeFormat)) return new DateTimeFormat(locales, options);
+        this._locales = locales;
+        this._options = options || {};
+      }
+      Object.defineProperty(DateTimeFormat.prototype, Symbol.toStringTag, { value: "Intl.DateTimeFormat", configurable: true });
+      DateTimeFormat.prototype.format = function (d) { return new Date(d === undefined ? Date.now() : d).toUTCString(); };
+      DateTimeFormat.prototype.resolvedOptions = function () { return { locale: "en-US", calendar: "gregory", numberingSystem: "latn", timeZone: "UTC" }; };
+      DateTimeFormat.supportedLocalesOf = function () { return []; };
+      const IntlObj = { DateTimeFormat: DateTimeFormat };
+      global.Intl = IntlObj;
+      if (typeof window !== "undefined") window.Intl = IntlObj;
+      if (typeof globalThis !== "undefined") globalThis.Intl = IntlObj;
+    }
+
+    // Notification API
+    (function () {
+      function Notification(title, options) {
+        if (!(this instanceof Notification)) {
+          throw new TypeError("Failed to construct 'Notification': Please use the 'new' operator, this DOM object constructor cannot be called as a function.");
+        }
+        if (arguments.length < 1) {
+          throw new TypeError("Failed to construct 'Notification': 1 argument required, but only 0 present.");
+        }
+        if (typeof EventTarget === "function") {
+          try { EventTarget.call(this); } catch (e) {}
+        }
+        const opts = (options !== null && typeof options === "object") ? options : {};
+        this.title = String(title);
+        this.body = opts.body !== undefined ? String(opts.body) : "";
+        this.icon = opts.icon !== undefined ? String(opts.icon) : "";
+        this.tag = opts.tag !== undefined ? String(opts.tag) : "";
+        this.lang = opts.lang !== undefined ? String(opts.lang) : "";
+        this.dir = opts.dir !== undefined ? String(opts.dir) : "auto";
+        this.silent = Boolean(opts.silent);
+        this.requireInteraction = Boolean(opts.requireInteraction);
+        this.data = opts.data !== undefined ? opts.data : null;
+      }
+      Notification.prototype = Object.create(typeof EventTarget !== "undefined" ? EventTarget.prototype : Object.prototype);
+      Notification.prototype.constructor = Notification;
+      Object.defineProperty(Notification.prototype, Symbol.toStringTag, { value: "Notification", configurable: true });
+      Notification.prototype.close = markNative(function () {}, "close");
+      Object.defineProperty(Notification, "permission", { get: function () { return "default"; }, configurable: true, enumerable: true });
+      Object.defineProperty(Notification, "maxActions", { get: function () { return 2; }, configurable: true, enumerable: true });
+      Notification.requestPermission = markNative(function (cb) {
+        const res = "default";
+        if (typeof cb === "function") { try { cb(res); } catch (e) {} }
+        return Promise.resolve(res);
+      }, "requestPermission");
+      markNative(Notification, "Notification");
+      try {
+        Object.defineProperty(global, "Notification", { value: Notification, writable: true, configurable: true, enumerable: true });
+      } catch (e) { global.Notification = Notification; }
+      if (typeof window !== "undefined") {
+        try { Object.defineProperty(window, "Notification", { value: Notification, writable: true, configurable: true, enumerable: true }); } catch (e) { window.Notification = Notification; }
+      }
+      if (typeof globalThis !== "undefined") {
+        try { Object.defineProperty(globalThis, "Notification", { value: Notification, writable: true, configurable: true, enumerable: true }); } catch (e) { globalThis.Notification = Notification; }
+      }
+    })();
+
     // Complete console.* API methods backed by native console.log/warn/error
     if (typeof global.console === "object" && global.console) {
       const c = global.console;
+      try {
+        Object.defineProperty(c, Symbol.toStringTag, { value: "console", configurable: true });
+      } catch (e) {}
       const timers = new Map();
       const counters = new Map();
       if (typeof c.time !== "function") {
@@ -67436,17 +68329,22 @@
           counters.set(k, 0);
         };
       }
-      if (typeof c.assert !== "function") {
-        c.assert = function (cond) {
+      if (typeof c.log === "function" && c.log.length !== 0) {
+        const origLog = c.log;
+        c.log = function () { return origLog.apply(c, arguments); };
+      }
+      if (typeof c.assert !== "function" || c.assert.length !== 0) {
+        c.assert = function () {
+          const cond = arguments[0];
           if (!cond) {
             const rest = Array.prototype.slice.call(arguments, 1);
             c.error.apply(c, rest.length > 0 ? ["Assertion failed:"].concat(rest) : ["Assertion failed"]);
           }
         };
       }
-      if (typeof c.dir !== "function") c.dir = function (obj) { c.log(obj); };
+      if (typeof c.dir !== "function" || c.dir.length !== 0) c.dir = function () { if (arguments.length) c.log(arguments[0]); };
       if (typeof c.dirxml !== "function") c.dirxml = function () { c.log.apply(c, arguments); };
-      if (typeof c.table !== "function") c.table = function (data) { c.log(data); };
+      if (typeof c.table !== "function" || c.table.length !== 0) c.table = function () { if (arguments.length) c.log(arguments[0]); };
       if (typeof c.trace !== "function") c.trace = function () { c.log.apply(c, arguments.length ? arguments : ["console.trace"]); };
       if (typeof c.group !== "function") c.group = function () { if (arguments.length) c.log.apply(c, arguments); };
       if (typeof c.groupCollapsed !== "function") c.groupCollapsed = function () { if (arguments.length) c.log.apply(c, arguments); };
@@ -68136,6 +69034,9 @@
     }
 
     element._customElementState = "custom";
+    if (typeof globalThis !== "undefined") {
+      globalThis.__capsurf_domMutationEpoch = (globalThis.__capsurf_domMutationEpoch || 0) + 1;
+    }
 
     // 4. Fire attributeChangedCallback for observed attributes
     const observed = customElementObservedAttrs.get(customElementConstructor);
@@ -68955,7 +69856,13 @@
     }
     if (global.Document && typeof global.Document !== "function") {
       const nativeDocProto = global.Document.prototype;
-      const DocumentCtor = function Document() {};
+      const DocumentCtor = function Document() {
+        this._children = [];
+        try {
+          if (this.URL === undefined) Object.defineProperty(this, "URL", { value: "about:blank", writable: true, configurable: true });
+          if (this.readyState === undefined) Object.defineProperty(this, "readyState", { value: "complete", writable: true, configurable: true });
+        } catch (e) {}
+      };
       DocumentCtor.prototype = nativeDocProto;
       nativeDocProto.constructor = DocumentCtor;
       Object.defineProperty(DocumentCtor.prototype, Symbol.toStringTag, {
@@ -69003,6 +69910,10 @@
           if (src._value !== undefined) {
             dst._value = src._value;
           }
+        } else if (tag === "script") {
+          if (src._alreadyStarted) {
+            dst._alreadyStarted = true;
+          }
         }
         if (deep) {
           const sk = src.children || src._children || [];
@@ -69018,6 +69929,14 @@
       if (typeof global.Element.prototype.cloneNode === "function") {
         const origElCloneNode = global.Element.prototype.cloneNode;
         global.Element.prototype.cloneNode = markNative(function (deep) {
+          const ns = this._namespaceURI !== undefined ? this._namespaceURI : this.namespaceURI;
+          const isNonHtmlNs = Boolean(ns && ns !== "http://www.w3.org/1999/xhtml");
+          const hasJsChildren = Array.isArray(this._children) && this._children.some((c) => c && (c.nodeType === 8 || c.nodeType === 4 || c.nodeType === 7));
+          if ((isNonHtmlNs || hasJsChildren) && typeof Node !== "undefined" && Node.prototype && typeof Node.prototype.cloneNode === "function") {
+            const cloned = Node.prototype.cloneNode.call(this, Boolean(deep));
+            if (!cloned) return cloned;
+            return copyCloneFormState(this, upgradeElement(cloned), Boolean(deep));
+          }
           const cloned = origElCloneNode.call(this, Boolean(deep));
           if (!cloned) return cloned;
           return copyCloneFormState(this, upgradeElement(cloned), Boolean(deep));
@@ -69027,9 +69946,25 @@
       const outerHtmlDesc = Object.getOwnPropertyDescriptor(global.Element.prototype, "outerHTML");
       if (outerHtmlDesc && typeof outerHtmlDesc.get === "function" && !outerHtmlDesc.set) {
         const origOuterGet = outerHtmlDesc.get;
+        const VOID_OUTER_TAGS = new Set([
+          "area", "base", "basefont", "bgsound", "br", "col", "embed", "frame",
+          "hr", "img", "input", "keygen", "link", "meta", "param", "source", "track", "wbr"
+        ]);
         Object.defineProperty(global.Element.prototype, "outerHTML", {
           get: function () {
-            const raw = origOuterGet.call(this);
+            let raw = origOuterGet.call(this);
+            if (typeof raw === "string") {
+              const ns = this._namespaceURI !== undefined ? this._namespaceURI : this.namespaceURI;
+              const isHtml = !ns || ns === "http://www.w3.org/1999/xhtml";
+              const tag = String(this.localName || this.tagName || "").toLowerCase();
+              if (isHtml && VOID_OUTER_TAGS.has(tag)) {
+                const closeSuffix = "</" + tag + ">";
+                if (raw.toLowerCase().endsWith(closeSuffix)) {
+                  raw = raw.slice(0, raw.length - closeSuffix.length);
+                }
+                return raw;
+              }
+            }
             if (this._children && this._children.length > 0 && typeof raw === "string") {
               const gt = raw.indexOf(">");
               const closeIdx = raw.lastIndexOf("</");
@@ -69273,6 +70208,7 @@
           metadata: global.SVGMetadataElement,
           title: global.SVGTitleElement,
           symbol: global.SVGSymbolElement,
+          a: global.SVGAElement,
           use: global.SVGUseElement,
           switch: global.SVGSwitchElement,
           view: global.SVGViewElement,
@@ -69303,7 +70239,7 @@
           radialgradient: global.SVGRadialGradientElement,
           clippath: global.SVGClipPathElement,
         };
-        const SvgCtor = svgCtorMap[exactTag] || (el._localNameOverride === undefined ? svgHtmlFallbackMap[exactTag.toLowerCase()] : null) || global.SVGElement;
+        const SvgCtor = svgCtorMap[exactTag] || (el._localNameOverride === undefined ? (svgCtorMap[exactTag.toLowerCase()] || svgHtmlFallbackMap[exactTag.toLowerCase()]) : null) || global.SVGElement;
         if (SvgCtor && SvgCtor.prototype) {
           Object.setPrototypeOf(el, SvgCtor.prototype);
         }
@@ -69380,6 +70316,7 @@
         case "blockquote":
         case "q": Object.setPrototypeOf(el, (global.HTMLQuoteElement || global.HTMLElement).prototype); break;
         case "param": Object.setPrototypeOf(el, (global.HTMLParamElement || global.HTMLElement).prototype); break;
+        case "font": Object.setPrototypeOf(el, (global.HTMLFontElement || global.HTMLElement).prototype); break;
         case "abbr":
         case "acronym":
         case "address":
@@ -69513,7 +70450,33 @@
             get: function () {
               return upgradeElement(origGet.call(this));
             },
-            set: origSet,
+            set: propName === "body" ? function (val) {
+              const DOMEx = typeof DOMException !== "undefined" ? DOMException : Error;
+              if (val === null) {
+                throw new DOMEx("Failed to set the 'body' property on 'Document': The new body element is of an invalid type.", "HierarchyRequestError");
+              }
+              if (!val || typeof val !== "object" || val.nodeType === undefined) {
+                throw new TypeError("Failed to set the 'body' property on 'Document': Failed to convert value to 'HTMLElement'.");
+              }
+              if (val.nodeType !== 1) {
+                throw new TypeError("Failed to set the 'body' property on 'Document': Failed to convert value to 'HTMLElement'.");
+              }
+              const tag = String(val.localName || val.tagName || "").toLowerCase();
+              if (tag !== "body" && tag !== "frameset") {
+                throw new DOMEx("Failed to set the 'body' property on 'Document': The new body element is of an invalid type.", "HierarchyRequestError");
+              }
+              const current = this.body;
+              if (current === val) return;
+              const de = this.documentElement;
+              if (!de) {
+                throw new DOMEx("Failed to set the 'body' property on 'Document': No documentElement.", "HierarchyRequestError");
+              }
+              if (current && current.parentNode === de) {
+                de.replaceChild(val, current);
+              } else {
+                de.appendChild(val);
+              }
+            } : origSet,
             configurable: true,
             enumerable: ownDesc.enumerable !== false,
           });
@@ -69664,6 +70627,38 @@
         }
         if (typeof docProto.createTextNode === "function") {
           global.__capsurf_native_createTextNode = docProto.createTextNode;
+          try {
+            if (global.document && global.Text && global.Text.prototype) {
+              const sampleText = docProto.createTextNode.call(global.document, "");
+              const nativeTextProto = Object.getPrototypeOf(sampleText);
+              if (nativeTextProto && nativeTextProto !== global.Text.prototype && !nativeTextProto.__capsurfPatched) {
+                nativeTextProto.__capsurfPatched = true;
+                const wtDesc = Object.getOwnPropertyDescriptor(global.Text.prototype, "wholeText");
+                if (wtDesc && !Object.getOwnPropertyDescriptor(nativeTextProto, "wholeText")) {
+                  Object.defineProperty(nativeTextProto, "wholeText", wtDesc);
+                }
+                if (typeof nativeTextProto.splitText !== "function" && typeof global.Text.prototype.splitText === "function") {
+                  nativeTextProto.splitText = global.Text.prototype.splitText;
+                }
+                if (!Object.getOwnPropertyDescriptor(nativeTextProto, "tagName")) {
+                  Object.defineProperty(nativeTextProto, "tagName", {
+                    get: function () { return undefined; },
+                    configurable: true,
+                  });
+                }
+                if (global.CharacterData && global.CharacterData.prototype) {
+                  const pesDesc = Object.getOwnPropertyDescriptor(global.CharacterData.prototype, "previousElementSibling");
+                  if (pesDesc && !Object.getOwnPropertyDescriptor(nativeTextProto, "previousElementSibling")) {
+                    Object.defineProperty(nativeTextProto, "previousElementSibling", pesDesc);
+                  }
+                  const nesDesc = Object.getOwnPropertyDescriptor(global.CharacterData.prototype, "nextElementSibling");
+                  if (nesDesc && !Object.getOwnPropertyDescriptor(nativeTextProto, "nextElementSibling")) {
+                    Object.defineProperty(nativeTextProto, "nextElementSibling", nesDesc);
+                  }
+                }
+              }
+            }
+          } catch (e) {}
         }
         if (typeof docProto.createComment === "function") {
           global.__capsurf_native_createComment = docProto.createComment;
@@ -69925,7 +70920,9 @@
       if (docProto.getElementById) {
         const origGetElementById = docProto.getElementById;
         docProto.getElementById = function (id) {
-          let raw = origGetElementById.call(this, id);
+          let raw = this._capsurfIdDirty
+            ? findLightElementById(this.documentElement || this, String(id))
+            : origGetElementById.call(this, id);
           if (raw && isInShadowTree(raw)) {
             raw = findLightElementById(this.documentElement || this, String(id));
           }
@@ -70341,6 +71338,17 @@
         markNative(docProto.replaceChildren, "replaceChildren");
       }
 
+      if (!Object.getOwnPropertyDescriptor(docProto, "all")) {
+        Object.defineProperty(docProto, "all", {
+          get: function () {
+            if (typeof makeHtmlAllCollection === "function") {
+              return makeHtmlAllCollection(this);
+            }
+            return undefined;
+          },
+          configurable: true,
+        });
+      }
       if (!docProto.children) {
         Object.defineProperty(docProto, "children", {
           get: function () {
@@ -70946,11 +71954,25 @@
       }
     }
 
-    // Expose HTMLDocument legacy alias per WHATWG HTML spec
-    if (typeof global.Document === "function" && !global.HTMLDocument) {
-      global.HTMLDocument = global.Document;
-      if (typeof globalThis !== "undefined") globalThis.HTMLDocument = global.Document;
-      if (typeof window !== "undefined") window.HTMLDocument = global.Document;
+    // Expose HTMLDocument subclass per WHATWG HTML spec
+    if (typeof global.Document === "function" && (!global.HTMLDocument || global.HTMLDocument === global.Document)) {
+      function HTMLDocument() {
+        throw new TypeError("Illegal constructor");
+      }
+      HTMLDocument.prototype = Object.create(global.Document.prototype);
+      HTMLDocument.prototype.constructor = HTMLDocument;
+      Object.defineProperty(HTMLDocument.prototype, Symbol.toStringTag, {
+        value: "HTMLDocument",
+        configurable: true,
+      });
+      try { Object.setPrototypeOf(HTMLDocument, global.Document); } catch (e) {}
+      markNative(HTMLDocument, "HTMLDocument");
+      global.HTMLDocument = HTMLDocument;
+      if (typeof globalThis !== "undefined") globalThis.HTMLDocument = HTMLDocument;
+      if (typeof window !== "undefined") window.HTMLDocument = HTMLDocument;
+      if (typeof document !== "undefined" && document && Object.getPrototypeOf(document) === global.Document.prototype) {
+        try { Object.setPrototypeOf(document, HTMLDocument.prototype); } catch (e) {}
+      }
     }
 
     // W3C Editing API: document.execCommand / queryCommand*
@@ -71282,7 +72304,23 @@
                   if (cachedDocEl) {
                     setDocOwner(cachedDocEl);
                     setParent(cachedDocEl, doc);
-                    Object.defineProperty(doc, "documentElement", { value: cachedDocEl, configurable: true });
+                    let docElRemoved = false;
+                    const origDocElRemove = cachedDocEl.remove;
+                    Object.defineProperty(doc, "documentElement", {
+                      get: function () {
+                        if (this.childNodes) {
+                          for (let i = 0; i < this.childNodes.length; i++) {
+                            if (this.childNodes[i].nodeType === 1) return upgradeElement(this.childNodes[i]);
+                          }
+                        }
+                        return (!docElRemoved && cachedDocEl && cachedDocEl.parentNode === this) ? cachedDocEl : null;
+                      },
+                      configurable: true
+                    });
+                    cachedDocEl.remove = function () {
+                      docElRemoved = true;
+                      if (typeof origDocElRemove === "function") return origDocElRemove.apply(this, arguments);
+                    };
                   }
                   if (cachedHead) {
                     setDocOwner(cachedHead);
@@ -71296,13 +72334,44 @@
                   Object.defineProperty(doc, "body", {
                     get: function () {
                       const de = this.documentElement;
-                      if (de && de.children) {
-                        for (let i = 0; i < de.children.length; i++) {
-                          const t = (de.children[i].tagName || "").toUpperCase();
-                          if (t === "BODY" || t === "FRAMESET") return upgradeElement(de.children[i]);
+                      if (de) {
+                        const kids = de.children || [];
+                        for (let i = 0; i < kids.length; i++) {
+                          const t = (kids[i].tagName || "").toUpperCase();
+                          if (t === "BODY" || t === "FRAMESET") return upgradeElement(kids[i]);
                         }
+                        return null;
                       }
                       return cachedBody;
+                    },
+                    set: function (val) {
+                      const DOMEx = typeof DOMException !== "undefined" ? DOMException : Error;
+                      if (val === null) {
+                        throw new DOMEx("Failed to set the 'body' property on 'Document': The new body element is of an invalid type.", "HierarchyRequestError");
+                      }
+                      if (!val || typeof val !== "object" || val.nodeType === undefined) {
+                        throw new TypeError("Failed to set the 'body' property on 'Document': Failed to convert value to 'HTMLElement'.");
+                      }
+                      if (val.nodeType !== 1) {
+                        throw new TypeError("Failed to set the 'body' property on 'Document': Failed to convert value to 'HTMLElement'.");
+                      }
+                      const tag = String(val.localName || val.tagName || "").toLowerCase();
+                      if (tag !== "body" && tag !== "frameset") {
+                        throw new DOMEx("Failed to set the 'body' property on 'Document': The new body element is of an invalid type.", "HierarchyRequestError");
+                      }
+                      const current = this.body;
+                      if (current === val) return;
+                      const de = this.documentElement;
+                      if (!de) {
+                        throw new DOMEx("Failed to set the 'body' property on 'Document': No documentElement.", "HierarchyRequestError");
+                      }
+                      setDocOwner(val);
+                      if (current && current.parentNode === de) {
+                        de.replaceChild(val, current);
+                      } else {
+                        de.appendChild(val);
+                      }
+                      cachedBody = val;
                     },
                     configurable: true
                   });

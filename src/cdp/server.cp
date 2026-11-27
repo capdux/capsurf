@@ -1078,6 +1078,11 @@ pub struct CdpServer {
                     const tgt = &_.session.target_registry.targets[t_idx];
                     if (tgt.opener_id_len > 0 && std.mem.eql(u8, tgt.url(), "about:blank")) {
                         new_sess.is_about_blank_popup = true;
+                    } else if (tgt.opener_id_len > 0 && tgt.url().len > 0) {
+                        const pu = tgt.url();
+                        const plen = @min(pu.len, new_sess.pending_popup_nav_url_buf.len);
+                        @memcpy(new_sess.pending_popup_nav_url_buf[0..plen], pu[0..plen]);
+                        new_sess.pending_popup_nav_url_len = plen;
                     }
                     if (tgt.opener_id_len > 0 && !tgt.popup_noopener) {
                         new_sess.has_opener = true;
@@ -1760,6 +1765,70 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
         }
     }
 
+    static fn flushDeferredLoadEventsForSession(client_fd: i32, sess: *CdpPageSession, sid: []const u8)! {
+        if (!sess.has_document) return;
+        if (!sess.pending_main_load_deferred && !sess.pending_child_load_deferred) return;
+        if (sess.activeAsyncFetchCount() > 0) return;
+
+        let evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
+        let cnt: usize = 0;
+        if (sess.pending_main_load_deferred) {
+            sess.pending_main_load_deferred = false;
+            if (!sess.navigation_aborted && !sess.checkWindowStopped()) {
+                evts[cnt] = CdpEvent.create("Page.loadEventFired", "{\"timestamp\":1700000000.1}");
+                cnt += 1;
+                const lc_load = std.fmt.allocPrint(
+                    sess.allocator,
+                    "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"name\":\"load\",\"timestamp\":1700000000.1}}",
+                    .{ sess.frame_id, sess.loader_id },
+                ) catch "{}";
+                evts[cnt] = CdpEvent.create("Page.lifecycleEvent", lc_load);
+                cnt += 1;
+                const stop_json = std.fmt.allocPrint(
+                    sess.allocator,
+                    "{{\"frameId\":\"{s}\"}}",
+                    .{ sess.frame_id },
+                ) catch "{}";
+                evts[cnt] = CdpEvent.create("Page.frameStoppedLoading", stop_json);
+                cnt += 1;
+            }
+        }
+        if (sess.pending_child_load_deferred) {
+            sess.pending_child_load_deferred = false;
+            const cfid = sess.pending_child_load_frame_id_buf[0..sess.pending_child_load_frame_id_len];
+            const clid = sess.pending_child_load_loader_id_buf[0..sess.pending_child_load_loader_id_len];
+            if (cfid.len > 0 && !sess.navigation_aborted && !sess.checkWindowStopped()) {
+                const lc_load = std.fmt.allocPrint(
+                    sess.allocator,
+                    "{{\"frameId\":\"{s}\",\"loaderId\":\"{s}\",\"name\":\"load\",\"timestamp\":1700000000.1}}",
+                    .{ cfid, clid },
+                ) catch "{}";
+                evts[cnt] = CdpEvent.create("Page.lifecycleEvent", lc_load);
+                cnt += 1;
+                const stop_json = std.fmt.allocPrint(
+                    sess.allocator,
+                    "{{\"frameId\":\"{s}\"}}",
+                    .{ cfid },
+                ) catch "{}";
+                evts[cnt] = CdpEvent.create("Page.frameStoppedLoading", stop_json);
+                cnt += 1;
+            }
+            sess.pending_child_load_frame_id_len = 0;
+            sess.pending_child_load_loader_id_len = 0;
+        }
+        if (cnt > 0) {
+            if (sid.len > 0) {
+                let ei: usize = 0;
+                while (ei < cnt) : (ei += 1) {
+                    if (evts[ei].session_id.len == 0) {
+                        evts[ei].session_id = sid;
+                    }
+                }
+            }
+            emitCdpEventsToFd(client_fd, &evts, cnt)?;
+        }
+    }
+
     static fn flushReopenLoadEventsForSession(client_fd: i32, sess: *CdpPageSession, sid: []const u8)! {
         if (!sess.has_document) return;
         let reopen_events: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
@@ -2207,7 +2276,19 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                 }
             }
             const base_poll_ms: i32 = if (fast_poll) 5 else 15;
-            const async_fetch_active: u32 = if (_.session.has_document) _.session.activeAsyncFetchCount() else 0;
+            let async_fetch_active: u32 = if (_.session.has_document) _.session.activeAsyncFetchCount() else 0;
+            if (async_fetch_active == 0) {
+                let ati: usize = 0;
+                while (ati < MAX_TAB_SESSIONS) : (ati += 1) {
+                    if (_.tab_sessions[ati].active) {
+                        if (ts := _.tab_sessions[ati].page_session) {
+                            if (ts.has_document) {
+                                async_fetch_active += ts.activeAsyncFetchCount();
+                            }
+                        }
+                    }
+                }
+            }
             const poll_ms: i32 = if (pending_wheel.active || has_active_promise || async_fetch_active > 0) 1 else base_poll_ms;
             const base_nfds: usize = if (_.listen_fd >= 0) 2 else 1;
             let net_pfds: [MAX_SCHEDULER_SLOTS]NetPollFd = [NetPollFd{ fd: -1, events: 0, revents: 0 }; MAX_SCHEDULER_SLOTS];
@@ -2292,6 +2373,7 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                     _.setActiveDialogSessionId("");
                     _.session.pumpTimers();
                     _.flushReopenLoadEvents(client_fd) catch break;
+                    flushDeferredLoadEventsForSession(client_fd, _.session, "") catch break;
                     if (shouldSyncChildFrames(_.session)) {
                         let cf_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
                         let cf_cnt: usize = 0;
@@ -2359,6 +2441,7 @@ fn findHeaderCaseInsensitive(headers: []const u8, name: []const u8): usize? {
                             _.setActiveDialogSessionId(tab_sid);
                             tab_sess.pumpTimers();
                             flushReopenLoadEventsForSession(client_fd, tab_sess, tab_sid) catch break;
+                            flushDeferredLoadEventsForSession(client_fd, tab_sess, tab_sid) catch break;
                             if (shouldSyncChildFrames(tab_sess)) {
                                 let tcf_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
                                 let tcf_cnt: usize = 0;

@@ -66,7 +66,8 @@ function scheduleMutationDelivery() {
           try {
             st.callback.call(obs, batch, obs);
           } catch (e) {
-            if (typeof console !== "undefined" && console.error) console.error(e);
+            if (typeof reportError === "function") reportError(e);
+            else if (typeof console !== "undefined" && console.error) console.error(e);
           }
         }
       }

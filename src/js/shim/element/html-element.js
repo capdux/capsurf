@@ -174,10 +174,42 @@ function installHtmlElementExtensions(proto) {
   Object.defineProperty(proto, "tabIndex", {
     get: function () {
       const v = this.getAttribute("tabindex");
-      return v !== null && v !== "" ? Number(v) : -1;
+      if (v !== null) {
+        const m = /^[ \t\n\f\r]*([+-]?\d+)/.exec(String(v));
+        if (m) {
+          const n = parseInt(m[1], 10);
+          return Object.is(n, -0) ? 0 : n;
+        }
+      }
+      const tag = String(this.localName || this.tagName || "").toLowerCase();
+      if (tag === "input" || tag === "button" || tag === "a" || tag === "area" || tag === "select" || tag === "textarea" || tag === "iframe") {
+        return 0;
+      }
+      return -1;
     },
     set: function (v) {
-      this.setAttribute("tabindex", String(v));
+      this.setAttribute("tabindex", String(v | 0));
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(proto, "spellcheck", {
+    get: function () {
+      let cur = this;
+      while (cur && cur.nodeType === 1) {
+        const v = typeof cur.getAttribute === "function" ? cur.getAttribute("spellcheck") : null;
+        if (v !== null) {
+          const lower = String(v).toLowerCase();
+          if (lower === "false") return false;
+          if (lower === "true" || lower === "") return true;
+          break;
+        }
+        cur = cur.parentElement;
+      }
+      return true;
+    },
+    set: function (v) {
+      this.setAttribute("spellcheck", v ? "true" : "false");
     },
     configurable: true,
   });

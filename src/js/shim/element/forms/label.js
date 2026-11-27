@@ -16,14 +16,17 @@ const _labelsCache = new WeakMap();
 
 function collectLabelsArray(control) {
   if (!isLabelable(control)) return [];
+  const root = typeof control.getRootNode === "function" ? control.getRootNode() : null;
+  if (!root || (root.nodeType !== 9 && root.nodeType !== 11)) return [];
   const matches = [];
   const seen = new Set();
 
   // 1. Explicit label with for="control.id"
   const id = control.id || (typeof control.getAttribute === "function" ? control.getAttribute("id") : "");
   if (id) {
-    const doc = control.ownerDocument || (typeof document !== "undefined" ? document : null);
-    if (doc && typeof doc.querySelectorAll === "function") {
+    const doc = root;
+    const primaryTarget = (doc && typeof doc.getElementById === "function") ? doc.getElementById(id) : control;
+    if (doc && typeof doc.querySelectorAll === "function" && (!primaryTarget || primaryTarget === control)) {
       try {
         const all = doc.querySelectorAll('label[for="' + id + '"]');
         for (let i = 0; i < all.length; i++) {
@@ -51,6 +54,7 @@ function collectLabelsArray(control) {
   }
 
   // 2. Ancestor label(s) (only when label has no `for` attr and this control is its first labelable descendant)
+  const ancLabels = [];
   let p = control.parentElement || control.parentNode;
   while (p) {
     if ((p.tagName || "").toLowerCase() === "label") {
@@ -58,10 +62,13 @@ function collectLabelsArray(control) {
       const hasFor = typeof up.hasAttribute === "function" ? up.hasAttribute("for") : (up.getAttribute && up.getAttribute("for") !== null);
       if (!hasFor && up.control === control && !seen.has(up)) {
         seen.add(up);
-        matches.push(up);
+        ancLabels.push(up);
       }
     }
     p = p.parentElement || p.parentNode;
+  }
+  for (let i = ancLabels.length - 1; i >= 0; i--) {
+    matches.push(ancLabels[i]);
   }
 
   return matches;
@@ -124,8 +131,8 @@ function installLabelElement(global) {
         const forId = this.getAttribute("for");
         if (!forId) return null;
         const root = typeof this.getRootNode === "function" ? this.getRootNode() : null;
-        const doc = (root && typeof root.getElementById === "function") ? root : (this.ownerDocument || (typeof document !== "undefined" ? document : null));
-        const el = doc && typeof doc.getElementById === "function" ? doc.getElementById(forId) : null;
+        if (!root || (root.nodeType !== 9 && root.nodeType !== 11)) return null;
+        const el = typeof root.getElementById === "function" ? root.getElementById(forId) : null;
         return (el && isLabelable(el)) ? el : null;
       }
       function findFirst(node) {

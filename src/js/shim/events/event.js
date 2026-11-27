@@ -498,11 +498,16 @@ function MouseEvent(type, options) {
   _mouseEventState.set(this, s);
   const es = _eventState.get(this);
   if (es) es.relatedTarget = relatedTarget;
+  if (opts.which === undefined) {
+    const us = _uiEventState.get(this);
+    if (us) us.which = s.button + 1;
+  }
 }
 MouseEvent.prototype = Object.create(UIEvent.prototype);
 MouseEvent.prototype.constructor = MouseEvent;
 markNative(MouseEvent, "MouseEvent");
 
+const _flooredMouseProps = new Set(["screenX", "screenY", "clientX", "clientY", "pageX", "pageY"]);
 ["screenX", "screenY", "clientX", "clientY", "pageX", "pageY", "offsetX", "offsetY", "movementX", "movementY", "button", "buttons", "ctrlKey", "shiftKey", "altKey", "metaKey", "relatedTarget"].forEach(function (prop) {
   Object.defineProperty(MouseEvent.prototype, prop, {
     get: function () {
@@ -516,7 +521,11 @@ markNative(MouseEvent, "MouseEvent");
         const rect = this.target.getBoundingClientRect();
         return s.clientY - ((rect ? rect.top : 0) + (Number(this.target.clientTop) || 0));
       }
-      return s[prop];
+      const val = s[prop];
+      if (_flooredMouseProps.has(prop) && !(typeof PointerEvent === "function" && this instanceof PointerEvent)) {
+        return Math.floor(val);
+      }
+      return val;
     },
     enumerable: false,
     configurable: true,
@@ -527,7 +536,7 @@ Object.defineProperty(MouseEvent.prototype, "x", {
   get: function () {
     const s = _mouseEventState.get(this);
     if (!s) throw new TypeError("Illegal invocation");
-    return s.clientX;
+    return (typeof PointerEvent === "function" && this instanceof PointerEvent) ? s.clientX : Math.floor(s.clientX);
   },
   enumerable: false,
   configurable: true,
@@ -537,7 +546,27 @@ Object.defineProperty(MouseEvent.prototype, "y", {
   get: function () {
     const s = _mouseEventState.get(this);
     if (!s) throw new TypeError("Illegal invocation");
-    return s.clientY;
+    return (typeof PointerEvent === "function" && this instanceof PointerEvent) ? s.clientY : Math.floor(s.clientY);
+  },
+  enumerable: false,
+  configurable: true,
+});
+
+Object.defineProperty(MouseEvent.prototype, "layerX", {
+  get: function () {
+    const s = _mouseEventState.get(this);
+    if (!s) throw new TypeError("Illegal invocation");
+    return (typeof PointerEvent === "function" && this instanceof PointerEvent) ? s.clientX : Math.floor(s.clientX);
+  },
+  enumerable: false,
+  configurable: true,
+});
+
+Object.defineProperty(MouseEvent.prototype, "layerY", {
+  get: function () {
+    const s = _mouseEventState.get(this);
+    if (!s) throw new TypeError("Illegal invocation");
+    return (typeof PointerEvent === "function" && this instanceof PointerEvent) ? s.clientY : Math.floor(s.clientY);
   },
   enumerable: false,
   configurable: true,

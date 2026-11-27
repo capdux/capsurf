@@ -664,13 +664,15 @@ function computeValidityFlags(control) {
       }
     }
   } else if (tag === "textarea") {
-    const value = control.value || "";
-    if (control.required && !value) flags.valueMissing = true;
-    if (control._userEdited) {
-      const ml = control.maxLength;
-      if (typeof ml === "number" && ml >= 0 && value.length > ml) flags.tooLong = true;
-      const mn = control.minLength;
-      if (typeof mn === "number" && mn >= 0 && value && value.length < mn) flags.tooShort = true;
+    if (!_isControlDisabled(control) && !control.readOnly) {
+      const value = control.value || "";
+      if (control.required && !value) flags.valueMissing = true;
+      if (control._userEdited) {
+        const ml = control.maxLength;
+        if (typeof ml === "number" && ml >= 0 && value.length > ml) flags.tooLong = true;
+        const mn = control.minLength;
+        if (typeof mn === "number" && mn >= 0 && value && value.length < mn) flags.tooShort = true;
+      }
     }
   } else if (tag === "select") {
     if (control.required && (control.value === "" || control.value == null)) {

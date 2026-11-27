@@ -20,6 +20,91 @@ let g_stored_bodies: [MAX_STORED_BODIES]StoredResponseBody = [StoredResponseBody
 let g_stored_body_cursor: usize = 0;
 let g_doc_req_seq: u64 = 0;
 
+pub struct CachedDocEntry {
+    used: bool = false,
+    url_buf: [2048]u8 = [0; 2048],
+    url_len: usize = 0,
+    raw_headers: []u8 = [],
+    content_type_buf: [256]u8 = [0; 256],
+    content_type_len: usize = 0,
+    raw_body: []u8 = [],
+    raw_body_base64: bool = false,
+    html: []u8 = [],
+}
+
+const MAX_CACHED_DOCS: usize = 16;
+let g_cached_docs: [MAX_CACHED_DOCS]CachedDocEntry = [CachedDocEntry{}; MAX_CACHED_DOCS];
+let g_cached_doc_cursor: usize = 0;
+
+pub fn recordCachedDoc(
+    url: []const u8,
+    raw_headers: []const u8,
+    content_type: []const u8,
+    raw_body: []const u8,
+    raw_body_base64: bool,
+    html: []const u8,
+) {
+    if (url.len == 0 || url.len > 2048) return;
+    let slot: *CachedDocEntry = &g_cached_docs[0];
+    let found = false;
+    let i: usize = 0;
+    while (i < MAX_CACHED_DOCS) : (i += 1) {
+        if (g_cached_docs[i].used && g_cached_docs[i].url_len == url.len && std.mem.eql(u8, g_cached_docs[i].url_buf[0..g_cached_docs[i].url_len], url)) {
+            slot = &g_cached_docs[i];
+            found = true;
+            break;
+        }
+    }
+    if (!found) {
+        slot = &g_cached_docs[g_cached_doc_cursor % MAX_CACHED_DOCS];
+        g_cached_doc_cursor += 1;
+    }
+    if (slot.used) {
+        if (slot.raw_headers.len > 0) std.heap.c_allocator.free(slot.raw_headers);
+        if (slot.raw_body.len > 0) std.heap.c_allocator.free(slot.raw_body);
+        if (slot.html.len > 0) std.heap.c_allocator.free(slot.html);
+        slot.raw_headers = [];
+        slot.raw_body = [];
+        slot.html = [];
+    }
+    @memcpy(slot.url_buf[0..url.len], url);
+    slot.url_len = url.len;
+    const ct_n = @min(content_type.len, slot.content_type_buf.len);
+    if (ct_n > 0) @memcpy(slot.content_type_buf[0..ct_n], content_type[0..ct_n]);
+    slot.content_type_len = ct_n;
+    slot.raw_body_base64 = raw_body_base64;
+    if (raw_headers.len > 0) {
+        if (d := std.heap.c_allocator.alloc(u8, raw_headers.len) catch null) {
+            @memcpy(d, raw_headers);
+            slot.raw_headers = d;
+        }
+    }
+    if (raw_body.len > 0) {
+        if (d := std.heap.c_allocator.alloc(u8, raw_body.len) catch null) {
+            @memcpy(d, raw_body);
+            slot.raw_body = d;
+        }
+    }
+    if (html.len > 0) {
+        if (d := std.heap.c_allocator.alloc(u8, html.len) catch null) {
+            @memcpy(d, html);
+            slot.html = d;
+        }
+    }
+    slot.used = true;
+}
+
+pub fn findCachedDoc(url: []const u8): (*const CachedDocEntry)? {
+    if (url.len == 0) return null;
+    let i: usize = 0;
+    while (i < MAX_CACHED_DOCS) : (i += 1) {
+        if (g_cached_docs[i].used && g_cached_docs[i].url_len == url.len && std.mem.eql(u8, g_cached_docs[i].url_buf[0..g_cached_docs[i].url_len], url)) {
+            return &g_cached_docs[i];
+        }
+    }
+    return null;
+}
+
 pub fn nextDocRequestId(out_buf: []u8): []const u8 {
     g_doc_req_seq += 1;
     return std.fmt.bufPrint(out_buf, "doc-req-{d}", .{g_doc_req_seq}) catch "doc-req-1";

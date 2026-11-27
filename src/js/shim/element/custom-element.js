@@ -201,6 +201,9 @@ function upgradeCustomElement(element, customElementConstructor, options) {
   }
 
   element._customElementState = "custom";
+  if (typeof globalThis !== "undefined") {
+    globalThis.__capsurf_domMutationEpoch = (globalThis.__capsurf_domMutationEpoch || 0) + 1;
+  }
 
   // 4. Fire attributeChangedCallback for observed attributes
   const observed = customElementObservedAttrs.get(customElementConstructor);

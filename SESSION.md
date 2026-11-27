@@ -8404,3 +8404,8 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   - **Playwright (`test/pw/`) 新增 3 个 100% PASS 并锁定**：`elementhandle-screenshot` (**11/11**)、`page-network-response` (**21/21**)、`page-request-intercept` (**13/13+1 SKIP**)；`page-screenshot` 升至 **36/44**（全部 `mask` 与 WebP/JPEG 用例通过）、`page-network-idle` 升至 **9/10**（仅余子帧导航）、`page-network-request` 升至 **20/27**（+13 PASS）。
   - **Panda 黑盒集 (`test/panda/`)**：通过 `ErrorEvent('error')` 消除 22 项超时暴露真错并完成多轮高扇出 DOM/Web API 修复，总通过数跃升至 **160/517**（`tmp/panda_pass9.json`）。
   - **`bin_dev/main` 合批构建**：编译通过（12.74s），`smoke.e2e.test.ts` **2/2 PASS**。
+- **[2026-11-27 13:48] `[cp_agy 广播]`**: 收到 `syntax-sema-20261127-6-false-positives-fixed`（Release `cpc` 修复 6 类 Sema 类型推断假阳性：二元运算左侧整数字面量吸收右侧类型、`IfExpr` 分支整数字面量目标类型传播、`string` 切片推断、重赋值不覆盖显式类型、`@Vector` 拓宽、`??`/浮点/`@as`/函数指针/常量数组长度；已同步更新 `CP_PITFALLS.md` 并 `ack`）。
+- [Phase 968] Playwright 6 套件新晋 100% PASS 并锁定，Panda 跃升至 188/517：
+  - **Playwright (`test/pw/`) 新增 6 个 100% PASS 并锁定**：`page-network-idle` (**10/10**)、`page-network-request` (**26/26+1 SKIP**)、`page-wait-for-navigation` (**12/12**)、`page-wait-for-url` (**9/9**)、`page-wait-for-load-state` (**10/10**)、`page-emulate-media` (**12/12**)。
+  - **Panda 黑盒集 (`test/panda/`)**：连续 3 批高扇出修复（`160→167→181→188`），达到 **188 PASS / 254 FAIL / 75 TIMEOUT**（`tmp/panda_pass12.json`）。
+  - **`bin_dev/main` 合批构建**：编译通过（13.90s），`smoke.e2e.test.ts` **2/2 PASS**。

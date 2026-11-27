@@ -288,10 +288,19 @@ Node.prototype.compareDocumentPosition = function (other) {
 
 Node.prototype.cloneNode = function (deep) {
   if (this.nodeType === TEXT_NODE) {
-    return new Text(this.textContent);
+    const t = new Text(this.textContent);
+    t.ownerDocument = this.ownerDocument;
+    return t;
+  }
+  if (this.nodeType === CDATA_SECTION_NODE) {
+    const c = new CDATASection(this.data);
+    c.ownerDocument = this.ownerDocument;
+    return c;
   }
   if (this.nodeType === COMMENT_NODE) {
-    return new Comment(this.textContent);
+    const c = new Comment(this.textContent);
+    c.ownerDocument = this.ownerDocument;
+    return c;
   }
   if (this.nodeType === DOCUMENT_FRAGMENT_NODE) {
     const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
@@ -373,6 +382,7 @@ const _NodeCtor = (typeof Node !== "undefined") ? Node : null;
 function isGenuineNode(obj) {
   if (!obj || typeof obj !== "object") return false;
   if (_NodeCtor && obj instanceof _NodeCtor) return true;
+  if (typeof global !== "undefined" && global.Node && obj instanceof global.Node) return true;
   if (isParsedNode(obj)) return true;
   return false;
 }
@@ -427,6 +437,11 @@ function executeConnectedScripts(node) {
   if (!node || typeof node !== "object") return;
   if (!node.isConnected) return;
   const tag = String(node.localName || node.tagName || "").toLowerCase();
+  if (tag === "img" && node._pendingFramelessLoad && typeof globalThis !== "undefined" && typeof globalThis.__capsurf_triggerImageLoad === "function") {
+    const pSrc = node._pendingFramelessLoad;
+    delete node._pendingFramelessLoad;
+    globalThis.__capsurf_triggerImageLoad(node, pSrc, true);
+  }
   if (tag === "script" && node._alreadyStarted) {
     if (!node._capsurfPendingScriptCheck) {
       node._capsurfPendingScriptCheck = true;
@@ -722,6 +737,10 @@ function detachChildInternal(parent, child, suppressLifecycle) {
   if (parent._shadowRoot && typeof global.__capsurf_scheduleSlotChange === "function") {
     global.__capsurf_scheduleSlotChange(parent);
   }
+  if (parent) {
+    const pDoc = parent.nodeType === DOCUMENT_NODE ? parent : (parent.ownerDocument || null);
+    if (pDoc) { try { pDoc._capsurfIdDirty = true; } catch (e) {} }
+  }
   if (parent.isConnected && typeof global !== "undefined" && typeof global.__capsurf_syncNamedGlobals === "function") {
     const mayHaveNamed = child && child.nodeType === 1 && (
       (typeof child.hasAttribute === "function" && (child.hasAttribute("id") || child.hasAttribute("name"))) ||
@@ -837,6 +856,7 @@ Node.prototype.appendChild = function (child) {
       global.__capsurf_on_iframe_connected(child);
     }
   }
+  { const _idDoc = this.nodeType === DOCUMENT_NODE ? this : (this.ownerDocument || null); if (_idDoc) { try { _idDoc._capsurfIdDirty = true; } catch (e) {} } }
   if (this.isConnected && typeof global !== "undefined" && typeof global.__capsurf_syncNamedGlobals === "function") {
     const mayHaveNamed = child && child.nodeType === 1 && (
       (typeof child.hasAttribute === "function" && (child.hasAttribute("id") || child.hasAttribute("name"))) ||
@@ -962,6 +982,7 @@ Node.prototype.insertBefore = function (newChild, refChild) {
       global.__capsurf_on_iframe_connected(newChild);
     }
   }
+  { const _idDoc = this.nodeType === DOCUMENT_NODE ? this : (this.ownerDocument || null); if (_idDoc) { try { _idDoc._capsurfIdDirty = true; } catch (e) {} } }
   if (this.isConnected && typeof global !== "undefined" && typeof global.__capsurf_syncNamedGlobals === "function") {
     const mayHaveNamed = newChild && newChild.nodeType === 1 && (
       (typeof newChild.hasAttribute === "function" && (newChild.hasAttribute("id") || newChild.hasAttribute("name"))) ||
@@ -1025,6 +1046,7 @@ Node.prototype.removeChild = function (child) {
   if (this._shadowRoot && typeof global.__capsurf_scheduleSlotChange === "function") {
     global.__capsurf_scheduleSlotChange(this);
   }
+  { const _idDoc = this.nodeType === DOCUMENT_NODE ? this : (this.ownerDocument || null); if (_idDoc) { try { _idDoc._capsurfIdDirty = true; } catch (e) {} } }
   if (this.isConnected && typeof global !== "undefined" && typeof global.__capsurf_syncNamedGlobals === "function") {
     const mayHaveNamed = child && child.nodeType === 1 && (
       (typeof child.hasAttribute === "function" && (child.hasAttribute("id") || child.hasAttribute("name"))) ||
@@ -1230,6 +1252,111 @@ if (typeof Element !== "undefined" && Element.prototype) {
   Element.prototype.insertBefore = Node.prototype.insertBefore;
   Element.prototype.removeChild = Node.prototype.removeChild;
   Element.prototype.replaceChild = Node.prototype.replaceChild;
+
+  const moveBeforeFn = markNative(function moveBefore(node, child) {
+    if (!this || typeof this !== "object") {
+      throw new TypeError("Illegal invocation");
+    }
+    if (arguments.length < 2) {
+      throw new TypeError("Failed to execute 'moveBefore': 2 arguments required, but only " + arguments.length + " present.");
+    }
+    if (!node || typeof node !== "object" || !isGenuineNode(node)) {
+      throw new TypeError("Failed to execute 'moveBefore': parameter 1 is not of type 'Node'.");
+    }
+    const DOMEx = typeof DOMException !== "undefined" ? DOMException : Error;
+    if (node.nodeType !== 1 && node.nodeType !== 3 && node.nodeType !== 8 && node.nodeType !== 4 && node.nodeType !== 7) {
+      throw new DOMEx("Failed to execute 'moveBefore': The node provided cannot be moved.", "HierarchyRequestError");
+    }
+    let anc = this;
+    while (anc) {
+      if (anc === node) {
+        throw new DOMEx("Failed to execute 'moveBefore': The new child element contains the parent.", "HierarchyRequestError");
+      }
+      anc = anc.parentNode;
+    }
+    function getShadowIncludingRoot(n) {
+      let cur = n;
+      while (cur) {
+        if (cur.parentNode) { cur = cur.parentNode; continue; }
+        if (cur.host) { cur = cur.host; continue; }
+        break;
+      }
+      return cur;
+    }
+    if (getShadowIncludingRoot(this) !== getShadowIncludingRoot(node)) {
+      throw new DOMEx("Failed to execute 'moveBefore': Nodes are not in the same tree.", "HierarchyRequestError");
+    }
+    if (child !== null && child !== undefined) {
+      if (typeof child !== "object" || !isGenuineNode(child)) {
+        throw new TypeError("Failed to execute 'moveBefore': parameter 2 is not of type 'Node'.");
+      }
+      if (child.parentNode !== this) {
+        throw new DOMEx("Failed to execute 'moveBefore': The node before which the new node is to be inserted is not a child of this node.", "NotFoundError");
+      }
+      if (node === child) return;
+    }
+
+    const oldParent = node.parentNode;
+    const oldSibIdx = oldParent ? ensureChildren(oldParent).indexOf(node) : -1;
+    if (oldParent && oldSibIdx !== -1) {
+      oldParent._children.splice(oldSibIdx, 1);
+      if (nativeElementRemoveChild && typeof nativeElementRemoveChild === "function") {
+        try { nativeElementRemoveChild.call(oldParent, node); } catch (e) {}
+      }
+      if (typeof oldParent._nid === "number" && oldParent._nid > 0 && oldParent.nodeType === DOCUMENT_FRAGMENT_NODE && typeof global.__capsurf_node_remove_child === "function") {
+        try { global.__capsurf_node_remove_child(oldParent._nid, node); } catch (e) {}
+      }
+    }
+
+    const children = ensureChildren(this);
+    if (child !== null && child !== undefined) {
+      const idx = children.indexOf(child);
+      if (idx !== -1) children.splice(idx, 0, node);
+      else children.push(node);
+      if (nativeElementInsertBefore && typeof nativeElementInsertBefore === "function") {
+        try { nativeElementInsertBefore.call(this, node, child); } catch (e) {}
+      }
+      if (typeof this._nid === "number" && this._nid > 0 && this.nodeType === DOCUMENT_FRAGMENT_NODE && typeof global.__capsurf_node_insert_before === "function") {
+        try { global.__capsurf_node_insert_before(this._nid, node, child); } catch (e) {}
+      }
+    } else {
+      children.push(node);
+      if (nativeElementAppendChild && typeof nativeElementAppendChild === "function") {
+        try { nativeElementAppendChild.call(this, node); } catch (e) {}
+      }
+      if (typeof this._nid === "number" && this._nid > 0 && this.nodeType === DOCUMENT_FRAGMENT_NODE && typeof global.__capsurf_node_append_child === "function") {
+        try { global.__capsurf_node_append_child(this._nid, node); } catch (e) {}
+      }
+    }
+    if (oldParent && oldParent._children && this === oldParent) {
+      // already removed from oldParent._children above; native side handled
+    }
+    try { node.parentNode = this; } catch (e) {}
+    const newDoc = this.nodeType === DOCUMENT_NODE ? this : (this.ownerDocument || null);
+    if (newDoc) { try { newDoc._capsurfIdDirty = true; } catch (e) {} }
+
+    if (typeof notifyMutation === "function") {
+      if (oldParent) {
+        const recR = new MutationRecord("childList", oldParent);
+        recR.removedNodes = [node];
+        notifyMutation(recR);
+      }
+      const recA = new MutationRecord("childList", this);
+      recA.addedNodes = [node];
+      notifyMutation(recA);
+    }
+
+    if (this.isConnected && typeof node.connectedMoveCallback === "function") {
+      try { node.connectedMoveCallback(); } catch (e) {}
+    }
+  }, "moveBefore");
+  Element.prototype.moveBefore = moveBeforeFn;
+  if (typeof Document !== "undefined" && Document.prototype) {
+    Document.prototype.moveBefore = moveBeforeFn;
+  }
+  if (typeof DocumentFragment !== "undefined" && DocumentFragment.prototype) {
+    DocumentFragment.prototype.moveBefore = moveBeforeFn;
+  }
   for (const _ep of ["childNodes", "firstChild", "lastChild", "nextSibling", "previousSibling"]) {
     const _desc = Object.getOwnPropertyDescriptor(Node.prototype, _ep);
     if (_desc) Object.defineProperty(Element.prototype, _ep, _desc);
@@ -1446,6 +1573,9 @@ Object.defineProperty(Node.prototype, "baseURI", {
 });
 
 Node.prototype.isSameNode = function (otherNode) {
+  if (arguments.length === 0) {
+    throw new TypeError("Failed to execute 'isSameNode' on 'Node': 1 argument required, but only 0 present.");
+  }
   return this === otherNode;
 };
 
@@ -1618,6 +1748,28 @@ function installCharacterDataMethods(proto) {
     get: function () { return this.data.length; },
     configurable: true,
   });
+  Object.defineProperty(proto, "previousElementSibling", {
+    get: function () {
+      let sib = this.previousSibling;
+      while (sib) {
+        if (sib.nodeType === 1) return sib;
+        sib = sib.previousSibling;
+      }
+      return null;
+    },
+    configurable: true,
+  });
+  Object.defineProperty(proto, "nextElementSibling", {
+    get: function () {
+      let sib = this.nextSibling;
+      while (sib) {
+        if (sib.nodeType === 1) return sib;
+        sib = sib.nextSibling;
+      }
+      return null;
+    },
+    configurable: true,
+  });
   proto.substringData = function (offset, count) {
     const cur = this.data;
     const len = cur.length;
@@ -1689,21 +1841,26 @@ if (_nodeTagNameDesc && _nodeTagNameDesc.get) {
     configurable: true,
   });
 }
-Object.defineProperty(Text.prototype, "wholeText", {
+const _wholeTextDesc = {
   get: function () {
+    if (this.nodeType !== TEXT_NODE && this.nodeType !== CDATA_SECTION_NODE) return undefined;
     let cur = this;
-    while (cur.previousSibling && cur.previousSibling.nodeType === TEXT_NODE) {
+    while (cur.previousSibling && (cur.previousSibling.nodeType === TEXT_NODE || cur.previousSibling.nodeType === CDATA_SECTION_NODE)) {
       cur = cur.previousSibling;
     }
     let out = "";
-    while (cur && cur.nodeType === TEXT_NODE) {
+    while (cur && (cur.nodeType === TEXT_NODE || cur.nodeType === CDATA_SECTION_NODE)) {
       out += (cur.data !== undefined ? cur.data : (cur.nodeValue || cur.textContent || ""));
       cur = cur.nextSibling;
     }
     return out;
   },
   configurable: true,
-});
+};
+Object.defineProperty(Text.prototype, "wholeText", _wholeTextDesc);
+if (!Object.getOwnPropertyDescriptor(Node.prototype, "wholeText")) {
+  Object.defineProperty(Node.prototype, "wholeText", _wholeTextDesc);
+}
 
 Text.prototype.splitText = function (offset) {
   const cur = this.data;
@@ -1744,6 +1901,9 @@ Text.prototype.splitText = function (offset) {
   return newNode;
 };
 markNative(Text.prototype.splitText, "splitText");
+if (!Object.getOwnPropertyDescriptor(Node.prototype, "splitText")) {
+  Node.prototype.splitText = Text.prototype.splitText;
+}
 markNative(Text, "Text");
 
 function Comment(data) {
@@ -1994,12 +2154,38 @@ function replaceChildrenImpl(parent, nodes) {
   if (parent.nodeType === 9) {
     _validateDocumentChildren(converted);
   }
-  const run = function () {
-    while (parent.firstChild) {
-      parent.removeChild(parent.firstChild);
+  const DOMEx = typeof DOMException !== "undefined" ? DOMException : Error;
+  for (let i = 0; i < converted.length; i++) {
+    const n = converted[i];
+    if (n.nodeType === 10 && parent.nodeType !== 9) {
+      throw new DOMEx("DocumentType may not be inserted inside an Element or DocumentFragment.", "HierarchyRequestError");
     }
-    for (let i = 0; i < converted.length; i++) {
-      parent.appendChild(converted[i]);
+    if (n.nodeType === 9) {
+      throw new DOMEx("Document may not be inserted.", "HierarchyRequestError");
+    }
+    let anc = parent;
+    while (anc) {
+      if (anc === n) {
+        throw new DOMEx("The new child element contains the parent.", "HierarchyRequestError");
+      }
+      anc = anc.parentNode;
+    }
+  }
+  const frag = new DocumentFragment();
+  frag.ownerDocument = parent.nodeType === 9 ? parent : parent.ownerDocument;
+  for (let i = 0; i < converted.length; i++) {
+    frag.appendChild(converted[i]);
+  }
+  const remaining = Array.from(parent.childNodes || []);
+  const run = function () {
+    let guard = 0;
+    while (parent.firstChild && guard++ < 10000) {
+      const fc = parent.firstChild;
+      parent.removeChild(fc);
+      if (parent.firstChild === fc) break;
+    }
+    while (frag.firstChild) {
+      parent.appendChild(frag.firstChild);
     }
   };
   if (typeof suppressChildListMutations === "function") {
@@ -2008,9 +2194,9 @@ function replaceChildrenImpl(parent, nodes) {
     run();
   }
   const added = Array.from(parent.childNodes || []);
-  if ((added.length > 0 || existing.length > 0) && typeof notifyMutation === "function" && typeof MutationRecord === "function") {
+  if ((added.length > 0 || remaining.length > 0) && typeof notifyMutation === "function" && typeof MutationRecord === "function") {
     const rec = new MutationRecord("childList", parent);
-    rec.removedNodes = existing;
+    rec.removedNodes = remaining;
     rec.addedNodes = added;
     notifyMutation(rec);
   }
@@ -2098,8 +2284,25 @@ if (typeof globalThis !== "undefined") globalThis.__capsurf_installChildNodeMeth
 
 markNative(DocumentFragment, "DocumentFragment");
 
-Object.defineProperty(DocumentFragment.prototype, "innerHTML", {
+const shadowRootState = new WeakMap();
+function ShadowRoot(host, mode) {
+  shadowRootState.set(this, {
+    host: host || null,
+    mode: mode || "open",
+    children: [],
+  });
+}
+ShadowRoot.prototype = Object.create(DocumentFragment.prototype);
+ShadowRoot.prototype.constructor = ShadowRoot;
+Object.defineProperty(ShadowRoot.prototype, Symbol.toStringTag, {
+  value: "ShadowRoot",
+  configurable: true,
+});
+Object.defineProperty(ShadowRoot.prototype, "innerHTML", {
   get: function () {
+    if (!shadowRootState.has(this)) {
+      throw new TypeError("Illegal invocation");
+    }
     const kids = ensureChildren(this);
     let html = "";
     for (let i = 0; i < kids.length; i++) {
@@ -2111,6 +2314,9 @@ Object.defineProperty(DocumentFragment.prototype, "innerHTML", {
     return html;
   },
   set: function (val) {
+    if (!shadowRootState.has(this)) {
+      throw new TypeError("Illegal invocation");
+    }
     while (this.firstChild) {
       this.removeChild(this.firstChild);
     }
@@ -2128,21 +2334,6 @@ Object.defineProperty(DocumentFragment.prototype, "innerHTML", {
       }
     }
   },
-  configurable: true,
-});
-
-const shadowRootState = new WeakMap();
-function ShadowRoot(host, mode) {
-  shadowRootState.set(this, {
-    host: host || null,
-    mode: mode || "open",
-    children: [],
-  });
-}
-ShadowRoot.prototype = Object.create(DocumentFragment.prototype);
-ShadowRoot.prototype.constructor = ShadowRoot;
-Object.defineProperty(ShadowRoot.prototype, Symbol.toStringTag, {
-  value: "ShadowRoot",
   configurable: true,
 });
 Object.defineProperty(ShadowRoot.prototype, "nodeType", {

@@ -170,3 +170,5 @@ orelse { ... } 被 cpc 误降级为 if (this_ptr.socket == null) 吞掉了 Socke
 
 在编译 udp_socket 修复时暴露出 src/uws_sys/udp.cp 中 PacketBuffer / Loop / Socket 可选指针类型优先级错误（*T? 误生成为 *?*T）；已全部修正为 (*T)? /
 *PacketBuffer 并通过 cpc_brief.py 门禁。
+
+- **[2026-11-27 编译器广播 `syntax-sema-20261127-6-false-positives-fixed`]**：Release `cpc` 已修复 6 类 Sema 类型推断假阳性（二元运算左侧整数字面量自动吸收右侧类型、`IfExpr` 分支整数字面量目标类型传播、`string` 切片推断为 `String`、重赋值不覆盖显式声明变量类型、`@Vector(N,u8)->@Vector(N,u32)` 向量拓宽、`??`/浮点内建/`@as`/函数指针/常量数组长度/重赋值定长失效），全仓 904/904 生态包 `cpc check` 100% 绿灯。

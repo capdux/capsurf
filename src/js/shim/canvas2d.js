@@ -1504,9 +1504,9 @@ CanvasRenderingContext2D.prototype.isPointInPath = function (x, y) {
       }
     }
   }
-  return true;
+  return false;
 };
-CanvasRenderingContext2D.prototype.isPointInStroke = function (x, y) { checkCtx(this); return true; };
+CanvasRenderingContext2D.prototype.isPointInStroke = function (x, y) { checkCtx(this); return false; };
 
 // Text drawing
 CanvasRenderingContext2D.prototype.fillText = function (text, x, y, maxWidth) {

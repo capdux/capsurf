@@ -166,6 +166,9 @@ pub struct RuntimeHandler {
                     return CdpResponse.ok(req.id, "{}");
                 }
             }
+            if (session.pending_popup_nav_url_len > 0) {
+                return CdpResponse.ok(req.id, "{}");
+            }
             let origin = session.url;
             if (origin.len == 0) origin = "about:blank";
 
@@ -512,6 +515,9 @@ pub struct RuntimeHandler {
                 event_count.* += 1;
             }
 
+            // Emit newly attached child frames before polling subresource network events
+            emitNewChildFrameEvents(session, out_events, event_count);
+
             // Poll any network events produced during callFunctionOn (e.g. fetch() / XHR)
             let polled_net_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
             const polled_net_count = session.pollNetworkEvents(&polled_net_evts);
@@ -537,7 +543,6 @@ pub struct RuntimeHandler {
                 out_events[event_count.*] = polled_reopen_evts[r_i];
                 event_count.* += 1;
             }
-            emitNewChildFrameEvents(session, out_events, event_count);
 
             let polled_pop_evts: [8]CdpEvent = [CdpEvent{}; 8];
             const polled_pop_count = session.pollPopupTargetEvents(&polled_pop_evts);
@@ -658,6 +663,9 @@ pub struct RuntimeHandler {
                 }
             }
 
+            // Emit dynamic child iframe lifecycle events before polling subresource network events
+            emitNewChildFrameEvents(session, out_events, event_count);
+
             // Poll any network events produced during evaluation
             let polled_net_evts: [MAX_CDP_EVENTS]CdpEvent = [CdpEvent{}; MAX_CDP_EVENTS];
             const polled_net_count = session.pollNetworkEvents(&polled_net_evts);
@@ -720,9 +728,6 @@ pub struct RuntimeHandler {
                 out_events[event_count.*] = polled_ctx_evts[c_i];
                 event_count.* += 1;
             }
-
-            // Emit dynamic child iframe lifecycle events if any new iframes were attached
-            emitNewChildFrameEvents(session, out_events, event_count);
 
             let polled_pop_evts: [8]CdpEvent = [CdpEvent{}; 8];
             const polled_pop_count = session.pollPopupTargetEvents(&polled_pop_evts);

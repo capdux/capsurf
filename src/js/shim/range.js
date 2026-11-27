@@ -1086,7 +1086,7 @@ Selection.prototype.selectAllChildren = function (node) {
   }
   st.range = r;
   r._selection = this;
-  st.direction = "none";
+  st.direction = "forward";
   selScheduleChange(this);
 };
 
@@ -1096,14 +1096,23 @@ Selection.prototype.containsNode = function (node, allowPartialContainment) {
   if (!st || !r || !node) return false;
   const doc = st.doc || (typeof document !== "undefined" ? document : null);
   if (!isNodeInDocument(node, doc)) return false;
-  const len = getNodeLength(node);
-  const nodeStartCmp = compareBoundaryPoints(node, 0, r.endContainer, r.endOffset);
-  const nodeEndCmp = compareBoundaryPoints(node, len, r.startContainer, r.startOffset);
-  if (allowPartialContainment) {
-    return nodeStartCmp <= 0 && nodeEndCmp >= 0;
+  const parent = node.parentNode;
+  if (!parent) return false;
+  const kids = parent.childNodes || parent._children || [];
+  let idx = -1;
+  for (let i = 0; i < kids.length; i++) {
+    if (kids[i] === node) { idx = i; break; }
   }
-  return compareBoundaryPoints(node, 0, r.startContainer, r.startOffset) >= 0 &&
-         compareBoundaryPoints(node, len, r.endContainer, r.endOffset) <= 0;
+  if (idx < 0) return false;
+  if (allowPartialContainment) {
+    const startBeforeEnd = compareBoundaryPoints(parent, idx, r.endContainer, r.endOffset) < 0 ||
+      (compareBoundaryPoints(parent, idx, r.endContainer, r.endOffset) === 0 && r.collapsed);
+    const endAfterStart = compareBoundaryPoints(parent, idx + 1, r.startContainer, r.startOffset) > 0 ||
+      (compareBoundaryPoints(parent, idx + 1, r.startContainer, r.startOffset) === 0 && r.collapsed);
+    return startBeforeEnd && endAfterStart;
+  }
+  return compareBoundaryPoints(parent, idx, r.startContainer, r.startOffset) >= 0 &&
+         compareBoundaryPoints(parent, idx + 1, r.endContainer, r.endOffset) <= 0;
 };
 
 Selection.prototype.toString = function () {

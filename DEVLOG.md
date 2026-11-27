@@ -3736,3 +3736,7 @@
 - **非阻塞异步 `fetch()` 调度器**：`PendingAsyncHttpSlot` + `pumpAsyncHttpFetches` 替换同源简单 `fetch()` 的同步阻塞路径，`server.cp` `net_idle_tracker` 感知活跃请求数并识别 SSE 长连接，一举打通 `page-network-response` (21/21)、`page-network-idle` (3→9/10) 与 `page-network-request` (7→20/27)。
 - **`border: medium none` 级联归零**：修复 `Cascade.parseBorderWidthToken` 提前返回 `3.0` 的缺陷，消除 Playwright `Highlight` mask 元素的 3px `#333` 边框与 `(+3,+3)` 偏移，直接拿下 `elementhandle-screenshot` (11/11) 与 `page-screenshot` (28→36/44)。
 - **`ErrorEvent` 暴露真实异常 + 16 核跑批**：`executeClassicScript` 派发 `ErrorEvent` 消除 22 项超时，配合 `panda_run.mjs -j 16` 多轮收割使 `test/panda/` 达到 **160/517**。
+
+## Phase 968 — 延迟 Load 调度与子帧网络归属闭环，Playwright 6 套件全绿 & Panda 188/517
+- **主/子帧 `load` 延迟与 `frameId` 归属**：拆解 `DOMContentLoaded` 与 `load` 发射时机，在 `activeAsyncFetchCount() > 0` 时由 `server.cp` 主循环 `flushDeferredLoadEventsForSession` 统一待挂起样式表/fetch 结束后补发 `load` 与 `frameStoppedLoading`；同时将子帧异步 `fetch` 归属到对应 `frameId` 并在子帧 `load` 扫描 `<link rel="stylesheet">`，彻底打通 `page-network-idle` (10/10)、`page-network-request` (26/26)、`page-wait-for-navigation` (12/12)、`page-wait-for-url` (9/9)、`page-wait-for-load-state` (10/10) 与 `page-emulate-media` (12/12)。
+- **Panda Web API 批量收割**：经 `pass10`–`pass12` 连续三轮 DOM/表单/事件/ShadowRoot/History/Screen/AllCollection 共性修复，`test/panda/` 达成 **188/517 PASS**。
