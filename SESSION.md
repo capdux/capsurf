@@ -8409,6 +8409,8 @@ Log: file:///root/.agy/node3/.gemini/antigravity-cli/brain/cc6b0bf7-3cec-401a-a4
   - **Playwright (`test/pw/`) 新增 3 个 100% PASS 并锁定**：`page-set-content` (**16/16**)、`frame-evaluate` (**8/8**)、`elementhandle-misc` (**10/10**，至此 `elementhandle-*` 10 个 spec 全部 100% PASS)；`page-event-request` 升至 **9/13**（余 4 项 ServiceWorker）；`page-goto` 2 项并发导航 `--grep` 复测 PASS。
   - **Panda 黑盒集 (`test/panda/`)**：连续两轮批量修复（`204→212→224`），达到 **224 PASS / 212 FAIL / 81 TIMEOUT**（`tmp/panda_pass20.json`），新增 `src/js/shim/streams.js` 与 `Canvas2D`/`CookieStore`/`PerformanceObserver`/`FontFace`/`ShadowRoot` 等补强。
 - [User] `所有测试详细结果写入 test/stats.md / 2. 更新文档, 所有文件 git 提交 / 3. 子智能体收回, 停止后续测试 / 配额不足, 暂停测试` -> [Agent] 已立即 `kill_all` 收回全部子智能体并停止后续测试，完成 `bin_dev/main` 静态门禁与编译校验，更新 `test/stats.md`、`SESSION.md`、`CHANGELOG.md`、`DEVLOG.md` 并执行原子提交与推送。
+- [User] `目前我们所有的测试文件都是 ts, 使用 bun 运行... 如果改为 cp, 使用 cap 运行cp 测试文件, 测试黑盒, 除了降低内存消耗之外, 还有什么好处? 编译需要时间吗?` -> [Agent] 已基于实测数据（`test/unit/html/` 9 文件 9.99s、`test/unit/` 138 文件 317s、`bin_dev/main` 11-15s）详细对比分析 CP 黑盒测试的 4 项优势与编译时间权衡。
+- **[2026-11-27 16:50] `[3小时自进化审计]`**: 完成第 4 轮自进化总结，将「TS 黑盒 vs CP 原生黑盒分工」与「暂停/交接零丢失收口」固化写入 `GEMINI.md` 11.19 节；因当前处于配额暂停测试状态，已注销定时任务 `task-678`。
 - [Phase 968] Playwright 6 套件新晋 100% PASS 并锁定，Panda 跃升至 188/517：
   - **Playwright (`test/pw/`) 新增 6 个 100% PASS 并锁定**：`page-network-idle` (**10/10**)、`page-network-request` (**26/26+1 SKIP**)、`page-wait-for-navigation` (**12/12**)、`page-wait-for-url` (**9/9**)、`page-wait-for-load-state` (**10/10**)、`page-emulate-media` (**12/12**)。
   - **Panda 黑盒集 (`test/panda/`)**：连续 3 批高扇出修复（`160→167→181→188`），达到 **188 PASS / 254 FAIL / 75 TIMEOUT**（`tmp/panda_pass12.json`）。
