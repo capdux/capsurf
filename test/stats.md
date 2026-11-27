@@ -13,7 +13,7 @@
 | **WPT Web 平台测试** | `test/wpt/` | **11,795** 用例（已登记 **9,725**） | 旧基线 `PASS: 7,224`；全量刷新 `task-38759` 已跑 **60/133 批 (4,789 条)**：`PASS: 2,708`, `FAIL: 1,388`, `TIMEOUT: 691`, `ERROR: 2` | `wpt-batched.mjs -j 8 --update-expectations` |
 | **Playwright 兼容测试** | `test/pw/` | **123** 个 spec（**619** 条基线预期） | 分片实测中：`page-wait-for-selector` **47/47 (100%)**，`page-check` **16/16 (100%)**，`page-fill` **36/40 (90%)**，`page-keyboard` **37/44 (84.1%)**，`page-click` **77/102 (75.5%)**，`page-mouse` **11/15 (73.3%)**，`page-goto` **43/61 (70.5%)** | `pw-run.mjs --no-gate --no-retry` |
 | **Puppeteer 兼容测试** | `test/pptr/` | **10** 个 spec（221 条实测 + `locator.test`） | **实测完成**：`PASS: 82`, `FAIL: 70`, `TIMEOUT: 58`, `SKIP: 11`（`locator.test` 600s SIGKILL） | `pptr-run.mjs --port 9780 --no-gate` |
-| **Panda 黑盒测试集** | `test/panda/`（`.gitignore` 本地） | **517** 项有效页面自测（全量 671 项） | **Phase 968**：`PASS: 188`, `FAIL: 254`, `TIMEOUT: 75` (`tmp/panda_pass12.json`, 由 `160→167→181→188`) | `scripts/panda_run.mjs -j 16` |
+| **Panda 黑盒测试集** | `test/panda/`（`.gitignore` 本地） | **517** 项有效页面自测（全量 671 项） | **Phase 969**：`PASS: 204`, `FAIL: 238`, `TIMEOUT: 75` (`tmp/panda_pass13.json`, 由 `188→204`, 净增 +16, 突破 200 大关) | `scripts/panda_run.mjs -j 16` |
 
 ---
 
@@ -204,7 +204,7 @@
   - `page-add-init-script-callback` (**已全过不再重测**): **11 PASS** / 0 FAIL (`tmp/pw948_page-add-init-script-callback.json`, 由 `7→9→11`)
   - `expect-to-have-accessible` (**已全过不再重测**): **14 PASS** / 0 FAIL (`tmp/pw945_expacc.json`)
   - `frame-frame-element` (**已全过不再重测**): **6 PASS** / 0 FAIL (`tmp/pw945_ffel.json`)
-  - `frame-evaluate`: **5 PASS** / 3 FAIL / 0 TIMEOUT (`tmp/pw961_frame-evaluate.json`, 由 `3→5`)
+  - `frame-evaluate`: **6 PASS** / 2 FAIL / 0 TIMEOUT (`tmp/pw969_frame_eval.json`, 由 `3→5→6`)
   - `frame-hierarchy` (**已全过不再重测**): **12 PASS** / 0 FAIL (`tmp/pw966_frame_hier.json`, 由 `8→9→11→12`)
   - `locator-frame` (**已全过不再重测**): **9 PASS** / 0 FAIL / 0 TIMEOUT (`tmp/pw965_locator-frame.json`, 由 `6→8→9`)
   - `selectors-frame` (**已全过不再重测**): **15 PASS** / 0 FAIL / 0 TIMEOUT (`tmp/pw966_sel_frame.json`, 由 `5→9→13→15`)
@@ -224,7 +224,7 @@
   - `page-basic`: **12 PASS** / 4 FAIL (`tmp/pw_basic.json`, `frame({name,url})`/`Chrome/`/`webdriver`)
   - `page-focus` (**已全过不再重测**): **7 PASS** / 0 FAIL (`tmp/pw954_page-focus.json`, 由 `6→7`)
   - `page-emulate-media` (**已全过不再重测**): **12 PASS** / 0 FAIL (`tmp/pw968_media.json`, 由 `9→11→12`)
-  - `page-set-content`: **14 PASS** / 0 FAIL / 2 TIMEOUT (`tmp/pw_set.json`)
+  - `page-set-content`: **15 PASS** / 0 FAIL / 1 TIMEOUT (`tmp/pw969_set_content.json`, 由 `14→15`)
   - `page-set-extra-http-headers`: **4 PASS** / 1 FAIL (`tmp/pw_set.json`, `should not duplicate referer header`)
   - `page-set-input-files`: **17 PASS** / 2 FAIL (`tmp/pw960_page-set-input-files.json`, 由 `13→16→17`, 0 TIMEOUT, `should not trim big uploaded files` 已过)
   - `page-wait-for-function` (**已全过不再重测**): **26 PASS** / 0 FAIL / 0 TIMEOUT (`25→26`)
@@ -243,7 +243,7 @@
   - `page-evaluate` (4 specs): **82 PASS** / 11 FAIL / 38 TIMEOUT (`tmp/pw_eval.json`, `callBinding` undefined/过深引用链/导航后报错超时级联)
   - `page-event-load` (**已全过不再重测**): **1 PASS** / 0 FAIL (`tmp/pw_event.json`)
   - `page-event-network` (**已全过不再重测**): **6 PASS** / 0 FAIL (`tmp/pw966_event_network.json`, 由 `5→6`, `RequestFailed @smoke` 已过)
-  - `page-event-request`: **5 PASS** / 7 FAIL / 1 TIMEOUT (`tmp/pw_event.json`)
+  - `page-event-request`: **6 PASS** / 6 FAIL / 1 TIMEOUT (`tmp/pw969_event_req.json`, 由 `5→6`, 余 4 项 SW + 2 项 OPTIONS + 1 项 `<picture>`)
   - `page-network-idle` (**已全过不再重测**): **10 PASS** / 0 FAIL / 0 TIMEOUT (`tmp/pw968_net_idle2.json`, 由 `2→3→9→10`)
   - `page-network-request` (**可执行项 26/26 全过不再重测**): **26 PASS** / 0 FAIL / 0 TIMEOUT / 1 SKIP (`tmp/pw968_net_req2.json`, 由 `7→20→25→26`)
   - `page-network-response` (**已全过不再重测**): **21 PASS** / 0 FAIL / 0 TIMEOUT (`tmp/pw967_net_resp.json`, 由 `17→21`)

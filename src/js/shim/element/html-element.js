@@ -567,6 +567,28 @@ function installHtmlElementExtensions(proto) {
     markNative(proto.blur, "blur");
   }
 
+  if (!Object.getOwnPropertyDescriptor(proto, "popover")) {
+    Object.defineProperty(proto, "popover", {
+      get: function () {
+        const attr = typeof this.getAttribute === "function" ? this.getAttribute("popover") : null;
+        if (attr === null) return null;
+        const low = String(attr).toLowerCase();
+        if (low === "" || low === "auto") return "auto";
+        if (low === "manual") return "manual";
+        return "manual";
+      },
+      set: function (v) {
+        if (v === null || v === undefined) {
+          if (typeof this.removeAttribute === "function") this.removeAttribute("popover");
+        } else {
+          if (typeof this.setAttribute === "function") this.setAttribute("popover", String(v));
+        }
+      },
+      configurable: true,
+      enumerable: true,
+    });
+  }
+
   if (!proto.showPopover) {
     proto.showPopover = function () {
       const attr = typeof this.getAttribute === "function" ? this.getAttribute("popover") : null;

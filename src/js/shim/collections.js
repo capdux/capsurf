@@ -881,38 +881,49 @@ function getSelectOptions(selectEl) {
   const opts = [];
   const seen = new Set();
   const up = typeof upgradeElement === "function" ? upgradeElement : (typeof globalThis !== "undefined" && globalThis.upgradeElement);
-  function collect(node) {
+  function collect(node, inOptgroup) {
     if (!node) return;
-    if (node.firstChild !== undefined) {
-      let child = node.firstChild;
-      while (child && !seen.has(child)) {
-        seen.add(child);
-        const tag = (child.tagName || "").toLowerCase();
-        if (tag === "option") {
-          if (up) up(child);
-          opts.push(child);
-        } else if (tag === "optgroup") {
-          collect(child);
-        }
-        child = child.nextSibling;
-      }
-      return;
-    }
-    if (node._children) {
-      for (let i = 0; i < node._children.length; i++) {
-        const c = node._children[i];
-        if (!c) continue;
+    const list = node._children || (node.firstChild !== undefined ? null : []);
+    if (list) {
+      for (let i = 0; i < list.length; i++) {
+        const c = list[i];
+        if (!c || seen.has(c)) continue;
+        seen.add(c);
+        if (c.nodeType !== 1) continue;
         const tag = (c.tagName || "").toLowerCase();
         if (tag === "option") {
           if (up) up(c);
           opts.push(c);
+        } else if (tag === "select" || tag === "hr" || tag === "datalist") {
+          continue;
         } else if (tag === "optgroup") {
-          collect(c);
+          if (!inOptgroup) collect(c, true);
+        } else {
+          collect(c, inOptgroup);
         }
       }
+      return;
+    }
+    let child = node.firstChild;
+    while (child && !seen.has(child)) {
+      seen.add(child);
+      if (child.nodeType === 1) {
+        const tag = (child.tagName || "").toLowerCase();
+        if (tag === "option") {
+          if (up) up(child);
+          opts.push(child);
+        } else if (tag === "select" || tag === "hr" || tag === "datalist") {
+          // stop subtree
+        } else if (tag === "optgroup") {
+          if (!inOptgroup) collect(child, true);
+        } else {
+          collect(child, inOptgroup);
+        }
+      }
+      child = child.nextSibling;
     }
   }
-  collect(selectEl);
+  collect(selectEl, false);
   return opts;
 }
 
@@ -1052,6 +1063,82 @@ function NodeList(items) {
     this[i] = list[i];
   }
   this.length = list.length;
+}
+function makeLiveNodeList(getter) {
+  const base = Object.create(NodeList.prototype);
+  return new Proxy(base, {
+    get: function (target, prop, receiver) {
+      if (prop === "length") return getter().length;
+      if (typeof prop === "string" && /^\d+$/.test(prop)) {
+        const list = getter();
+        const idx = Number(prop);
+        return idx >= 0 && idx < list.length ? list[idx] : undefined;
+      }
+      if (prop === Symbol.iterator || prop === "values") {
+        return function () {
+          let idx = 0;
+          return {
+            next: function () {
+              const list = getter();
+              return idx < list.length ? { value: list[idx++], done: false } : { value: undefined, done: true };
+            },
+            [Symbol.iterator]: function () { return this; },
+          };
+        };
+      }
+      if (prop === "keys") {
+        return function () {
+          let idx = 0;
+          return {
+            next: function () {
+              const list = getter();
+              return idx < list.length ? { value: idx++, done: false } : { value: undefined, done: true };
+            },
+            [Symbol.iterator]: function () { return this; },
+          };
+        };
+      }
+      if (prop === "entries") {
+        return function () {
+          let idx = 0;
+          return {
+            next: function () {
+              const list = getter();
+              if (idx < list.length) {
+                const i = idx++;
+                return { value: [i, list[i]], done: false };
+              }
+              return { value: undefined, done: true };
+            },
+            [Symbol.iterator]: function () { return this; },
+          };
+        };
+      }
+      return Reflect.get(target, prop, receiver);
+    },
+    has: function (target, prop) {
+      if (typeof prop === "string" && /^\d+$/.test(prop)) {
+        return Number(prop) < getter().length;
+      }
+      return Reflect.has(target, prop);
+    },
+    ownKeys: function () {
+      const list = getter();
+      const keys = [];
+      for (let i = 0; i < list.length; i++) keys.push(String(i));
+      return keys;
+    },
+    getOwnPropertyDescriptor: function (target, prop) {
+      if (typeof prop === "string" && /^\d+$/.test(prop)) {
+        const list = getter();
+        const idx = Number(prop);
+        if (idx >= 0 && idx < list.length) {
+          return { value: list[idx], writable: false, enumerable: true, configurable: true };
+        }
+      }
+      return Reflect.getOwnPropertyDescriptor(target, prop);
+    },
+  });
 }
 NodeList.prototype.item = function (index) {
   const i = Number(index);

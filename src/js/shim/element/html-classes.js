@@ -808,10 +808,25 @@ function installHtmlClasses(global) {
   HTMLSlotElement.prototype.assignedNodes = function (options) {
     const assigned = computeAssignedNodesForSlot(this);
     this._lastAssignedNodes = assigned;
-    if (options && options.flatten && assigned.length === 0) {
-      return Array.from(this.childNodes || this._children || []);
+    const flatten = Boolean(options && options.flatten);
+    if (!flatten) return assigned;
+    const base = assigned.length > 0 ? assigned : Array.from(this.childNodes || this._children || []);
+    const out = [];
+    for (let i = 0; i < base.length; i++) {
+      const n = base[i];
+      if (n && n.nodeType === 1 && String(n.localName || n.tagName || "").toLowerCase() === "slot") {
+        const rn = typeof n.getRootNode === "function" ? n.getRootNode() : null;
+        if (rn && rn.nodeType === 11 && rn.host) {
+          const sub = typeof n.assignedNodes === "function" ? n.assignedNodes({ flatten: true }) : [];
+          for (let j = 0; j < sub.length; j++) out.push(sub[j]);
+        } else {
+          out.push(n);
+        }
+      } else {
+        out.push(n);
+      }
     }
-    return assigned;
+    return out;
   };
   HTMLSlotElement.prototype.assignedElements = function (options) {
     const nodes = this.assignedNodes(options);
@@ -3498,6 +3513,7 @@ function installHtmlClasses(global) {
       "allow-downloads", "allow-forms", "allow-modals", "allow-orientation-lock",
       "allow-pointer-lock", "allow-popups", "allow-popups-to-escape-sandbox",
       "allow-presentation", "allow-same-origin", "allow-scripts",
+      "allow-storage-access-by-user-activation",
       "allow-top-navigation", "allow-top-navigation-by-user-activation",
       "allow-top-navigation-to-custom-protocols",
     ])
@@ -3593,6 +3609,41 @@ function installHtmlClasses(global) {
 
   markNative(HTMLIFrameElement, "HTMLIFrameElement");
   global.HTMLIFrameElement = HTMLIFrameElement;
+
+  function HTMLEmbedElement() {}
+  HTMLEmbedElement.prototype = Object.create(HTMLElementProto);
+  HTMLEmbedElement.prototype.constructor = HTMLEmbedElement;
+  Object.defineProperty(HTMLEmbedElement.prototype, Symbol.toStringTag, {
+    value: "HTMLEmbedElement",
+    configurable: true,
+  });
+  Object.defineProperty(HTMLEmbedElement.prototype, "src", {
+    get: function () {
+      const raw = nativeGetAttribute.call(this, "src");
+      if (raw == null) return "";
+      try {
+        const base = (typeof document !== "undefined" && document.baseURI) ? document.baseURI : (global.location ? global.location.href : "http://localhost/");
+        return new URL(raw, base).href;
+      } catch (e) {
+        return raw;
+      }
+    },
+    set: function (v) { nativeSetAttribute.call(this, "src", String(v)); },
+    configurable: true,
+    enumerable: true,
+  });
+  ["type", "width", "height", "align", "name"].forEach(function (attr) {
+    Object.defineProperty(HTMLEmbedElement.prototype, attr, {
+      get: function () { const v = nativeGetAttribute.call(this, attr); return v == null ? "" : String(v); },
+      set: function (v) { nativeSetAttribute.call(this, attr, String(v)); },
+      configurable: true,
+      enumerable: true,
+    });
+  });
+  markNative(HTMLEmbedElement, "HTMLEmbedElement");
+  global.HTMLEmbedElement = HTMLEmbedElement;
+  if (typeof globalThis !== "undefined") globalThis.HTMLEmbedElement = HTMLEmbedElement;
+  if (typeof window !== "undefined") window.HTMLEmbedElement = HTMLEmbedElement;
 
   function HTMLFrameElement() {}
   HTMLFrameElement.prototype = Object.create(HTMLElementProto);
@@ -3746,13 +3797,63 @@ function installHtmlClasses(global) {
     showing: true,
   };
 
-  function TextTrack(trackEl) {
+  function TextTrackCueList(getCuesFn) {
+    this._getCues = getCuesFn;
+    return new Proxy(this, {
+      get: function (t, prop) {
+        if (prop === "length") return getCuesFn().length;
+        if (prop === Symbol.iterator) {
+          return function () {
+            const arr = getCuesFn();
+            let idx = 0;
+            return { next: function () { return idx < arr.length ? { value: arr[idx++], done: false } : { value: undefined, done: true }; } };
+          };
+        }
+        if (typeof prop === "string" && /^\d+$/.test(prop)) {
+          const arr = getCuesFn();
+          const idx = Number(prop);
+          return idx >= 0 && idx < arr.length ? arr[idx] : undefined;
+        }
+        return Reflect.get(t, prop);
+      },
+      has: function (t, prop) {
+        if (prop === "length") return true;
+        if (typeof prop === "string" && /^\d+$/.test(prop)) return Number(prop) < getCuesFn().length;
+        return Reflect.has(t, prop);
+      },
+    });
+  }
+  TextTrackCueList.prototype.getCueById = function (id) {
+    const s = String(id);
+    if (!s) return null;
+    const arr = this._getCues();
+    for (let i = 0; i < arr.length; i++) {
+      if (arr[i] && arr[i].id === s) return arr[i];
+    }
+    return null;
+  };
+  markNative(TextTrackCueList, "TextTrackCueList");
+  global.TextTrackCueList = TextTrackCueList;
+  if (typeof globalThis !== "undefined") globalThis.TextTrackCueList = TextTrackCueList;
+  if (typeof window !== "undefined") window.TextTrackCueList = TextTrackCueList;
+
+  function TextTrack(trackEl, manualOpts) {
     this._trackEl = trackEl || null;
-    this._mode = (trackEl && typeof trackEl.hasAttribute === "function" && trackEl.hasAttribute("default"))
-      ? "showing"
-      : "disabled";
-    this._cues = [];
-    this._activeCues = [];
+    this._manualOpts = manualOpts || null;
+    this._mode = manualOpts
+      ? "hidden"
+      : ((trackEl && typeof trackEl.hasAttribute === "function" && trackEl.hasAttribute("default")) ? "showing" : "disabled");
+    this._cuesArr = [];
+    this._activeCuesArr = [];
+    const self = this;
+    function sortedCues() {
+      return self._cuesArr.slice().sort(function (a, b) {
+        if (a.startTime !== b.startTime) return a.startTime - b.startTime;
+        return b.endTime - a.endTime;
+      });
+    }
+    this._cuesList = new TextTrackCueList(sortedCues);
+    this._activeCuesList = new TextTrackCueList(function () { return self._activeCuesArr; });
   }
   Object.defineProperty(TextTrack.prototype, Symbol.toStringTag, {
     value: "TextTrack",
@@ -3760,6 +3861,7 @@ function installHtmlClasses(global) {
   });
   Object.defineProperty(TextTrack.prototype, "kind", {
     get: function () {
+      if (this._manualOpts) return this._manualOpts.kind;
       const attr = this._trackEl && typeof this._trackEl.getAttribute === "function"
         ? this._trackEl.getAttribute("kind")
         : null;
@@ -3771,6 +3873,7 @@ function installHtmlClasses(global) {
   });
   Object.defineProperty(TextTrack.prototype, "label", {
     get: function () {
+      if (this._manualOpts) return this._manualOpts.label;
       return (this._trackEl && typeof this._trackEl.getAttribute === "function")
         ? (this._trackEl.getAttribute("label") || "")
         : "";
@@ -3779,6 +3882,7 @@ function installHtmlClasses(global) {
   });
   Object.defineProperty(TextTrack.prototype, "language", {
     get: function () {
+      if (this._manualOpts) return this._manualOpts.language;
       return (this._trackEl && typeof this._trackEl.getAttribute === "function")
         ? (this._trackEl.getAttribute("srclang") || "")
         : "";
@@ -3787,6 +3891,7 @@ function installHtmlClasses(global) {
   });
   Object.defineProperty(TextTrack.prototype, "id", {
     get: function () {
+      if (this._manualOpts) return "";
       return (this._trackEl && typeof this._trackEl.getAttribute === "function")
         ? (this._trackEl.getAttribute("id") || "")
         : "";
@@ -3806,13 +3911,29 @@ function installHtmlClasses(global) {
     configurable: true,
   });
   Object.defineProperty(TextTrack.prototype, "cues", {
-    get: function () { return this._mode === "disabled" ? null : this._cues; },
+    get: function () { return this._mode === "disabled" ? null : this._cuesList; },
     configurable: true,
   });
   Object.defineProperty(TextTrack.prototype, "activeCues", {
-    get: function () { return this._mode === "disabled" ? null : this._activeCues; },
+    get: function () { return this._mode === "disabled" ? null : this._activeCuesList; },
     configurable: true,
   });
+  TextTrack.prototype.addCue = function (cue) {
+    if (!cue || typeof cue !== "object") throw new TypeError("Failed to execute 'addCue' on 'TextTrack': parameter 1 is not of type 'TextTrackCue'.");
+    if (cue.track && cue.track !== this) {
+      if (typeof cue.track.removeCue === "function") cue.track.removeCue(cue);
+    }
+    if (this._cuesArr.indexOf(cue) === -1) {
+      this._cuesArr.push(cue);
+      cue.track = this;
+    }
+  };
+  TextTrack.prototype.removeCue = function (cue) {
+    const idx = this._cuesArr.indexOf(cue);
+    if (idx === -1) throw new DOMException("The cue was not found in the track.", "NotFoundError");
+    this._cuesArr.splice(idx, 1);
+    cue.track = null;
+  };
   markNative(TextTrack, "TextTrack");
   global.TextTrack = TextTrack;
   if (typeof globalThis !== "undefined") globalThis.TextTrack = TextTrack;
@@ -3849,6 +3970,11 @@ function installHtmlClasses(global) {
           }
         }
         child = child.nextSibling;
+      }
+      if (mediaEl && Array.isArray(mediaEl._manualTextTracks)) {
+        for (let i = 0; i < mediaEl._manualTextTracks.length; i++) {
+          out.push(mediaEl._manualTextTracks[i]);
+        }
       }
       return out;
     }
@@ -3957,6 +4083,19 @@ function installHtmlClasses(global) {
     },
     configurable: true,
   });
+  HTMLMediaElement.prototype.addTextTrack = function (kind, label, language) {
+    if (arguments.length < 1) throw new TypeError("Failed to execute 'addTextTrack' on 'HTMLMediaElement': 1 argument required.");
+    const k = String(kind);
+    if (!VALID_TRACK_KINDS[k]) throw new TypeError("Failed to execute 'addTextTrack' on 'HTMLMediaElement': The provided value '" + k + "' is not a valid enum value of type TextTrackKind.");
+    const tr = new TextTrack(null, {
+      kind: k,
+      label: label !== undefined ? String(label) : "",
+      language: language !== undefined ? String(language) : "",
+    });
+    if (!this._manualTextTracks) this._manualTextTracks = [];
+    this._manualTextTracks.push(tr);
+    return tr;
+  };
   markNative(HTMLMediaElement, "HTMLMediaElement");
   global.HTMLMediaElement = HTMLMediaElement;
   if (typeof globalThis !== "undefined") globalThis.HTMLMediaElement = HTMLMediaElement;
@@ -4336,7 +4475,11 @@ function installHtmlClasses(global) {
     const isHtmlEl = function (el) {
       return el && el.nodeType === 1 && el.namespaceURI === HTML_NS;
     };
-    const makeColl = function (arr) {
+    const makeColl = function (arrOrFn) {
+      if (typeof arrOrFn === "function" && typeof makeHtmlCollection === "function") {
+        return makeHtmlCollection(arrOrFn);
+      }
+      const arr = typeof arrOrFn === "function" ? arrOrFn() : arrOrFn;
       return typeof HTMLCollection === "function" ? new HTMLCollection(arr) : arr;
     };
     const childTags = function (el, tagSet) {
@@ -4357,6 +4500,7 @@ function installHtmlClasses(global) {
       const trSet = new Set(["tr"]);
       for (let i = 0; i < kids.length; i++) {
         const ch = kids[i];
+        if (!isHtmlEl(ch)) continue;
         const tn = String(ch.tagName || "").toLowerCase();
         if (tn === "thead") theadRows.push.apply(theadRows, childTags(ch, trSet));
         else if (tn === "tfoot") tfootRows.push.apply(tfootRows, childTags(ch, trSet));
@@ -4372,23 +4516,59 @@ function installHtmlClasses(global) {
 
     const tblProto = global.HTMLTableElement.prototype;
     Object.defineProperty(tblProto, "tBodies", {
-      get: function () { return makeColl(childTags(this, new Set(["tbody"]))); },
+      get: function () { const self = this; return makeColl(function () { return childTags(self, new Set(["tbody"])); }); },
       configurable: true,
     });
     Object.defineProperty(tblProto, "tHead", {
       get: function () { return childTags(this, new Set(["thead"]))[0] || null; },
+      set: function (v) {
+        if (v !== null && (!v || typeof v !== "object" || v.nodeType !== 1)) {
+          throw new TypeError("Failed to set the 'tHead' property on 'HTMLTableElement': Failed to convert value to 'HTMLTableSectionElement'.");
+        }
+        if (v !== null && String(v.tagName || "").toLowerCase() !== "thead") {
+          throw new DOMException("Failed to set the 'tHead' property on 'HTMLTableElement': Not a thead element.", "HierarchyRequestError");
+        }
+        if (this.tHead) this.removeChild(this.tHead);
+        if (v) {
+          const kids = this.children || [];
+          let after = null;
+          for (let i = 0; i < kids.length; i++) {
+            const tn = String(kids[i].tagName || "").toLowerCase();
+            if (tn === "caption" || tn === "colgroup") after = kids[i];
+          }
+          if (after) this.insertBefore(v, after.nextSibling);
+          else this.insertBefore(v, this.firstChild);
+        }
+      },
       configurable: true,
     });
     Object.defineProperty(tblProto, "tFoot", {
       get: function () { return childTags(this, new Set(["tfoot"]))[0] || null; },
+      set: function (v) {
+        if (v !== null && (!v || typeof v !== "object" || v.nodeType !== 1)) {
+          throw new TypeError("Failed to set the 'tFoot' property on 'HTMLTableElement': Failed to convert value to 'HTMLTableSectionElement'.");
+        }
+        if (v !== null && String(v.tagName || "").toLowerCase() !== "tfoot") {
+          throw new DOMException("Failed to set the 'tFoot' property on 'HTMLTableElement': Not a tfoot element.", "HierarchyRequestError");
+        }
+        if (this.tFoot) this.removeChild(this.tFoot);
+        if (v) this.appendChild(v);
+      },
       configurable: true,
     });
     Object.defineProperty(tblProto, "caption", {
       get: function () { return childTags(this, new Set(["caption"]))[0] || null; },
+      set: function (v) {
+        if (v !== null && (!v || v.nodeType !== 1 || String(v.tagName || "").toLowerCase() !== "caption")) {
+          throw new TypeError("Failed to set the 'caption' property on 'HTMLTableElement': Failed to convert value to 'HTMLTableCaptionElement'.");
+        }
+        if (this.caption) this.removeChild(this.caption);
+        if (v) this.insertBefore(v, this.firstChild);
+      },
       configurable: true,
     });
     Object.defineProperty(tblProto, "rows", {
-      get: function () { return makeColl(getTableRows(this)); },
+      get: function () { const self = this; return makeColl(function () { return getTableRows(self); }); },
       configurable: true,
     });
     tblProto.insertRow = function (index) {
@@ -4418,12 +4598,34 @@ function installHtmlClasses(global) {
       const row = rows[idx];
       if (row && row.parentNode) row.parentNode.removeChild(row);
     };
-    tblProto.createTHead = function () { return this.tHead || this.appendChild((this.ownerDocument || document).createElement("thead")); };
+    tblProto.createTHead = function () {
+      if (this.tHead) return this.tHead;
+      const th = (this.ownerDocument || document).createElement("thead");
+      const kids = this.children || [];
+      let after = null;
+      for (let i = 0; i < kids.length; i++) {
+        const tn = String(kids[i].tagName || "").toLowerCase();
+        if (tn === "caption" || tn === "colgroup") after = kids[i];
+      }
+      if (after) return this.insertBefore(th, after.nextSibling);
+      return this.insertBefore(th, this.firstChild);
+    };
     tblProto.deleteTHead = function () { if (this.tHead) this.removeChild(this.tHead); };
     tblProto.createTFoot = function () { return this.tFoot || this.appendChild((this.ownerDocument || document).createElement("tfoot")); };
     tblProto.deleteTFoot = function () { if (this.tFoot) this.removeChild(this.tFoot); };
-    tblProto.createTBody = function () { return this.appendChild((this.ownerDocument || document).createElement("tbody")); };
-    tblProto.createCaption = function () { return this.caption || this.appendChild((this.ownerDocument || document).createElement("caption")); };
+    tblProto.createTBody = function () {
+      const tb = (this.ownerDocument || document).createElement("tbody");
+      const bodies = childTags(this, new Set(["tbody"]));
+      if (bodies.length > 0) {
+        return this.insertBefore(tb, bodies[bodies.length - 1].nextSibling);
+      }
+      return this.appendChild(tb);
+    };
+    tblProto.createCaption = function () {
+      if (this.caption) return this.caption;
+      const cap = (this.ownerDocument || document).createElement("caption");
+      return this.insertBefore(cap, this.firstChild);
+    };
     tblProto.deleteCaption = function () { if (this.caption) this.removeChild(this.caption); };
 
     const secProto = global.HTMLTableSectionElement.prototype;

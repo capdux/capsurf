@@ -94,6 +94,24 @@ function matchesObserverRecord(sub, record) {
   return false;
 }
 
+function cloneMutationRecordForObserver(record, options) {
+  const rec = new MutationRecord(record.type, record.target);
+  rec.addedNodes = record.addedNodes;
+  rec.removedNodes = record.removedNodes;
+  rec.previousSibling = record.previousSibling;
+  rec.nextSibling = record.nextSibling;
+  rec.attributeName = record.attributeName;
+  rec.attributeNamespace = record.attributeNamespace;
+  if (record.type === "attributes") {
+    rec.oldValue = options && options.attributeOldValue ? record.oldValue : null;
+  } else if (record.type === "characterData") {
+    rec.oldValue = options && options.characterDataOldValue ? record.oldValue : null;
+  } else {
+    rec.oldValue = null;
+  }
+  return rec;
+}
+
 function notifyMutation(record) {
   if (typeof globalThis !== "undefined") {
     globalThis.__treeSeq = (globalThis.__treeSeq || 0) + 1;
@@ -121,7 +139,7 @@ function notifyMutation(record) {
           scheduleMutationDelivery();
         }
         if (!matched && matchesObserverRecord(sub, record)) {
-          st.records.push(record);
+          st.records.push(cloneMutationRecordForObserver(record, sub.options));
           scheduleMutationDelivery();
           matched = true;
         }
@@ -131,7 +149,7 @@ function notifyMutation(record) {
       for (const tsub of st.transientTargets) {
         if (isSameTarget(tsub.target, record.target) || (tsub.options.subtree && tsub.target.contains && tsub.target.contains(record.target))) {
           if (matchesObserverRecord(tsub, record)) {
-            st.records.push(record);
+            st.records.push(cloneMutationRecordForObserver(record, tsub.options));
             scheduleMutationDelivery();
             break;
           }

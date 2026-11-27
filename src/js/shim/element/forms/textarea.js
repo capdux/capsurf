@@ -25,21 +25,41 @@ function installTextAreaElement(global) {
     configurable: true,
   });
 
+  function getTextAreaDefaultValue(el) {
+    let out = "";
+    const kids = el.childNodes;
+    if (kids && kids.length) {
+      for (let i = 0; i < kids.length; i++) {
+        const k = kids[i];
+        if (k && (k.nodeType === 3 || k.nodeType === 4)) {
+          out += k.data !== undefined ? String(k.data) : String(k.textContent || "");
+        }
+      }
+      return out;
+    }
+    return el.textContent || "";
+  }
+
   Object.defineProperty(HTMLTextAreaElement.prototype, "value", {
     get: function () {
       if (this._value !== undefined) return this._value;
-      return this.textContent || "";
+      return getTextAreaDefaultValue(this).replace(/\r\n?/g, "\n");
     },
     set: function (v) {
-      this._value = String(v);
-      this._selectionStart = this._value.length;
-      this._selectionEnd = this._value.length;
+      const cur = this._value !== undefined ? this._value : getTextAreaDefaultValue(this).replace(/\r\n?/g, "\n");
+      const next = String(v).replace(/\r\n?/g, "\n");
+      this._value = next;
+      if (next !== cur) {
+        this._selectionStart = next.length;
+        this._selectionEnd = next.length;
+        this._selectionDirection = "none";
+      }
     },
     configurable: true,
   });
 
   Object.defineProperty(HTMLTextAreaElement.prototype, "defaultValue", {
-    get: function () { return this.textContent || ""; },
+    get: function () { return getTextAreaDefaultValue(this); },
     set: function (v) { this.textContent = String(v); },
     configurable: true,
   });

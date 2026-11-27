@@ -47,8 +47,11 @@ function FormData(form) {
       throw new DOMEx("Failed to construct 'FormData': The form is already constructing an entry list.", "InvalidStateError");
     }
     let submitterEl = null;
-    if (submitter && submitter.name && !isFormControlActuallyDisabled(submitter)) {
-      submitterEl = submitter;
+    if (submitter && !isFormControlActuallyDisabled(submitter)) {
+      const sType = (submitter.type || "").toLowerCase();
+      if (submitter.name || sType === "image") {
+        submitterEl = submitter;
+      }
     }
     let submitterAppended = false;
     const controls = (typeof collectFormControls === "function") ? collectFormControls(form) : (form.elements || []);
@@ -56,12 +59,19 @@ function FormData(form) {
       const c = controls[i];
       const tag = (c.tagName || "").toLowerCase();
       if (tag === "fieldset") continue;
-      if (!c.name || isFormControlActuallyDisabled(c)) continue;
       const type = (c.type || "").toLowerCase();
+      if (isFormControlActuallyDisabled(c)) continue;
+      if (!c.name && !(type === "image" && c === submitterEl)) continue;
 
       if (tag === "button" || type === "submit" || type === "reset" || type === "button" || type === "image") {
         if (c === submitterEl) {
-          this.append(c.name, c.value !== undefined ? c.value : "");
+          if (type === "image") {
+            const prefix = c.name ? (c.name + ".") : "";
+            this.append(prefix + "x", "0");
+            this.append(prefix + "y", "0");
+          } else {
+            this.append(c.name, c.value !== undefined ? c.value : "");
+          }
           submitterAppended = true;
         }
         continue;
@@ -90,21 +100,37 @@ function FormData(form) {
       }
     }
     if (!submitterAppended && submitterEl) {
-      this.append(submitterEl.name, submitterEl.value !== undefined ? submitterEl.value : "");
+      const sType = (submitterEl.type || "").toLowerCase();
+      if (sType === "image") {
+        const prefix = submitterEl.name ? (submitterEl.name + ".") : "";
+        this.append(prefix + "x", "0");
+        this.append(prefix + "y", "0");
+      } else {
+        this.append(submitterEl.name, submitterEl.value !== undefined ? submitterEl.value : "");
+      }
     }
 
     // Dispatch "formdata" event per WHATWG HTML spec
     form._constructingEntryList = true;
     try {
+      const eventFd = new FormData();
+      const eventEntries = getFdEntries(eventFd);
+      for (let i = 0; i < entries.length; i++) {
+        eventEntries.push([entries[i][0], entries[i][1]]);
+      }
       let evt;
       if (typeof FormDataEvent === "function") {
-        evt = new FormDataEvent("formdata", { bubbles: true, cancelable: false, formData: this });
+        evt = new FormDataEvent("formdata", { bubbles: true, cancelable: false, formData: eventFd });
       } else {
         evt = new Event("formdata", { bubbles: true, cancelable: false });
-        Object.defineProperty(evt, "formData", { value: this, configurable: true });
+        Object.defineProperty(evt, "formData", { value: eventFd, configurable: true });
       }
       if (typeof form.dispatchEvent === "function") {
         form.dispatchEvent(evt);
+      }
+      entries.length = 0;
+      for (let i = 0; i < eventEntries.length; i++) {
+        entries.push([eventEntries[i][0], eventEntries[i][1]]);
       }
     } finally {
       form._constructingEntryList = false;

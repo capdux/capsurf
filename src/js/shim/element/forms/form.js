@@ -360,6 +360,13 @@ function performFormSubmission(form, submitter) {
 
 function submitForm(form, submitter) {
   if (!form) return;
+  const subMethod = (submitter && typeof submitter.getAttribute === "function")
+    ? String(submitter.getAttribute("formmethod") || "").toLowerCase()
+    : "";
+  const formMethodAttr = (typeof form.getAttribute === "function")
+    ? String(form.getAttribute("method") || "").toLowerCase()
+    : "";
+  const effectiveMethod = subMethod || formMethodAttr;
   let ev;
   try {
     ev = new SubmitEvent("submit", {
@@ -377,6 +384,21 @@ function submitForm(form, submitter) {
   }
   form.dispatchEvent(ev);
   if (ev.defaultPrevented) {
+    return;
+  }
+  if (effectiveMethod === "dialog") {
+    let dlg = form.parentNode;
+    while (dlg) {
+      if (dlg.nodeType === 1 && String(dlg.tagName || "").toLowerCase() === "dialog") break;
+      dlg = dlg.parentNode;
+    }
+    if (dlg && dlg.open && typeof dlg.close === "function") {
+      if (submitter && typeof submitter.hasAttribute === "function" && submitter.hasAttribute("value")) {
+        dlg.close(submitter.getAttribute("value"));
+      } else {
+        dlg.close();
+      }
+    }
     return;
   }
   performFormSubmission(form, submitter);
@@ -512,6 +534,12 @@ function installFormElement(global) {
   Object.defineProperty(HTMLFormElement.prototype, "noValidate", {
     get: function () { return this.hasAttribute("novalidate"); },
     set: function (v) { if (v) this.setAttribute("novalidate", ""); else this.removeAttribute("novalidate"); },
+    configurable: true,
+  });
+
+  Object.defineProperty(HTMLFormElement.prototype, "rel", {
+    get: function () { return this.getAttribute("rel") || ""; },
+    set: function (v) { this.setAttribute("rel", String(v)); },
     configurable: true,
   });
 

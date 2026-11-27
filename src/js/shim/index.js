@@ -762,6 +762,7 @@ function installShim(global) {
       case "script": Object.setPrototypeOf(el, global.HTMLScriptElement.prototype); break;
       case "frame": Object.setPrototypeOf(el, (global.HTMLFrameElement || global.HTMLIFrameElement).prototype); break;
       case "iframe": Object.setPrototypeOf(el, global.HTMLIFrameElement.prototype); break;
+      case "embed": Object.setPrototypeOf(el, (global.HTMLEmbedElement || global.HTMLElement).prototype); break;
       case "template": Object.setPrototypeOf(el, global.HTMLTemplateElement.prototype); break;
       case "slot": Object.setPrototypeOf(el, (global.HTMLSlotElement || global.HTMLElement).prototype); break;
       case "details": Object.setPrototypeOf(el, (global.HTMLDetailsElement || global.HTMLElement).prototype); break;
@@ -977,6 +978,19 @@ function installShim(global) {
     }
 
     // Include document.doctype in document.firstChild and document.childNodes per DOM spec
+    const origDoctypeDesc = Object.getOwnPropertyDescriptor(docProto, "doctype");
+    if (origDoctypeDesc && origDoctypeDesc.get) {
+      const origDoctypeGet = origDoctypeDesc.get;
+      Object.defineProperty(docProto, "doctype", {
+        get: function () {
+          const dt = origDoctypeGet.call(this);
+          if (!dt || !dt.name) return null;
+          return dt;
+        },
+        configurable: true,
+        enumerable: true,
+      });
+    }
     const origDocFirstChildDesc = Object.getOwnPropertyDescriptor(docProto, "firstChild")
       || Object.getOwnPropertyDescriptor(Node.prototype, "firstChild");
     const origDocFirstChildGet = origDocFirstChildDesc && origDocFirstChildDesc.get;
@@ -1133,12 +1147,10 @@ function installShim(global) {
               if (typeof nativeTextProto.splitText !== "function" && typeof global.Text.prototype.splitText === "function") {
                 nativeTextProto.splitText = global.Text.prototype.splitText;
               }
-              if (!Object.getOwnPropertyDescriptor(nativeTextProto, "tagName")) {
-                Object.defineProperty(nativeTextProto, "tagName", {
-                  get: function () { return undefined; },
-                  configurable: true,
-                });
-              }
+              Object.defineProperty(nativeTextProto, "tagName", {
+                get: function () { return undefined; },
+                configurable: true,
+              });
               if (global.CharacterData && global.CharacterData.prototype) {
                 const pesDesc = Object.getOwnPropertyDescriptor(global.CharacterData.prototype, "previousElementSibling");
                 if (pesDesc && !Object.getOwnPropertyDescriptor(nativeTextProto, "previousElementSibling")) {
@@ -1235,21 +1247,19 @@ function installShim(global) {
           return node;
         }, "createCDATASection");
       }
-      if (typeof docProto.createProcessingInstruction !== "function") {
-        docProto.createProcessingInstruction = markNative(function (target, data) {
-          if (arguments.length < 2) {
-            throw new TypeError("Failed to execute 'createProcessingInstruction' on 'Document': 2 arguments required.");
-          }
-          const t = String(target);
-          const d = String(data);
-          if (!/^[A-Za-z_\xC0-\uFFFF][A-Za-z0-9._:-\xC0-\uFFFF]*$/.test(t) || d.includes("?>")) {
-            throw new DOMException("String contains an invalid character", "InvalidCharacterError");
-          }
-          const node = new ProcessingInstruction(t, d);
-          node.ownerDocument = this;
-          return node;
-        }, "createProcessingInstruction");
-      }
+      docProto.createProcessingInstruction = markNative(function (target, data) {
+        if (arguments.length < 2) {
+          throw new TypeError("Failed to execute 'createProcessingInstruction' on 'Document': 2 arguments required.");
+        }
+        const t = String(target);
+        const d = String(data);
+        if (!/^[A-Za-z_\xC0-\uFFFF][A-Za-z0-9._:-\xC0-\uFFFF]*$/.test(t) || d.includes("?>")) {
+          throw new DOMException("String contains an invalid character", "InvalidCharacterError");
+        }
+        const node = new ProcessingInstruction(t, d);
+        node.ownerDocument = this;
+        return node;
+      }, "createProcessingInstruction");
       if (global.document) {
         global.document.createElement = docProto.createElement;
         if (typeof global.document.createEvent !== "function") {
@@ -1258,9 +1268,7 @@ function installShim(global) {
         if (typeof global.document.createCDATASection !== "function") {
           global.document.createCDATASection = docProto.createCDATASection;
         }
-        if (typeof global.document.createProcessingInstruction !== "function") {
-          global.document.createProcessingInstruction = docProto.createProcessingInstruction;
-        }
+        global.document.createProcessingInstruction = docProto.createProcessingInstruction;
       }
     }
 

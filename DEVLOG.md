@@ -3740,3 +3740,7 @@
 ## Phase 968 — 延迟 Load 调度与子帧网络归属闭环，Playwright 6 套件全绿 & Panda 188/517
 - **主/子帧 `load` 延迟与 `frameId` 归属**：拆解 `DOMContentLoaded` 与 `load` 发射时机，在 `activeAsyncFetchCount() > 0` 时由 `server.cp` 主循环 `flushDeferredLoadEventsForSession` 统一待挂起样式表/fetch 结束后补发 `load` 与 `frameStoppedLoading`；同时将子帧异步 `fetch` 归属到对应 `frameId` 并在子帧 `load` 扫描 `<link rel="stylesheet">`，彻底打通 `page-network-idle` (10/10)、`page-network-request` (26/26)、`page-wait-for-navigation` (12/12)、`page-wait-for-url` (9/9)、`page-wait-for-load-state` (10/10) 与 `page-emulate-media` (12/12)。
 - **Panda Web API 批量收割**：经 `pass10`–`pass12` 连续三轮 DOM/表单/事件/ShadowRoot/History/Screen/AllCollection 共性修复，`test/panda/` 达成 **188/517 PASS**。
+
+## Phase 969 — Panda 突破 204/517 与多 Spec 端口隔离固化
+- **Panda Web API / Form / File / Dialog 批量突破**：通过 `panda_pass13`（`-j 16`）进一步补齐 `dialog`/`form`/`form-data`/`file`/`canvas2d`/`node` 等共性缺口，`test/panda/` 净增 +16 突破 200 大关达到 **204/517**。
+- **端口段步长 10 硬隔离**：实测发现 `pw-run.mjs --filter` 匹配多 spec 时按 `--port + i` 递增占用端口，固化主控 `9930..9939`、子智能体 1 `9940..9949`、子智能体 2 `9950..9959`、Panda `19954..19979` 分段规则彻底消除 `BindFailed`。

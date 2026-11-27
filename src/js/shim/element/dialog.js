@@ -34,6 +34,12 @@ function installDialogElement(global) {
       if (modalDialogs.get(this) === true) return;
       throw new DOMException("The dialog is already open.", "InvalidStateError");
     }
+    if (!this.isConnected) {
+      throw new DOMException("The element is not connected.", "InvalidStateError");
+    }
+    if (this._popoverOpen) {
+      throw new DOMException("The dialog is already open as a popover.", "InvalidStateError");
+    }
     modalDialogs.set(this, true);
     this._isModalDialog = true;
     this.setAttribute("open", "");
@@ -48,10 +54,10 @@ function installDialogElement(global) {
     this.removeAttribute("open");
     modalDialogs.delete(this);
     const dialog = this;
-    setTimeout(function () {
+    Promise.resolve().then(function () {
       const ev = new Event("close", { bubbles: false, cancelable: false });
       dialog.dispatchEvent(ev);
-    }, 0);
+    });
   };
 
   const dialogRequestClose = function (returnValue) {

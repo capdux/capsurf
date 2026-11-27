@@ -2484,7 +2484,11 @@
       if (eventState) {
         eventState.target = eventTarget;
       } else {
-        event.target = eventTarget;
+        try {
+          Object.defineProperty(event, "target", { value: eventTarget, configurable: true });
+        } catch (e) {
+          event.target = eventTarget;
+        }
       }
       const targetRoot = getNodeRoot(target);
 
@@ -2593,6 +2597,19 @@
           event.target = retargeted;
           event.currentTarget = entry;
           event.eventPhase = phase;
+        }
+
+        if (phase === PHASE_AT_TARGET && (entry === global || (typeof window !== "undefined" && entry === window)) && eventType === "load" && global.__capsurf_bodyOnloadPending) {
+          global.__capsurf_bodyOnloadPending = false;
+          const bodyOnloadFn = entry.onload;
+          if (typeof bodyOnloadFn === "function") {
+            event._handledByOnProp = true;
+            try {
+              bodyOnloadFn.call(entry, event);
+            } catch (e) {
+              reportListenerError(e);
+            }
+          }
         }
 
         const map = getListeners(entry);
@@ -2914,6 +2931,24 @@
     return false;
   }
 
+  function cloneMutationRecordForObserver(record, options) {
+    const rec = new MutationRecord(record.type, record.target);
+    rec.addedNodes = record.addedNodes;
+    rec.removedNodes = record.removedNodes;
+    rec.previousSibling = record.previousSibling;
+    rec.nextSibling = record.nextSibling;
+    rec.attributeName = record.attributeName;
+    rec.attributeNamespace = record.attributeNamespace;
+    if (record.type === "attributes") {
+      rec.oldValue = options && options.attributeOldValue ? record.oldValue : null;
+    } else if (record.type === "characterData") {
+      rec.oldValue = options && options.characterDataOldValue ? record.oldValue : null;
+    } else {
+      rec.oldValue = null;
+    }
+    return rec;
+  }
+
   function notifyMutation(record) {
     if (typeof globalThis !== "undefined") {
       globalThis.__treeSeq = (globalThis.__treeSeq || 0) + 1;
@@ -2941,7 +2976,7 @@
             scheduleMutationDelivery();
           }
           if (!matched && matchesObserverRecord(sub, record)) {
-            st.records.push(record);
+            st.records.push(cloneMutationRecordForObserver(record, sub.options));
             scheduleMutationDelivery();
             matched = true;
           }
@@ -2951,7 +2986,7 @@
         for (const tsub of st.transientTargets) {
           if (isSameTarget(tsub.target, record.target) || (tsub.options.subtree && tsub.target.contains && tsub.target.contains(record.target))) {
             if (matchesObserverRecord(tsub, record)) {
-              st.records.push(record);
+              st.records.push(cloneMutationRecordForObserver(record, tsub.options));
               scheduleMutationDelivery();
               break;
             }
@@ -3896,38 +3931,49 @@
     const opts = [];
     const seen = new Set();
     const up = typeof upgradeElement === "function" ? upgradeElement : (typeof globalThis !== "undefined" && globalThis.upgradeElement);
-    function collect(node) {
+    function collect(node, inOptgroup) {
       if (!node) return;
-      if (node.firstChild !== undefined) {
-        let child = node.firstChild;
-        while (child && !seen.has(child)) {
-          seen.add(child);
-          const tag = (child.tagName || "").toLowerCase();
-          if (tag === "option") {
-            if (up) up(child);
-            opts.push(child);
-          } else if (tag === "optgroup") {
-            collect(child);
-          }
-          child = child.nextSibling;
-        }
-        return;
-      }
-      if (node._children) {
-        for (let i = 0; i < node._children.length; i++) {
-          const c = node._children[i];
-          if (!c) continue;
+      const list = node._children || (node.firstChild !== undefined ? null : []);
+      if (list) {
+        for (let i = 0; i < list.length; i++) {
+          const c = list[i];
+          if (!c || seen.has(c)) continue;
+          seen.add(c);
+          if (c.nodeType !== 1) continue;
           const tag = (c.tagName || "").toLowerCase();
           if (tag === "option") {
             if (up) up(c);
             opts.push(c);
+          } else if (tag === "select" || tag === "hr" || tag === "datalist") {
+            continue;
           } else if (tag === "optgroup") {
-            collect(c);
+            if (!inOptgroup) collect(c, true);
+          } else {
+            collect(c, inOptgroup);
           }
         }
+        return;
+      }
+      let child = node.firstChild;
+      while (child && !seen.has(child)) {
+        seen.add(child);
+        if (child.nodeType === 1) {
+          const tag = (child.tagName || "").toLowerCase();
+          if (tag === "option") {
+            if (up) up(child);
+            opts.push(child);
+          } else if (tag === "select" || tag === "hr" || tag === "datalist") {
+            // stop subtree
+          } else if (tag === "optgroup") {
+            if (!inOptgroup) collect(child, true);
+          } else {
+            collect(child, inOptgroup);
+          }
+        }
+        child = child.nextSibling;
       }
     }
-    collect(selectEl);
+    collect(selectEl, false);
     return opts;
   }
 
@@ -4067,6 +4113,82 @@
       this[i] = list[i];
     }
     this.length = list.length;
+  }
+  function makeLiveNodeList(getter) {
+    const base = Object.create(NodeList.prototype);
+    return new Proxy(base, {
+      get: function (target, prop, receiver) {
+        if (prop === "length") return getter().length;
+        if (typeof prop === "string" && /^\d+$/.test(prop)) {
+          const list = getter();
+          const idx = Number(prop);
+          return idx >= 0 && idx < list.length ? list[idx] : undefined;
+        }
+        if (prop === Symbol.iterator || prop === "values") {
+          return function () {
+            let idx = 0;
+            return {
+              next: function () {
+                const list = getter();
+                return idx < list.length ? { value: list[idx++], done: false } : { value: undefined, done: true };
+              },
+              [Symbol.iterator]: function () { return this; },
+            };
+          };
+        }
+        if (prop === "keys") {
+          return function () {
+            let idx = 0;
+            return {
+              next: function () {
+                const list = getter();
+                return idx < list.length ? { value: idx++, done: false } : { value: undefined, done: true };
+              },
+              [Symbol.iterator]: function () { return this; },
+            };
+          };
+        }
+        if (prop === "entries") {
+          return function () {
+            let idx = 0;
+            return {
+              next: function () {
+                const list = getter();
+                if (idx < list.length) {
+                  const i = idx++;
+                  return { value: [i, list[i]], done: false };
+                }
+                return { value: undefined, done: true };
+              },
+              [Symbol.iterator]: function () { return this; },
+            };
+          };
+        }
+        return Reflect.get(target, prop, receiver);
+      },
+      has: function (target, prop) {
+        if (typeof prop === "string" && /^\d+$/.test(prop)) {
+          return Number(prop) < getter().length;
+        }
+        return Reflect.has(target, prop);
+      },
+      ownKeys: function () {
+        const list = getter();
+        const keys = [];
+        for (let i = 0; i < list.length; i++) keys.push(String(i));
+        return keys;
+      },
+      getOwnPropertyDescriptor: function (target, prop) {
+        if (typeof prop === "string" && /^\d+$/.test(prop)) {
+          const list = getter();
+          const idx = Number(prop);
+          if (idx >= 0 && idx < list.length) {
+            return { value: list[idx], writable: false, enumerable: true, configurable: true };
+          }
+        }
+        return Reflect.getOwnPropertyDescriptor(target, prop);
+      },
+    });
   }
   NodeList.prototype.item = function (index) {
     const i = Number(index);
@@ -10441,7 +10563,7 @@
           else if (p[i] === "full-width") fw = true;
           else if (p[i] === "full-size-kana") fsk = true;
         }
-        return [c, fw ? "full-width" : "", fsk ? "full-size-kana" : ""].filter(Boolean).join(" ");
+        return c || (fw ? "full-width" : (fsk ? "full-size-kana" : ""));
       }
       if (key === "white-space") {
         const p = splitCssTokens(s.toLowerCase());
@@ -17620,6 +17742,12 @@
     Node.prototype[k] = nodeTypes[k];
   }
 
+  Object.defineProperty(Node.prototype, "nodeValue", {
+    get: function () { return null; },
+    set: function () {},
+    configurable: true,
+  });
+
   Object.defineProperty(Node.prototype, "isConnected", {
     get: function () {
       let curr = this;
@@ -18276,6 +18404,8 @@
     const children = ensureChildren(parent);
     const idx = children.indexOf(child);
     if (idx === -1 && child.parentNode !== parent) return;
+    const prevSib = idx > 0 ? children[idx - 1] : null;
+    const nextSib = idx >= 0 && idx + 1 < children.length ? children[idx + 1] : null;
     const wasConnected = Boolean(parent.isConnected);
     if (idx >= 0) {
       if (typeof global !== "undefined" && typeof global.__capsurf_rangeOnNodeRemoved === "function") {
@@ -18303,6 +18433,8 @@
     if (typeof notifyMutation === "function") {
       const rec = new MutationRecord("childList", parent);
       rec.removedNodes = [child];
+      rec.previousSibling = prevSib;
+      rec.nextSibling = nextSib;
       notifyMutation(rec);
     }
 
@@ -18395,7 +18527,9 @@
     // Handle native element / node
     child.parentNode = this;
     child.ownerDocument = newDoc || this;
-    ensureChildren(this).push(child);
+    const appendKids = ensureChildren(this);
+    const appendPrevSib = appendKids.length > 0 ? appendKids[appendKids.length - 1] : null;
+    appendKids.push(child);
 
     if (nativeElementAppendChild && typeof nativeElementAppendChild === "function") {
       try {
@@ -18411,6 +18545,8 @@
     if (typeof notifyMutation === "function") {
       const rec = new MutationRecord("childList", this);
       rec.addedNodes = [child];
+      rec.previousSibling = appendPrevSib;
+      rec.nextSibling = null;
       notifyMutation(rec);
     }
 
@@ -18477,10 +18613,27 @@
 
     if (newChild.nodeType === DOCUMENT_FRAGMENT_NODE) {
       const kids = Array.from(newChild.childNodes || newChild._children || []);
-      for (let i = 0; i < kids.length; i++) {
-        this.insertBefore(kids[i], refChild);
+      const insertPos = idx >= 0 ? idx : children.length;
+      const prevSib = insertPos > 0 ? children[insertPos - 1] : null;
+      const nextSib = refChild;
+      const doInsert = () => {
+        for (let i = 0; i < kids.length; i++) {
+          this.insertBefore(kids[i], refChild);
+        }
+      };
+      if (typeof suppressChildListMutations === "function") {
+        suppressChildListMutations(this, doInsert);
+      } else {
+        doInsert();
       }
       if (newChild._children) newChild._children.length = 0;
+      if (kids.length > 0 && typeof notifyMutation === "function") {
+        const rec = new MutationRecord("childList", this);
+        rec.addedNodes = kids;
+        rec.previousSibling = prevSib;
+        rec.nextSibling = nextSib;
+        notifyMutation(rec);
+      }
       return newChild;
     }
 
@@ -18537,6 +18690,8 @@
     if (typeof notifyMutation === "function") {
       const rec = new MutationRecord("childList", this);
       rec.addedNodes = [newChild];
+      rec.previousSibling = insertPos > 0 ? children[insertPos - 1] : null;
+      rec.nextSibling = insertPos + 1 < children.length ? children[insertPos + 1] : null;
       notifyMutation(rec);
     }
 
@@ -18585,6 +18740,8 @@
       throw err;
     }
 
+    const prevSib = idx > 0 ? children[idx - 1] : null;
+    const nextSib = idx >= 0 && idx + 1 < children.length ? children[idx + 1] : null;
     const wasConnected = Boolean(this.isConnected);
     if (idx >= 0) {
       if (typeof global !== "undefined" && typeof global.__capsurf_rangeOnNodeRemoved === "function") {
@@ -18612,6 +18769,8 @@
     if (typeof notifyMutation === "function") {
       const rec = new MutationRecord("childList", this);
       rec.removedNodes = [child];
+      rec.previousSibling = prevSib;
+      rec.nextSibling = nextSib;
       notifyMutation(rec);
     }
 
@@ -18657,8 +18816,39 @@
     }
 
     if (newChild.nodeType === DOCUMENT_FRAGMENT_NODE) {
-      this.insertBefore(newChild, oldChild);
-      this.removeChild(oldChild);
+      const kids = Array.from(newChild.childNodes || newChild._children || []);
+      const oldIdx = children.indexOf(oldChild);
+      const prevSib = oldIdx > 0 ? children[oldIdx - 1] : null;
+      const nextSib = oldIdx >= 0 && oldIdx + 1 < children.length ? children[oldIdx + 1] : null;
+      const doReplace = () => {
+        for (let i = 0; i < kids.length; i++) {
+          this.insertBefore(kids[i], oldChild);
+        }
+        this.removeChild(oldChild);
+      };
+      if (typeof suppressChildListMutations === "function") {
+        suppressChildListMutations(this, function () {
+          suppressChildListMutations(newChild, doReplace);
+        });
+      } else {
+        doReplace();
+      }
+      if (newChild._children) newChild._children.length = 0;
+      if (kids.length > 0 && typeof notifyMutation === "function") {
+        const fragRec = new MutationRecord("childList", newChild);
+        fragRec.removedNodes = kids;
+        fragRec.previousSibling = null;
+        fragRec.nextSibling = null;
+        notifyMutation(fragRec);
+      }
+      if (typeof notifyMutation === "function") {
+        const rec = new MutationRecord("childList", this);
+        rec.addedNodes = kids;
+        rec.removedNodes = [oldChild];
+        rec.previousSibling = prevSib;
+        rec.nextSibling = nextSib;
+        notifyMutation(rec);
+      }
       return oldChild;
     }
 
@@ -18729,6 +18919,9 @@
       const rec = new MutationRecord("childList", this);
       rec.addedNodes = [newChild];
       rec.removedNodes = [oldChild];
+      const finalIdx = oldIdx >= 0 ? oldIdx : children.length - 1;
+      rec.previousSibling = finalIdx > 0 ? children[finalIdx - 1] : null;
+      rec.nextSibling = finalIdx + 1 < children.length ? children[finalIdx + 1] : null;
       notifyMutation(rec);
     }
 
@@ -18744,9 +18937,18 @@
     return oldChild;
   };
 
+  const _nodeChildNodesCache = new WeakMap();
   Object.defineProperty(Node.prototype, "childNodes", {
     get: function () {
-      return new NodeList(ensureChildren(this));
+      let list = _nodeChildNodesCache.get(this);
+      if (!list) {
+        const self = this;
+        list = typeof makeLiveNodeList === "function"
+          ? makeLiveNodeList(function () { return ensureChildren(self); })
+          : new NodeList(ensureChildren(this));
+        _nodeChildNodesCache.set(this, list);
+      }
+      return list;
     },
     configurable: true,
   });
@@ -19716,7 +19918,12 @@
     for (let i = 0; i < nodes.length; i++) {
       const n = nodes[i];
       if (n && typeof n === "object" && typeof n.nodeType === "number") {
-        converted.push(n);
+        if (n.nodeType === 11) {
+          const fkids = Array.from(n.childNodes || n._children || []);
+          for (let j = 0; j < fkids.length; j++) converted.push(fkids[j]);
+        } else {
+          converted.push(n);
+        }
       } else if (typeof document !== "undefined" && document.createTextNode) {
         converted.push(document.createTextNode(String(n)));
       } else {
@@ -19743,11 +19950,6 @@
         anc = anc.parentNode;
       }
     }
-    const frag = new DocumentFragment();
-    frag.ownerDocument = parent.nodeType === 9 ? parent : parent.ownerDocument;
-    for (let i = 0; i < converted.length; i++) {
-      frag.appendChild(converted[i]);
-    }
     const remaining = Array.from(parent.childNodes || []);
     const run = function () {
       let guard = 0;
@@ -19756,8 +19958,8 @@
         parent.removeChild(fc);
         if (parent.firstChild === fc) break;
       }
-      while (frag.firstChild) {
-        parent.appendChild(frag.firstChild);
+      for (let i = 0; i < converted.length; i++) {
+        parent.appendChild(converted[i]);
       }
     };
     if (typeof suppressChildListMutations === "function") {
@@ -22685,14 +22887,14 @@
         const ns = this.namespaceURI;
         const local = String(this.localName || this.tagName || "").toLowerCase();
         const ok =
-          (ns === "http://www.w3.org/1999/xhtml" && (local === "a" || local === "area" || local === "link")) ||
+          (ns === "http://www.w3.org/1999/xhtml" && (local === "a" || local === "area" || local === "link" || local === "form")) ||
           ((ns === "http://www.w3.org/2000/svg" || ns === "http://www.w3.org/1998/Math/MathML") && local === "a");
         if (!ok) return undefined;
         if (!this._relList) {
           const self = this;
           const supportedRel = local === "link"
             ? new Set(["stylesheet", "icon", "preload", "prefetch", "preconnect", "dns-prefetch", "modulepreload", "canonical", "manifest", "alternate", "pingback"])
-            : new Set(["noopener", "noreferrer", "opener", "nofollow", "external", "help", "license", "next", "prev", "search", "tag"]);
+            : new Set(["noopener", "noreferrer", "opener"]);
           this._relList = new DOMTokenList(
             function () {
               return (self.getAttribute && self.getAttribute("rel")) || "";
@@ -22756,28 +22958,55 @@
         this._attrs = new Map();
         this._attrList = [];
         const isHtml = isHtmlElement(this);
+        const isSvg = this.namespaceURI === "http://www.w3.org/2000/svg";
+        const SVG_ATTR_CASE = isSvg ? {
+          attributename: "attributeName",
+          attributetype: "attributeType",
+          basefrequency: "baseFrequency",
+          clippathunits: "clipPathUnits",
+          gradienttransform: "gradientTransform",
+          gradientunits: "gradientUnits",
+          markerheight: "markerHeight",
+          markerunits: "markerUnits",
+          markerwidth: "markerWidth",
+          maskcontentunits: "maskContentUnits",
+          maskunits: "maskUnits",
+          patterncontentunits: "patternContentUnits",
+          patterntransform: "patternTransform",
+          patternunits: "patternUnits",
+          preserveaspectratio: "preserveAspectRatio",
+          primitiveunits: "primitiveUnits",
+          spreadmethod: "spreadMethod",
+          startoffset: "startOffset",
+          stddeviation: "stdDeviation",
+          textlength: "textLength",
+          viewbox: "viewBox",
+          xchannelselector: "xChannelSelector",
+          ychannelselector: "yChannelSelector",
+        } : null;
         if (typeof this._getRawAttrs === "function") {
           const raw = this._getRawAttrs();
           if (raw && _elIsArray(raw)) {
             for (let i = 0; i < raw.length; i++) {
               const item = raw[i];
               if (item && item.name) {
-                const colon = item.name.indexOf(":");
-                const prefix = colon !== -1 ? item.name.slice(0, colon) : null;
-                const localName = colon !== -1 ? item.name.slice(colon + 1) : item.name;
+                const adjName = (SVG_ATTR_CASE && SVG_ATTR_CASE[item.name]) ? SVG_ATTR_CASE[item.name] : item.name;
+                const colon = adjName.indexOf(":");
+                const prefix = colon !== -1 ? adjName.slice(0, colon) : null;
+                const localName = colon !== -1 ? adjName.slice(colon + 1) : adjName;
                 let ns = null;
                 if (prefix === "xml") ns = "http://www.w3.org/XML/1998/namespace";
-                else if (prefix === "xmlns" || item.name === "xmlns") ns = "http://www.w3.org/2000/xmlns/";
+                else if (prefix === "xmlns" || adjName === "xmlns") ns = "http://www.w3.org/2000/xmlns/";
                 else if (prefix === "xlink") ns = "http://www.w3.org/1999/xlink";
                 const entry = {
-                  name: item.name,
+                  name: adjName,
                   value: item.value || "",
                   namespaceURI: ns,
                   localName: localName,
                   prefix: prefix,
                 };
                 this._attrList.push(entry);
-                const mapKey = isHtml ? item.name.toLowerCase() : item.name;
+                const mapKey = isHtml ? adjName.toLowerCase() : adjName;
                 this._attrs.set(mapKey, entry);
               }
             }
@@ -25496,9 +25725,23 @@
         throw e;
       }
       const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
-      const temp = doc && typeof doc.createElement === "function" ? doc.createElement("div") : null;
+      if (!doc) return;
+      const ctxNode = (pos === "beforebegin" || pos === "afterend") ? this.parentNode : this;
+      const ctxNs = ctxNode && ctxNode.nodeType === 1 ? ctxNode.namespaceURI : "http://www.w3.org/1999/xhtml";
+      let ctxTag = ctxNode && ctxNode.nodeType === 1 ? String(ctxNode.localName || ctxNode.tagName || "div") : "body";
+      if (ctxTag.toLowerCase() === "html") ctxTag = "body";
+      let temp = null;
+      if (ctxNs === "http://www.w3.org/2000/svg" && typeof doc.createElementNS === "function") {
+        temp = doc.createElementNS("http://www.w3.org/2000/svg", ctxTag);
+      } else if (typeof doc.createElement === "function") {
+        temp = doc.createElement(ctxTag.toLowerCase());
+      }
       if (!temp) return;
-      temp.innerHTML = String(text);
+      if (ctxNs === "http://www.w3.org/2000/svg" && typeof global !== "undefined" && typeof global.__capsurf_raw_setInnerHTML === "function") {
+        temp.innerHTML = String(text);
+      } else {
+        temp.innerHTML = String(text);
+      }
       const nodes = [];
       let ch = temp.firstChild;
       while (ch) {
@@ -26101,6 +26344,28 @@
         this.dispatchEvent(new FocusEvent("focusout", { bubbles: true, cancelable: false, composed: true, relatedTarget: nextTarget }));
       };
       markNative(proto.blur, "blur");
+    }
+
+    if (!Object.getOwnPropertyDescriptor(proto, "popover")) {
+      Object.defineProperty(proto, "popover", {
+        get: function () {
+          const attr = typeof this.getAttribute === "function" ? this.getAttribute("popover") : null;
+          if (attr === null) return null;
+          const low = String(attr).toLowerCase();
+          if (low === "" || low === "auto") return "auto";
+          if (low === "manual") return "manual";
+          return "manual";
+        },
+        set: function (v) {
+          if (v === null || v === undefined) {
+            if (typeof this.removeAttribute === "function") this.removeAttribute("popover");
+          } else {
+            if (typeof this.setAttribute === "function") this.setAttribute("popover", String(v));
+          }
+        },
+        configurable: true,
+        enumerable: true,
+      });
     }
 
     if (!proto.showPopover) {
@@ -26973,10 +27238,25 @@
     HTMLSlotElement.prototype.assignedNodes = function (options) {
       const assigned = computeAssignedNodesForSlot(this);
       this._lastAssignedNodes = assigned;
-      if (options && options.flatten && assigned.length === 0) {
-        return Array.from(this.childNodes || this._children || []);
+      const flatten = Boolean(options && options.flatten);
+      if (!flatten) return assigned;
+      const base = assigned.length > 0 ? assigned : Array.from(this.childNodes || this._children || []);
+      const out = [];
+      for (let i = 0; i < base.length; i++) {
+        const n = base[i];
+        if (n && n.nodeType === 1 && String(n.localName || n.tagName || "").toLowerCase() === "slot") {
+          const rn = typeof n.getRootNode === "function" ? n.getRootNode() : null;
+          if (rn && rn.nodeType === 11 && rn.host) {
+            const sub = typeof n.assignedNodes === "function" ? n.assignedNodes({ flatten: true }) : [];
+            for (let j = 0; j < sub.length; j++) out.push(sub[j]);
+          } else {
+            out.push(n);
+          }
+        } else {
+          out.push(n);
+        }
       }
-      return assigned;
+      return out;
     };
     HTMLSlotElement.prototype.assignedElements = function (options) {
       const nodes = this.assignedNodes(options);
@@ -29663,6 +29943,7 @@
         "allow-downloads", "allow-forms", "allow-modals", "allow-orientation-lock",
         "allow-pointer-lock", "allow-popups", "allow-popups-to-escape-sandbox",
         "allow-presentation", "allow-same-origin", "allow-scripts",
+        "allow-storage-access-by-user-activation",
         "allow-top-navigation", "allow-top-navigation-by-user-activation",
         "allow-top-navigation-to-custom-protocols",
       ])
@@ -29758,6 +30039,41 @@
 
     markNative(HTMLIFrameElement, "HTMLIFrameElement");
     global.HTMLIFrameElement = HTMLIFrameElement;
+
+    function HTMLEmbedElement() {}
+    HTMLEmbedElement.prototype = Object.create(HTMLElementProto);
+    HTMLEmbedElement.prototype.constructor = HTMLEmbedElement;
+    Object.defineProperty(HTMLEmbedElement.prototype, Symbol.toStringTag, {
+      value: "HTMLEmbedElement",
+      configurable: true,
+    });
+    Object.defineProperty(HTMLEmbedElement.prototype, "src", {
+      get: function () {
+        const raw = nativeGetAttribute.call(this, "src");
+        if (raw == null) return "";
+        try {
+          const base = (typeof document !== "undefined" && document.baseURI) ? document.baseURI : (global.location ? global.location.href : "http://localhost/");
+          return new URL(raw, base).href;
+        } catch (e) {
+          return raw;
+        }
+      },
+      set: function (v) { nativeSetAttribute.call(this, "src", String(v)); },
+      configurable: true,
+      enumerable: true,
+    });
+    ["type", "width", "height", "align", "name"].forEach(function (attr) {
+      Object.defineProperty(HTMLEmbedElement.prototype, attr, {
+        get: function () { const v = nativeGetAttribute.call(this, attr); return v == null ? "" : String(v); },
+        set: function (v) { nativeSetAttribute.call(this, attr, String(v)); },
+        configurable: true,
+        enumerable: true,
+      });
+    });
+    markNative(HTMLEmbedElement, "HTMLEmbedElement");
+    global.HTMLEmbedElement = HTMLEmbedElement;
+    if (typeof globalThis !== "undefined") globalThis.HTMLEmbedElement = HTMLEmbedElement;
+    if (typeof window !== "undefined") window.HTMLEmbedElement = HTMLEmbedElement;
 
     function HTMLFrameElement() {}
     HTMLFrameElement.prototype = Object.create(HTMLElementProto);
@@ -29911,13 +30227,63 @@
       showing: true,
     };
 
-    function TextTrack(trackEl) {
+    function TextTrackCueList(getCuesFn) {
+      this._getCues = getCuesFn;
+      return new Proxy(this, {
+        get: function (t, prop) {
+          if (prop === "length") return getCuesFn().length;
+          if (prop === Symbol.iterator) {
+            return function () {
+              const arr = getCuesFn();
+              let idx = 0;
+              return { next: function () { return idx < arr.length ? { value: arr[idx++], done: false } : { value: undefined, done: true }; } };
+            };
+          }
+          if (typeof prop === "string" && /^\d+$/.test(prop)) {
+            const arr = getCuesFn();
+            const idx = Number(prop);
+            return idx >= 0 && idx < arr.length ? arr[idx] : undefined;
+          }
+          return Reflect.get(t, prop);
+        },
+        has: function (t, prop) {
+          if (prop === "length") return true;
+          if (typeof prop === "string" && /^\d+$/.test(prop)) return Number(prop) < getCuesFn().length;
+          return Reflect.has(t, prop);
+        },
+      });
+    }
+    TextTrackCueList.prototype.getCueById = function (id) {
+      const s = String(id);
+      if (!s) return null;
+      const arr = this._getCues();
+      for (let i = 0; i < arr.length; i++) {
+        if (arr[i] && arr[i].id === s) return arr[i];
+      }
+      return null;
+    };
+    markNative(TextTrackCueList, "TextTrackCueList");
+    global.TextTrackCueList = TextTrackCueList;
+    if (typeof globalThis !== "undefined") globalThis.TextTrackCueList = TextTrackCueList;
+    if (typeof window !== "undefined") window.TextTrackCueList = TextTrackCueList;
+
+    function TextTrack(trackEl, manualOpts) {
       this._trackEl = trackEl || null;
-      this._mode = (trackEl && typeof trackEl.hasAttribute === "function" && trackEl.hasAttribute("default"))
-        ? "showing"
-        : "disabled";
-      this._cues = [];
-      this._activeCues = [];
+      this._manualOpts = manualOpts || null;
+      this._mode = manualOpts
+        ? "hidden"
+        : ((trackEl && typeof trackEl.hasAttribute === "function" && trackEl.hasAttribute("default")) ? "showing" : "disabled");
+      this._cuesArr = [];
+      this._activeCuesArr = [];
+      const self = this;
+      function sortedCues() {
+        return self._cuesArr.slice().sort(function (a, b) {
+          if (a.startTime !== b.startTime) return a.startTime - b.startTime;
+          return b.endTime - a.endTime;
+        });
+      }
+      this._cuesList = new TextTrackCueList(sortedCues);
+      this._activeCuesList = new TextTrackCueList(function () { return self._activeCuesArr; });
     }
     Object.defineProperty(TextTrack.prototype, Symbol.toStringTag, {
       value: "TextTrack",
@@ -29925,6 +30291,7 @@
     });
     Object.defineProperty(TextTrack.prototype, "kind", {
       get: function () {
+        if (this._manualOpts) return this._manualOpts.kind;
         const attr = this._trackEl && typeof this._trackEl.getAttribute === "function"
           ? this._trackEl.getAttribute("kind")
           : null;
@@ -29936,6 +30303,7 @@
     });
     Object.defineProperty(TextTrack.prototype, "label", {
       get: function () {
+        if (this._manualOpts) return this._manualOpts.label;
         return (this._trackEl && typeof this._trackEl.getAttribute === "function")
           ? (this._trackEl.getAttribute("label") || "")
           : "";
@@ -29944,6 +30312,7 @@
     });
     Object.defineProperty(TextTrack.prototype, "language", {
       get: function () {
+        if (this._manualOpts) return this._manualOpts.language;
         return (this._trackEl && typeof this._trackEl.getAttribute === "function")
           ? (this._trackEl.getAttribute("srclang") || "")
           : "";
@@ -29952,6 +30321,7 @@
     });
     Object.defineProperty(TextTrack.prototype, "id", {
       get: function () {
+        if (this._manualOpts) return "";
         return (this._trackEl && typeof this._trackEl.getAttribute === "function")
           ? (this._trackEl.getAttribute("id") || "")
           : "";
@@ -29971,13 +30341,29 @@
       configurable: true,
     });
     Object.defineProperty(TextTrack.prototype, "cues", {
-      get: function () { return this._mode === "disabled" ? null : this._cues; },
+      get: function () { return this._mode === "disabled" ? null : this._cuesList; },
       configurable: true,
     });
     Object.defineProperty(TextTrack.prototype, "activeCues", {
-      get: function () { return this._mode === "disabled" ? null : this._activeCues; },
+      get: function () { return this._mode === "disabled" ? null : this._activeCuesList; },
       configurable: true,
     });
+    TextTrack.prototype.addCue = function (cue) {
+      if (!cue || typeof cue !== "object") throw new TypeError("Failed to execute 'addCue' on 'TextTrack': parameter 1 is not of type 'TextTrackCue'.");
+      if (cue.track && cue.track !== this) {
+        if (typeof cue.track.removeCue === "function") cue.track.removeCue(cue);
+      }
+      if (this._cuesArr.indexOf(cue) === -1) {
+        this._cuesArr.push(cue);
+        cue.track = this;
+      }
+    };
+    TextTrack.prototype.removeCue = function (cue) {
+      const idx = this._cuesArr.indexOf(cue);
+      if (idx === -1) throw new DOMException("The cue was not found in the track.", "NotFoundError");
+      this._cuesArr.splice(idx, 1);
+      cue.track = null;
+    };
     markNative(TextTrack, "TextTrack");
     global.TextTrack = TextTrack;
     if (typeof globalThis !== "undefined") globalThis.TextTrack = TextTrack;
@@ -30014,6 +30400,11 @@
             }
           }
           child = child.nextSibling;
+        }
+        if (mediaEl && Array.isArray(mediaEl._manualTextTracks)) {
+          for (let i = 0; i < mediaEl._manualTextTracks.length; i++) {
+            out.push(mediaEl._manualTextTracks[i]);
+          }
         }
         return out;
       }
@@ -30122,6 +30513,19 @@
       },
       configurable: true,
     });
+    HTMLMediaElement.prototype.addTextTrack = function (kind, label, language) {
+      if (arguments.length < 1) throw new TypeError("Failed to execute 'addTextTrack' on 'HTMLMediaElement': 1 argument required.");
+      const k = String(kind);
+      if (!VALID_TRACK_KINDS[k]) throw new TypeError("Failed to execute 'addTextTrack' on 'HTMLMediaElement': The provided value '" + k + "' is not a valid enum value of type TextTrackKind.");
+      const tr = new TextTrack(null, {
+        kind: k,
+        label: label !== undefined ? String(label) : "",
+        language: language !== undefined ? String(language) : "",
+      });
+      if (!this._manualTextTracks) this._manualTextTracks = [];
+      this._manualTextTracks.push(tr);
+      return tr;
+    };
     markNative(HTMLMediaElement, "HTMLMediaElement");
     global.HTMLMediaElement = HTMLMediaElement;
     if (typeof globalThis !== "undefined") globalThis.HTMLMediaElement = HTMLMediaElement;
@@ -30501,7 +30905,11 @@
       const isHtmlEl = function (el) {
         return el && el.nodeType === 1 && el.namespaceURI === HTML_NS;
       };
-      const makeColl = function (arr) {
+      const makeColl = function (arrOrFn) {
+        if (typeof arrOrFn === "function" && typeof makeHtmlCollection === "function") {
+          return makeHtmlCollection(arrOrFn);
+        }
+        const arr = typeof arrOrFn === "function" ? arrOrFn() : arrOrFn;
         return typeof HTMLCollection === "function" ? new HTMLCollection(arr) : arr;
       };
       const childTags = function (el, tagSet) {
@@ -30522,6 +30930,7 @@
         const trSet = new Set(["tr"]);
         for (let i = 0; i < kids.length; i++) {
           const ch = kids[i];
+          if (!isHtmlEl(ch)) continue;
           const tn = String(ch.tagName || "").toLowerCase();
           if (tn === "thead") theadRows.push.apply(theadRows, childTags(ch, trSet));
           else if (tn === "tfoot") tfootRows.push.apply(tfootRows, childTags(ch, trSet));
@@ -30537,23 +30946,59 @@
 
       const tblProto = global.HTMLTableElement.prototype;
       Object.defineProperty(tblProto, "tBodies", {
-        get: function () { return makeColl(childTags(this, new Set(["tbody"]))); },
+        get: function () { const self = this; return makeColl(function () { return childTags(self, new Set(["tbody"])); }); },
         configurable: true,
       });
       Object.defineProperty(tblProto, "tHead", {
         get: function () { return childTags(this, new Set(["thead"]))[0] || null; },
+        set: function (v) {
+          if (v !== null && (!v || typeof v !== "object" || v.nodeType !== 1)) {
+            throw new TypeError("Failed to set the 'tHead' property on 'HTMLTableElement': Failed to convert value to 'HTMLTableSectionElement'.");
+          }
+          if (v !== null && String(v.tagName || "").toLowerCase() !== "thead") {
+            throw new DOMException("Failed to set the 'tHead' property on 'HTMLTableElement': Not a thead element.", "HierarchyRequestError");
+          }
+          if (this.tHead) this.removeChild(this.tHead);
+          if (v) {
+            const kids = this.children || [];
+            let after = null;
+            for (let i = 0; i < kids.length; i++) {
+              const tn = String(kids[i].tagName || "").toLowerCase();
+              if (tn === "caption" || tn === "colgroup") after = kids[i];
+            }
+            if (after) this.insertBefore(v, after.nextSibling);
+            else this.insertBefore(v, this.firstChild);
+          }
+        },
         configurable: true,
       });
       Object.defineProperty(tblProto, "tFoot", {
         get: function () { return childTags(this, new Set(["tfoot"]))[0] || null; },
+        set: function (v) {
+          if (v !== null && (!v || typeof v !== "object" || v.nodeType !== 1)) {
+            throw new TypeError("Failed to set the 'tFoot' property on 'HTMLTableElement': Failed to convert value to 'HTMLTableSectionElement'.");
+          }
+          if (v !== null && String(v.tagName || "").toLowerCase() !== "tfoot") {
+            throw new DOMException("Failed to set the 'tFoot' property on 'HTMLTableElement': Not a tfoot element.", "HierarchyRequestError");
+          }
+          if (this.tFoot) this.removeChild(this.tFoot);
+          if (v) this.appendChild(v);
+        },
         configurable: true,
       });
       Object.defineProperty(tblProto, "caption", {
         get: function () { return childTags(this, new Set(["caption"]))[0] || null; },
+        set: function (v) {
+          if (v !== null && (!v || v.nodeType !== 1 || String(v.tagName || "").toLowerCase() !== "caption")) {
+            throw new TypeError("Failed to set the 'caption' property on 'HTMLTableElement': Failed to convert value to 'HTMLTableCaptionElement'.");
+          }
+          if (this.caption) this.removeChild(this.caption);
+          if (v) this.insertBefore(v, this.firstChild);
+        },
         configurable: true,
       });
       Object.defineProperty(tblProto, "rows", {
-        get: function () { return makeColl(getTableRows(this)); },
+        get: function () { const self = this; return makeColl(function () { return getTableRows(self); }); },
         configurable: true,
       });
       tblProto.insertRow = function (index) {
@@ -30583,12 +31028,34 @@
         const row = rows[idx];
         if (row && row.parentNode) row.parentNode.removeChild(row);
       };
-      tblProto.createTHead = function () { return this.tHead || this.appendChild((this.ownerDocument || document).createElement("thead")); };
+      tblProto.createTHead = function () {
+        if (this.tHead) return this.tHead;
+        const th = (this.ownerDocument || document).createElement("thead");
+        const kids = this.children || [];
+        let after = null;
+        for (let i = 0; i < kids.length; i++) {
+          const tn = String(kids[i].tagName || "").toLowerCase();
+          if (tn === "caption" || tn === "colgroup") after = kids[i];
+        }
+        if (after) return this.insertBefore(th, after.nextSibling);
+        return this.insertBefore(th, this.firstChild);
+      };
       tblProto.deleteTHead = function () { if (this.tHead) this.removeChild(this.tHead); };
       tblProto.createTFoot = function () { return this.tFoot || this.appendChild((this.ownerDocument || document).createElement("tfoot")); };
       tblProto.deleteTFoot = function () { if (this.tFoot) this.removeChild(this.tFoot); };
-      tblProto.createTBody = function () { return this.appendChild((this.ownerDocument || document).createElement("tbody")); };
-      tblProto.createCaption = function () { return this.caption || this.appendChild((this.ownerDocument || document).createElement("caption")); };
+      tblProto.createTBody = function () {
+        const tb = (this.ownerDocument || document).createElement("tbody");
+        const bodies = childTags(this, new Set(["tbody"]));
+        if (bodies.length > 0) {
+          return this.insertBefore(tb, bodies[bodies.length - 1].nextSibling);
+        }
+        return this.appendChild(tb);
+      };
+      tblProto.createCaption = function () {
+        if (this.caption) return this.caption;
+        const cap = (this.ownerDocument || document).createElement("caption");
+        return this.insertBefore(cap, this.firstChild);
+      };
       tblProto.deleteCaption = function () { if (this.caption) this.removeChild(this.caption); };
 
       const secProto = global.HTMLTableSectionElement.prototype;
@@ -31441,6 +31908,12 @@
         if (modalDialogs.get(this) === true) return;
         throw new DOMException("The dialog is already open.", "InvalidStateError");
       }
+      if (!this.isConnected) {
+        throw new DOMException("The element is not connected.", "InvalidStateError");
+      }
+      if (this._popoverOpen) {
+        throw new DOMException("The dialog is already open as a popover.", "InvalidStateError");
+      }
       modalDialogs.set(this, true);
       this._isModalDialog = true;
       this.setAttribute("open", "");
@@ -31455,10 +31928,10 @@
       this.removeAttribute("open");
       modalDialogs.delete(this);
       const dialog = this;
-      setTimeout(function () {
+      Promise.resolve().then(function () {
         const ev = new Event("close", { bubbles: false, cancelable: false });
         dialog.dispatchEvent(ev);
-      }, 0);
+      });
     };
 
     const dialogRequestClose = function (returnValue) {
@@ -32593,8 +33066,10 @@
 
   function findAssociatedForm(element) {
     if (!element) return null;
+    const hasFormAttr = typeof element.hasAttribute === "function" && element.hasAttribute("form");
     const formAttr = (typeof element.getAttribute === "function") ? element.getAttribute("form") : null;
-    if (formAttr) {
+    if (hasFormAttr) {
+      if (!formAttr) return null;
       const doc = element.ownerDocument || (typeof document !== "undefined" ? document : null);
       if (doc && typeof doc.getElementById === "function") {
         const f = doc.getElementById(formAttr);
@@ -32620,7 +33095,7 @@
         }
       }
       walkFind(root);
-      if (found) return found;
+      return found || null;
     }
     let curr = element.parentElement || element.parentNode;
     while (curr) {
@@ -32659,7 +33134,25 @@
         return normalizeInputType(this.getAttribute("type"));
       },
       set: function (v) {
+        const oldMode = inputValueMode(this.type);
+        const newType = normalizeInputType(String(v));
+        const newMode = inputValueMode(newType);
         this.setAttribute("type", String(v));
+        if (oldMode === "value" && (newMode === "default" || newMode === "default/on")) {
+          if (this._valueDirty && this._value !== undefined && this._value !== "") {
+            this.setAttribute("value", this._value);
+          }
+        } else if ((oldMode === "default" || oldMode === "default/on") && newMode === "value") {
+          const attr = this.getAttribute("value");
+          this._valueDirty = false;
+          this._value = attr !== null ? sanitizeForInput(this, attr) : "";
+        } else if (newMode === "filename") {
+          this._valueDirty = false;
+          this._value = "";
+        } else if (oldMode === "filename" && newMode !== "filename") {
+          this._valueDirty = false;
+          this._value = "";
+        }
       },
       configurable: true,
     });
@@ -32755,13 +33248,16 @@
         const isRadio = this.type === "radio";
         if (isRadio && v && this.name) {
           const form = findAssociatedForm(this);
-          const root = form || (this.ownerDocument || (typeof document !== "undefined" ? document : null));
+          const root = (typeof this.getRootNode === "function" ? this.getRootNode() : null)
+            || this.ownerDocument
+            || (typeof document !== "undefined" ? document : null);
           if (root && root.querySelectorAll) {
-            const radios = root.querySelectorAll('input[type="radio"][name="' + this.name + '"]');
+            const radios = root.querySelectorAll('input[type="radio"]');
             for (let i = 0; i < radios.length; i++) {
-              if (radios[i] !== this) {
-                radios[i]._checkedDirty = true;
-                radios[i]._checked = false;
+              const r = radios[i];
+              if (r !== this && r.name === this.name && findAssociatedForm(r) === form) {
+                r._checkedDirty = true;
+                r._checked = false;
               }
             }
           }
@@ -33159,21 +33655,41 @@
       configurable: true,
     });
 
+    function getTextAreaDefaultValue(el) {
+      let out = "";
+      const kids = el.childNodes;
+      if (kids && kids.length) {
+        for (let i = 0; i < kids.length; i++) {
+          const k = kids[i];
+          if (k && (k.nodeType === 3 || k.nodeType === 4)) {
+            out += k.data !== undefined ? String(k.data) : String(k.textContent || "");
+          }
+        }
+        return out;
+      }
+      return el.textContent || "";
+    }
+
     Object.defineProperty(HTMLTextAreaElement.prototype, "value", {
       get: function () {
         if (this._value !== undefined) return this._value;
-        return this.textContent || "";
+        return getTextAreaDefaultValue(this).replace(/\r\n?/g, "\n");
       },
       set: function (v) {
-        this._value = String(v);
-        this._selectionStart = this._value.length;
-        this._selectionEnd = this._value.length;
+        const cur = this._value !== undefined ? this._value : getTextAreaDefaultValue(this).replace(/\r\n?/g, "\n");
+        const next = String(v).replace(/\r\n?/g, "\n");
+        this._value = next;
+        if (next !== cur) {
+          this._selectionStart = next.length;
+          this._selectionEnd = next.length;
+          this._selectionDirection = "none";
+        }
       },
       configurable: true,
     });
 
     Object.defineProperty(HTMLTextAreaElement.prototype, "defaultValue", {
-      get: function () { return this.textContent || ""; },
+      get: function () { return getTextAreaDefaultValue(this); },
       set: function (v) { this.textContent = String(v); },
       configurable: true,
     });
@@ -33456,9 +33972,28 @@
       configurable: true,
     });
 
+    function collectOptionText(node) {
+      let out = "";
+      const kids = node.childNodes;
+      if (!kids) return "";
+      for (let i = 0; i < kids.length; i++) {
+        const k = kids[i];
+        if (!k) continue;
+        if (k.nodeType === 3 || k.nodeType === 4) {
+          out += k.data !== undefined ? String(k.data) : String(k.textContent || "");
+        } else if (k.nodeType === 1) {
+          const tag = String(k.localName || k.tagName || "").toLowerCase();
+          if (tag !== "script") {
+            out += collectOptionText(k);
+          }
+        }
+      }
+      return out;
+    }
+
     Object.defineProperty(HTMLOptionElement.prototype, "text", {
       get: function () {
-        const tc = (this.textContent || "").replace(/[\t\n\f\r ]+/g, " ").trim();
+        const tc = collectOptionText(this).replace(/[\t\n\f\r ]+/g, " ").trim();
         return tc;
       },
       set: function (v) {
@@ -33513,8 +34048,23 @@
               }
             } else {
               const curIdx = owner.selectedIndex;
+              const isListBox = owner.size > 1;
               if (curIdx !== -1 && isSameElement(opts[curIdx], this)) {
-                selState.selectedIndex = -1;
+                if (isListBox) {
+                  selState.selectedIndex = -1;
+                } else {
+                  let fallback = -1;
+                  for (let i = 0; i < opts.length; i++) {
+                    if (!opts[i].disabled) {
+                      fallback = i;
+                      break;
+                    }
+                  }
+                  selState.selectedIndex = fallback;
+                  for (let i = 0; i < opts.length; i++) {
+                    getOptionState(opts[i]).selected = (i === fallback);
+                  }
+                }
               }
             }
           } else {
@@ -33615,9 +34165,13 @@
       window.HTMLOptionElement = HTMLOptionElement;
     }
 
-    global.Option = function (text, value, defaultSelected, selected) {
+    global.Option = function () {
+      const text = arguments.length > 0 ? arguments[0] : undefined;
+      const value = arguments.length > 1 ? arguments[1] : undefined;
+      const defaultSelected = arguments.length > 2 ? arguments[2] : undefined;
+      const selected = arguments.length > 3 ? arguments[3] : undefined;
       const opt = typeof document !== "undefined" && document.createElement ? document.createElement("option") : new HTMLOptionElement();
-      if (text !== undefined) opt.text = text;
+      if (text !== undefined && String(text) !== "") opt.text = text;
       if (value !== undefined) opt.value = value;
       if (defaultSelected !== undefined) opt.defaultSelected = Boolean(defaultSelected);
       if (selected !== undefined) opt.selected = Boolean(selected);
@@ -33676,6 +34230,24 @@
       value: "HTMLSelectElement",
       configurable: true,
     });
+
+    HTMLSelectElement.prototype.remove = function (index) {
+      if (arguments.length === 0) {
+        if (ElementProto && typeof ElementProto.remove === "function") {
+          return ElementProto.remove.call(this);
+        }
+        if (this.parentNode) this.parentNode.removeChild(this);
+        return;
+      }
+      const idx = Number(index) | 0;
+      const opts = this.options;
+      if (idx >= 0 && idx < opts.length) {
+        const o = opts[idx];
+        if (o && o.parentNode && typeof o.parentNode.removeChild === "function") {
+          o.parentNode.removeChild(o);
+        }
+      }
+    };
 
     Object.defineProperty(HTMLSelectElement.prototype, "type", {
       get: function () { return this.multiple ? "select-multiple" : "select-one"; },
@@ -34631,6 +35203,13 @@
 
   function submitForm(form, submitter) {
     if (!form) return;
+    const subMethod = (submitter && typeof submitter.getAttribute === "function")
+      ? String(submitter.getAttribute("formmethod") || "").toLowerCase()
+      : "";
+    const formMethodAttr = (typeof form.getAttribute === "function")
+      ? String(form.getAttribute("method") || "").toLowerCase()
+      : "";
+    const effectiveMethod = subMethod || formMethodAttr;
     let ev;
     try {
       ev = new SubmitEvent("submit", {
@@ -34648,6 +35227,21 @@
     }
     form.dispatchEvent(ev);
     if (ev.defaultPrevented) {
+      return;
+    }
+    if (effectiveMethod === "dialog") {
+      let dlg = form.parentNode;
+      while (dlg) {
+        if (dlg.nodeType === 1 && String(dlg.tagName || "").toLowerCase() === "dialog") break;
+        dlg = dlg.parentNode;
+      }
+      if (dlg && dlg.open && typeof dlg.close === "function") {
+        if (submitter && typeof submitter.hasAttribute === "function" && submitter.hasAttribute("value")) {
+          dlg.close(submitter.getAttribute("value"));
+        } else {
+          dlg.close();
+        }
+      }
       return;
     }
     performFormSubmission(form, submitter);
@@ -34783,6 +35377,12 @@
     Object.defineProperty(HTMLFormElement.prototype, "noValidate", {
       get: function () { return this.hasAttribute("novalidate"); },
       set: function (v) { if (v) this.setAttribute("novalidate", ""); else this.removeAttribute("novalidate"); },
+      configurable: true,
+    });
+
+    Object.defineProperty(HTMLFormElement.prototype, "rel", {
+      get: function () { return this.getAttribute("rel") || ""; },
+      set: function (v) { this.setAttribute("rel", String(v)); },
       configurable: true,
     });
 
@@ -37035,7 +37635,7 @@
       dataMap: new Map(),
       itemList: createDataTransferItemList(this),
       dropEffect: "none",
-      effectAllowed: "uninitialized",
+      effectAllowed: "none",
     });
   }
 
@@ -37249,8 +37849,11 @@
         throw new DOMEx("Failed to construct 'FormData': The form is already constructing an entry list.", "InvalidStateError");
       }
       let submitterEl = null;
-      if (submitter && submitter.name && !isFormControlActuallyDisabled(submitter)) {
-        submitterEl = submitter;
+      if (submitter && !isFormControlActuallyDisabled(submitter)) {
+        const sType = (submitter.type || "").toLowerCase();
+        if (submitter.name || sType === "image") {
+          submitterEl = submitter;
+        }
       }
       let submitterAppended = false;
       const controls = (typeof collectFormControls === "function") ? collectFormControls(form) : (form.elements || []);
@@ -37258,12 +37861,19 @@
         const c = controls[i];
         const tag = (c.tagName || "").toLowerCase();
         if (tag === "fieldset") continue;
-        if (!c.name || isFormControlActuallyDisabled(c)) continue;
         const type = (c.type || "").toLowerCase();
+        if (isFormControlActuallyDisabled(c)) continue;
+        if (!c.name && !(type === "image" && c === submitterEl)) continue;
 
         if (tag === "button" || type === "submit" || type === "reset" || type === "button" || type === "image") {
           if (c === submitterEl) {
-            this.append(c.name, c.value !== undefined ? c.value : "");
+            if (type === "image") {
+              const prefix = c.name ? (c.name + ".") : "";
+              this.append(prefix + "x", "0");
+              this.append(prefix + "y", "0");
+            } else {
+              this.append(c.name, c.value !== undefined ? c.value : "");
+            }
             submitterAppended = true;
           }
           continue;
@@ -37292,21 +37902,37 @@
         }
       }
       if (!submitterAppended && submitterEl) {
-        this.append(submitterEl.name, submitterEl.value !== undefined ? submitterEl.value : "");
+        const sType = (submitterEl.type || "").toLowerCase();
+        if (sType === "image") {
+          const prefix = submitterEl.name ? (submitterEl.name + ".") : "";
+          this.append(prefix + "x", "0");
+          this.append(prefix + "y", "0");
+        } else {
+          this.append(submitterEl.name, submitterEl.value !== undefined ? submitterEl.value : "");
+        }
       }
 
       // Dispatch "formdata" event per WHATWG HTML spec
       form._constructingEntryList = true;
       try {
+        const eventFd = new FormData();
+        const eventEntries = getFdEntries(eventFd);
+        for (let i = 0; i < entries.length; i++) {
+          eventEntries.push([entries[i][0], entries[i][1]]);
+        }
         let evt;
         if (typeof FormDataEvent === "function") {
-          evt = new FormDataEvent("formdata", { bubbles: true, cancelable: false, formData: this });
+          evt = new FormDataEvent("formdata", { bubbles: true, cancelable: false, formData: eventFd });
         } else {
           evt = new Event("formdata", { bubbles: true, cancelable: false });
-          Object.defineProperty(evt, "formData", { value: this, configurable: true });
+          Object.defineProperty(evt, "formData", { value: eventFd, configurable: true });
         }
         if (typeof form.dispatchEvent === "function") {
           form.dispatchEvent(evt);
+        }
+        entries.length = 0;
+        for (let i = 0; i < eventEntries.length; i++) {
+          entries.push([eventEntries[i][0], eventEntries[i][1]]);
         }
       } finally {
         form._constructingEntryList = false;
@@ -38686,6 +39312,14 @@
     return r;
   };
 
+  Selection.prototype.deleteFromDocument = function () {
+    const r = selLive(this);
+    if (r) {
+      r.deleteContents();
+      selScheduleChange(this);
+    }
+  };
+
   Selection.prototype.addRange = function (range) {
     if (!range) return;
     const st = _selState.get(this);
@@ -39413,6 +40047,10 @@
   });
   Object.defineProperty(ParsedText.prototype, "parentElement", {
     get: function () { return (this.parentNode && this.parentNode.nodeType === ELEMENT_NODE) ? this.parentNode : null; },
+    configurable: true,
+  });
+  Object.defineProperty(ParsedText.prototype, "tagName", {
+    get: function () { return undefined; },
     configurable: true,
   });
 
@@ -40169,6 +40807,13 @@
     registerParsedNode(this);
   }
 
+  Object.defineProperty(ParsedDocument.prototype, Symbol.toStringTag, {
+    get: function () {
+      return this.contentType === "text/html" ? "HTMLDocument" : "XMLDocument";
+    },
+    configurable: true,
+  });
+
   Object.defineProperty(ParsedDocument.prototype, "isConnected", {
     get: function () {
       return true;
@@ -40589,16 +41234,27 @@
           }
         } else if (match[2] !== undefined) {
           if (stack.length > 1) {
-            const tNode = doc.createTextNode(match[2]);
-            stack[stack.length - 1].appendChild(tNode);
+            const cdataNode = typeof doc.createCDATASection === "function"
+              ? doc.createCDATASection(match[2])
+              : { nodeType: 4, nodeName: "#cdata-section", data: match[2], textContent: match[2], ownerDocument: doc };
+            stack[stack.length - 1].appendChild(cdataNode);
           }
         } else if (match[3] !== undefined) {
-          const cNode = doc.createComment("?" + match[3]);
-          if (stack.length === 1) {
-            cNode.parentNode = doc;
-            doc._children.push(cNode);
-          } else {
-            stack[stack.length - 1].appendChild(cNode);
+          const rawPi = match[3];
+          const spIdx = rawPi.search(/\s/);
+          const piTarget = spIdx === -1 ? rawPi : rawPi.slice(0, spIdx);
+          const piData = spIdx === -1 ? "" : rawPi.slice(spIdx + 1).replace(/^\s+/, "");
+          if (piTarget.toLowerCase() !== "xml") {
+            const piNode = typeof ProcessingInstruction === "function"
+              ? new ProcessingInstruction(piTarget, piData)
+              : { nodeType: 7, nodeName: piTarget, target: piTarget, data: piData, textContent: piData, ownerDocument: doc };
+            piNode.ownerDocument = doc;
+            if (stack.length === 1) {
+              piNode.parentNode = doc;
+              doc._children.push(piNode);
+            } else {
+              stack[stack.length - 1].appendChild(piNode);
+            }
           }
         } else if (match[4] !== undefined) {
           const endTag = match[4].toLowerCase();
@@ -40641,6 +41297,14 @@
       }
     }
 
+    if (!isHtml && !doc.documentElement) {
+      const errEl = doc.createElement("parsererror");
+      errEl.textContent = "Document is empty";
+      errEl.parentNode = doc;
+      doc._children.push(errEl);
+      doc.documentElement = errEl;
+    }
+
     return doc;
   }
 
@@ -40680,7 +41344,7 @@
     return out + ">";
   }
 
-  function serializeXmlNode(node) {
+  function serializeXmlNode(node, parentNs) {
     if (!node || typeof node !== "object") {
       throw new TypeError("Failed to execute 'serializeToString' on 'XMLSerializer': parameter 1 is not of type 'Node'.");
     }
@@ -40695,7 +41359,7 @@
           if (hasOverrideDt) continue;
           sawDoctype = true;
         }
-        out += serializeXmlNode(cs[i]);
+        out += serializeXmlNode(cs[i], null);
       }
       if (hasOverrideDt) {
         if (node._reopenDoctype) {
@@ -40705,14 +41369,14 @@
         out = serializeXmlDoctype(node.doctype) + out;
       }
       if (!out && node.documentElement) {
-        out = serializeXmlNode(node.documentElement);
+        out = serializeXmlNode(node.documentElement, null);
       }
       return out;
     }
     if (nt === 11) {
       const cs = node.childNodes || [];
       let out = "";
-      for (let i = 0; i < cs.length; i++) out += serializeXmlNode(cs[i]);
+      for (let i = 0; i < cs.length; i++) out += serializeXmlNode(cs[i], null);
       return out;
     }
     if (nt === 10) {
@@ -40728,15 +41392,33 @@
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");
     }
+    if (nt === 4) return "<![CDATA[" + String(node.data !== undefined ? node.data : (node.textContent || "")) + "]]>";
     if (nt === 8) return "<!--" + String(node.data !== undefined ? node.data : (node.textContent || "")) + "-->";
     if (nt === 7) return "<?" + String(node.target || "") + " " + String(node.data || "") + "?>";
-    if (nt === 1 && (node instanceof ParsedElement)) {
-      const tag = node.localName || node.tagName || "div";
+    if (nt === 1) {
+      const ns = node.namespaceURI !== undefined
+        ? (node.namespaceURI || null)
+        : ((node.ownerDocument && (!node.ownerDocument.contentType || node.ownerDocument.contentType === "text/html")) ? "http://www.w3.org/1999/xhtml" : null);
+      const rawLocal = String(node.localName || node.tagName || "div");
+      const local = (ns === "http://www.w3.org/1999/xhtml") ? rawLocal.toLowerCase() : rawLocal;
+      const prefix = node.prefix ? String(node.prefix) : null;
+      const tag = prefix ? (prefix + ":" + local) : local;
       let attrsStr = "";
+      let hasXmlns = false;
+      const xmlnsAttrName = prefix ? ("xmlns:" + prefix) : "xmlns";
       if (node._attrs instanceof Map) {
         node._attrs.forEach((val, key) => {
           const origName = (node._attrCases && node._attrCases.get(key)) || key;
-          const v = String(val || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+          if (origName === xmlnsAttrName || origName === "xmlns") hasXmlns = true;
+          const rawVal = (val && typeof val === "object" && "value" in val) ? val.value : val;
+          const v = String(rawVal == null ? "" : rawVal)
+            .replace(/&/g, "&amp;")
+            .replace(/"/g, "&quot;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\t/g, "&#9;")
+            .replace(/\n/g, "&#10;")
+            .replace(/\r/g, "&#13;");
           attrsStr += " " + origName + '="' + v + '"';
         });
       } else if (node.attributes) {
@@ -40744,13 +41426,35 @@
         for (let i = 0; i < attrs.length; i++) {
           const a = attrs[i];
           if (!a) continue;
-          const v = String(a.value || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+          if (a.name === xmlnsAttrName || a.name === "xmlns") hasXmlns = true;
+          const v = String(a.value || "")
+            .replace(/&/g, "&amp;")
+            .replace(/"/g, "&quot;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\t/g, "&#9;")
+            .replace(/\n/g, "&#10;")
+            .replace(/\r/g, "&#13;");
           attrsStr += " " + a.name + '="' + v + '"';
         }
       }
-      const cs = node.childNodes || [];
+      if (ns && ns !== parentNs && !hasXmlns) {
+        const escNs = String(ns).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        attrsStr = " " + xmlnsAttrName + '="' + escNs + '"' + attrsStr;
+      } else if (!ns && parentNs && !hasXmlns && !prefix) {
+        attrsStr = ' xmlns=""' + attrsStr;
+      }
+      const cs = (tag === "template" && node.content && (!node.childNodes || node.childNodes.length === 0))
+        ? (node.content.childNodes || [])
+        : (node.childNodes || []);
       let inner = "";
-      for (let i = 0; i < cs.length; i++) inner += serializeXmlNode(cs[i]);
+      for (let i = 0; i < cs.length; i++) inner += serializeXmlNode(cs[i], ns);
+      const isXmlNode = !ns || ns !== "http://www.w3.org/1999/xhtml" || (node.ownerDocument && node.ownerDocument.contentType && node.ownerDocument.contentType !== "text/html");
+      if (inner.length === 0 && (isXmlNode || HTML_VOID_TAGS.has(tag))) {
+        return inner.length === 0 && ns === "http://www.w3.org/1999/xhtml" && HTML_VOID_TAGS.has(tag)
+          ? "<" + tag + attrsStr + " />"
+          : "<" + tag + attrsStr + "/>";
+      }
       return "<" + tag + attrsStr + ">" + inner + "</" + tag + ">";
     }
     if (typeof node.outerHTML === "string") return node.outerHTML;
@@ -42665,9 +43369,14 @@
       }
       this.width = width;
       this.height = height;
-      this.data = data instanceof Uint8ClampedArray ? data : new Uint8ClampedArray(this.width * this.height * 4);
+      try {
+        this.data = data instanceof Uint8ClampedArray ? data : new Uint8ClampedArray(this.width * this.height * 4);
+      } catch (e) {
+        throw new DOMException("Failed to construct 'ImageData': The requested image size exceeds the supported range.", "IndexSizeError");
+      }
     }
     this.colorSpace = "srgb";
+    this.pixelFormat = "rgba-unorm8";
   }
   markNative(ImageData, "ImageData");
 
@@ -48049,8 +48758,413 @@
       } catch (e) {}
     }
 
+    // Web Locks API (Lock, LockManager, navigator.locks)
+    function Lock(name, mode) {
+      this._name = name;
+      this._mode = mode;
+    }
+    Object.defineProperty(Lock.prototype, "name", { get: function () { return this._name; }, configurable: true, enumerable: true });
+    Object.defineProperty(Lock.prototype, "mode", { get: function () { return this._mode; }, configurable: true, enumerable: true });
+    Object.defineProperty(Lock.prototype, Symbol.toStringTag, { value: "Lock", configurable: true });
+    markNative(Lock, "Lock");
+
+    function LockManager() {}
+    Object.defineProperty(LockManager.prototype, Symbol.toStringTag, { value: "LockManager", configurable: true });
+    const _lockQueues = new Map();
+    const _lockHeld = [];
+
+    function _canGrantLock(name, mode) {
+      for (let i = 0; i < _lockHeld.length; i++) {
+        if (_lockHeld[i].name === name) {
+          if (mode === "exclusive" || _lockHeld[i].mode === "exclusive") return false;
+        }
+      }
+      return true;
+    }
+
+    function _processLockQueue(name) {
+      const q = _lockQueues.get(name);
+      if (!q || q.length === 0) return;
+      while (q.length > 0) {
+        const req = q[0];
+        if (req.aborted) {
+          q.shift();
+          continue;
+        }
+        if (!_canGrantLock(name, req.mode)) break;
+        q.shift();
+        const lockObj = new Lock(name, req.mode);
+        const heldEntry = {
+          name: name,
+          mode: req.mode,
+          clientId: "default",
+          lock: lockObj,
+          broken: false,
+          reject: function (err) {
+            if (heldEntry.broken) return;
+            heldEntry.broken = true;
+            req.reject(err);
+          },
+        };
+        _lockHeld.push(heldEntry);
+        if (req.cleanupAbort) req.cleanupAbort();
+        Promise.resolve().then(function () {
+          if (heldEntry.broken) return;
+          let p;
+          try {
+            p = Promise.resolve(req.callback(lockObj));
+          } catch (err) {
+            p = Promise.reject(err);
+          }
+          p.then(function (val) {
+            const idx = _lockHeld.indexOf(heldEntry);
+            if (idx !== -1) _lockHeld.splice(idx, 1);
+            _processLockQueue(name);
+            if (!heldEntry.broken) req.resolve(val);
+          }, function (err) {
+            const idx = _lockHeld.indexOf(heldEntry);
+            if (idx !== -1) _lockHeld.splice(idx, 1);
+            _processLockQueue(name);
+            if (!heldEntry.broken) req.reject(err);
+          });
+        });
+      }
+      if (q.length === 0) _lockQueues.delete(name);
+    }
+
+    LockManager.prototype.request = markNative(function request(name, optionsOrCallback, maybeCallback) {
+      let options = {};
+      let callback = optionsOrCallback;
+      if (typeof optionsOrCallback === "function") {
+        callback = optionsOrCallback;
+      } else {
+        options = optionsOrCallback || {};
+        callback = maybeCallback;
+      }
+      if (typeof callback !== "function") {
+        return Promise.reject(new TypeError("Failed to execute 'request' on 'LockManager': parameter 2 is not of type 'Function'."));
+      }
+      const lockName = String(name);
+      if (lockName.startsWith("-")) {
+        return Promise.reject(new DOMException("Names cannot start with '-'.", "NotSupportedError"));
+      }
+      const mode = options.mode !== undefined ? String(options.mode) : "exclusive";
+      if (mode !== "exclusive" && mode !== "shared") {
+        return Promise.reject(new TypeError("Invalid lock mode: " + mode));
+      }
+      const ifAvailable = Boolean(options.ifAvailable);
+      const steal = Boolean(options.steal);
+      const signal = options.signal;
+      if (steal && ifAvailable) {
+        return Promise.reject(new DOMException("The 'steal' and 'ifAvailable' options cannot be used together.", "NotSupportedError"));
+      }
+      if (steal && mode !== "exclusive") {
+        return Promise.reject(new DOMException("The 'steal' option may only be used with 'exclusive' locks.", "NotSupportedError"));
+      }
+      if (signal && steal) {
+        return Promise.reject(new DOMException("The 'signal' and 'steal' options cannot be used together.", "NotSupportedError"));
+      }
+      if (signal && ifAvailable) {
+        return Promise.reject(new DOMException("The 'signal' and 'ifAvailable' options cannot be used together.", "NotSupportedError"));
+      }
+      if (signal && signal.aborted) {
+        return Promise.reject(signal.reason !== undefined ? signal.reason : new DOMException("The request was aborted.", "AbortError"));
+      }
+      if (ifAvailable && (!_canGrantLock(lockName, mode) || (_lockQueues.has(lockName) && _lockQueues.get(lockName).length > 0))) {
+        return new Promise(function (resolve, reject) {
+          setTimeout(function () {
+            try {
+              resolve(callback(null));
+            } catch (e) {
+              reject(e);
+            }
+          }, 0);
+        });
+      }
+      if (steal) {
+        for (let i = _lockHeld.length - 1; i >= 0; i--) {
+          if (_lockHeld[i].name === lockName) {
+            const broken = _lockHeld[i];
+            _lockHeld.splice(i, 1);
+            if (typeof broken.reject === "function") {
+              broken.reject(new DOMException("Lock broken by another request with the 'steal' option.", "AbortError"));
+            }
+          }
+        }
+      }
+      return new Promise(function (resolve, reject) {
+        const req = { name: lockName, mode: mode, callback: callback, resolve: resolve, reject: reject, aborted: false, cleanupAbort: null };
+        if (signal && typeof signal.addEventListener === "function") {
+          const onAbort = function () {
+            req.aborted = true;
+            const q = _lockQueues.get(lockName);
+            if (q) {
+              const idx = q.indexOf(req);
+              if (idx !== -1) q.splice(idx, 1);
+              if (q.length === 0) _lockQueues.delete(lockName);
+            }
+            reject(signal.reason !== undefined ? signal.reason : new DOMException("The request was aborted.", "AbortError"));
+          };
+          signal.addEventListener("abort", onAbort, { once: true });
+          req.cleanupAbort = function () {
+            if (typeof signal.removeEventListener === "function") signal.removeEventListener("abort", onAbort);
+          };
+        }
+        if (!_lockQueues.has(lockName)) _lockQueues.set(lockName, []);
+        const q = _lockQueues.get(lockName);
+        if (steal) q.unshift(req);
+        else q.push(req);
+        setTimeout(function () { _processLockQueue(lockName); }, 0);
+      });
+    }, "request");
+
+    LockManager.prototype.query = markNative(function query() {
+      const held = _lockHeld.map(function (h) { return { name: h.name, mode: h.mode, clientId: h.clientId }; });
+      const pending = [];
+      _lockQueues.forEach(function (q) {
+        for (let i = 0; i < q.length; i++) {
+          if (!q[i].aborted) pending.push({ name: q[i].name, mode: q[i].mode, clientId: "default" });
+        }
+      });
+      return Promise.resolve({ held: held, pending: pending });
+    }, "query");
+    markNative(LockManager, "LockManager");
+
+    const lockManagerObj = Object.create(LockManager.prototype);
+    global.Lock = Lock;
+    global.LockManager = LockManager;
+    if (typeof globalThis !== "undefined") {
+      globalThis.Lock = Lock;
+      globalThis.LockManager = LockManager;
+    }
+    if (typeof window !== "undefined") {
+      window.Lock = Lock;
+      window.LockManager = LockManager;
+    }
+
+    // VTTCue, TextTrackCue, VTTRegion
+    function TextTrackCue() {
+      if (typeof EventTarget === "function") EventTarget.call(this);
+    }
+    if (typeof EventTarget === "function") TextTrackCue.prototype = Object.create(EventTarget.prototype);
+    TextTrackCue.prototype.constructor = TextTrackCue;
+    markNative(TextTrackCue, "TextTrackCue");
+
+    function VTTCue(startTime, endTime, text) {
+      if (arguments.length < 3) throw new TypeError("Failed to construct 'VTTCue': 3 arguments required.");
+      TextTrackCue.call(this);
+      this.startTime = Number(startTime);
+      this.endTime = Number(endTime);
+      this.text = String(text);
+      this.id = "";
+      this.pauseOnExit = false;
+      this.region = null;
+      this._vertical = "";
+      this.snapToLines = true;
+      this.line = "auto";
+      this._lineAlign = "start";
+      this.position = "auto";
+      this._positionAlign = "auto";
+      this.size = 100;
+      this._align = "center";
+    }
+    VTTCue.prototype = Object.create(TextTrackCue.prototype);
+    VTTCue.prototype.constructor = VTTCue;
+    [
+      ["vertical", "_vertical", ["", "rl", "lr"]],
+      ["align", "_align", ["start", "center", "end", "left", "right"]],
+      ["lineAlign", "_lineAlign", ["start", "center", "end"]],
+      ["positionAlign", "_positionAlign", ["line-left", "center", "line-right", "auto"]],
+    ].forEach(function (spec) {
+      const prop = spec[0], slot = spec[1], valid = new Set(spec[2]);
+      Object.defineProperty(VTTCue.prototype, prop, {
+        get: function () { return this[slot]; },
+        set: function (v) { const s = String(v); if (valid.has(s)) this[slot] = s; },
+        configurable: true,
+        enumerable: true,
+      });
+    });
+    VTTCue.prototype.getCueAsHTML = function () {
+      const doc = global.document || (typeof document !== "undefined" ? document : null);
+      const frag = doc && doc.createDocumentFragment ? doc.createDocumentFragment() : null;
+      if (frag && doc.createTextNode) frag.appendChild(doc.createTextNode(this.text || ""));
+      return frag;
+    };
+    markNative(VTTCue, "VTTCue");
+
+    function VTTRegion() {
+      this.id = "";
+      this._width = 100;
+      this._lines = 3;
+      this._regionAnchorX = 0;
+      this._regionAnchorY = 100;
+      this._viewportAnchorX = 0;
+      this._viewportAnchorY = 100;
+      this._scroll = "";
+    }
+    ["width", "regionAnchorX", "regionAnchorY", "viewportAnchorX", "viewportAnchorY"].forEach(function (prop) {
+      const slot = "_" + prop;
+      Object.defineProperty(VTTRegion.prototype, prop, {
+        get: function () { return this[slot]; },
+        set: function (v) {
+          const n = Number(v);
+          if (!Number.isFinite(n)) throw new TypeError("The provided double value is non-finite.");
+          if (n < 0 || n > 100) throw new DOMException("Value must be between 0 and 100.", "IndexSizeError");
+          this[slot] = n;
+        },
+        configurable: true,
+        enumerable: true,
+      });
+    });
+    Object.defineProperty(VTTRegion.prototype, "lines", {
+      get: function () { return this._lines; },
+      set: function (v) { this._lines = Number(v) >>> 0; },
+      configurable: true,
+      enumerable: true,
+    });
+    Object.defineProperty(VTTRegion.prototype, "scroll", {
+      get: function () { return this._scroll; },
+      set: function (v) { const s = String(v); if (s === "" || s === "up") this._scroll = s; },
+      configurable: true,
+      enumerable: true,
+    });
+    markNative(VTTRegion, "VTTRegion");
+
+    global.TextTrackCue = TextTrackCue;
+    global.VTTCue = VTTCue;
+    global.VTTRegion = VTTRegion;
+    if (typeof globalThis !== "undefined") {
+      globalThis.TextTrackCue = TextTrackCue;
+      globalThis.VTTCue = VTTCue;
+      globalThis.VTTRegion = VTTRegion;
+    }
+    if (typeof window !== "undefined") {
+      window.TextTrackCue = TextTrackCue;
+      window.VTTCue = VTTCue;
+      window.VTTRegion = VTTRegion;
+    }
+
+    // CookieStore API
+    function CookieChangeEvent(type, init) {
+      Event.call(this, type, init);
+      const opts = init || {};
+      this.changed = Array.isArray(opts.changed) ? opts.changed.slice() : [];
+      this.deleted = Array.isArray(opts.deleted) ? opts.deleted.slice() : [];
+    }
+    CookieChangeEvent.prototype = Object.create(Event.prototype);
+    CookieChangeEvent.prototype.constructor = CookieChangeEvent;
+    markNative(CookieChangeEvent, "CookieChangeEvent");
+
+    function CookieStore() {
+      if (typeof EventTarget === "function") EventTarget.call(this);
+      this._store = new Map();
+      this._onchange = null;
+    }
+    if (typeof EventTarget === "function") CookieStore.prototype = Object.create(EventTarget.prototype);
+    CookieStore.prototype.constructor = CookieStore;
+    Object.defineProperty(CookieStore.prototype, "onchange", {
+      get: function () { return this._onchange || null; },
+      set: function (v) {
+        if (this._onchangeWrapper) {
+          this.removeEventListener("change", this._onchangeWrapper);
+          this._onchangeWrapper = null;
+        }
+        this._onchange = typeof v === "function" ? v : null;
+        if (this._onchange) {
+          const fn = this._onchange;
+          this._onchangeWrapper = function (e) { fn.call(this, e); };
+          this.addEventListener("change", this._onchangeWrapper);
+        }
+      },
+      configurable: true,
+      enumerable: true,
+    });
+    CookieStore.prototype.get = markNative(function get(nameOrOptions) {
+      if (arguments.length === 0 || nameOrOptions === undefined) {
+        return Promise.reject(new TypeError("Failed to execute 'get' on 'CookieStore': 1 argument required."));
+      }
+      const name = typeof nameOrOptions === "string" ? nameOrOptions : (nameOrOptions && nameOrOptions.name);
+      if (!name) return Promise.resolve(null);
+      const item = this._store.get(String(name));
+      if (!item || (item.expires !== null && item.expires <= Date.now())) {
+        if (item) this._store.delete(String(name));
+        return Promise.resolve(null);
+      }
+      return Promise.resolve(Object.assign({}, item));
+    }, "get");
+    CookieStore.prototype.getAll = markNative(function getAll(nameOrOptions) {
+      const name = typeof nameOrOptions === "string" ? nameOrOptions : (nameOrOptions && nameOrOptions.name);
+      const out = [];
+      const now = Date.now();
+      this._store.forEach(function (v, k) {
+        if (v.expires !== null && v.expires <= now) { this._store.delete(k); return; }
+        if (!name || k === String(name)) out.push(Object.assign({}, v));
+      }, this);
+      return Promise.resolve(out);
+    }, "getAll");
+    CookieStore.prototype.set = markNative(function set(nameOrOptions, value) {
+      if (typeof nameOrOptions === "string" && arguments.length < 2) {
+        return Promise.reject(new TypeError("Failed to execute 'set' on 'CookieStore': 2 arguments required when passing a string name."));
+      }
+      const opts = (typeof nameOrOptions === "object" && nameOrOptions !== null)
+        ? nameOrOptions
+        : { name: String(nameOrOptions), value: String(value !== undefined ? value : "") };
+      const name = String(opts.name || "");
+      const val = String(opts.value !== undefined ? opts.value : "");
+      const item = {
+        name: name,
+        value: val,
+        domain: opts.domain != null ? String(opts.domain) : null,
+        path: opts.path != null ? String(opts.path) : "/",
+        expires: opts.expires != null ? Number(opts.expires) : null,
+        sameSite: opts.sameSite != null ? String(opts.sameSite) : "strict",
+        partitioned: Boolean(opts.partitioned),
+        secure: opts.secure !== undefined ? Boolean(opts.secure) : Boolean(global.isSecureContext),
+      };
+      this._store.set(name, item);
+      if (typeof document !== "undefined") {
+        try { document.cookie = name + "=" + val; } catch (e) {}
+      }
+      const self = this;
+      Promise.resolve().then(function () {
+        try { self.dispatchEvent(new CookieChangeEvent("change", { changed: [Object.assign({}, item)], deleted: [] })); } catch (e) {}
+      });
+      return Promise.resolve();
+    }, "set");
+    CookieStore.prototype.delete = markNative(function (nameOrOptions) {
+      const name = typeof nameOrOptions === "string" ? nameOrOptions : String((nameOrOptions && nameOrOptions.name) || "");
+      const prev = this._store.get(name);
+      this._store.delete(name);
+      const self = this;
+      if (prev) {
+        Promise.resolve().then(function () {
+          try {
+            const delItem = Object.assign({}, prev, { value: undefined });
+            self.dispatchEvent(new CookieChangeEvent("change", { changed: [], deleted: [delItem] }));
+          } catch (e) {}
+        });
+      }
+      return Promise.resolve();
+    }, "delete");
+    markNative(CookieStore, "CookieStore");
+    const cookieStoreObj = new CookieStore();
+    global.CookieStore = CookieStore;
+    global.CookieChangeEvent = CookieChangeEvent;
+    global.cookieStore = cookieStoreObj;
+    if (typeof globalThis !== "undefined") {
+      globalThis.CookieStore = CookieStore;
+      globalThis.CookieChangeEvent = CookieChangeEvent;
+      globalThis.cookieStore = cookieStoreObj;
+    }
+    if (typeof window !== "undefined") {
+      window.CookieStore = CookieStore;
+      window.CookieChangeEvent = CookieChangeEvent;
+      window.cookieStore = cookieStoreObj;
+    }
+
     // 2. Navigator: modern lightweight shield & Client Hints
     const navigatorObj = Object.assign(Object.create(Navigator.prototype), {
+      locks: lockManagerObj,
       userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 CapSurf/1.0.0",
       appVersion: "5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 CapSurf/1.0.0",
       platform: "Linux x86_64",
@@ -63695,17 +64809,24 @@
       } catch (e) {}
       try {
         if (global.document && global.document.body && typeof global.document.body.getAttribute === "function") {
+          if (typeof upgradeElement === "function") {
+            try { upgradeElement(global.document.body); } catch (e) {}
+          }
           const bodyOnloadAttr = global.document.body.getAttribute("onload");
           if (typeof bodyOnloadAttr === "string" && bodyOnloadAttr.length > 0 && typeof global.onload !== "function") {
             try {
               global.onload = new Function("event", bodyOnloadAttr);
+              global.__capsurf_bodyOnloadPending = true;
             } catch (e) {}
+          } else if (typeof bodyOnloadAttr === "string" && bodyOnloadAttr.length > 0 && typeof global.onload === "function") {
+            global.__capsurf_bodyOnloadPending = true;
           }
         }
       } catch (e) {}
       try {
         if (global.dispatchEvent) {
-          const loadEv = new NativeEvent("load", { bubbles: false, cancelable: false });
+          const EvCtor = global.Event || NativeEvent;
+          const loadEv = new EvCtor("load", { bubbles: false, cancelable: false });
           if (global.document) loadEv._overrideTarget = global.document;
           global.dispatchEvent(loadEv);
         }
@@ -70269,6 +71390,7 @@
         case "script": Object.setPrototypeOf(el, global.HTMLScriptElement.prototype); break;
         case "frame": Object.setPrototypeOf(el, (global.HTMLFrameElement || global.HTMLIFrameElement).prototype); break;
         case "iframe": Object.setPrototypeOf(el, global.HTMLIFrameElement.prototype); break;
+        case "embed": Object.setPrototypeOf(el, (global.HTMLEmbedElement || global.HTMLElement).prototype); break;
         case "template": Object.setPrototypeOf(el, global.HTMLTemplateElement.prototype); break;
         case "slot": Object.setPrototypeOf(el, (global.HTMLSlotElement || global.HTMLElement).prototype); break;
         case "details": Object.setPrototypeOf(el, (global.HTMLDetailsElement || global.HTMLElement).prototype); break;
@@ -70484,6 +71606,19 @@
       }
 
       // Include document.doctype in document.firstChild and document.childNodes per DOM spec
+      const origDoctypeDesc = Object.getOwnPropertyDescriptor(docProto, "doctype");
+      if (origDoctypeDesc && origDoctypeDesc.get) {
+        const origDoctypeGet = origDoctypeDesc.get;
+        Object.defineProperty(docProto, "doctype", {
+          get: function () {
+            const dt = origDoctypeGet.call(this);
+            if (!dt || !dt.name) return null;
+            return dt;
+          },
+          configurable: true,
+          enumerable: true,
+        });
+      }
       const origDocFirstChildDesc = Object.getOwnPropertyDescriptor(docProto, "firstChild")
         || Object.getOwnPropertyDescriptor(Node.prototype, "firstChild");
       const origDocFirstChildGet = origDocFirstChildDesc && origDocFirstChildDesc.get;
@@ -70640,12 +71775,10 @@
                 if (typeof nativeTextProto.splitText !== "function" && typeof global.Text.prototype.splitText === "function") {
                   nativeTextProto.splitText = global.Text.prototype.splitText;
                 }
-                if (!Object.getOwnPropertyDescriptor(nativeTextProto, "tagName")) {
-                  Object.defineProperty(nativeTextProto, "tagName", {
-                    get: function () { return undefined; },
-                    configurable: true,
-                  });
-                }
+                Object.defineProperty(nativeTextProto, "tagName", {
+                  get: function () { return undefined; },
+                  configurable: true,
+                });
                 if (global.CharacterData && global.CharacterData.prototype) {
                   const pesDesc = Object.getOwnPropertyDescriptor(global.CharacterData.prototype, "previousElementSibling");
                   if (pesDesc && !Object.getOwnPropertyDescriptor(nativeTextProto, "previousElementSibling")) {
@@ -70742,21 +71875,19 @@
             return node;
           }, "createCDATASection");
         }
-        if (typeof docProto.createProcessingInstruction !== "function") {
-          docProto.createProcessingInstruction = markNative(function (target, data) {
-            if (arguments.length < 2) {
-              throw new TypeError("Failed to execute 'createProcessingInstruction' on 'Document': 2 arguments required.");
-            }
-            const t = String(target);
-            const d = String(data);
-            if (!/^[A-Za-z_\xC0-\uFFFF][A-Za-z0-9._:-\xC0-\uFFFF]*$/.test(t) || d.includes("?>")) {
-              throw new DOMException("String contains an invalid character", "InvalidCharacterError");
-            }
-            const node = new ProcessingInstruction(t, d);
-            node.ownerDocument = this;
-            return node;
-          }, "createProcessingInstruction");
-        }
+        docProto.createProcessingInstruction = markNative(function (target, data) {
+          if (arguments.length < 2) {
+            throw new TypeError("Failed to execute 'createProcessingInstruction' on 'Document': 2 arguments required.");
+          }
+          const t = String(target);
+          const d = String(data);
+          if (!/^[A-Za-z_\xC0-\uFFFF][A-Za-z0-9._:-\xC0-\uFFFF]*$/.test(t) || d.includes("?>")) {
+            throw new DOMException("String contains an invalid character", "InvalidCharacterError");
+          }
+          const node = new ProcessingInstruction(t, d);
+          node.ownerDocument = this;
+          return node;
+        }, "createProcessingInstruction");
         if (global.document) {
           global.document.createElement = docProto.createElement;
           if (typeof global.document.createEvent !== "function") {
@@ -70765,9 +71896,7 @@
           if (typeof global.document.createCDATASection !== "function") {
             global.document.createCDATASection = docProto.createCDATASection;
           }
-          if (typeof global.document.createProcessingInstruction !== "function") {
-            global.document.createProcessingInstruction = docProto.createProcessingInstruction;
-          }
+          global.document.createProcessingInstruction = docProto.createProcessingInstruction;
         }
       }
 

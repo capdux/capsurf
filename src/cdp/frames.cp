@@ -605,7 +605,7 @@ pub fn makeChildFrameState(args: ChildFrameArgs): FrameState {
 }
 
 pub fn writeFrameJson(writer: *FrameJsonWriter, frame: *const FrameState, all_frames: []const FrameState) {
-    const href = if (frame.url.len > 0) frame.url else "about:blank";
+    const href = if (frame.url.len > 0) frame.url else if (frame.parent_frame_id != null) "" else "about:blank";
     let url = href;
     let url_fragment: []const u8 = "";
     if (hash_idx := std.mem.indexOfScalar(u8, href, '#')) {

@@ -1747,8 +1747,413 @@ function installWindow(global) {
     } catch (e) {}
   }
 
+  // Web Locks API (Lock, LockManager, navigator.locks)
+  function Lock(name, mode) {
+    this._name = name;
+    this._mode = mode;
+  }
+  Object.defineProperty(Lock.prototype, "name", { get: function () { return this._name; }, configurable: true, enumerable: true });
+  Object.defineProperty(Lock.prototype, "mode", { get: function () { return this._mode; }, configurable: true, enumerable: true });
+  Object.defineProperty(Lock.prototype, Symbol.toStringTag, { value: "Lock", configurable: true });
+  markNative(Lock, "Lock");
+
+  function LockManager() {}
+  Object.defineProperty(LockManager.prototype, Symbol.toStringTag, { value: "LockManager", configurable: true });
+  const _lockQueues = new Map();
+  const _lockHeld = [];
+
+  function _canGrantLock(name, mode) {
+    for (let i = 0; i < _lockHeld.length; i++) {
+      if (_lockHeld[i].name === name) {
+        if (mode === "exclusive" || _lockHeld[i].mode === "exclusive") return false;
+      }
+    }
+    return true;
+  }
+
+  function _processLockQueue(name) {
+    const q = _lockQueues.get(name);
+    if (!q || q.length === 0) return;
+    while (q.length > 0) {
+      const req = q[0];
+      if (req.aborted) {
+        q.shift();
+        continue;
+      }
+      if (!_canGrantLock(name, req.mode)) break;
+      q.shift();
+      const lockObj = new Lock(name, req.mode);
+      const heldEntry = {
+        name: name,
+        mode: req.mode,
+        clientId: "default",
+        lock: lockObj,
+        broken: false,
+        reject: function (err) {
+          if (heldEntry.broken) return;
+          heldEntry.broken = true;
+          req.reject(err);
+        },
+      };
+      _lockHeld.push(heldEntry);
+      if (req.cleanupAbort) req.cleanupAbort();
+      Promise.resolve().then(function () {
+        if (heldEntry.broken) return;
+        let p;
+        try {
+          p = Promise.resolve(req.callback(lockObj));
+        } catch (err) {
+          p = Promise.reject(err);
+        }
+        p.then(function (val) {
+          const idx = _lockHeld.indexOf(heldEntry);
+          if (idx !== -1) _lockHeld.splice(idx, 1);
+          _processLockQueue(name);
+          if (!heldEntry.broken) req.resolve(val);
+        }, function (err) {
+          const idx = _lockHeld.indexOf(heldEntry);
+          if (idx !== -1) _lockHeld.splice(idx, 1);
+          _processLockQueue(name);
+          if (!heldEntry.broken) req.reject(err);
+        });
+      });
+    }
+    if (q.length === 0) _lockQueues.delete(name);
+  }
+
+  LockManager.prototype.request = markNative(function request(name, optionsOrCallback, maybeCallback) {
+    let options = {};
+    let callback = optionsOrCallback;
+    if (typeof optionsOrCallback === "function") {
+      callback = optionsOrCallback;
+    } else {
+      options = optionsOrCallback || {};
+      callback = maybeCallback;
+    }
+    if (typeof callback !== "function") {
+      return Promise.reject(new TypeError("Failed to execute 'request' on 'LockManager': parameter 2 is not of type 'Function'."));
+    }
+    const lockName = String(name);
+    if (lockName.startsWith("-")) {
+      return Promise.reject(new DOMException("Names cannot start with '-'.", "NotSupportedError"));
+    }
+    const mode = options.mode !== undefined ? String(options.mode) : "exclusive";
+    if (mode !== "exclusive" && mode !== "shared") {
+      return Promise.reject(new TypeError("Invalid lock mode: " + mode));
+    }
+    const ifAvailable = Boolean(options.ifAvailable);
+    const steal = Boolean(options.steal);
+    const signal = options.signal;
+    if (steal && ifAvailable) {
+      return Promise.reject(new DOMException("The 'steal' and 'ifAvailable' options cannot be used together.", "NotSupportedError"));
+    }
+    if (steal && mode !== "exclusive") {
+      return Promise.reject(new DOMException("The 'steal' option may only be used with 'exclusive' locks.", "NotSupportedError"));
+    }
+    if (signal && steal) {
+      return Promise.reject(new DOMException("The 'signal' and 'steal' options cannot be used together.", "NotSupportedError"));
+    }
+    if (signal && ifAvailable) {
+      return Promise.reject(new DOMException("The 'signal' and 'ifAvailable' options cannot be used together.", "NotSupportedError"));
+    }
+    if (signal && signal.aborted) {
+      return Promise.reject(signal.reason !== undefined ? signal.reason : new DOMException("The request was aborted.", "AbortError"));
+    }
+    if (ifAvailable && (!_canGrantLock(lockName, mode) || (_lockQueues.has(lockName) && _lockQueues.get(lockName).length > 0))) {
+      return new Promise(function (resolve, reject) {
+        setTimeout(function () {
+          try {
+            resolve(callback(null));
+          } catch (e) {
+            reject(e);
+          }
+        }, 0);
+      });
+    }
+    if (steal) {
+      for (let i = _lockHeld.length - 1; i >= 0; i--) {
+        if (_lockHeld[i].name === lockName) {
+          const broken = _lockHeld[i];
+          _lockHeld.splice(i, 1);
+          if (typeof broken.reject === "function") {
+            broken.reject(new DOMException("Lock broken by another request with the 'steal' option.", "AbortError"));
+          }
+        }
+      }
+    }
+    return new Promise(function (resolve, reject) {
+      const req = { name: lockName, mode: mode, callback: callback, resolve: resolve, reject: reject, aborted: false, cleanupAbort: null };
+      if (signal && typeof signal.addEventListener === "function") {
+        const onAbort = function () {
+          req.aborted = true;
+          const q = _lockQueues.get(lockName);
+          if (q) {
+            const idx = q.indexOf(req);
+            if (idx !== -1) q.splice(idx, 1);
+            if (q.length === 0) _lockQueues.delete(lockName);
+          }
+          reject(signal.reason !== undefined ? signal.reason : new DOMException("The request was aborted.", "AbortError"));
+        };
+        signal.addEventListener("abort", onAbort, { once: true });
+        req.cleanupAbort = function () {
+          if (typeof signal.removeEventListener === "function") signal.removeEventListener("abort", onAbort);
+        };
+      }
+      if (!_lockQueues.has(lockName)) _lockQueues.set(lockName, []);
+      const q = _lockQueues.get(lockName);
+      if (steal) q.unshift(req);
+      else q.push(req);
+      setTimeout(function () { _processLockQueue(lockName); }, 0);
+    });
+  }, "request");
+
+  LockManager.prototype.query = markNative(function query() {
+    const held = _lockHeld.map(function (h) { return { name: h.name, mode: h.mode, clientId: h.clientId }; });
+    const pending = [];
+    _lockQueues.forEach(function (q) {
+      for (let i = 0; i < q.length; i++) {
+        if (!q[i].aborted) pending.push({ name: q[i].name, mode: q[i].mode, clientId: "default" });
+      }
+    });
+    return Promise.resolve({ held: held, pending: pending });
+  }, "query");
+  markNative(LockManager, "LockManager");
+
+  const lockManagerObj = Object.create(LockManager.prototype);
+  global.Lock = Lock;
+  global.LockManager = LockManager;
+  if (typeof globalThis !== "undefined") {
+    globalThis.Lock = Lock;
+    globalThis.LockManager = LockManager;
+  }
+  if (typeof window !== "undefined") {
+    window.Lock = Lock;
+    window.LockManager = LockManager;
+  }
+
+  // VTTCue, TextTrackCue, VTTRegion
+  function TextTrackCue() {
+    if (typeof EventTarget === "function") EventTarget.call(this);
+  }
+  if (typeof EventTarget === "function") TextTrackCue.prototype = Object.create(EventTarget.prototype);
+  TextTrackCue.prototype.constructor = TextTrackCue;
+  markNative(TextTrackCue, "TextTrackCue");
+
+  function VTTCue(startTime, endTime, text) {
+    if (arguments.length < 3) throw new TypeError("Failed to construct 'VTTCue': 3 arguments required.");
+    TextTrackCue.call(this);
+    this.startTime = Number(startTime);
+    this.endTime = Number(endTime);
+    this.text = String(text);
+    this.id = "";
+    this.pauseOnExit = false;
+    this.region = null;
+    this._vertical = "";
+    this.snapToLines = true;
+    this.line = "auto";
+    this._lineAlign = "start";
+    this.position = "auto";
+    this._positionAlign = "auto";
+    this.size = 100;
+    this._align = "center";
+  }
+  VTTCue.prototype = Object.create(TextTrackCue.prototype);
+  VTTCue.prototype.constructor = VTTCue;
+  [
+    ["vertical", "_vertical", ["", "rl", "lr"]],
+    ["align", "_align", ["start", "center", "end", "left", "right"]],
+    ["lineAlign", "_lineAlign", ["start", "center", "end"]],
+    ["positionAlign", "_positionAlign", ["line-left", "center", "line-right", "auto"]],
+  ].forEach(function (spec) {
+    const prop = spec[0], slot = spec[1], valid = new Set(spec[2]);
+    Object.defineProperty(VTTCue.prototype, prop, {
+      get: function () { return this[slot]; },
+      set: function (v) { const s = String(v); if (valid.has(s)) this[slot] = s; },
+      configurable: true,
+      enumerable: true,
+    });
+  });
+  VTTCue.prototype.getCueAsHTML = function () {
+    const doc = global.document || (typeof document !== "undefined" ? document : null);
+    const frag = doc && doc.createDocumentFragment ? doc.createDocumentFragment() : null;
+    if (frag && doc.createTextNode) frag.appendChild(doc.createTextNode(this.text || ""));
+    return frag;
+  };
+  markNative(VTTCue, "VTTCue");
+
+  function VTTRegion() {
+    this.id = "";
+    this._width = 100;
+    this._lines = 3;
+    this._regionAnchorX = 0;
+    this._regionAnchorY = 100;
+    this._viewportAnchorX = 0;
+    this._viewportAnchorY = 100;
+    this._scroll = "";
+  }
+  ["width", "regionAnchorX", "regionAnchorY", "viewportAnchorX", "viewportAnchorY"].forEach(function (prop) {
+    const slot = "_" + prop;
+    Object.defineProperty(VTTRegion.prototype, prop, {
+      get: function () { return this[slot]; },
+      set: function (v) {
+        const n = Number(v);
+        if (!Number.isFinite(n)) throw new TypeError("The provided double value is non-finite.");
+        if (n < 0 || n > 100) throw new DOMException("Value must be between 0 and 100.", "IndexSizeError");
+        this[slot] = n;
+      },
+      configurable: true,
+      enumerable: true,
+    });
+  });
+  Object.defineProperty(VTTRegion.prototype, "lines", {
+    get: function () { return this._lines; },
+    set: function (v) { this._lines = Number(v) >>> 0; },
+    configurable: true,
+    enumerable: true,
+  });
+  Object.defineProperty(VTTRegion.prototype, "scroll", {
+    get: function () { return this._scroll; },
+    set: function (v) { const s = String(v); if (s === "" || s === "up") this._scroll = s; },
+    configurable: true,
+    enumerable: true,
+  });
+  markNative(VTTRegion, "VTTRegion");
+
+  global.TextTrackCue = TextTrackCue;
+  global.VTTCue = VTTCue;
+  global.VTTRegion = VTTRegion;
+  if (typeof globalThis !== "undefined") {
+    globalThis.TextTrackCue = TextTrackCue;
+    globalThis.VTTCue = VTTCue;
+    globalThis.VTTRegion = VTTRegion;
+  }
+  if (typeof window !== "undefined") {
+    window.TextTrackCue = TextTrackCue;
+    window.VTTCue = VTTCue;
+    window.VTTRegion = VTTRegion;
+  }
+
+  // CookieStore API
+  function CookieChangeEvent(type, init) {
+    Event.call(this, type, init);
+    const opts = init || {};
+    this.changed = Array.isArray(opts.changed) ? opts.changed.slice() : [];
+    this.deleted = Array.isArray(opts.deleted) ? opts.deleted.slice() : [];
+  }
+  CookieChangeEvent.prototype = Object.create(Event.prototype);
+  CookieChangeEvent.prototype.constructor = CookieChangeEvent;
+  markNative(CookieChangeEvent, "CookieChangeEvent");
+
+  function CookieStore() {
+    if (typeof EventTarget === "function") EventTarget.call(this);
+    this._store = new Map();
+    this._onchange = null;
+  }
+  if (typeof EventTarget === "function") CookieStore.prototype = Object.create(EventTarget.prototype);
+  CookieStore.prototype.constructor = CookieStore;
+  Object.defineProperty(CookieStore.prototype, "onchange", {
+    get: function () { return this._onchange || null; },
+    set: function (v) {
+      if (this._onchangeWrapper) {
+        this.removeEventListener("change", this._onchangeWrapper);
+        this._onchangeWrapper = null;
+      }
+      this._onchange = typeof v === "function" ? v : null;
+      if (this._onchange) {
+        const fn = this._onchange;
+        this._onchangeWrapper = function (e) { fn.call(this, e); };
+        this.addEventListener("change", this._onchangeWrapper);
+      }
+    },
+    configurable: true,
+    enumerable: true,
+  });
+  CookieStore.prototype.get = markNative(function get(nameOrOptions) {
+    if (arguments.length === 0 || nameOrOptions === undefined) {
+      return Promise.reject(new TypeError("Failed to execute 'get' on 'CookieStore': 1 argument required."));
+    }
+    const name = typeof nameOrOptions === "string" ? nameOrOptions : (nameOrOptions && nameOrOptions.name);
+    if (!name) return Promise.resolve(null);
+    const item = this._store.get(String(name));
+    if (!item || (item.expires !== null && item.expires <= Date.now())) {
+      if (item) this._store.delete(String(name));
+      return Promise.resolve(null);
+    }
+    return Promise.resolve(Object.assign({}, item));
+  }, "get");
+  CookieStore.prototype.getAll = markNative(function getAll(nameOrOptions) {
+    const name = typeof nameOrOptions === "string" ? nameOrOptions : (nameOrOptions && nameOrOptions.name);
+    const out = [];
+    const now = Date.now();
+    this._store.forEach(function (v, k) {
+      if (v.expires !== null && v.expires <= now) { this._store.delete(k); return; }
+      if (!name || k === String(name)) out.push(Object.assign({}, v));
+    }, this);
+    return Promise.resolve(out);
+  }, "getAll");
+  CookieStore.prototype.set = markNative(function set(nameOrOptions, value) {
+    if (typeof nameOrOptions === "string" && arguments.length < 2) {
+      return Promise.reject(new TypeError("Failed to execute 'set' on 'CookieStore': 2 arguments required when passing a string name."));
+    }
+    const opts = (typeof nameOrOptions === "object" && nameOrOptions !== null)
+      ? nameOrOptions
+      : { name: String(nameOrOptions), value: String(value !== undefined ? value : "") };
+    const name = String(opts.name || "");
+    const val = String(opts.value !== undefined ? opts.value : "");
+    const item = {
+      name: name,
+      value: val,
+      domain: opts.domain != null ? String(opts.domain) : null,
+      path: opts.path != null ? String(opts.path) : "/",
+      expires: opts.expires != null ? Number(opts.expires) : null,
+      sameSite: opts.sameSite != null ? String(opts.sameSite) : "strict",
+      partitioned: Boolean(opts.partitioned),
+      secure: opts.secure !== undefined ? Boolean(opts.secure) : Boolean(global.isSecureContext),
+    };
+    this._store.set(name, item);
+    if (typeof document !== "undefined") {
+      try { document.cookie = name + "=" + val; } catch (e) {}
+    }
+    const self = this;
+    Promise.resolve().then(function () {
+      try { self.dispatchEvent(new CookieChangeEvent("change", { changed: [Object.assign({}, item)], deleted: [] })); } catch (e) {}
+    });
+    return Promise.resolve();
+  }, "set");
+  CookieStore.prototype.delete = markNative(function (nameOrOptions) {
+    const name = typeof nameOrOptions === "string" ? nameOrOptions : String((nameOrOptions && nameOrOptions.name) || "");
+    const prev = this._store.get(name);
+    this._store.delete(name);
+    const self = this;
+    if (prev) {
+      Promise.resolve().then(function () {
+        try {
+          const delItem = Object.assign({}, prev, { value: undefined });
+          self.dispatchEvent(new CookieChangeEvent("change", { changed: [], deleted: [delItem] }));
+        } catch (e) {}
+      });
+    }
+    return Promise.resolve();
+  }, "delete");
+  markNative(CookieStore, "CookieStore");
+  const cookieStoreObj = new CookieStore();
+  global.CookieStore = CookieStore;
+  global.CookieChangeEvent = CookieChangeEvent;
+  global.cookieStore = cookieStoreObj;
+  if (typeof globalThis !== "undefined") {
+    globalThis.CookieStore = CookieStore;
+    globalThis.CookieChangeEvent = CookieChangeEvent;
+    globalThis.cookieStore = cookieStoreObj;
+  }
+  if (typeof window !== "undefined") {
+    window.CookieStore = CookieStore;
+    window.CookieChangeEvent = CookieChangeEvent;
+    window.cookieStore = cookieStoreObj;
+  }
+
   // 2. Navigator: modern lightweight shield & Client Hints
   const navigatorObj = Object.assign(Object.create(Navigator.prototype), {
+    locks: lockManagerObj,
     userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 CapSurf/1.0.0",
     appVersion: "5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 CapSurf/1.0.0",
     platform: "Linux x86_64",
@@ -17393,17 +17798,24 @@ const CSS_TYPED_OM_GLOBALS = {
     } catch (e) {}
     try {
       if (global.document && global.document.body && typeof global.document.body.getAttribute === "function") {
+        if (typeof upgradeElement === "function") {
+          try { upgradeElement(global.document.body); } catch (e) {}
+        }
         const bodyOnloadAttr = global.document.body.getAttribute("onload");
         if (typeof bodyOnloadAttr === "string" && bodyOnloadAttr.length > 0 && typeof global.onload !== "function") {
           try {
             global.onload = new Function("event", bodyOnloadAttr);
+            global.__capsurf_bodyOnloadPending = true;
           } catch (e) {}
+        } else if (typeof bodyOnloadAttr === "string" && bodyOnloadAttr.length > 0 && typeof global.onload === "function") {
+          global.__capsurf_bodyOnloadPending = true;
         }
       }
     } catch (e) {}
     try {
       if (global.dispatchEvent) {
-        const loadEv = new NativeEvent("load", { bubbles: false, cancelable: false });
+        const EvCtor = global.Event || NativeEvent;
+        const loadEv = new EvCtor("load", { bubbles: false, cancelable: false });
         if (global.document) loadEv._overrideTarget = global.document;
         global.dispatchEvent(loadEv);
       }

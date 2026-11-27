@@ -1257,14 +1257,14 @@ function installElementExtensions(proto) {
       const ns = this.namespaceURI;
       const local = String(this.localName || this.tagName || "").toLowerCase();
       const ok =
-        (ns === "http://www.w3.org/1999/xhtml" && (local === "a" || local === "area" || local === "link")) ||
+        (ns === "http://www.w3.org/1999/xhtml" && (local === "a" || local === "area" || local === "link" || local === "form")) ||
         ((ns === "http://www.w3.org/2000/svg" || ns === "http://www.w3.org/1998/Math/MathML") && local === "a");
       if (!ok) return undefined;
       if (!this._relList) {
         const self = this;
         const supportedRel = local === "link"
           ? new Set(["stylesheet", "icon", "preload", "prefetch", "preconnect", "dns-prefetch", "modulepreload", "canonical", "manifest", "alternate", "pingback"])
-          : new Set(["noopener", "noreferrer", "opener", "nofollow", "external", "help", "license", "next", "prev", "search", "tag"]);
+          : new Set(["noopener", "noreferrer", "opener"]);
         this._relList = new DOMTokenList(
           function () {
             return (self.getAttribute && self.getAttribute("rel")) || "";
@@ -1328,28 +1328,55 @@ function installElementExtensions(proto) {
       this._attrs = new Map();
       this._attrList = [];
       const isHtml = isHtmlElement(this);
+      const isSvg = this.namespaceURI === "http://www.w3.org/2000/svg";
+      const SVG_ATTR_CASE = isSvg ? {
+        attributename: "attributeName",
+        attributetype: "attributeType",
+        basefrequency: "baseFrequency",
+        clippathunits: "clipPathUnits",
+        gradienttransform: "gradientTransform",
+        gradientunits: "gradientUnits",
+        markerheight: "markerHeight",
+        markerunits: "markerUnits",
+        markerwidth: "markerWidth",
+        maskcontentunits: "maskContentUnits",
+        maskunits: "maskUnits",
+        patterncontentunits: "patternContentUnits",
+        patterntransform: "patternTransform",
+        patternunits: "patternUnits",
+        preserveaspectratio: "preserveAspectRatio",
+        primitiveunits: "primitiveUnits",
+        spreadmethod: "spreadMethod",
+        startoffset: "startOffset",
+        stddeviation: "stdDeviation",
+        textlength: "textLength",
+        viewbox: "viewBox",
+        xchannelselector: "xChannelSelector",
+        ychannelselector: "yChannelSelector",
+      } : null;
       if (typeof this._getRawAttrs === "function") {
         const raw = this._getRawAttrs();
         if (raw && _elIsArray(raw)) {
           for (let i = 0; i < raw.length; i++) {
             const item = raw[i];
             if (item && item.name) {
-              const colon = item.name.indexOf(":");
-              const prefix = colon !== -1 ? item.name.slice(0, colon) : null;
-              const localName = colon !== -1 ? item.name.slice(colon + 1) : item.name;
+              const adjName = (SVG_ATTR_CASE && SVG_ATTR_CASE[item.name]) ? SVG_ATTR_CASE[item.name] : item.name;
+              const colon = adjName.indexOf(":");
+              const prefix = colon !== -1 ? adjName.slice(0, colon) : null;
+              const localName = colon !== -1 ? adjName.slice(colon + 1) : adjName;
               let ns = null;
               if (prefix === "xml") ns = "http://www.w3.org/XML/1998/namespace";
-              else if (prefix === "xmlns" || item.name === "xmlns") ns = "http://www.w3.org/2000/xmlns/";
+              else if (prefix === "xmlns" || adjName === "xmlns") ns = "http://www.w3.org/2000/xmlns/";
               else if (prefix === "xlink") ns = "http://www.w3.org/1999/xlink";
               const entry = {
-                name: item.name,
+                name: adjName,
                 value: item.value || "",
                 namespaceURI: ns,
                 localName: localName,
                 prefix: prefix,
               };
               this._attrList.push(entry);
-              const mapKey = isHtml ? item.name.toLowerCase() : item.name;
+              const mapKey = isHtml ? adjName.toLowerCase() : adjName;
               this._attrs.set(mapKey, entry);
             }
           }
@@ -4068,9 +4095,23 @@ function installElementExtensions(proto) {
       throw e;
     }
     const doc = this.ownerDocument || (typeof document !== "undefined" ? document : null);
-    const temp = doc && typeof doc.createElement === "function" ? doc.createElement("div") : null;
+    if (!doc) return;
+    const ctxNode = (pos === "beforebegin" || pos === "afterend") ? this.parentNode : this;
+    const ctxNs = ctxNode && ctxNode.nodeType === 1 ? ctxNode.namespaceURI : "http://www.w3.org/1999/xhtml";
+    let ctxTag = ctxNode && ctxNode.nodeType === 1 ? String(ctxNode.localName || ctxNode.tagName || "div") : "body";
+    if (ctxTag.toLowerCase() === "html") ctxTag = "body";
+    let temp = null;
+    if (ctxNs === "http://www.w3.org/2000/svg" && typeof doc.createElementNS === "function") {
+      temp = doc.createElementNS("http://www.w3.org/2000/svg", ctxTag);
+    } else if (typeof doc.createElement === "function") {
+      temp = doc.createElement(ctxTag.toLowerCase());
+    }
     if (!temp) return;
-    temp.innerHTML = String(text);
+    if (ctxNs === "http://www.w3.org/2000/svg" && typeof global !== "undefined" && typeof global.__capsurf_raw_setInnerHTML === "function") {
+      temp.innerHTML = String(text);
+    } else {
+      temp.innerHTML = String(text);
+    }
     const nodes = [];
     let ch = temp.firstChild;
     while (ch) {

@@ -4763,3 +4763,8 @@
 - `src/cdp/page.cp`, `src/cdp/session.cp`, `src/cdp/session_hooks.cp`, `src/cdp/server.cp`: `PendingAsyncHttpSlot` 携带 `frame_id` 精确归属子帧 `Network.requestWillBeSent`/`responseReceived`；子帧 `load` 时扫描并异步拉取 `<link rel="stylesheet">`；拆分 `emitMainFrameDomContentLoadedEvents`/`emitMainFrameLoadEvents` 与新增 `flushDeferredLoadEventsForSession`，在活跃异步 fetch 未清零前延迟主/子帧 `load` 与 `frameStoppedLoading`；`Page.setLifecycleEventsEnabled` 补齐 `window.open('')` 弹窗初始 `about:blank` 生命周期事件；`session.cp` 移除多余 `user-agent` 拼接与主文档重定向链逐跳真实响应头透传。
 - `src/js/shim/*` (`node-base.js`, `element/*`, `events/*`, `window.js`, `index.js`, `collections.js`, `cssom.js`, `range.js`, `canvas2d.js`): 补齐 `ShadowRoot.prototype.innerHTML`、`HTMLTableCellElement`/`HTMLFontElement`/`HTMLLinkElement`/`HTMLAllCollection`/`ScreenOrientation`、`tabIndex`/`spellcheck`/`TextTrack.kind`、`onerror` 5 参、`reportError`、`scroll` 事件合并、`location.hash` 与 `HashChangeEvent`、`customElements` 失效 epoch 等。
 - `CP_PITFALLS.md`, `test/stats.md`, `SESSION.md`, `CHANGELOG.md`, `DEVLOG.md`: 同步 `syntax-sema-20261127-6-false-positives-fixed` 广播与 Phase 968 全量统计。
+
+## Phase 969: Panda 突破 204/517 与 `page-set-content` / `frame-evaluate` 推进
+- `src/cdp/frames.cp`, `src/cdp/session.cp`: 子帧导航异常/上下文边界修复，推进 `page-set-content` (14→15/16)、`frame-evaluate` (5→6/8) 与 `page-event-request` (5→6/13)。
+- `src/js/shim/*` (`window.js`, `index.js`, `node-base.js`, `parser.js`, `file.js`, `form-data.js`, `range.js`, `collections.js`, `cssom.js`, `canvas2d.js`, `element/*`, `events/*`, `mutations/*`): 批量补齐 DOM/Form/Dialog/File/FormData/Canvas/Event 接口与规范校验，推动 `test/panda/` 突破 200 大关达到 **204/517**。
+- `GEMINI.md`, `test/stats.md`, `SESSION.md`, `CHANGELOG.md`, `DEVLOG.md`: 固化 11.18 多 Spec 端口段步长 10 隔离并同步 Phase 969 统计。

@@ -393,3 +393,8 @@
 - **只读 `research` 聚类前置 + 精确行号派单**：面对 100+ 失败集群时，先派只读 `research` 子智能体对 `tmp/*.json` 做 `Counter` 聚类并定位精确 `src/` 行号，再派全新编码子智能体一刀切修复，消除探索往返 Token。
 - **`cpc from --ts --include-tests` 自动化转写 TS 测试**：转换 TS 测试用例为原生 CP `cap:test` 时，优先使用 `/data/dev/cp/cap/bin/cpc from --ts --include-tests --no-deps --verify` 生成初稿，再通过 `cpc brief -n 8` 收口，以利用 `cap test` 多核并发跑批。
 - **30 分钟上下文熔断**：严格监控子智能体运行时长，超过 30 分钟立即 `kill` 收回，保留其已落盘产物并派发全新子智能体接力，杜绝长上下文 $O(N^2)$ 膨胀。
+
+### 11.18 3小时自进化固化：多 Spec 端口段步长 10 隔离 (2026-11-27 第3轮自进化)
+
+- **`pw-run.mjs` 多 Spec 端口段步长 10 硬隔离**：`pw-run.mjs --port P` 匹配 `K` 个 spec 时会并发占用 `P .. P+K-1` 端口，严禁主控与子智能体使用相邻端口！统一划分为：主智能体 **`9930..9939`**、子智能体 1 **`9940..9949`**、子智能体 2 **`9950..9959`**、Panda `-j 16` **`19954..19979`**，杜绝 `BindFailed`。
+- **`cpc from --ts` 适用边界**：纯算法/协议/工具类测试优先用 `cpc from --ts --include-tests` 转原生 `cap test`；强依赖 Node Playwright/Puppeteer SDK 的黑盒套件直接走多端口并发跑批，不重复造客户端 SDK 轮子。

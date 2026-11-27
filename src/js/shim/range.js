@@ -887,6 +887,14 @@ Selection.prototype.getRangeAt = function (index) {
   return r;
 };
 
+Selection.prototype.deleteFromDocument = function () {
+  const r = selLive(this);
+  if (r) {
+    r.deleteContents();
+    selScheduleChange(this);
+  }
+};
+
 Selection.prototype.addRange = function (range) {
   if (!range) return;
   const st = _selState.get(this);

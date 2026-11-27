@@ -1702,7 +1702,7 @@ function DataTransfer() {
     dataMap: new Map(),
     itemList: createDataTransferItemList(this),
     dropEffect: "none",
-    effectAllowed: "uninitialized",
+    effectAllowed: "none",
   });
 }
 

@@ -187,6 +187,10 @@ Object.defineProperty(ParsedText.prototype, "parentElement", {
   get: function () { return (this.parentNode && this.parentNode.nodeType === ELEMENT_NODE) ? this.parentNode : null; },
   configurable: true,
 });
+Object.defineProperty(ParsedText.prototype, "tagName", {
+  get: function () { return undefined; },
+  configurable: true,
+});
 
 function ParsedComment(data, ownerDoc) {
   this.nodeType = COMMENT_NODE;
@@ -941,6 +945,13 @@ function ParsedDocument(contentType, compatMode) {
   registerParsedNode(this);
 }
 
+Object.defineProperty(ParsedDocument.prototype, Symbol.toStringTag, {
+  get: function () {
+    return this.contentType === "text/html" ? "HTMLDocument" : "XMLDocument";
+  },
+  configurable: true,
+});
+
 Object.defineProperty(ParsedDocument.prototype, "isConnected", {
   get: function () {
     return true;
@@ -1361,16 +1372,27 @@ function parseDocument(str, mime) {
         }
       } else if (match[2] !== undefined) {
         if (stack.length > 1) {
-          const tNode = doc.createTextNode(match[2]);
-          stack[stack.length - 1].appendChild(tNode);
+          const cdataNode = typeof doc.createCDATASection === "function"
+            ? doc.createCDATASection(match[2])
+            : { nodeType: 4, nodeName: "#cdata-section", data: match[2], textContent: match[2], ownerDocument: doc };
+          stack[stack.length - 1].appendChild(cdataNode);
         }
       } else if (match[3] !== undefined) {
-        const cNode = doc.createComment("?" + match[3]);
-        if (stack.length === 1) {
-          cNode.parentNode = doc;
-          doc._children.push(cNode);
-        } else {
-          stack[stack.length - 1].appendChild(cNode);
+        const rawPi = match[3];
+        const spIdx = rawPi.search(/\s/);
+        const piTarget = spIdx === -1 ? rawPi : rawPi.slice(0, spIdx);
+        const piData = spIdx === -1 ? "" : rawPi.slice(spIdx + 1).replace(/^\s+/, "");
+        if (piTarget.toLowerCase() !== "xml") {
+          const piNode = typeof ProcessingInstruction === "function"
+            ? new ProcessingInstruction(piTarget, piData)
+            : { nodeType: 7, nodeName: piTarget, target: piTarget, data: piData, textContent: piData, ownerDocument: doc };
+          piNode.ownerDocument = doc;
+          if (stack.length === 1) {
+            piNode.parentNode = doc;
+            doc._children.push(piNode);
+          } else {
+            stack[stack.length - 1].appendChild(piNode);
+          }
         }
       } else if (match[4] !== undefined) {
         const endTag = match[4].toLowerCase();
@@ -1413,6 +1435,14 @@ function parseDocument(str, mime) {
     }
   }
 
+  if (!isHtml && !doc.documentElement) {
+    const errEl = doc.createElement("parsererror");
+    errEl.textContent = "Document is empty";
+    errEl.parentNode = doc;
+    doc._children.push(errEl);
+    doc.documentElement = errEl;
+  }
+
   return doc;
 }
 
@@ -1452,7 +1482,7 @@ function serializeXmlDoctype(dt) {
   return out + ">";
 }
 
-function serializeXmlNode(node) {
+function serializeXmlNode(node, parentNs) {
   if (!node || typeof node !== "object") {
     throw new TypeError("Failed to execute 'serializeToString' on 'XMLSerializer': parameter 1 is not of type 'Node'.");
   }
@@ -1467,7 +1497,7 @@ function serializeXmlNode(node) {
         if (hasOverrideDt) continue;
         sawDoctype = true;
       }
-      out += serializeXmlNode(cs[i]);
+      out += serializeXmlNode(cs[i], null);
     }
     if (hasOverrideDt) {
       if (node._reopenDoctype) {
@@ -1477,14 +1507,14 @@ function serializeXmlNode(node) {
       out = serializeXmlDoctype(node.doctype) + out;
     }
     if (!out && node.documentElement) {
-      out = serializeXmlNode(node.documentElement);
+      out = serializeXmlNode(node.documentElement, null);
     }
     return out;
   }
   if (nt === 11) {
     const cs = node.childNodes || [];
     let out = "";
-    for (let i = 0; i < cs.length; i++) out += serializeXmlNode(cs[i]);
+    for (let i = 0; i < cs.length; i++) out += serializeXmlNode(cs[i], null);
     return out;
   }
   if (nt === 10) {
@@ -1500,15 +1530,33 @@ function serializeXmlNode(node) {
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
   }
+  if (nt === 4) return "<![CDATA[" + String(node.data !== undefined ? node.data : (node.textContent || "")) + "]]>";
   if (nt === 8) return "<!--" + String(node.data !== undefined ? node.data : (node.textContent || "")) + "-->";
   if (nt === 7) return "<?" + String(node.target || "") + " " + String(node.data || "") + "?>";
-  if (nt === 1 && (node instanceof ParsedElement)) {
-    const tag = node.localName || node.tagName || "div";
+  if (nt === 1) {
+    const ns = node.namespaceURI !== undefined
+      ? (node.namespaceURI || null)
+      : ((node.ownerDocument && (!node.ownerDocument.contentType || node.ownerDocument.contentType === "text/html")) ? "http://www.w3.org/1999/xhtml" : null);
+    const rawLocal = String(node.localName || node.tagName || "div");
+    const local = (ns === "http://www.w3.org/1999/xhtml") ? rawLocal.toLowerCase() : rawLocal;
+    const prefix = node.prefix ? String(node.prefix) : null;
+    const tag = prefix ? (prefix + ":" + local) : local;
     let attrsStr = "";
+    let hasXmlns = false;
+    const xmlnsAttrName = prefix ? ("xmlns:" + prefix) : "xmlns";
     if (node._attrs instanceof Map) {
       node._attrs.forEach((val, key) => {
         const origName = (node._attrCases && node._attrCases.get(key)) || key;
-        const v = String(val || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+        if (origName === xmlnsAttrName || origName === "xmlns") hasXmlns = true;
+        const rawVal = (val && typeof val === "object" && "value" in val) ? val.value : val;
+        const v = String(rawVal == null ? "" : rawVal)
+          .replace(/&/g, "&amp;")
+          .replace(/"/g, "&quot;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/\t/g, "&#9;")
+          .replace(/\n/g, "&#10;")
+          .replace(/\r/g, "&#13;");
         attrsStr += " " + origName + '="' + v + '"';
       });
     } else if (node.attributes) {
@@ -1516,13 +1564,35 @@ function serializeXmlNode(node) {
       for (let i = 0; i < attrs.length; i++) {
         const a = attrs[i];
         if (!a) continue;
-        const v = String(a.value || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+        if (a.name === xmlnsAttrName || a.name === "xmlns") hasXmlns = true;
+        const v = String(a.value || "")
+          .replace(/&/g, "&amp;")
+          .replace(/"/g, "&quot;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/\t/g, "&#9;")
+          .replace(/\n/g, "&#10;")
+          .replace(/\r/g, "&#13;");
         attrsStr += " " + a.name + '="' + v + '"';
       }
     }
-    const cs = node.childNodes || [];
+    if (ns && ns !== parentNs && !hasXmlns) {
+      const escNs = String(ns).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      attrsStr = " " + xmlnsAttrName + '="' + escNs + '"' + attrsStr;
+    } else if (!ns && parentNs && !hasXmlns && !prefix) {
+      attrsStr = ' xmlns=""' + attrsStr;
+    }
+    const cs = (tag === "template" && node.content && (!node.childNodes || node.childNodes.length === 0))
+      ? (node.content.childNodes || [])
+      : (node.childNodes || []);
     let inner = "";
-    for (let i = 0; i < cs.length; i++) inner += serializeXmlNode(cs[i]);
+    for (let i = 0; i < cs.length; i++) inner += serializeXmlNode(cs[i], ns);
+    const isXmlNode = !ns || ns !== "http://www.w3.org/1999/xhtml" || (node.ownerDocument && node.ownerDocument.contentType && node.ownerDocument.contentType !== "text/html");
+    if (inner.length === 0 && (isXmlNode || HTML_VOID_TAGS.has(tag))) {
+      return inner.length === 0 && ns === "http://www.w3.org/1999/xhtml" && HTML_VOID_TAGS.has(tag)
+        ? "<" + tag + attrsStr + " />"
+        : "<" + tag + attrsStr + "/>";
+    }
     return "<" + tag + attrsStr + ">" + inner + "</" + tag + ">";
   }
   if (typeof node.outerHTML === "string") return node.outerHTML;

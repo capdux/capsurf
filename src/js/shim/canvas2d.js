@@ -440,9 +440,14 @@ function ImageData(w, h, data) {
     }
     this.width = width;
     this.height = height;
-    this.data = data instanceof Uint8ClampedArray ? data : new Uint8ClampedArray(this.width * this.height * 4);
+    try {
+      this.data = data instanceof Uint8ClampedArray ? data : new Uint8ClampedArray(this.width * this.height * 4);
+    } catch (e) {
+      throw new DOMException("Failed to construct 'ImageData': The requested image size exceeds the supported range.", "IndexSizeError");
+    }
   }
   this.colorSpace = "srgb";
+  this.pixelFormat = "rgba-unorm8";
 }
 markNative(ImageData, "ImageData");
 

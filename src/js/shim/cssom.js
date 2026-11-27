@@ -5970,7 +5970,7 @@
         else if (p[i] === "full-width") fw = true;
         else if (p[i] === "full-size-kana") fsk = true;
       }
-      return [c, fw ? "full-width" : "", fsk ? "full-size-kana" : ""].filter(Boolean).join(" ");
+      return c || (fw ? "full-width" : (fsk ? "full-size-kana" : ""));
     }
     if (key === "white-space") {
       const p = splitCssTokens(s.toLowerCase());

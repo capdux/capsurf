@@ -59,8 +59,10 @@ function sanitizeForInput(el, raw) {
 
 function findAssociatedForm(element) {
   if (!element) return null;
+  const hasFormAttr = typeof element.hasAttribute === "function" && element.hasAttribute("form");
   const formAttr = (typeof element.getAttribute === "function") ? element.getAttribute("form") : null;
-  if (formAttr) {
+  if (hasFormAttr) {
+    if (!formAttr) return null;
     const doc = element.ownerDocument || (typeof document !== "undefined" ? document : null);
     if (doc && typeof doc.getElementById === "function") {
       const f = doc.getElementById(formAttr);
@@ -86,7 +88,7 @@ function findAssociatedForm(element) {
       }
     }
     walkFind(root);
-    if (found) return found;
+    return found || null;
   }
   let curr = element.parentElement || element.parentNode;
   while (curr) {
@@ -125,7 +127,25 @@ function installInputElement(global) {
       return normalizeInputType(this.getAttribute("type"));
     },
     set: function (v) {
+      const oldMode = inputValueMode(this.type);
+      const newType = normalizeInputType(String(v));
+      const newMode = inputValueMode(newType);
       this.setAttribute("type", String(v));
+      if (oldMode === "value" && (newMode === "default" || newMode === "default/on")) {
+        if (this._valueDirty && this._value !== undefined && this._value !== "") {
+          this.setAttribute("value", this._value);
+        }
+      } else if ((oldMode === "default" || oldMode === "default/on") && newMode === "value") {
+        const attr = this.getAttribute("value");
+        this._valueDirty = false;
+        this._value = attr !== null ? sanitizeForInput(this, attr) : "";
+      } else if (newMode === "filename") {
+        this._valueDirty = false;
+        this._value = "";
+      } else if (oldMode === "filename" && newMode !== "filename") {
+        this._valueDirty = false;
+        this._value = "";
+      }
     },
     configurable: true,
   });
@@ -221,13 +241,16 @@ function installInputElement(global) {
       const isRadio = this.type === "radio";
       if (isRadio && v && this.name) {
         const form = findAssociatedForm(this);
-        const root = form || (this.ownerDocument || (typeof document !== "undefined" ? document : null));
+        const root = (typeof this.getRootNode === "function" ? this.getRootNode() : null)
+          || this.ownerDocument
+          || (typeof document !== "undefined" ? document : null);
         if (root && root.querySelectorAll) {
-          const radios = root.querySelectorAll('input[type="radio"][name="' + this.name + '"]');
+          const radios = root.querySelectorAll('input[type="radio"]');
           for (let i = 0; i < radios.length; i++) {
-            if (radios[i] !== this) {
-              radios[i]._checkedDirty = true;
-              radios[i]._checked = false;
+            const r = radios[i];
+            if (r !== this && r.name === this.name && findAssociatedForm(r) === form) {
+              r._checkedDirty = true;
+              r._checked = false;
             }
           }
         }

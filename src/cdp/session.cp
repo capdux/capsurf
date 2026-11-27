@@ -184,21 +184,27 @@ fn sessionHttpRequestHook(session_ptr: *void, url: []const u8, method: []const u
         }
     }
     defer sess.extra_headers = prev_extra_headers;
-    const fetch_res = HttpLoader.fetchDocumentWithMethod(sess, url, method, post_data, out_buf, 0, "Fetch") catch |e| { recordPendingFetchFailedWithError(url, mapSubresourceErrorText(@errorName(e))); return -1; };
-    recordPendingFetchMetaWithRedirects(
-        url,
-        fetch_res.final_url,
-        fetch_res.html,
-        fetch_res.status_code,
-        fetch_res.status_text,
-        fetch_res.raw_headers,
-        fetch_res.content_type,
-        fetch_res.req_headers_text,
-        fetch_res.resp_headers_text,
-        fetch_res.wire_body_len,
-        fetch_res.redirect_count,
-        fetch_res.redirect_hops,
-    );
+    const is_options_req = std.ascii.eqlIgnoreCase(method, "OPTIONS");
+    const fetch_res = HttpLoader.fetchDocumentWithMethod(sess, url, method, post_data, out_buf, 0, "Fetch") catch |e| {
+        if (!is_options_req) recordPendingFetchFailedWithError(url, mapSubresourceErrorText(@errorName(e)));
+        return -1;
+    };
+    if (!is_options_req) {
+        recordPendingFetchMetaWithRedirects(
+            url,
+            fetch_res.final_url,
+            fetch_res.html,
+            fetch_res.status_code,
+            fetch_res.status_text,
+            fetch_res.raw_headers,
+            fetch_res.content_type,
+            fetch_res.req_headers_text,
+            fetch_res.resp_headers_text,
+            fetch_res.wire_body_len,
+            fetch_res.redirect_count,
+            fetch_res.redirect_hops,
+        );
+    }
     if (fetch_res.status_code < 200 || fetch_res.status_code >= 300) return -1;
     const n = @min(fetch_res.html.len, out_buf.len);
     if (n > 0 && unsafe { @intFromPtr(fetch_res.html.ptr) != @intFromPtr(out_buf.ptr) }) {

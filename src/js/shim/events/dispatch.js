@@ -287,7 +287,11 @@ function internalDispatch(target, event, trusted) {
     if (eventState) {
       eventState.target = eventTarget;
     } else {
-      event.target = eventTarget;
+      try {
+        Object.defineProperty(event, "target", { value: eventTarget, configurable: true });
+      } catch (e) {
+        event.target = eventTarget;
+      }
     }
     const targetRoot = getNodeRoot(target);
 
@@ -396,6 +400,19 @@ function internalDispatch(target, event, trusted) {
         event.target = retargeted;
         event.currentTarget = entry;
         event.eventPhase = phase;
+      }
+
+      if (phase === PHASE_AT_TARGET && (entry === global || (typeof window !== "undefined" && entry === window)) && eventType === "load" && global.__capsurf_bodyOnloadPending) {
+        global.__capsurf_bodyOnloadPending = false;
+        const bodyOnloadFn = entry.onload;
+        if (typeof bodyOnloadFn === "function") {
+          event._handledByOnProp = true;
+          try {
+            bodyOnloadFn.call(entry, event);
+          } catch (e) {
+            reportListenerError(e);
+          }
+        }
       }
 
       const map = getListeners(entry);

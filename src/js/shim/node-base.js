@@ -48,6 +48,12 @@ for (const k in nodeTypes) {
   Node.prototype[k] = nodeTypes[k];
 }
 
+Object.defineProperty(Node.prototype, "nodeValue", {
+  get: function () { return null; },
+  set: function () {},
+  configurable: true,
+});
+
 Object.defineProperty(Node.prototype, "isConnected", {
   get: function () {
     let curr = this;
@@ -704,6 +710,8 @@ function detachChildInternal(parent, child, suppressLifecycle) {
   const children = ensureChildren(parent);
   const idx = children.indexOf(child);
   if (idx === -1 && child.parentNode !== parent) return;
+  const prevSib = idx > 0 ? children[idx - 1] : null;
+  const nextSib = idx >= 0 && idx + 1 < children.length ? children[idx + 1] : null;
   const wasConnected = Boolean(parent.isConnected);
   if (idx >= 0) {
     if (typeof global !== "undefined" && typeof global.__capsurf_rangeOnNodeRemoved === "function") {
@@ -731,6 +739,8 @@ function detachChildInternal(parent, child, suppressLifecycle) {
   if (typeof notifyMutation === "function") {
     const rec = new MutationRecord("childList", parent);
     rec.removedNodes = [child];
+    rec.previousSibling = prevSib;
+    rec.nextSibling = nextSib;
     notifyMutation(rec);
   }
 
@@ -823,7 +833,9 @@ Node.prototype.appendChild = function (child) {
   // Handle native element / node
   child.parentNode = this;
   child.ownerDocument = newDoc || this;
-  ensureChildren(this).push(child);
+  const appendKids = ensureChildren(this);
+  const appendPrevSib = appendKids.length > 0 ? appendKids[appendKids.length - 1] : null;
+  appendKids.push(child);
 
   if (nativeElementAppendChild && typeof nativeElementAppendChild === "function") {
     try {
@@ -839,6 +851,8 @@ Node.prototype.appendChild = function (child) {
   if (typeof notifyMutation === "function") {
     const rec = new MutationRecord("childList", this);
     rec.addedNodes = [child];
+    rec.previousSibling = appendPrevSib;
+    rec.nextSibling = null;
     notifyMutation(rec);
   }
 
@@ -905,10 +919,27 @@ Node.prototype.insertBefore = function (newChild, refChild) {
 
   if (newChild.nodeType === DOCUMENT_FRAGMENT_NODE) {
     const kids = Array.from(newChild.childNodes || newChild._children || []);
-    for (let i = 0; i < kids.length; i++) {
-      this.insertBefore(kids[i], refChild);
+    const insertPos = idx >= 0 ? idx : children.length;
+    const prevSib = insertPos > 0 ? children[insertPos - 1] : null;
+    const nextSib = refChild;
+    const doInsert = () => {
+      for (let i = 0; i < kids.length; i++) {
+        this.insertBefore(kids[i], refChild);
+      }
+    };
+    if (typeof suppressChildListMutations === "function") {
+      suppressChildListMutations(this, doInsert);
+    } else {
+      doInsert();
     }
     if (newChild._children) newChild._children.length = 0;
+    if (kids.length > 0 && typeof notifyMutation === "function") {
+      const rec = new MutationRecord("childList", this);
+      rec.addedNodes = kids;
+      rec.previousSibling = prevSib;
+      rec.nextSibling = nextSib;
+      notifyMutation(rec);
+    }
     return newChild;
   }
 
@@ -965,6 +996,8 @@ Node.prototype.insertBefore = function (newChild, refChild) {
   if (typeof notifyMutation === "function") {
     const rec = new MutationRecord("childList", this);
     rec.addedNodes = [newChild];
+    rec.previousSibling = insertPos > 0 ? children[insertPos - 1] : null;
+    rec.nextSibling = insertPos + 1 < children.length ? children[insertPos + 1] : null;
     notifyMutation(rec);
   }
 
@@ -1013,6 +1046,8 @@ Node.prototype.removeChild = function (child) {
     throw err;
   }
 
+  const prevSib = idx > 0 ? children[idx - 1] : null;
+  const nextSib = idx >= 0 && idx + 1 < children.length ? children[idx + 1] : null;
   const wasConnected = Boolean(this.isConnected);
   if (idx >= 0) {
     if (typeof global !== "undefined" && typeof global.__capsurf_rangeOnNodeRemoved === "function") {
@@ -1040,6 +1075,8 @@ Node.prototype.removeChild = function (child) {
   if (typeof notifyMutation === "function") {
     const rec = new MutationRecord("childList", this);
     rec.removedNodes = [child];
+    rec.previousSibling = prevSib;
+    rec.nextSibling = nextSib;
     notifyMutation(rec);
   }
 
@@ -1085,8 +1122,39 @@ Node.prototype.replaceChild = function (newChild, oldChild) {
   }
 
   if (newChild.nodeType === DOCUMENT_FRAGMENT_NODE) {
-    this.insertBefore(newChild, oldChild);
-    this.removeChild(oldChild);
+    const kids = Array.from(newChild.childNodes || newChild._children || []);
+    const oldIdx = children.indexOf(oldChild);
+    const prevSib = oldIdx > 0 ? children[oldIdx - 1] : null;
+    const nextSib = oldIdx >= 0 && oldIdx + 1 < children.length ? children[oldIdx + 1] : null;
+    const doReplace = () => {
+      for (let i = 0; i < kids.length; i++) {
+        this.insertBefore(kids[i], oldChild);
+      }
+      this.removeChild(oldChild);
+    };
+    if (typeof suppressChildListMutations === "function") {
+      suppressChildListMutations(this, function () {
+        suppressChildListMutations(newChild, doReplace);
+      });
+    } else {
+      doReplace();
+    }
+    if (newChild._children) newChild._children.length = 0;
+    if (kids.length > 0 && typeof notifyMutation === "function") {
+      const fragRec = new MutationRecord("childList", newChild);
+      fragRec.removedNodes = kids;
+      fragRec.previousSibling = null;
+      fragRec.nextSibling = null;
+      notifyMutation(fragRec);
+    }
+    if (typeof notifyMutation === "function") {
+      const rec = new MutationRecord("childList", this);
+      rec.addedNodes = kids;
+      rec.removedNodes = [oldChild];
+      rec.previousSibling = prevSib;
+      rec.nextSibling = nextSib;
+      notifyMutation(rec);
+    }
     return oldChild;
   }
 
@@ -1157,6 +1225,9 @@ Node.prototype.replaceChild = function (newChild, oldChild) {
     const rec = new MutationRecord("childList", this);
     rec.addedNodes = [newChild];
     rec.removedNodes = [oldChild];
+    const finalIdx = oldIdx >= 0 ? oldIdx : children.length - 1;
+    rec.previousSibling = finalIdx > 0 ? children[finalIdx - 1] : null;
+    rec.nextSibling = finalIdx + 1 < children.length ? children[finalIdx + 1] : null;
     notifyMutation(rec);
   }
 
@@ -1172,9 +1243,18 @@ Node.prototype.replaceChild = function (newChild, oldChild) {
   return oldChild;
 };
 
+const _nodeChildNodesCache = new WeakMap();
 Object.defineProperty(Node.prototype, "childNodes", {
   get: function () {
-    return new NodeList(ensureChildren(this));
+    let list = _nodeChildNodesCache.get(this);
+    if (!list) {
+      const self = this;
+      list = typeof makeLiveNodeList === "function"
+        ? makeLiveNodeList(function () { return ensureChildren(self); })
+        : new NodeList(ensureChildren(this));
+      _nodeChildNodesCache.set(this, list);
+    }
+    return list;
   },
   configurable: true,
 });
@@ -2144,7 +2224,12 @@ function replaceChildrenImpl(parent, nodes) {
   for (let i = 0; i < nodes.length; i++) {
     const n = nodes[i];
     if (n && typeof n === "object" && typeof n.nodeType === "number") {
-      converted.push(n);
+      if (n.nodeType === 11) {
+        const fkids = Array.from(n.childNodes || n._children || []);
+        for (let j = 0; j < fkids.length; j++) converted.push(fkids[j]);
+      } else {
+        converted.push(n);
+      }
     } else if (typeof document !== "undefined" && document.createTextNode) {
       converted.push(document.createTextNode(String(n)));
     } else {
@@ -2171,11 +2256,6 @@ function replaceChildrenImpl(parent, nodes) {
       anc = anc.parentNode;
     }
   }
-  const frag = new DocumentFragment();
-  frag.ownerDocument = parent.nodeType === 9 ? parent : parent.ownerDocument;
-  for (let i = 0; i < converted.length; i++) {
-    frag.appendChild(converted[i]);
-  }
   const remaining = Array.from(parent.childNodes || []);
   const run = function () {
     let guard = 0;
@@ -2184,8 +2264,8 @@ function replaceChildrenImpl(parent, nodes) {
       parent.removeChild(fc);
       if (parent.firstChild === fc) break;
     }
-    while (frag.firstChild) {
-      parent.appendChild(frag.firstChild);
+    for (let i = 0; i < converted.length; i++) {
+      parent.appendChild(converted[i]);
     }
   };
   if (typeof suppressChildListMutations === "function") {
